@@ -1,0 +1,18 @@
+# Normalise line endings: the repo is developed on Windows and built in Linux
+# containers, so LF in the repository is the only sane invariant.
+* text=auto eol=lf
+
+# Shell scripts and Dockerfiles must be LF or they break inside containers.
+*.sh text eol=lf
+*.mjs text eol=lf
+Dockerfile* text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# Generated: collapse in diffs and exclude from language stats.
+pnpm-lock.yaml linguist-generated=true -diff

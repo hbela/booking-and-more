@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turborepo
+.turbo/
+
+# Generated Prisma client — never commit this.
+# booking-for-all committed theirs, including a Windows query-engine .dll.node.
+packages/db/src/generated/
+**/.prisma/
+
+# Generated API contract — regenerate it, don't commit it.
+# booking-for-all committed a 240 KB openapi.json that described nothing.
+openapi.json
+
+# Environment — .env.example is the only one that is tracked.
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Test / coverage artifacts
+coverage/
+playwright-report/
+test-results/
+.vitest/
+
+# Editors and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# Python bytecode (a predecessor committed __pycache__ from a test tool)
+__pycache__/
+
+# Sentry
+.sentryclirc

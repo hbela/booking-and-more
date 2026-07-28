@@ -1,0 +1,24 @@
+{
+  "common": {
+    "appName": "booking-and-more",
+    "tagline": "Book by form, chat, or voice.",
+    "language": "Language",
+    "loading": "Loading…"
+  },
+  "home": {
+    "title": "Voice-enabled booking",
+    "description": "A booking platform where customers book appointments and providers manage availability by speaking — without the cost of a telephone voice agent.",
+    "phaseNotice": "Phase 0 — technical foundation. The booking flow arrives in Epic 4.",
+    "apiStatus": {
+      "heading": "API status",
+      "checking": "Checking…",
+      "ok": "Reachable",
+      "unreachable": "Unreachable",
+      "postgres": "PostgreSQL",
+      "redis": "Redis",
+      "statusOk": "ok",
+      "statusDown": "down",
+      "statusNotConfigured": "not configured (arrives in Epic 5)"
+    }
+  }
+}

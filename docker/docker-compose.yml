@@ -1,0 +1,102 @@
+# Full stack for Coolify / Hetzner. tech-impl §41.
+#
+# NOTE: this is not the local development path. The dev machine has no Docker;
+# local work runs against native PostgreSQL 18 with `pnpm dev`. This file exists
+# so production parity is defined and reviewable from Phase 0 rather than
+# improvised at deploy time. See docs/phase-0-technical-foundation.md §4.
+#
+#   docker compose -f docker/docker-compose.yml up --build
+
+name: booking-and-more
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-booking_and_more}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published: only the API and worker need it.
+    expose:
+      - "5432"
+
+  redis:
+    # Unused until Epic 5 (BullMQ, outbox dispatch, distributed rate limiting).
+    # Declared now so the topology is complete and the API/worker can pick it up
+    # by setting REDIS_URL, with no compose change required.
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    expose:
+      - "6379"
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PORT: 3001
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # REDIS_URL: redis://redis:6379
+    ports:
+      - "3001:3001"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # REDIS_URL: redis://redis:6379
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+      args:
+        # Inlined at build time, so a change here needs a rebuild, not a restart.
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+  redis-data:

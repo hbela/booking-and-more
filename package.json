@@ -1,0 +1,32 @@
+{
+  "name": "booking-and-more",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-tenant voice-enabled booking SaaS",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yaml,yml}\"",
+    "db:generate": "pnpm --filter @bam/db db:generate",
+    "db:migrate": "pnpm --filter @bam/db db:migrate",
+    "db:migrate:deploy": "pnpm --filter @bam/db db:migrate:deploy",
+    "db:drift-check": "pnpm --filter @bam/db db:drift-check",
+    "db:seed": "pnpm --filter @bam/db db:seed",
+    "db:studio": "pnpm --filter @bam/db db:studio"
+  },
+  "devDependencies": {
+    "prettier": "catalog:",
+    "turbo": "^2.10.7",
+    "typescript": "catalog:"
+  }
+}

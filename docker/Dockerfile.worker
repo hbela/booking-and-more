@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+#
+# BullMQ worker image. See docker/Dockerfile.api for the shared rationale.
+#
+# Build from the repository root:
+#   docker build -f docker/Dockerfile.worker -t bam-worker .
+
+ARG NODE_VERSION=24-alpine
+
+# --- deps ---------------------------------------------------------------------
+FROM node:${NODE_VERSION} AS deps
+RUN corepack enable
+WORKDIR /app
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/tsconfig/package.json ./packages/tsconfig/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY packages/config/package.json ./packages/config/
+COPY packages/contracts/package.json ./packages/contracts/
+COPY packages/observability/package.json ./packages/observability/
+COPY packages/db/package.json ./packages/db/
+COPY apps/worker/package.json ./apps/worker/
+
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# --- build --------------------------------------------------------------------
+FROM deps AS build
+WORKDIR /app
+COPY . .
+RUN pnpm --filter @bam/worker... build
+
+# --- runtime ------------------------------------------------------------------
+FROM node:${NODE_VERSION} AS runtime
+RUN corepack enable
+WORKDIR /app
+
+ENV NODE_ENV=production
+USER node
+
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/apps/worker/dist ./apps/worker/dist
+COPY --from=build --chown=node:node /app/apps/worker/package.json ./apps/worker/package.json
+COPY --from=build --chown=node:node /app/apps/worker/node_modules ./apps/worker/node_modules
+
+# The worker serves no HTTP surface, so the healthcheck asserts the process is
+# alive rather than probing an endpoint. Epic 5 replaces this with a queue
+# heartbeat once there is real work to observe.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "process.exit(0)"
+
+CMD ["node", "apps/worker/dist/worker.js"]

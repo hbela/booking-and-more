@@ -1,0 +1,10 @@
+{
+  "extends": "@bam/tsconfig/library.json",
+  "//": "Editor + ESLint project: covers tests and config files so type-aware linting can see them. Emitting is done by tsconfig.build.json.",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "*.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "@bam/tsconfig/library.json",
+  "//": "Editor + ESLint project. Prisma 7 generates TypeScript, so src/generated is part of the compilation; it is excluded from ESLint in eslint.config.js instead.",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts", "*.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

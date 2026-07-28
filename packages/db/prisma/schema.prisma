@@ -1,0 +1,73 @@
+// Prisma schema for booking-and-more.
+//
+// Conventions (tech-impl §9):
+//   - Every tenant-owned table carries `tenant_id`.
+//   - All timestamps are UTC `timestamptz`. Recurring working hours are stored
+//     as local wall-clock time and interpreted in the provider's zone — never
+//     by adding a UTC offset by hand (tech-impl §13.4).
+//   - Money is integer minor units plus a currency code (tech-impl §10.5).
+//   - Table and column names are snake_case via @map/@@map; the TS API stays
+//     camelCase.
+//
+// Phase 0 defines only `Tenant`. Users, memberships and RBAC land in Epic 1;
+// providers, services and locations in Epic 2. See
+// docs/phase-0-technical-foundation.md §7.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 removed `url` from the datasource block. The connection URL used by
+// the CLI (migrate, studio, db pull) now lives in prisma.config.ts; the runtime
+// client gets its connection from a driver adapter — see src/index.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Lifecycle of a tenant. Gates every write: a suspended tenant accepts no new
+/// bookings (Epic 9 exit criterion). tech-impl §10.1.
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CLOSED
+
+  @@map("tenant_status")
+}
+
+/// A business using the platform. The root of every ownership chain.
+model Tenant {
+  id String @id @default(cuid(2))
+
+  /// URL segment: booking.example.com/<slug>. Immutable once published.
+  slug String @unique @db.Citext
+  name String
+
+  status TenantStatus @default(TRIAL)
+
+  /// IANA zone, e.g. "Europe/Budapest". Validated in application code — Postgres
+  /// will accept any string here.
+  defaultTimezone String @default("Europe/Budapest") @map("default_timezone")
+  /// BCP-47 subtag. Hungarian and English at launch (PRD §12.5).
+  defaultLanguage String @default("hu") @map("default_language")
+
+  // --- Branding (Epic 9: white-label) ---------------------------------------
+  logoUrl      String? @map("logo_url")
+  primaryColor String? @map("primary_color")
+
+  // --- Contact --------------------------------------------------------------
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // --- Policies surfaced during booking (PRD §9.1) --------------------------
+  bookingPolicy      String? @map("booking_policy")
+  cancellationPolicy String? @map("cancellation_policy")
+  privacyPolicyUrl   String? @map("privacy_policy_url")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status])
+  @@map("tenants")
+}

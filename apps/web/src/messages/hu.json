@@ -1,0 +1,24 @@
+{
+  "common": {
+    "appName": "booking-and-more",
+    "tagline": "Foglalás űrlappal, chatben vagy hanggal.",
+    "language": "Nyelv",
+    "loading": "Betöltés…"
+  },
+  "home": {
+    "title": "Hangvezérelt időpontfoglalás",
+    "description": "Foglalási platform, ahol az ügyfelek beszéddel foglalnak időpontot, a szolgáltatók pedig beszéddel kezelik a szabad időpontjaikat — telefonos hangasszisztens költsége nélkül.",
+    "phaseNotice": "0. fázis — technikai alapok. A foglalási folyamat a 4. epikban készül el.",
+    "apiStatus": {
+      "heading": "API állapot",
+      "checking": "Ellenőrzés…",
+      "ok": "Elérhető",
+      "unreachable": "Nem elérhető",
+      "postgres": "PostgreSQL",
+      "redis": "Redis",
+      "statusOk": "rendben",
+      "statusDown": "nem működik",
+      "statusNotConfigured": "nincs beállítva (az 5. epikban jön)"
+    }
+  }
+}

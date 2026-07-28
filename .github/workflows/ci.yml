@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Matches the local dev setup (native PostgreSQL 18).
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/booking_and_more?schema=public
+  TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/booking_and_more_test?schema=public
+  SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/booking_and_more_shadow?schema=public
+  APP_BASE_URL: http://localhost:3000
+  API_BASE_URL: http://localhost:3001
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # tech-impl §39.3 specifies Testcontainers, which needs a Docker daemon we
+    # do not have on the dev machine. A service container gives the integration
+    # tests the same PostgreSQL 18 with the same extensions instead.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: booking_and_more
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Create the test and shadow databases
+        run: |
+          PGPASSWORD=postgres createdb -h localhost -U postgres booking_and_more_test
+          PGPASSWORD=postgres createdb -h localhost -U postgres booking_and_more_shadow
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+
+      # The step that would have prevented the predecessor project's worst
+      # incident. `prisma migrate status` does NOT catch this: it reports which
+      # migrations were applied, not whether applying them reproduces the schema.
+      - name: Check for migration drift
+        run: pnpm db:drift-check
+
+      - name: Apply migrations to the test database
+        run: pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm check-types
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # A migration that cannot be applied to an empty database is broken, even
+      # if it happens to work against the current one.
+      - name: Verify migrations apply from scratch
+        run: |
+          PGPASSWORD=postgres createdb -h localhost -U postgres booking_and_more_scratch
+          pnpm db:migrate:deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/booking_and_more_scratch?schema=public

@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "Thin alias kept at the root for editor tooling. The real options live in packages/tsconfig/base.json.",
+  "extends": "@bam/tsconfig/base.json"
+}

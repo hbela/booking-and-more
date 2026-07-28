@@ -1,0 +1,33 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Single source of truth for versions shared across every workspace.
+# Referenced as "catalog:" in each package.json.
+catalog:
+  # Language & types.
+  # TypeScript is pinned to 5.9.x on purpose: typescript-eslint@8 declares
+  # `typescript >=4.8.4 <6.1.0`, so moving to TS 7 silently disables type-aware
+  # linting. Revisit when typescript-eslint ships TS 7 support.
+  typescript: 5.9.3
+  "@types/node": ^24.10.0
+
+  # Validation — one Zod version everywhere, because schemas cross package
+  # boundaries (contracts -> api -> web) and two copies of Zod do not interop.
+  zod: ^4.4.3
+
+  # Tooling.
+  eslint: ^10.8.0
+  typescript-eslint: ^8.65.0
+  prettier: ^3.7.4
+  vitest: ^4.1.10
+  tsx: ^4.23.1
+  tsup: ^8.5.0
+
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+  - esbuild
+  - "@sentry/cli"
+  - sharp
