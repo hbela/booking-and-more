@@ -4,8 +4,9 @@ Multi-tenant, voice-enabled booking SaaS. Specs live in [docs/PRD.md](docs/PRD.m
 [docs/technical-implementation.md](docs/technical-implementation.md).
 
 Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
-[Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md). Next up is Epic 2 (providers,
-services, locations).
+[Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md) ·
+[Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md). Next up is Epic 3
+(the availability engine).
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -65,6 +66,17 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
 10. **Ask for a permission, not a role.** `requirePermission(Permissions.MEMBER_MANAGE)`, never
     `if (role === "ADMIN")`. Re-scoping a role should mean editing one table in `@bam/auth`, not auditing
     every route.
+
+11. **Catalogue rows are archived, never deleted.** `DELETE /v1/services/:id` sets `archivedAt` and clears
+    `active`; nothing in providers, services or locations is hard-deleted through the API. A predecessor
+    deleted services outright and left bookings pointing at rows that no longer existed, so every screen
+    joining through one had to cope with a null it was never designed for. `active` and `archivedAt` are
+    different questions — "off for now" and "gone" — and both are needed.
+
+12. **Public responses are their own types.** `/v1/public/*` serialises through schemas declared separately
+    in `catalogue.schemas.ts`, not the staff schemas with a filter applied, so adding a staff field cannot
+    quietly publish it. What a stranger may see is decided by one class (`PublicCatalogueService`), and every
+    query there carries the same active/archived/assigned predicate.
 
 ## Layout
 

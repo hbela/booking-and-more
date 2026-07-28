@@ -9,6 +9,22 @@ import { z } from "zod";
 /** Model IDs are CUID2-ish opaque strings; never parse meaning out of them. */
 export const idSchema = z.string().min(1).max(64);
 
+/**
+ * The shape every public URL segment must take: lowercase, digits, single
+ * hyphens, no leading or trailing hyphen.
+ *
+ * Exported as the pattern rather than a finished schema because the length
+ * bounds differ — a tenant slug is a subdomain-like thing, a service slug is a
+ * path segment — but the character rules must not.
+ */
+export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const SLUG_MESSAGE =
+  "must be lowercase letters, digits and single hyphens, e.g. dental-hygiene";
+
+/** Slug for a resource inside a tenant: appears in `/<tenant>/book/<slug>`. */
+export const slugSchema = z.string().min(2).max(80).regex(SLUG_PATTERN, SLUG_MESSAGE);
+
 /** IANA zone name, e.g. `Europe/Budapest`. Validated against the runtime's own
  *  zone database rather than a hand-maintained list. */
 export const timezoneSchema = z.string().refine(

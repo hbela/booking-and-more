@@ -3,101 +3,62 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
-import { signOut } from "@/lib/auth-client";
+import { ApiError, apiFetch, type Invitation, type Member } from "@/lib/api-client";
 import {
-  ApiError,
-  apiFetch,
-  type Invitation,
-  type Member,
-  type MeResponse,
-  type TenantSummary,
-} from "@/lib/api-client";
+  DashboardShell,
+  ErrorText,
+  Field,
+  Panel,
+  Section,
+  buttonClass,
+  inputClass,
+  useDashboardContext,
+  useSignInRedirect,
+} from "./dashboard-shell";
 
 /**
- * Staff dashboard for Epic 1: who am I, which tenant, who else is here, and
- * invite someone.
+ * Dashboard overview: who is here, and who to invite.
  *
- * Controls are shown or hidden from `me.permissions`, which the API derives
- * from the same role table the guards use. That keeps the UI honest — but it is
- * only a UI affordance. Every action is authorised again server-side, so hiding
- * a button is never the thing that stops an unauthorised call.
+ * Epic 2 moved the header, tenant switcher and navigation into
+ * {@link DashboardShell}, shared with the catalogue screens. What is left here
+ * is the members panel this screen actually owns.
+ *
+ * Controls are shown or hidden from `me.permissions`, which the API derives from
+ * the same role table the guards use. That keeps the UI honest — but it is only
+ * a UI affordance. Every action is authorised again server-side, so hiding a
+ * button is never the thing that stops an unauthorised call.
  */
 export function Dashboard(): React.ReactElement {
   const t = useTranslations("dashboard");
-  const router = useRouter();
+  const context = useDashboardContext();
+  useSignInRedirect(!context.isPending && !context.me);
   const queryClient = useQueryClient();
 
-  const [tenantId, setTenantId] = useState<string | undefined>(undefined);
-
-  const tenants = useQuery({
-    queryKey: ["tenants"],
-    queryFn: () => apiFetch<{ items: TenantSummary[] }>("/v1/tenants"),
-  });
-
-  const activeTenantId = tenantId ?? tenants.data?.items[0]?.id;
-
-  const me = useQuery({
-    queryKey: ["me", activeTenantId],
-    queryFn: () => apiFetch<MeResponse>("/v1/me", { tenantId: activeTenantId }),
-  });
-
-  const canManageMembers = me.data?.permissions.includes("member:manage") ?? false;
-  const canReadMembers = me.data?.permissions.includes("member:read") ?? false;
+  const canManageMembers = context.can("member:manage");
+  const canReadMembers = context.can("member:read");
 
   const members = useQuery({
-    queryKey: ["members", activeTenantId],
-    queryFn: () => apiFetch<{ items: Member[] }>("/v1/members", { tenantId: activeTenantId }),
-    enabled: Boolean(activeTenantId) && canReadMembers,
+    queryKey: ["members", context.tenantId],
+    queryFn: () => apiFetch<{ items: Member[] }>("/v1/members", { tenantId: context.tenantId }),
+    enabled: Boolean(context.tenantId) && canReadMembers,
   });
 
   const invitations = useQuery({
-    queryKey: ["invitations", activeTenantId],
+    queryKey: ["invitations", context.tenantId],
     queryFn: () =>
-      apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: activeTenantId }),
-    enabled: Boolean(activeTenantId) && canManageMembers,
+      apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: context.tenantId }),
+    enabled: Boolean(context.tenantId) && canManageMembers,
   });
 
-  if (tenants.isPending) {
+  // Almost always "not signed in" — send them to sign-in rather than showing a
+  // dead dashboard. The redirect itself happens in an effect, not here.
+  if (context.isPending || !context.me) {
     return <p className="p-8">{t("loading")}</p>;
   }
-
-  if (tenants.isError) {
-    // Almost always "not signed in" — send them to sign-in rather than showing
-    // a dead dashboard.
-    router.push("/sign-in");
-    return <p className="p-8">{t("loading")}</p>;
-  }
-
-  const tenantList = tenants.data.items;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-12">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("title")}</h1>
-          {me.data ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {me.data.user.name} · {me.data.user.email}
-              {me.data.membership ? ` · ${me.data.membership.role}` : ""}
-            </p>
-          ) : null}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            void signOut().then(() => {
-              router.push("/sign-in");
-            });
-          }}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700"
-        >
-          {t("signOut")}
-        </button>
-      </header>
-
-      {tenantList.length === 0 ? (
+    <DashboardShell context={context}>
+      {context.tenants.length === 0 ? (
         <CreateTenantPanel
           onCreated={() => {
             void queryClient.invalidateQueries();
@@ -105,30 +66,8 @@ export function Dashboard(): React.ReactElement {
         />
       ) : (
         <>
-          <section className="flex flex-col gap-2">
-            <label htmlFor="tenant" className="text-sm font-medium">
-              {t("tenant")}
-            </label>
-            <select
-              id="tenant"
-              value={activeTenantId ?? ""}
-              onChange={(event) => {
-                setTenantId(event.target.value);
-              }}
-              className="max-w-sm rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
-            >
-              {tenantList.map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name} ({tenant.role.toLowerCase()})
-                </option>
-              ))}
-            </select>
-          </section>
-
           {canReadMembers ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold">{t("members")}</h2>
-
+            <Section title={t("members")}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-md text-left text-sm">
                   <thead className="border-b border-slate-200 dark:border-slate-800">
@@ -158,21 +97,21 @@ export function Dashboard(): React.ReactElement {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </Section>
           ) : null}
 
-          {canManageMembers && activeTenantId ? (
+          {canManageMembers && context.tenantId ? (
             <InvitePanel
-              tenantId={activeTenantId}
+              tenantId={context.tenantId}
               invitations={invitations.data?.items ?? []}
               onInvited={() => {
-                void queryClient.invalidateQueries({ queryKey: ["invitations", activeTenantId] });
+                void queryClient.invalidateQueries({ queryKey: ["invitations"] });
               }}
             />
           ) : null}
         </>
       )}
-    </main>
+    </DashboardShell>
   );
 }
 
@@ -191,8 +130,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
   });
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-      <h2 className="text-lg font-semibold">{t("createTenant")}</h2>
+    <Panel title={t("createTenant")}>
       <p className="text-sm text-slate-600 dark:text-slate-400">{t("createTenantHint")}</p>
 
       <form
@@ -203,8 +141,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
           mutation.mutate();
         }}
       >
-        <label htmlFor="tenant-name" className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("name")}</span>
+        <Field id="tenant-name" label={t("name")}>
           <input
             id="tenant-name"
             value={name}
@@ -222,12 +159,11 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
               );
             }}
             required
-            className="rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+            className={inputClass}
           />
-        </label>
+        </Field>
 
-        <label htmlFor="tenant-slug" className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("slug")}</span>
+        <Field id="tenant-slug" label={t("slug")}>
           <input
             id="tenant-slug"
             value={slug}
@@ -235,25 +171,17 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
               setSlug(event.target.value);
             }}
             required
-            className="rounded-md border border-slate-300 bg-transparent px-3 py-2 font-mono dark:border-slate-700"
+            className={`${inputClass} font-mono`}
           />
-        </label>
+        </Field>
 
-        {error ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
+        <ErrorText>{error}</ErrorText>
 
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
+        <button type="submit" disabled={mutation.isPending} className={buttonClass}>
           {t("create")}
         </button>
       </form>
-    </section>
+    </Panel>
   );
 }
 
@@ -290,9 +218,7 @@ function InvitePanel({
   });
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-slate-200 p-5 dark:border-slate-800">
-      <h2 className="text-lg font-semibold">{t("invite")}</h2>
-
+    <Panel title={t("invite")}>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
@@ -302,29 +228,29 @@ function InvitePanel({
           mutation.mutate();
         }}
       >
-        <label htmlFor="invite-email" className="flex flex-1 flex-col gap-1 text-sm">
-          <span className="font-medium">{t("email")}</span>
-          <input
-            id="invite-email"
-            type="email"
-            value={email}
-            onChange={(event) => {
-              setEmail(event.target.value);
-            }}
-            required
-            className="rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
-          />
-        </label>
+        <div className="flex-1">
+          <Field id="invite-email" label={t("email")}>
+            <input
+              id="invite-email"
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+              }}
+              required
+              className={`${inputClass} w-full`}
+            />
+          </Field>
+        </div>
 
-        <label htmlFor="invite-role" className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{t("role")}</span>
+        <Field id="invite-role" label={t("role")}>
           <select
             id="invite-role"
             value={role}
             onChange={(event) => {
               setRole(event.target.value);
             }}
-            className="rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+            className={inputClass}
           >
             {["OWNER", "ADMIN", "PROVIDER", "ASSISTANT"].map((value) => (
               <option key={value} value={value}>
@@ -332,7 +258,7 @@ function InvitePanel({
               </option>
             ))}
           </select>
-        </label>
+        </Field>
 
         <button
           type="submit"
@@ -343,11 +269,7 @@ function InvitePanel({
         </button>
       </form>
 
-      {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
+      <ErrorText>{error}</ErrorText>
 
       {acceptUrl ? (
         <div className="rounded-md bg-amber-50 p-3 text-sm dark:bg-amber-950/40">
@@ -368,6 +290,6 @@ function InvitePanel({
           ))}
         </ul>
       ) : null}
-    </section>
+    </Panel>
   );
 }

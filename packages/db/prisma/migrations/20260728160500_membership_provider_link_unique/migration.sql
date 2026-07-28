@@ -1,0 +1,11 @@
+-- At most one login per provider diary.
+--
+-- Written by hand rather than generated because `prisma migrate dev` refuses to
+-- run non-interactively once it has a warning to show — here, that adding a
+-- unique constraint could fail on existing duplicates. There are none: the
+-- column was introduced nullable in Epic 1 and nothing has written to it yet.
+--
+-- Postgres treats NULLs as distinct in a unique index, so this constrains only
+-- the memberships that actually name a provider. The rest — owners, assistants,
+-- customers — are unaffected however many of them there are.
+CREATE UNIQUE INDEX "memberships_provider_id_key" ON "memberships"("provider_id");

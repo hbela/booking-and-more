@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions, canChangeMemberRole, canRemoveMember } from "@bam/auth";
-import { ForbiddenError, commonErrorResponses, idSchema } from "@bam/contracts";
+import { ForbiddenError, NotFoundError, commonErrorResponses, idSchema } from "@bam/contracts";
 import { MembershipService } from "./membership.service.js";
 
 const roleSchema = z.enum(["OWNER", "ADMIN", "PROVIDER", "ASSISTANT", "CUSTOMER"]);
@@ -75,18 +75,26 @@ export const membershipRoutes: FastifyPluginAsyncZod<MembershipRoutesOptions> = 
     },
   );
 
-  // --- Change a member's role ----------------------------------------------
+  // --- Change a member's role, or link them to a provider -------------------
   app.patch(
     "/:membershipId",
     {
       preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.MEMBER_MANAGE)],
       schema: {
         tags: ["members"],
-        summary: "Change a member's role",
+        summary: "Change a member's role or provider link",
         description:
-          "You cannot change your own role, and the last owner cannot be demoted — either would leave a tenant nobody can administer.",
+          "You cannot change your own role, and the last owner cannot be demoted — either would leave a tenant nobody can administer. Linking a provider is what gives a member the `:own` scope over that diary; pass null to unlink.",
         params: z.object({ membershipId: idSchema }),
-        body: z.object({ role: invitableRoleSchema }),
+        body: z
+          .object({
+            role: invitableRoleSchema.optional(),
+            providerId: idSchema.nullable().optional(),
+          })
+          .refine(
+            (body) => body.role !== undefined || body.providerId !== undefined,
+            "Provide a role, a providerId, or both.",
+          ),
         response: { 200: memberResponseSchema, ...commonErrorResponses },
       },
     },
@@ -94,23 +102,47 @@ export const membershipRoutes: FastifyPluginAsyncZod<MembershipRoutesOptions> = 
       const tenant = request.tenant!;
       const actor = request.actor!;
       const { membershipId } = request.params;
-
-      // Self-demotion and self-promotion are both refused. The permission check
-      // in the preHandler is not enough — this rule is about *which* member.
-      if (!canChangeMemberRole(actor, tenant.id, membershipId)) {
-        throw new ForbiddenError("You cannot change your own role.");
-      }
+      const { role, providerId } = request.body;
 
       const before = await service.findById(tenant.id, membershipId);
-      const updated = await service.changeRole(tenant.id, membershipId, request.body.role);
+      let updated = before;
 
-      request.audit({
-        action: "membership.role_changed",
-        entityType: "Membership",
-        entityId: membershipId,
-        before: { role: before?.role, userId: before?.userId },
-        after: { role: updated.role, userId: updated.userId },
-      });
+      if (role !== undefined) {
+        // Self-demotion and self-promotion are both refused. The permission
+        // check in the preHandler is not enough — this rule is about *which*
+        // member. It applies to the role only: linking yourself to your own
+        // provider record grants a strict subset of what you already hold.
+        if (!canChangeMemberRole(actor, tenant.id, membershipId)) {
+          throw new ForbiddenError("You cannot change your own role.");
+        }
+
+        updated = await service.changeRole(tenant.id, membershipId, role);
+
+        request.audit({
+          action: "membership.role_changed",
+          entityType: "Membership",
+          entityId: membershipId,
+          before: { role: before?.role, userId: before?.userId },
+          after: { role: updated.role, userId: updated.userId },
+        });
+      }
+
+      if (providerId !== undefined) {
+        updated = await service.linkProvider(tenant.id, membershipId, providerId);
+
+        request.audit({
+          action:
+            providerId === null ? "membership.provider_unlinked" : "membership.provider_linked",
+          entityType: "Membership",
+          entityId: membershipId,
+          before: { providerId: before?.providerId },
+          after: { providerId },
+        });
+      }
+
+      if (!updated) {
+        throw new NotFoundError("Member not found.");
+      }
 
       return {
         id: updated.id,

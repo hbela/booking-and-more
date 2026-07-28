@@ -23,6 +23,13 @@ export const ErrorCodes = {
   TENANT_NOT_FOUND: "TENANT_NOT_FOUND",
   TENANT_SUSPENDED: "TENANT_SUSPENDED",
 
+  // --- Catalogue (Epic 2) ---------------------------------------------------
+  PROVIDER_NOT_FOUND: "PROVIDER_NOT_FOUND",
+  SERVICE_NOT_FOUND: "SERVICE_NOT_FOUND",
+  LOCATION_NOT_FOUND: "LOCATION_NOT_FOUND",
+  /** A slug already in use within the tenant. Slugs are public URLs. */
+  SLUG_TAKEN: "SLUG_TAKEN",
+
   // --- Idempotency (tech-impl §32) -----------------------------------------
   IDEMPOTENCY_KEY_REQUIRED: "IDEMPOTENCY_KEY_REQUIRED",
   IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",

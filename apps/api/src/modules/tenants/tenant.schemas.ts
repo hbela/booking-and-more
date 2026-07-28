@@ -1,16 +1,18 @@
 import { z } from "zod";
-import { idSchema, languageSchema, timezoneSchema } from "@bam/contracts";
+import { SLUG_PATTERN, idSchema, languageSchema, timezoneSchema } from "@bam/contracts";
 
 /**
  * Tenant slugs become public URLs (booking.example.com/<slug>), so the rules are
- * strict: lowercase, no leading or trailing hyphen, no doubled hyphens.
+ * strict: lowercase, no leading or trailing hyphen, no doubled hyphens. The
+ * character rules are shared with every other public slug; only the length
+ * bounds are specific to tenants.
  */
 export const tenantSlugSchema = z
   .string()
   .min(3)
   .max(63)
   .regex(
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    SLUG_PATTERN,
     "must be lowercase letters, digits and single hyphens, e.g. sunshine-dental",
   );
 

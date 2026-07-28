@@ -9,9 +9,12 @@
 //   - Table and column names are snake_case via @map/@@map; the TS API stays
 //     camelCase.
 //
-// Phase 0 defined `Tenant`. Phase 1 (Epic 1) adds identity and tenancy: the
-// Better Auth tables, plus Membership, Invitation and AuditLog. Providers,
-// services and locations land in Epic 2.
+// Phase 0 defined `Tenant`. Phase 1 (Epic 1) added identity and tenancy: the
+// Better Auth tables, plus Membership, Invitation and AuditLog. Phase 2
+// (Epic 2) adds the catalogue a tenant configures before it can take a booking:
+// Provider, Service, Location and the two join tables that connect them.
+// Working hours and availability exceptions belong to the availability engine
+// and land in Epic 3.
 //
 // Identity vs. authorization: Better Auth owns User/Session/Account/
 // Verification and nothing else. Roles live on Membership — never on User — so
@@ -77,6 +80,12 @@ model Tenant {
   invitations Invitation[]
   auditLogs   AuditLog[]
   sessions    Session[]
+
+  providers         Provider[]
+  services          Service[]
+  locations         Location[]
+  providerServices  ProviderService[]
+  providerLocations ProviderLocation[]
 
   @@index([status])
   @@map("tenants")
@@ -214,10 +223,15 @@ model Membership {
   role   MembershipRole
   status MembershipStatus @default(ACTIVE)
 
-  /// Links a PROVIDER membership to its schedule. Populated in Epic 2, once the
-  /// Provider model exists; until then the `:own` permissions in policy.ts have
-  /// nothing to match against.
-  providerId String? @map("provider_id")
+  /// Links a PROVIDER membership to its schedule — the thing the `:own`
+  /// permissions in policy.ts match against.
+  ///
+  /// Nullable in both directions on purpose: a provider need not have a login
+  /// (a visiting hygienist whose diary the front desk keeps), and a member need
+  /// not be a provider. `SetNull` rather than `Cascade` because archiving a
+  /// provider must not delete the person's membership and with it their access.
+  providerId String?   @map("provider_id")
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
 
   invitedByUserId String?   @map("invited_by_user_id")
   joinedAt        DateTime? @map("joined_at") @db.Timestamptz(3)
@@ -227,8 +241,14 @@ model Membership {
 
   /// One membership per person per tenant (tech-impl §10.3).
   @@unique([tenantId, userId])
+  /// And at most one login per provider diary. Postgres treats NULLs as
+  /// distinct, so this constrains only the rows that actually name a provider.
+  /// Without it, two accounts could both hold `:own` permissions over the same
+  /// schedule and neither would know about the other.
+  @@unique([providerId])
   @@index([tenantId, status])
   @@index([userId])
+  @@index([providerId])
   @@map("memberships")
 }
 
@@ -320,4 +340,265 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
   @@map("audit_logs")
+}
+
+// ===========================================================================
+// Catalogue — Epic 2
+//
+// What a tenant configures before it can take a booking: who does the work
+// (Provider), what the work is (Service), where it happens (Location), and
+// which combinations are allowed (ProviderService, ProviderLocation).
+//
+// ## Two flags, not one
+//
+// Every catalogue row has both `active` and `archivedAt`, and they mean
+// different things:
+//
+//   active     — temporarily off. A provider on parental leave, a service only
+//                offered in summer. Flipped back on routinely.
+//   archivedAt — removed. Hidden from every list and every picker, kept only so
+//                that a booking made last March still knows what it was for.
+//
+// Nothing in the catalogue is ever hard-deleted through the API. The
+// predecessor project deleted services outright and left bookings pointing at a
+// row that no longer existed; every screen that joined through it then had to
+// cope with a null it was never designed for.
+//
+// ## Inheritance of booking-window fields
+//
+// `minimumNoticeMinutes` and `maximumAdvanceDays` appear on both Provider and
+// Service, and are nullable on both. NULL means "inherit", and the availability
+// engine resolves the pair in Epic 3 by taking the *most restrictive* value
+// that applies (tech-impl §13.3). A zero is therefore meaningfully different
+// from a NULL, which is why neither has a database default.
+// ===========================================================================
+
+/// tech-impl §10.7. ONLINE and TELEPHONE locations have no address; the API
+/// enforces that, since Postgres cannot express "address required unless type
+/// is ONLINE" without a check constraint per column.
+enum LocationType {
+  PHYSICAL
+  ONLINE
+  HOME_VISIT
+  TELEPHONE
+
+  @@map("location_type")
+}
+
+/// Someone (or something) that appointments are booked with. tech-impl §10.4.
+///
+/// Deliberately not the same thing as a user: a provider is a bookable
+/// resource. Linking one to a login is what `Membership.providerId` is for.
+model Provider {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Shown to customers, so it is whatever the clinic calls this person —
+  /// "Dr. Kovács Anna", not a normalised first/last name pair we would then
+  /// have to reassemble differently per locale (tech-impl §38).
+  displayName String  @map("display_name")
+  description String?
+
+  email String?
+  phone String?
+
+  /// Resolved from the tenant default at creation rather than left NULL: the
+  /// availability engine reads this on every slot calculation, and a nullable
+  /// zone there is a null check in the middle of DST arithmetic (tech-impl
+  /// §13.4).
+  timezone String
+
+  /// BCP-47 subtags this provider can work in. A text array rather than a join
+  /// table — it is read on every public provider list and never queried the
+  /// other way round.
+  languages String[] @default([])
+
+  active               Boolean @default(true)
+  /// Off means staff can still book this provider, but the public booking page
+  /// will not offer them (PRD §9.4).
+  onlineBookingEnabled Boolean @default(true) @map("online_booking_enabled")
+
+  /// NULL means inherit — see the section comment above.
+  minimumNoticeMinutes Int? @map("minimum_notice_minutes")
+  maximumAdvanceDays   Int? @map("maximum_advance_days")
+
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  services    ProviderService[]
+  locations   ProviderLocation[]
+
+  @@index([tenantId, active])
+  @@map("providers")
+}
+
+/// A bookable unit of work. tech-impl §10.5.
+model Service {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Name in the tenant's default language. Other locales live in
+  /// ServiceTranslation (tech-impl §38).
+  name        String
+  /// Appears in the public booking URL, so it is unique per tenant and not
+  /// editable once customers may have linked to it.
+  slug        String
+  description String?
+
+  durationMinutes     Int @map("duration_minutes")
+  /// Padding around the appointment that blocks the diary without being shown
+  /// to the customer — room turnaround, notes, travel (tech-impl §13.3).
+  bufferBeforeMinutes Int @default(0) @map("buffer_before_minutes")
+  bufferAfterMinutes  Int @default(0) @map("buffer_after_minutes")
+
+  /// Integer minor units (tech-impl §10.5): $125.00 is 12500. NULL means the
+  /// price is not published — "on consultation" — which is different from free.
+  priceMinor Int?    @map("price_minor")
+  currency   String? @db.Char(3)
+
+  active Boolean @default(true)
+  /// The booking is requested rather than confirmed; staff accept it. Honoured
+  /// by the booking engine in Epic 4.
+  requiresApproval Boolean @default(false) @map("requires_approval")
+
+  /// NULL means inherit — see the section comment above.
+  minimumNoticeMinutes Int? @map("minimum_notice_minutes")
+  maximumAdvanceDays   Int? @map("maximum_advance_days")
+
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  translations ServiceTranslation[]
+  providers    ProviderService[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, active])
+  @@map("services")
+}
+
+/// Tenant-managed translations of a service. tech-impl §38.
+///
+/// Only user-facing text is translated; the slug, duration and price stay
+/// language-neutral, so there is exactly one bookable thing however many
+/// languages describe it.
+model ServiceTranslation {
+  id String @id @default(cuid(2))
+
+  serviceId String  @map("service_id")
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  /// BCP-47 subtag. Validated against the supported set in application code.
+  locale String
+
+  name        String
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([serviceId, locale])
+  @@map("service_translations")
+}
+
+/// Where an appointment happens. tech-impl §10.7.
+model Location {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name String
+  type LocationType @default(PHYSICAL)
+
+  addressLine1 String? @map("address_line_1")
+  addressLine2 String? @map("address_line_2")
+  city         String?
+  postalCode   String? @map("postal_code")
+  /// ISO 3166-1 alpha-2, upper case.
+  countryCode  String? @map("country_code") @db.Char(2)
+
+  /// A location can sit in a different zone from its tenant — a chain with a
+  /// branch across a border. Slots are computed in the location's zone when one
+  /// is set (tech-impl §13.4).
+  timezone String
+
+  /// Double precision is ample for a map pin; nothing here does geometry, so
+  /// PostGIS would be a dependency bought for nothing.
+  latitude  Float?
+  longitude Float?
+
+  active Boolean @default(true)
+
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  providers ProviderLocation[]
+
+  @@index([tenantId, active])
+  @@map("locations")
+}
+
+/// Which providers offer which services, and on what terms. tech-impl §10.6.
+///
+/// `tenantId` is denormalised onto the join row so every query can be scoped by
+/// tenant in one predicate rather than through two joins. Keeping it consistent
+/// with the parents is the service layer's job: both sides are loaded
+/// tenant-scoped before the link is written, so a cross-tenant assignment reads
+/// as a 404 on the entity that "does not exist" for this caller.
+model ProviderService {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  serviceId String  @map("service_id")
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  /// Per-provider overrides. NULL means "use the service's own value" — a
+  /// senior dentist may take longer, or charge more, for the same procedure.
+  customDurationMinutes Int? @map("custom_duration_minutes")
+  customPriceMinor      Int? @map("custom_price_minor")
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([providerId, serviceId])
+  @@index([tenantId, serviceId])
+  @@map("provider_services")
+}
+
+/// Where a provider works. tech-impl §10.8.
+model ProviderLocation {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  locationId String   @map("location_id")
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([providerId, locationId])
+  @@index([tenantId, locationId])
+  @@map("provider_locations")
 }

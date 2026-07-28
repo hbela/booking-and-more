@@ -73,6 +73,56 @@ export class MembershipService {
     });
   }
 
+  /**
+   * Link a membership to a provider, or unlink it with `null`.
+   *
+   * This is what turns "someone with the PROVIDER role" into "the person whose
+   * diary this is": `canForProvider` in @bam/auth compares
+   * `membership.providerId` against the resource, so an unlinked provider
+   * membership holds `:own` permissions that match nothing.
+   *
+   * The provider is looked up inside the tenant, so a provider id from
+   * elsewhere is a 404 rather than a cross-tenant link.
+   */
+  async linkProvider(tenantId: string, membershipId: string, providerId: string | null) {
+    const membership = await this.findById(tenantId, membershipId);
+    if (!membership) {
+      throw new NotFoundError("Member not found.");
+    }
+
+    if (providerId !== null) {
+      const provider = await this.prisma.provider.findFirst({
+        where: { id: providerId, tenantId, archivedAt: null },
+        select: { id: true },
+      });
+
+      if (!provider) {
+        throw new NotFoundError("Provider not found.", ErrorCodes.PROVIDER_NOT_FOUND);
+      }
+
+      // Checked up front for a usable message; the unique index is what holds
+      // under concurrency.
+      const alreadyLinked = await this.prisma.membership.findFirst({
+        where: { providerId, id: { not: membershipId } },
+        select: { id: true },
+      });
+
+      if (alreadyLinked) {
+        throw new ConflictError(
+          ErrorCodes.VALIDATION_FAILED,
+          "That provider is already linked to another member. Unlink it first.",
+          { field: "providerId" },
+        );
+      }
+    }
+
+    return this.prisma.membership.update({
+      where: { id: membershipId },
+      data: { providerId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
   async remove(tenantId: string, membershipId: string): Promise<void> {
     const membership = await this.findById(tenantId, membershipId);
     if (!membership) {

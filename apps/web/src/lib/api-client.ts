@@ -75,8 +75,16 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 }
 
 // --- Shapes the dashboard needs -------------------------------------------
-// Hand-written for now. Epic 2 generates these from the OpenAPI document so
-// they cannot drift from the server.
+// Still hand-written. Generating these from the OpenAPI document is the right
+// answer and remains on the list; it did not make Epic 2, so every type here is
+// a promise the server has to keep on its own. The integration suite is what
+// actually checks it.
+
+/** Cursor pagination envelope (tech-impl §15.2). */
+export interface Paginated<T> {
+  items: T[];
+  nextCursor: string | null;
+}
 
 export interface MeResponse {
   user: { id: string; name: string; email: string; isPlatformAdmin: boolean };
@@ -114,4 +122,104 @@ export interface Invitation {
   role: string;
   expiresAt: string;
   invitedBy: { name: string; email: string };
+}
+
+// --- Catalogue (Epic 2) ----------------------------------------------------
+
+export interface Provider {
+  id: string;
+  displayName: string;
+  description: string | null;
+  email: string | null;
+  phone: string | null;
+  timezone: string;
+  languages: string[];
+  active: boolean;
+  onlineBookingEnabled: boolean;
+  archivedAt: string | null;
+}
+
+export interface ServiceTranslation {
+  locale: string;
+  name: string;
+  description: string | null;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  durationMinutes: number;
+  bufferBeforeMinutes: number;
+  bufferAfterMinutes: number;
+  /** Integer minor units, with the currency alongside (tech-impl §10.5). */
+  priceMinor: number | null;
+  currency: string | null;
+  active: boolean;
+  requiresApproval: boolean;
+  translations: ServiceTranslation[];
+  archivedAt: string | null;
+}
+
+export type LocationType = "PHYSICAL" | "ONLINE" | "HOME_VISIT" | "TELEPHONE";
+
+export interface Location {
+  id: string;
+  name: string;
+  type: LocationType;
+  addressLine1: string | null;
+  city: string | null;
+  postalCode: string | null;
+  countryCode: string | null;
+  timezone: string;
+  active: boolean;
+  archivedAt: string | null;
+}
+
+export interface AssignedService {
+  serviceId: string;
+  serviceName: string;
+  serviceActive: boolean;
+  durationMinutes: number;
+  active: boolean;
+}
+
+export interface AssignedLocation {
+  locationId: string;
+  locationName: string;
+  locationType: LocationType;
+  active: boolean;
+}
+
+/**
+ * Money for display.
+ *
+ * Minor units become a decimal exactly once, here, using the browser's own
+ * currency rules — `Intl` knows that HUF has no minor unit and JPY has none
+ * either, which a hard-coded `/ 100` does not.
+ */
+export function formatMoney(minor: number, currency: string, locale: string): string {
+  const formatter = new Intl.NumberFormat(locale, { style: "currency", currency });
+  return formatter.format(minor / 10 ** minorUnitDigits(currency));
+}
+
+/** The inverse: what the user typed into a price field, as minor units. */
+export function toMinorUnits(amount: number, currency: string): number {
+  return Math.round(amount * 10 ** minorUnitDigits(currency));
+}
+
+/**
+ * How many decimal places this currency has.
+ *
+ * Asked of `Intl` rather than assumed to be two: HUF and JPY have none, so a
+ * hard-coded `* 100` would price a 15 000 Ft cleaning at 1.5 million.
+ */
+function minorUnitDigits(currency: string): number {
+  // `maximumFractionDigits` is optional in the type even though a currency
+  // formatter always resolves one; two is the right guess if it ever does not.
+  return (
+    new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions()
+      .maximumFractionDigits ?? 2
+  );
 }

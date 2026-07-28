@@ -21,7 +21,7 @@ import errorHandlerPlugin from "./plugins/error-handler.plugin.js";
 import databasePlugin from "./plugins/database.plugin.js";
 import openApiPlugin from "./plugins/openapi.plugin.js";
 import authPlugin from "./plugins/auth.plugin.js";
-import tenantContextPlugin from "./plugins/tenant-context.plugin.js";
+import tenantContextPlugin, { TENANT_HEADER } from "./plugins/tenant-context.plugin.js";
 import authorizationPlugin from "./plugins/authorization.plugin.js";
 import auditPlugin from "./plugins/audit.plugin.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
@@ -31,6 +31,10 @@ import {
   membershipRoutes,
 } from "./modules/memberships/membership.routes.js";
 import { meRoutes } from "./modules/me/me.routes.js";
+import { providerRoutes } from "./modules/providers/provider.routes.js";
+import { serviceRoutes } from "./modules/services/service.routes.js";
+import { locationRoutes } from "./modules/locations/location.routes.js";
+import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 
 export const API_VERSION = "0.1.0";
 
@@ -113,11 +117,22 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
 
   // Explicit allow-list. Not `origin: true` — the predecessor shipped
   // reflect-any CORS alongside `credentials: true`, which defeats the point.
+  //
+  // The tenant header is named from TENANT_HEADER rather than spelled out
+  // again: a request the plugin reads but CORS does not allow fails only in a
+  // browser, and only on preflight, so `fastify.inject()` cannot catch the
+  // mismatch. It went unnoticed through all of Epic 1 for exactly that reason.
   await app.register(cors, {
     origin: [env.APP_BASE_URL],
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key", "X-Request-Id"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Idempotency-Key",
+      "X-Request-Id",
+      TENANT_HEADER,
+    ],
     exposedHeaders: ["X-Request-Id"],
   });
 
@@ -183,6 +198,18 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // Outside the tenant-scoped prefix: whoever is accepting is not a member yet,
   // so no tenant context can be resolved for them.
   await app.register(invitationAcceptRoutes, { prefix: "/v1/invitations" });
+
+  // --- Catalogue (Epic 2) ---------------------------------------------------
+  // Staff routes. Every one of them resolves a tenant from the X-Tenant-Id
+  // header and an ACTIVE membership before doing anything.
+  await app.register(providerRoutes, { prefix: "/v1/providers" });
+  await app.register(serviceRoutes, { prefix: "/v1/services" });
+  await app.register(locationRoutes, { prefix: "/v1/locations" });
+
+  // The public booking catalogue: no session, tenant addressed by slug. The
+  // active/archived/assigned filters in catalogue.service.ts are what keep an
+  // unfinished catalogue off the internet.
+  await app.register(publicCatalogueRoutes, { prefix: "/v1/public" });
 
   return app;
 }

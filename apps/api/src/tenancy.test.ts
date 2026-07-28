@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
@@ -20,8 +21,14 @@ import { buildApp, type AppInstance } from "./app.js";
 
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 
-/** Unique per run, so repeated runs do not collide on unique slugs and emails. */
-const RUN = Date.now().toString(36);
+/**
+ * Unique per run, so repeated runs do not collide on unique slugs and emails.
+ *
+ * Random rather than `Date.now()`: vitest runs suites in parallel against one
+ * database, and two files starting in the same millisecond derived identical
+ * identifiers from identical labels.
+ */
+const RUN = `tnc${randomBytes(4).toString("hex")}`;
 
 describe.skipIf(!databaseUrl)("tenancy", () => {
   let app: AppInstance;
@@ -45,8 +52,12 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
 
   afterAll(async () => {
     // Tenants cascade to memberships, invitations and audit logs.
-    await app.prisma.tenant.deleteMany({ where: { slug: { contains: RUN } } });
-    await app.prisma.user.deleteMany({ where: { email: { contains: RUN } } });
+    //
+    // `endsWith`, not `contains`: every slug here ends with RUN, and a
+    // substring match once deleted another parallel suite's tenants out from
+    // under it — an intermittent foreign-key failure two files away.
+    await app.prisma.tenant.deleteMany({ where: { slug: { endsWith: RUN } } });
+    await app.prisma.user.deleteMany({ where: { email: { endsWith: `${RUN}@example.test` } } });
     await app.close();
   });
 

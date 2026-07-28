@@ -3,6 +3,7 @@ import type { AppInstance } from "./app.js";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
 import { buildApp } from "./app.js";
+import { TENANT_HEADER } from "./plugins/tenant-context.plugin.js";
 
 /**
  * Driven through `fastify.inject()` — no listening socket, no port conflicts,
@@ -189,6 +190,35 @@ describe("api", () => {
       });
 
       expect(response.headers["access-control-allow-origin"]).not.toBe("https://evil.example.com");
+    });
+
+    it("allows every header the web app actually sends", async () => {
+      // The gap this closes: a header the API reads but CORS does not allow
+      // fails only in a browser, and only on preflight. Every other test here
+      // uses inject(), which does not preflight — so `X-Tenant-Id` was missing
+      // from the allow-list through all of Epic 1 and nothing noticed.
+      const sent = ["content-type", "authorization", "x-request-id", TENANT_HEADER];
+
+      const response = await app.inject({
+        method: "OPTIONS",
+        url: "/v1/providers",
+        headers: {
+          origin: "http://localhost:3000",
+          "access-control-request-method": "GET",
+          "access-control-request-headers": sent.join(","),
+        },
+      });
+
+      expect(response.statusCode).toBeLessThan(300);
+
+      const allowed = String(response.headers["access-control-allow-headers"] ?? "")
+        .toLowerCase()
+        .split(",")
+        .map((header) => header.trim());
+
+      for (const header of sent) {
+        expect(allowed, `${header} must survive preflight`).toContain(header);
+      }
     });
   });
 
