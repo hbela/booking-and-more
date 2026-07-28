@@ -20,5 +20,48 @@
       "statusDown": "nem működik",
       "statusNotConfigured": "nincs beállítva (az 5. epikban jön)"
     }
+  },
+  "auth": {
+    "signInTitle": "Bejelentkezés",
+    "signUpTitle": "Fiók létrehozása",
+    "signIn": "Bejelentkezés",
+    "createAccount": "Fiók létrehozása",
+    "name": "Név",
+    "email": "E-mail cím",
+    "password": "Jelszó",
+    "passwordHint": "Legalább 12 karakter.",
+    "working": "Folyamatban…",
+    "noAccount": "Még nincs fiókja?",
+    "haveAccount": "Már van fiókja?",
+    "genericError": "Nem sikerült. Ellenőrizze az adatokat, majd próbálja újra.",
+    "networkError": "A kiszolgáló nem érhető el. Ellenőrizze a kapcsolatot, majd próbálja újra."
+  },
+  "dashboard": {
+    "title": "Vezérlőpult",
+    "loading": "Betöltés…",
+    "signOut": "Kijelentkezés",
+    "tenant": "Vállalkozás",
+    "members": "Munkatársak",
+    "name": "Név",
+    "email": "E-mail cím",
+    "role": "Szerepkör",
+    "invite": "Munkatárs meghívása",
+    "sendInvite": "Meghívó küldése",
+    "inviteLinkOnce": "Másolja ki most a linket — csak egyszer jelenik meg.",
+    "expires": "lejár:",
+    "createTenant": "Vállalkozás létrehozása",
+    "createTenantHint": "Ön lesz a tulajdonos. Az URL-azonosító a nyilvános foglalási cím része lesz.",
+    "slug": "URL-azonosító",
+    "create": "Létrehozás",
+    "genericError": "Hiba történt. Kérjük, próbálja újra."
+  },
+  "invitation": {
+    "title": "Meghívó",
+    "working": "Meghívó ellenőrzése…",
+    "signInFirst": "Jelentkezzen be azzal az e-mail címmel, amelyre a meghívót küldtük, majd nyissa meg újra a linket.",
+    "goToSignIn": "Tovább a bejelentkezéshez",
+    "accepted": "Csatlakozott mint {role}.",
+    "goToDashboard": "Tovább a vezérlőpultra",
+    "genericError": "Ez a meghívó link érvénytelen."
   }
 }

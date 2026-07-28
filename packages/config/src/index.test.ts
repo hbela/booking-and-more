@@ -6,6 +6,7 @@ const valid = {
   APP_BASE_URL: "http://localhost:3000",
   API_BASE_URL: "http://localhost:3001",
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+  BETTER_AUTH_SECRET: "a-test-secret-that-is-at-least-32-characters",
 } satisfies NodeJS.ProcessEnv;
 
 const load = (overrides: NodeJS.ProcessEnv = {}) =>
@@ -75,5 +76,37 @@ describe("loadEnv", () => {
     expect(load({ VOICE_AUDIO_RETENTION_ENABLED: "false" }).VOICE_AUDIO_RETENTION_ENABLED).toBe(
       false,
     );
+  });
+
+  describe("authentication config", () => {
+    it("requires a signing secret", () => {
+      expect(() => load({ BETTER_AUTH_SECRET: undefined })).toThrowError(/BETTER_AUTH_SECRET/);
+    });
+
+    it("rejects a short signing secret", () => {
+      // A weak secret here undermines every session cookie the platform issues,
+      // so this is a hard floor rather than advice.
+      expect(() => load({ BETTER_AUTH_SECRET: "too-short" })).toThrowError(/32 characters/);
+    });
+
+    it("accepts Google credentials when both halves are present", () => {
+      const env = load({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" });
+      expect(env.GOOGLE_CLIENT_ID).toBe("id");
+    });
+
+    it("leaves Google unconfigured when neither half is present", () => {
+      expect(load().GOOGLE_CLIENT_ID).toBeUndefined();
+    });
+
+    it("rejects a half-configured Google provider", () => {
+      // Registering the provider with a missing half would fail at Google with
+      // an opaque error, so it is caught at boot instead.
+      expect(() => load({ GOOGLE_CLIENT_ID: "id" })).toThrowError(/GOOGLE_CLIENT_SECRET/);
+      expect(() => load({ GOOGLE_CLIENT_SECRET: "secret" })).toThrowError(/GOOGLE_CLIENT_ID/);
+    });
+
+    it("defaults invitation expiry to seven days", () => {
+      expect(load().INVITATION_EXPIRY_HOURS).toBe(168);
+    });
   });
 });

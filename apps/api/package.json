@@ -15,6 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@bam/auth": "workspace:*",
     "@bam/config": "workspace:*",
     "@bam/contracts": "workspace:*",
     "@bam/db": "workspace:*",

@@ -20,5 +20,48 @@
       "statusDown": "down",
       "statusNotConfigured": "not configured (arrives in Epic 5)"
     }
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signUpTitle": "Create your account",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 12 characters.",
+    "working": "Working…",
+    "noAccount": "No account yet?",
+    "haveAccount": "Already have an account?",
+    "genericError": "That did not work. Please check your details and try again.",
+    "networkError": "Could not reach the server. Check your connection and try again."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "loading": "Loading…",
+    "signOut": "Sign out",
+    "tenant": "Business",
+    "members": "Members",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "invite": "Invite someone",
+    "sendInvite": "Send invitation",
+    "inviteLinkOnce": "Copy this link now — it is shown only once.",
+    "expires": "expires",
+    "createTenant": "Create your business",
+    "createTenantHint": "You will become its owner. The slug becomes part of your public booking address.",
+    "slug": "URL slug",
+    "create": "Create",
+    "genericError": "Something went wrong. Please try again."
+  },
+  "invitation": {
+    "title": "Invitation",
+    "working": "Checking your invitation…",
+    "signInFirst": "Sign in with the address this invitation was sent to, then open the link again.",
+    "goToSignIn": "Go to sign in",
+    "accepted": "You have joined as {role}.",
+    "goToDashboard": "Go to dashboard",
+    "genericError": "This invitation link is not valid."
   }
 }

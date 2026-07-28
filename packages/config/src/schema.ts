@@ -21,7 +21,7 @@ const postgresUrlSchema = z
       "predecessor project.",
   });
 
-export const envSchema = z.object({
+const baseEnvSchema = z.object({
   // --- Core -----------------------------------------------------------------
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -34,6 +34,29 @@ export const envSchema = z.object({
 
   // --- Database -------------------------------------------------------------
   DATABASE_URL: postgresUrlSchema,
+
+  // --- Authentication (Epic 1) ---------------------------------------------
+  /**
+   * Better Auth signing secret. Required, and required to be stable: rotating
+   * it invalidates every live session.
+   *
+   * 32 characters is the floor rather than a suggestion — a short secret here
+   * undermines every session cookie the platform issues.
+   */
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(32, "must be at least 32 characters; generate with `openssl rand -base64 32`"),
+
+  /**
+   * Google sign-in. Optional, but both halves are needed or neither — see the
+   * superRefine below. A missing key degrades one feature; it does not break
+   * boot (CLAUDE.md rule 4).
+   */
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+
+  /** How long an invitation link stays usable. */
+  INVITATION_EXPIRY_HOURS: z.coerce.number().int().positive().default(168), // 7 days
 
   // --- Optional in Phase 0 --------------------------------------------------
   /**
@@ -52,6 +75,23 @@ export const envSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
+});
+
+export const envSchema = baseEnvSchema.superRefine((env, ctx) => {
+  // Half-configured OAuth is worse than none: Better Auth would register the
+  // provider and every sign-in attempt would fail at Google with an opaque
+  // error. Catch it at boot instead.
+  const hasId = env.GOOGLE_CLIENT_ID !== undefined;
+  const hasSecret = env.GOOGLE_CLIENT_SECRET !== undefined;
+
+  if (hasId !== hasSecret) {
+    ctx.addIssue({
+      code: "custom",
+      path: [hasId ? "GOOGLE_CLIENT_SECRET" : "GOOGLE_CLIENT_ID"],
+      message:
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together, or both left unset to disable Google sign-in.",
+    });
+  }
 });
 
 export type Env = z.infer<typeof envSchema>;

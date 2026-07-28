@@ -9,9 +9,14 @@
 //   - Table and column names are snake_case via @map/@@map; the TS API stays
 //     camelCase.
 //
-// Phase 0 defines only `Tenant`. Users, memberships and RBAC land in Epic 1;
-// providers, services and locations in Epic 2. See
-// docs/phase-0-technical-foundation.md §7.
+// Phase 0 defined `Tenant`. Phase 1 (Epic 1) adds identity and tenancy: the
+// Better Auth tables, plus Membership, Invitation and AuditLog. Providers,
+// services and locations land in Epic 2.
+//
+// Identity vs. authorization: Better Auth owns User/Session/Account/
+// Verification and nothing else. Roles live on Membership — never on User — so
+// there is exactly one answer to "what may this person do here".
+// See packages/auth/src/roles.ts.
 
 generator client {
   provider = "prisma-client"
@@ -68,6 +73,251 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  memberships Membership[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+  sessions    Session[]
+
   @@index([status])
   @@map("tenants")
+}
+
+// ===========================================================================
+// Identity — owned by Better Auth
+//
+// These four models mirror Better Auth's core schema. The field names are
+// dictated by the adapter, so they stay camelCase in the database (no @map) to
+// keep that mapping trivial and avoid a class of "worked until you added a
+// plugin" bugs. Only `isPlatformAdmin` is ours, declared through
+// additionalFields in packages/auth/src/auth.ts.
+// ===========================================================================
+
+model User {
+  id            String  @id @default(cuid(2))
+  name          String
+  email         String  @unique @db.Citext
+  emailVerified Boolean @default(false)
+  image         String?
+
+  /// Platform operator. Deliberately NOT a tenant role (see roles.ts): running
+  /// the platform is not scoped to a tenant. Better Auth declares this field
+  /// with `input: false`, so no sign-up or update request can set it — only a
+  /// deliberate server-side script can.
+  isPlatformAdmin Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  sessions    Session[]
+  accounts    Account[]
+  memberships Membership[]
+  invitesSent Invitation[] @relation("InvitationInviter")
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid(2))
+  token     String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Last tenant the user was working in. A UI convenience only — never trusted
+  /// for authorization. Every request re-resolves membership server-side
+  /// (tech-impl §7.2).
+  activeTenantId String?
+  activeTenant   Tenant? @relation(fields: [activeTenantId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(cuid(2))
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  /// Hashed by Better Auth. Never logged — see @bam/observability redaction.
+  password              String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid(2))
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ===========================================================================
+// Tenancy — ours
+// ===========================================================================
+
+/// tech-impl §8.3. PLATFORM_ADMIN is absent on purpose: it is a user flag, not
+/// a tenant role, so it cannot be granted through an invitation.
+enum MembershipRole {
+  OWNER
+  ADMIN
+  PROVIDER
+  ASSISTANT
+  CUSTOMER
+
+  @@map("membership_role")
+}
+
+/// A membership grants nothing unless ACTIVE.
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+
+  @@map("membership_status")
+}
+
+/// The (tenant, user) pair that carries a role. tech-impl §10.3.
+model Membership {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role   MembershipRole
+  status MembershipStatus @default(ACTIVE)
+
+  /// Links a PROVIDER membership to its schedule. Populated in Epic 2, once the
+  /// Provider model exists; until then the `:own` permissions in policy.ts have
+  /// nothing to match against.
+  providerId String? @map("provider_id")
+
+  invitedByUserId String?   @map("invited_by_user_id")
+  joinedAt        DateTime? @map("joined_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// One membership per person per tenant (tech-impl §10.3).
+  @@unique([tenantId, userId])
+  @@index([tenantId, status])
+  @@index([userId])
+  @@map("memberships")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+
+  @@map("invitation_status")
+}
+
+/// A pending invitation to join a tenant with a given role.
+///
+/// Only the SHA-256 hash of the token is stored, exactly as for booking
+/// management tokens (tech-impl §34.4): a database leak must not hand the
+/// attacker usable invitation links.
+model Invitation {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  email String         @db.Citext
+  role  MembershipRole
+
+  tokenHash String           @unique @map("token_hash")
+  status    InvitationStatus @default(PENDING)
+
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+
+  invitedByUserId String @map("invited_by_user_id")
+  invitedBy       User   @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// At most one live invitation per email per tenant is enforced as a partial
+  /// unique index in a follow-up custom migration — Prisma cannot express
+  /// `WHERE status = 'PENDING'`, and a plain unique index would stop a revoked
+  /// invitation from ever being reissued.
+  @@index([tenantId, status])
+  @@index([email])
+  @@map("invitations")
+}
+
+/// Who performed an audited action. tech-impl §10.20.
+enum AuditActorType {
+  USER
+  PLATFORM_ADMIN
+  SYSTEM
+  CUSTOMER
+
+  @@map("audit_actor_type")
+}
+
+/// Append-only audit trail. tech-impl §10.20, §34.5.
+///
+/// There is no update or delete path in application code, and the model has no
+/// `updatedAt` — an audit row that can be edited is not an audit row.
+model AuditLog {
+  id String @id @default(cuid(2))
+
+  /// Nullable: platform-level actions such as creating a tenant have no tenant
+  /// to attribute to yet.
+  tenantId String? @map("tenant_id")
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  actorType AuditActorType @map("actor_type")
+  actorId   String?        @map("actor_id")
+
+  /// Past-tense verb, e.g. "tenant.created", "membership.role_changed".
+  action     String
+  entityType String  @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  /// Snapshots for diffing. Must never contain credentials or customer PII.
+  beforeJson Json? @map("before_json")
+  afterJson  Json? @map("after_json")
+
+  requestId String? @map("request_id")
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
 }

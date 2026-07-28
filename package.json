@@ -22,7 +22,8 @@
     "db:migrate:deploy": "pnpm --filter @bam/db db:migrate:deploy",
     "db:drift-check": "pnpm --filter @bam/db db:drift-check",
     "db:seed": "pnpm --filter @bam/db db:seed",
-    "db:studio": "pnpm --filter @bam/db db:studio"
+    "db:studio": "pnpm --filter @bam/db db:studio",
+    "db:grant-platform-admin": "pnpm --filter @bam/db db:grant-platform-admin"
   },
   "devDependencies": {
     "prettier": "catalog:",

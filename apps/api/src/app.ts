@@ -20,7 +20,17 @@ import requestContextPlugin from "./plugins/request-context.plugin.js";
 import errorHandlerPlugin from "./plugins/error-handler.plugin.js";
 import databasePlugin from "./plugins/database.plugin.js";
 import openApiPlugin from "./plugins/openapi.plugin.js";
+import authPlugin from "./plugins/auth.plugin.js";
+import tenantContextPlugin from "./plugins/tenant-context.plugin.js";
+import authorizationPlugin from "./plugins/authorization.plugin.js";
+import auditPlugin from "./plugins/audit.plugin.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
+import { tenantRoutes } from "./modules/tenants/tenant.routes.js";
+import {
+  invitationAcceptRoutes,
+  membershipRoutes,
+} from "./modules/memberships/membership.routes.js";
+import { meRoutes } from "./modules/me/me.routes.js";
 
 export const API_VERSION = "0.1.0";
 
@@ -41,6 +51,15 @@ export interface BuildAppOptions {
   env: Env;
   /** Silence logs in tests. */
   logger?: boolean;
+  /**
+   * Register the rate limiter. Defaults to true.
+   *
+   * Turned off by the integration suite, which legitimately makes hundreds of
+   * sign-ups and tenant creations in a few seconds. Expressed as an explicit
+   * option rather than an `if (NODE_ENV === "test")` inside the app, so the
+   * limiter is still exercised by the test that specifically asserts it.
+   */
+  rateLimit?: boolean;
 }
 
 /**
@@ -104,11 +123,13 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
 
   // In-process store for now. Epic 5 swaps in Redis so limits hold across
   // instances — until then, limits are per-instance and that is a known gap.
-  await app.register(rateLimit, {
-    global: true,
-    max: 300,
-    timeWindow: "1 minute",
-  });
+  if (options.rateLimit !== false) {
+    await app.register(rateLimit, {
+      global: true,
+      max: 300,
+      timeWindow: "1 minute",
+    });
+  }
 
   await app.register(databasePlugin, {
     databaseUrl: env.DATABASE_URL,
@@ -120,6 +141,28 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     exposeUi: !isProduction,
   });
 
+  // --- Identity and tenancy (Epic 1) ---------------------------------------
+  // Order matters and is enforced by each plugin's `dependencies`:
+  //   auth            resolves *who* you are
+  //   tenant-context  resolves *where* you are, and your standing there
+  //   authorization   decides *whether* you may
+  await app.register(authPlugin, {
+    secret: env.BETTER_AUTH_SECRET,
+    baseUrl: env.API_BASE_URL,
+    appUrl: env.APP_BASE_URL,
+    // Cross-site cookies require HTTPS; on http://localhost they must not be
+    // marked secure or the browser silently drops them.
+    secureCookies: env.API_BASE_URL.startsWith("https://"),
+    google:
+      env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+        ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
+        : undefined,
+  });
+
+  await app.register(tenantContextPlugin);
+  await app.register(authorizationPlugin);
+  await app.register(auditPlugin);
+
   // --- Modules --------------------------------------------------------------
   const startedAt = Date.now();
 
@@ -129,6 +172,17 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     version: API_VERSION,
     startedAt,
   });
+
+  await app.register(meRoutes, { prefix: "/v1/me" });
+  await app.register(tenantRoutes, { prefix: "/v1/tenants" });
+  await app.register(membershipRoutes, {
+    prefix: "/v1/members",
+    invitationExpiryHours: env.INVITATION_EXPIRY_HOURS,
+    appBaseUrl: env.APP_BASE_URL,
+  });
+  // Outside the tenant-scoped prefix: whoever is accepting is not a member yet,
+  // so no tenant context can be resolved for them.
+  await app.register(invitationAcceptRoutes, { prefix: "/v1/invitations" });
 
   return app;
 }

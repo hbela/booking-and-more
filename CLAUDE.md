@@ -1,15 +1,18 @@
 # booking-and-more — working conventions
 
 Multi-tenant, voice-enabled booking SaaS. Specs live in [docs/PRD.md](docs/PRD.md) and
-[docs/technical-implementation.md](docs/technical-implementation.md); the current phase plan is
-[docs/phase-0-technical-foundation.md](docs/phase-0-technical-foundation.md).
+[docs/technical-implementation.md](docs/technical-implementation.md).
+
+Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
+[Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md). Next up is Epic 2 (providers,
+services, locations).
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
 ## Stack
 
 pnpm workspace + Turborepo · Fastify 5 (`apps/api`) · Next.js 16 App Router (`apps/web`) ·
-BullMQ worker (`apps/worker`) · PostgreSQL 18 + Prisma 7 · Zod 4 · Vitest 4.
+BullMQ worker (`apps/worker`) · PostgreSQL 18 + Prisma 7 · Better Auth 1.6 · Zod 4 · Vitest 4.
 
 TypeScript is pinned to **5.9.x**. TS 7 exists, but `typescript-eslint@8` declares `typescript <6.1.0`, so
 upgrading silently disables type-aware linting. Revisit when typescript-eslint supports TS 7.
@@ -17,7 +20,7 @@ upgrading silently disables type-aware linting. Revisit when typescript-eslint s
 Local dev runs against **native PostgreSQL 18 on :5432**. There is no Docker on the dev machine and no Redis
 until Epic 5 — see the phase plan for why, and for the Testcontainers deviation that follows from it.
 
-## The eight rules
+## The rules
 
 Each of these is here because a predecessor project (`booking-for-all`, `sunshine-dental`,
 `appointer-console`) got it wrong and paid for it.
@@ -40,7 +43,9 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
 
 5. **`tenantId` is a required parameter on every repository call.** Never optional, never inferred from
    ambient state. `bookingRepository.findById({ tenantId, bookingId })`, never `findById(bookingId)`
-   (tech-impl §34.2). Client-supplied tenant IDs are validated against membership before use.
+   (tech-impl §34.2). A client-supplied tenant ID is a _hint_ that selects which tenant to look up; access
+   always comes from an ACTIVE membership resolved server-side by `tenant-context.plugin.ts`. A tenant the
+   caller cannot see returns the same 404 as one that does not exist.
 
 6. **Never log connection strings, tokens, or personal data.** Redaction paths are configured in
    `@bam/observability`; add to them rather than hand-scrubbing at call sites.
@@ -50,7 +55,16 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
 
 8. **Business logic lives in services and engines, not route handlers.** Handlers validate, delegate, and
    serialize. The availability and booking engines stay pure — no Fastify, Prisma, Redis or HTTP imports —
-   so they stay property-testable (tech-impl §13, §14).
+   so they stay property-testable (tech-impl §13, §14). `@bam/auth/policy` already follows this: every
+   authorization rule is a pure function, and route guards only call them.
+
+9. **A role belongs to a membership, never to a user.** The same person can own one clinic and assist at
+   another. `PLATFORM_ADMIN` is the sole exception and is deliberately a user flag rather than a role, so it
+   cannot be granted by invitation — set it with `pnpm db:grant-platform-admin <email>`.
+
+10. **Ask for a permission, not a role.** `requirePermission(Permissions.MEMBER_MANAGE)`, never
+    `if (role === "ADMIN")`. Re-scoping a role should mean editing one table in `@bam/auth`, not auditing
+    every route.
 
 ## Layout
 
@@ -58,6 +72,7 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
 apps/api          Fastify. buildApp() in app.ts is the composition root; server.ts only loads env + listens.
 apps/web          Next.js App Router.
 apps/worker       BullMQ. Idles cleanly while REDIS_URL is unset.
+packages/auth     Roles, permissions, pure policy functions, Better Auth factory.
 packages/config   Zod-validated env.
 packages/contracts Shared Zod schemas, error codes, API envelope types.
 packages/db       Prisma schema, migrations, client singleton.
@@ -82,7 +97,15 @@ pnpm lint && pnpm check-types && pnpm test
 pnpm db:migrate          # create/apply a migration
 pnpm db:drift-check      # what CI runs
 pnpm db:seed
+pnpm db:grant-platform-admin <email>   # the only way to set isPlatformAdmin
 ```
+
+## Identity vs. authorization
+
+Better Auth owns identity only — users, sessions, credentials. Tenancy, roles and permissions are ours. We
+deliberately do not use its `organization` plugin; see
+[the phase 1 record §2](docs/phase-1-authentication-and-tenancy.md) for why, and for what went wrong in the
+predecessor project when two role systems coexisted.
 
 ## Definition of done
 

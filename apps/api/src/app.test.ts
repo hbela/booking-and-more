@@ -21,11 +21,12 @@ describe("api", () => {
         DATABASE_URL:
           process.env["TEST_DATABASE_URL"] ??
           "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+        BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
       },
       loadDotenvFile: false,
     });
 
-    app = await buildApp({ env, logger: false });
+    app = await buildApp({ env, logger: false, rateLimit: false });
     await app.ready();
   });
 
