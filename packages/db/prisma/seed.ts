@@ -1,5 +1,6 @@
 /* eslint-disable no-console -- this is a CLI script; console is the output channel */
 import { loadEnv } from "@bam/config";
+import { occupiedSpanFor } from "@bam/booking-engine";
 import { createPrismaClient, type PrismaClient } from "../src/index.js";
 
 /**
@@ -275,6 +276,8 @@ async function seedBooking(
     service: {
       name: string;
       durationMinutes: number;
+      bufferBeforeMinutes: number;
+      bufferAfterMinutes: number;
       priceMinor: number | null;
       currency: string | null;
     };
@@ -300,7 +303,14 @@ async function seedBooking(
   const startAt = new Date();
   startAt.setUTCDate(startAt.getUTCDate() + ((8 - startAt.getUTCDay()) % 7 || 7));
   startAt.setUTCHours(8, 0, 0, 0);
-  const endAt = new Date(startAt.getTime() + args.service.durationMinutes * 60_000);
+
+  const { appointment, occupied } = occupiedSpanFor({
+    startAt: startAt.toISOString(),
+    durationMinutes: args.service.durationMinutes,
+    bufferBeforeMinutes: args.service.bufferBeforeMinutes,
+    bufferAfterMinutes: args.service.bufferAfterMinutes,
+  });
+  const endAt = new Date(appointment.endAt);
 
   await prisma.$transaction(async (tx) => {
     const customer = await tx.customer.create({
@@ -333,15 +343,23 @@ async function seedBooking(
       },
     });
 
-    // The reservation carries the occupied span. This service has no buffers,
-    // so it matches the appointment; with buffers it would be wider.
+    // The reservation carries the *occupied* span — buffers included — which is
+    // wider than the appointment whenever a service has any. Scaling has a
+    // ten-minute after-buffer, so this blocks 10:00-10:55 for a 10:00-10:45
+    // appointment.
+    //
+    // Computed through the engine rather than by hand. This seed writing rows
+    // the API would never write is exactly the failure the phase record warns
+    // about: an earlier version stored the appointment span here, and the slot
+    // search duly offered 10:45 — a start whose own buffer runs straight into
+    // the booked one.
     await tx.capacityReservation.create({
       data: {
         tenantId: args.tenantId,
         providerId: args.providerId,
         bookingId: booking.id,
-        startAt,
-        endAt,
+        startAt: new Date(occupied.startAt),
+        endAt: new Date(occupied.endAt),
       },
     });
   });
