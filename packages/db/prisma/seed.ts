@@ -146,7 +146,20 @@ async function main(): Promise<void> {
       { weekday: 4, startTime: "14:00", endTime: "18:00" },
     ]);
 
-    console.log(`Seeded 2 services, 2 providers, 2 locations and working hours for ${tenant.slug}`);
+    // --- A booking (Epic 4) -------------------------------------------------
+    // One appointment, so the staff diary is not an empty screen on a fresh
+    // clone and the exclusion constraint has something real to refuse against.
+    await seedBooking(prisma, {
+      tenantId: tenant.id,
+      providerId: anna.id,
+      serviceId: scaling.id,
+      locationId: surgery.id,
+      service: scaling,
+    });
+
+    console.log(
+      `Seeded 2 services, 2 providers, 2 locations, working hours and 1 booking for ${tenant.slug}`,
+    );
 
     const total = await prisma.tenant.count();
     console.log(`Tenants in database: ${String(total)}`);
@@ -234,6 +247,92 @@ async function setWorkingHours(
   await prisma.workingHours.deleteMany({ where: { tenantId, providerId } });
   await prisma.workingHours.createMany({
     data: periods.map((period) => ({ ...period, tenantId, providerId })),
+  });
+}
+
+/**
+ * One confirmed booking, next Monday at 10:00 local.
+ *
+ * Idempotent by reference: re-running the seed finds the existing row rather
+ * than colliding with the exclusion constraint, which is what a second
+ * overlapping reservation would do — correctly, and confusingly for anyone who
+ * just wanted to re-seed.
+ *
+ * The customer here is fictional. Seeds end up in screenshots and demo
+ * environments, so nothing in this file should ever be a real person's details.
+ */
+async function seedBooking(
+  prisma: PrismaClient,
+  args: {
+    tenantId: string;
+    providerId: string;
+    serviceId: string;
+    locationId: string;
+    service: {
+      name: string;
+      durationMinutes: number;
+      priceMinor: number | null;
+      currency: string | null;
+    };
+  },
+): Promise<void> {
+  const reference = "SEED01";
+
+  const existing = await prisma.booking.findFirst({
+    where: { tenantId: args.tenantId, reference },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  // Next Monday, 10:00 UTC. Far enough ahead to clear any notice window and
+  // inside Anna's Monday morning hours.
+  const startAt = new Date();
+  startAt.setUTCDate(startAt.getUTCDate() + ((8 - startAt.getUTCDay()) % 7 || 7));
+  startAt.setUTCHours(10, 0, 0, 0);
+  const endAt = new Date(startAt.getTime() + args.service.durationMinutes * 60_000);
+
+  await prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.create({
+      data: {
+        tenantId: args.tenantId,
+        fullName: "Példa Piroska",
+        email: "piroska@example.test",
+        normalizedEmail: "piroska@example.test",
+        preferredLanguage: "hu",
+      },
+    });
+
+    const booking = await tx.booking.create({
+      data: {
+        tenantId: args.tenantId,
+        reference,
+        customerId: customer.id,
+        providerId: args.providerId,
+        serviceId: args.serviceId,
+        locationId: args.locationId,
+        startAt,
+        endAt,
+        status: "CONFIRMED",
+        source: "STAFF",
+        customerNameSnapshot: customer.fullName,
+        customerEmailSnapshot: customer.email,
+        serviceNameSnapshot: args.service.name,
+        priceMinorSnapshot: args.service.priceMinor,
+        currencySnapshot: args.service.currency,
+      },
+    });
+
+    // The reservation carries the occupied span. This service has no buffers,
+    // so it matches the appointment; with buffers it would be wider.
+    await tx.capacityReservation.create({
+      data: {
+        tenantId: args.tenantId,
+        providerId: args.providerId,
+        bookingId: booking.id,
+        startAt,
+        endAt,
+      },
+    });
   });
 }
 

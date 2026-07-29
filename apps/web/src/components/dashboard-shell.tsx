@@ -81,6 +81,9 @@ export function useSignInRedirect(signedOut: boolean): void {
 
 const NAV = [
   { href: "/dashboard", key: "overview" as const },
+  // Bookings sit second, ahead of the catalogue: the catalogue is configured
+  // once and the diary is looked at every day.
+  { href: "/dashboard/bookings", key: "bookings" as const },
   { href: "/dashboard/providers", key: "providers" as const },
   { href: "/dashboard/services", key: "services" as const },
   { href: "/dashboard/locations", key: "locations" as const },

@@ -261,3 +261,118 @@ export interface Slot {
   occupiedFrom: string;
   occupiedUntil: string;
 }
+
+// --- Bookings (Epic 4) -----------------------------------------------------
+
+export type BookingStatus =
+  "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "EXPIRED";
+
+/** The staff shape. The public one is deliberately smaller — see {@link PublicBooking}. */
+export interface Booking {
+  id: string;
+  reference: string;
+  status: BookingStatus;
+  source: string;
+  providerId: string;
+  providerName: string;
+  serviceId: string;
+  locationId: string | null;
+  locationName: string | null;
+  customerId: string;
+  startAt: string;
+  endAt: string;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  serviceName: string;
+  priceMinor: number | null;
+  currency: string | null;
+  notes: string | null;
+  cancellationReason: string | null;
+  cancelledAt: string | null;
+  /** Sent back on writes so two screens editing one booking cannot silently
+   *  overwrite each other. */
+  version: number;
+  createdAt: string;
+}
+
+export interface Hold {
+  id: string;
+  providerId: string;
+  serviceId: string;
+  locationId: string | null;
+  startAt: string;
+  endAt: string;
+  expiresAt: string;
+  /** What the countdown starts from. Recomputed by the server on every read. */
+  remainingSeconds: number;
+}
+
+/**
+ * What a customer sees. Mirrors the API's separate public schema, and is a
+ * different type on purpose (CLAUDE.md rule 12) — no version, no source, no
+ * internal notes, no ids.
+ */
+export interface PublicBooking {
+  reference: string;
+  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+  startAt: string;
+  endAt: string;
+  providerName: string;
+  serviceName: string;
+  locationName: string | null;
+  priceMinor: number | null;
+  currency: string | null;
+  customerName: string;
+  cancellationPolicy: string | null;
+}
+
+export interface PublicBookingCreated extends PublicBooking {
+  /** Returned once and never again — only its hash is stored (tech-impl §34.4). */
+  managementToken: string;
+}
+
+export interface ChangePreview {
+  reference: string;
+  allowed: boolean;
+  /** Already a sentence for the customer, not a reason code. */
+  message: string | null;
+}
+
+export interface ReschedulePreview extends ChangePreview {
+  current: { startAt: string; endAt: string };
+  proposed: { startAt: string; endAt: string };
+  providerName: string;
+  serviceName: string;
+}
+
+export interface CancellationPreview extends ChangePreview {
+  startAt: string;
+  endAt: string;
+  providerName: string;
+  serviceName: string;
+  cancellationPolicy: string | null;
+}
+
+/**
+ * A fresh `Idempotency-Key` for one user action.
+ *
+ * Generated per *action*, never per page: a key that outlives the button press
+ * is how a customer who books, goes back, and books a different slot gets the
+ * first booking's response for the second request (tech-impl §32).
+ *
+ * `crypto.randomUUID` needs a secure context, which localhost and HTTPS both
+ * are; the fallback keeps a plain-HTTP staging box working rather than throwing
+ * inside a click handler.
+ */
+export function idempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `k-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Convenience for the write endpoints, all of which require the header. */
+export function withIdempotency(key: string): Record<string, string> {
+  return { "Idempotency-Key": key };
+}

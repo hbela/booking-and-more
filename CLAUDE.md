@@ -6,7 +6,8 @@ Multi-tenant, voice-enabled booking SaaS. Specs live in [docs/PRD.md](docs/PRD.m
 Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md) ·
 [Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md) ·
-[Phase 3 — availability engine](docs/phase-3-availability-engine.md). Next up is Epic 4 (the booking engine).
+[Phase 3 — availability engine](docs/phase-3-availability-engine.md) ·
+[Phase 4 — booking engine](docs/phase-4-booking-engine.md). Next up is Epic 5 (notifications).
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -85,6 +86,24 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
     recurring time by adding an offset by hand; go through `@bam/availability-engine`'s `zone.ts`, which
     reports whether a reading was skipped or repeated by a daylight-saving transition.
 
+14. **The database decides who got the slot.** Exclusive capacity is enforced by one exclusion constraint on
+    `capacity_reservations` (tech-impl §11.3), never by a `SELECT` before an `INSERT` — between the check and
+    the write there is a window, and under load somebody is always inside it. Application code's job is to
+    translate `23P01` into `SLOT_NO_LONGER_AVAILABLE`, not to attempt the decision. The same applies to any
+    future exclusive resource: put it in that table rather than inventing a second mechanism.
+
+15. **A booking records what the customer was told.** `customer_name_snapshot`, `service_name_snapshot`,
+    `price_minor_snapshot` and `currency_snapshot` are copied at confirmation, never joined for. Rule 11
+    keeps catalogue rows alive so the foreign keys resolve, which fixes referential integrity and nothing
+    else — a service renamed and repriced next year would otherwise have an old booking claim the customer
+    agreed to a price they never saw. Build them through `@bam/booking-engine`'s `buildBookingSnapshot`,
+    which also enforces that a price and its currency travel together.
+
+16. **Writes that a customer can retry carry an `Idempotency-Key`.** Holds, confirmations, reschedules and
+    cancellations (tech-impl §32). The key is claimed _before_ the work runs, so a retry that arrives
+    mid-flight is told the first request is still going rather than doing the work twice. Never make the
+    header optional "for now": it is absent exactly when it matters.
+
 ## Layout
 
 ```
@@ -93,6 +112,8 @@ apps/web          Next.js App Router.
 apps/worker       BullMQ. Idles cleanly while REDIS_URL is unset.
 packages/auth     Roles, permissions, pure policy functions, Better Auth factory.
 packages/availability-engine  Pure slot generation. No runtime dependencies, deliberately.
+packages/booking-engine  Pure booking decisions: spans, hold lifecycle, state machine, policy.
+                         The transaction is the API's; the database owns the race.
 packages/config   Zod-validated env.
 packages/contracts Shared Zod schemas, error codes, API envelope types.
 packages/db       Prisma schema, migrations, client singleton.
