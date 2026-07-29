@@ -284,11 +284,18 @@ async function seedBooking(
   });
   if (existing) return;
 
-  // Next Monday, 10:00 UTC. Far enough ahead to clear any notice window and
-  // inside Anna's Monday morning hours.
+  // Next Monday, 08:00 UTC.
+  //
+  // The hour is chosen so the booking sits inside a period the availability
+  // engine would actually offer, in both halves of the year: Anna works
+  // 09:00-12:00 and 13:00-17:00 local, and 08:00 UTC is 10:00 in Budapest
+  // summer time and 09:00 in winter. 10:00 UTC — the obvious first guess —
+  // is 12:00 local in summer, which is the middle of her lunch break, and a
+  // demo booking sitting in a gap nobody can book is a confusing thing to
+  // hand somebody on their first run.
   const startAt = new Date();
   startAt.setUTCDate(startAt.getUTCDate() + ((8 - startAt.getUTCDay()) % 7 || 7));
-  startAt.setUTCHours(10, 0, 0, 0);
+  startAt.setUTCHours(8, 0, 0, 0);
   const endAt = new Date(startAt.getTime() + args.service.durationMinutes * 60_000);
 
   await prisma.$transaction(async (tx) => {
