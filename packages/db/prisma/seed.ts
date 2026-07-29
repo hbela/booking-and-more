@@ -78,7 +78,11 @@ async function main(): Promise<void> {
           description: "Ultrahangos fogkőeltávolítás és polírozás.",
           durationMinutes: 45,
           bufferAfterMinutes: 10,
-          priceMinor: 1_500_000,
+          // 15 000 Ft. HUF has no minor unit, so minor units *are* forints —
+          // 1_500_000 here would be one and a half million, which is what this
+          // said until somebody looked at the booking page. The same trap
+          // api-client.ts's minorUnitDigits() exists to avoid.
+          priceMinor: 15_000,
           currency: "HUF",
           translations: {
             create: [
