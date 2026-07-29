@@ -58,7 +58,8 @@
     "overview": "Áttekintés",
     "providers": "Szolgáltatók",
     "services": "Szolgáltatások",
-    "locations": "Helyszínek"
+    "locations": "Helyszínek",
+    "availability": "Elérhetőség"
   },
   "invitation": {
     "title": "Meghívó",
@@ -118,6 +119,42 @@
       "ONLINE": "Online",
       "HOME_VISIT": "Kiszállás",
       "TELEPHONE": "Telefon"
+    }
+  },
+  "availability": {
+    "loading": "Betöltés…",
+    "title": "Elérhetőség",
+    "provider": "Szolgáltató",
+    "workingHours": "Heti munkaidő",
+    "workingHoursHint": "A szolgáltató időzónája szerinti helyi idő. Szünet úgy hagyható, ha egy naphoz két külön időszakot ad meg.",
+    "exceptions": "Kivételek",
+    "exceptionsHint": "Egyedi zárva tartás vagy plusz nyitvatartás. Ezek felülírják a heti munkaidőt.",
+    "noExceptions": "Nincs közelgő kivétel.",
+    "noProviders": "Előbb vegyen fel szolgáltatót.",
+    "notLinked": "A fiókja még nincs szolgáltatóhoz kapcsolva. Kérje meg egy adminisztrátort, hogy kapcsolja össze.",
+    "addPeriod": "Időszak hozzáadása",
+    "closed": "zárva",
+    "from": "Ettől",
+    "to": "Eddig",
+    "reason": "Indok (csak munkatársaknak)",
+    "add": "Hozzáadás",
+    "remove": "Törlés",
+    "save": "Mentés",
+    "saved": "Mentve.",
+    "genericError": "Hiba történt. Kérjük, próbálja újra.",
+    "type": {
+      "label": "Típus",
+      "UNAVAILABLE": "Nem elérhető",
+      "ADDITIONAL_AVAILABILITY": "Plusz elérhetőség"
+    },
+    "weekday": {
+      "1": "Hétfő",
+      "2": "Kedd",
+      "3": "Szerda",
+      "4": "Csütörtök",
+      "5": "Péntek",
+      "6": "Szombat",
+      "7": "Vasárnap"
     }
   }
 }

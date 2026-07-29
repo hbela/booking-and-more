@@ -34,6 +34,7 @@ import { meRoutes } from "./modules/me/me.routes.js";
 import { providerRoutes } from "./modules/providers/provider.routes.js";
 import { serviceRoutes } from "./modules/services/service.routes.js";
 import { locationRoutes } from "./modules/locations/location.routes.js";
+import { availabilityRoutes } from "./modules/availability/availability.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 
 export const API_VERSION = "0.1.0";
@@ -205,6 +206,12 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   await app.register(providerRoutes, { prefix: "/v1/providers" });
   await app.register(serviceRoutes, { prefix: "/v1/services" });
   await app.register(locationRoutes, { prefix: "/v1/locations" });
+
+  // --- Availability (Epic 3) ------------------------------------------------
+  // Registered at the version root rather than under a prefix: its routes hang
+  // off two different nouns (`/v1/providers/:id/working-hours` and
+  // `/v1/availability-exceptions/:id`), which is what tech-impl §17 specifies.
+  await app.register(availabilityRoutes, { prefix: "/v1" });
 
   // The public booking catalogue: no session, tenant addressed by slug. The
   // active/archived/assigned filters in catalogue.service.ts are what keep an

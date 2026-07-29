@@ -58,7 +58,8 @@
     "overview": "Overview",
     "providers": "Providers",
     "services": "Services",
-    "locations": "Locations"
+    "locations": "Locations",
+    "availability": "Availability"
   },
   "invitation": {
     "title": "Invitation",
@@ -118,6 +119,42 @@
       "ONLINE": "Online",
       "HOME_VISIT": "Home visit",
       "TELEPHONE": "Telephone"
+    }
+  },
+  "availability": {
+    "loading": "Loading…",
+    "title": "Availability",
+    "provider": "Provider",
+    "workingHours": "Weekly working hours",
+    "workingHoursHint": "Local times in the provider's zone. Add a second period to a day to leave a break in the middle.",
+    "exceptions": "Exceptions",
+    "exceptionsHint": "One-off closures and extra openings. These override the weekly hours.",
+    "noExceptions": "Nothing coming up.",
+    "noProviders": "Add a provider first.",
+    "notLinked": "Your account is not linked to a provider yet. Ask an administrator to link it.",
+    "addPeriod": "Add period",
+    "closed": "closed",
+    "from": "From",
+    "to": "To",
+    "reason": "Reason (staff only)",
+    "add": "Add",
+    "remove": "Remove",
+    "save": "Save",
+    "saved": "Saved.",
+    "genericError": "Something went wrong. Please try again.",
+    "type": {
+      "label": "Type",
+      "UNAVAILABLE": "Unavailable",
+      "ADDITIONAL_AVAILABILITY": "Extra availability"
+    },
+    "weekday": {
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday",
+      "7": "Sunday"
     }
   }
 }

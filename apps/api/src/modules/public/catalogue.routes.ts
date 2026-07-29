@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { commonErrorResponses, idSchema, paginatedSchema } from "@bam/contracts";
 import { pageOf } from "../../lib/pagination.js";
+import { AvailabilityService } from "../availability/availability.service.js";
+import { slotResponseSchema, slotSearchBodySchema } from "../availability/availability.schemas.js";
 import { PublicCatalogueService, localiseService } from "./catalogue.service.js";
 import {
   publicProviderSchema,
@@ -30,6 +32,9 @@ import {
  */
 export const publicCatalogueRoutes: FastifyPluginAsyncZod = async (app) => {
   const catalogue = new PublicCatalogueService(app.prisma);
+  // Shared with the staff search: one engine, one set of filters, and a
+  // `publicOnly` flag rather than a second implementation that can drift.
+  const availability = new AvailabilityService(app.prisma);
 
   const publicRateLimit = { rateLimit: { max: 120, timeWindow: "1 minute" } };
 
@@ -173,6 +178,45 @@ export const publicCatalogueRoutes: FastifyPluginAsyncZod = async (app) => {
       });
 
       return pageOf(rows, limit, (row) => row.displayName, toPublicProvider);
+    },
+  );
+
+  // --- Slot search ----------------------------------------------------------
+  app.post(
+    "/tenants/:tenantSlug/slots/search",
+    {
+      config: {
+        // Tighter than the read endpoints: this one runs the availability
+        // engine over a date range, so it is the most expensive thing an
+        // anonymous caller can ask for.
+        rateLimit: { max: 30, timeWindow: "1 minute" },
+      },
+      schema: {
+        tags: ["public"],
+        summary: "Find bookable slots",
+        description:
+          "Only providers a customer may actually book — active, not archived, online booking enabled, and assigned to this service. Times are absolute instants; the caller renders them in whatever zone it likes.",
+        params: tenantSlugParamsSchema,
+        body: slotSearchBodySchema,
+        response: {
+          200: z.object({ items: z.array(slotResponseSchema) }),
+          ...commonErrorResponses,
+        },
+      },
+    },
+    async (request) => {
+      const tenant = await catalogue.resolveTenant(request.params.tenantSlug);
+
+      const slots = await availability.searchSlots({
+        tenantId: tenant.id,
+        input: request.body,
+        now: new Date(),
+        // The difference that matters: an inactive service or an unpublished
+        // provider is invisible here, exactly as in the catalogue above.
+        publicOnly: true,
+      });
+
+      return { items: slots };
     },
   );
 

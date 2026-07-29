@@ -81,11 +81,13 @@ model Tenant {
   auditLogs   AuditLog[]
   sessions    Session[]
 
-  providers         Provider[]
-  services          Service[]
-  locations         Location[]
-  providerServices  ProviderService[]
-  providerLocations ProviderLocation[]
+  providers              Provider[]
+  services               Service[]
+  locations              Location[]
+  providerServices       ProviderService[]
+  providerLocations      ProviderLocation[]
+  workingHours           WorkingHours[]
+  availabilityExceptions AvailabilityException[]
 
   @@index([status])
   @@map("tenants")
@@ -432,6 +434,9 @@ model Provider {
   services    ProviderService[]
   locations   ProviderLocation[]
 
+  workingHours           WorkingHours[]
+  availabilityExceptions AvailabilityException[]
+
   @@index([tenantId, active])
   @@map("providers")
 }
@@ -475,8 +480,9 @@ model Service {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  translations ServiceTranslation[]
-  providers    ProviderService[]
+  translations           ServiceTranslation[]
+  providers              ProviderService[]
+  availabilityExceptions AvailabilityException[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, active])
@@ -540,7 +546,9 @@ model Location {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  providers ProviderLocation[]
+  providers              ProviderLocation[]
+  workingHours           WorkingHours[]
+  availabilityExceptions AvailabilityException[]
 
   @@index([tenantId, active])
   @@map("locations")
@@ -601,4 +609,134 @@ model ProviderLocation {
   @@unique([providerId, locationId])
   @@index([tenantId, locationId])
   @@map("provider_locations")
+}
+
+// ===========================================================================
+// Availability — Epic 3
+//
+// What the availability engine reads. The engine itself is a pure package
+// (@bam/availability-engine, tech-impl §13) and knows nothing about these
+// tables; the API loads them and hands over plain values.
+//
+// ## Wall-clock, not instants
+//
+// `WorkingHours.startTime` and `endTime` are local `HH:mm` strings, never
+// timestamps (tech-impl §13.4). "Mondays 09:00–17:00" must stay 09:00–17:00 on
+// the Monday the clocks change, and a stored UTC offset cannot express that —
+// it is right for half the year and an hour wrong for the other half.
+//
+// `AvailabilityException`, by contrast, names actual moments ("closed on the
+// 24th from 12:00"), so it stores timestamptz. The difference is the point: one
+// is a rule, the other is an event.
+// ===========================================================================
+
+/// tech-impl §10.10.
+enum ExceptionType {
+  /// Time removed from the schedule — a holiday, sick leave, a meeting.
+  UNAVAILABLE
+  /// Time added outside the recurring hours — a one-off Saturday clinic.
+  ADDITIONAL_AVAILABILITY
+
+  @@map("exception_type")
+}
+
+/// Where an exception came from. Voice and chat land here from Epics 7–8, so
+/// "who blocked this out" stays answerable after the fact (tech-impl §10.10).
+enum ExceptionSource {
+  DASHBOARD
+  VOICE
+  CHAT
+  CALENDAR
+  API
+
+  @@map("exception_source")
+}
+
+/// A recurring weekly working period. tech-impl §10.9.
+///
+/// Multiple rows per weekday are expected and are how a lunch break is
+/// expressed: Monday 09:00–12:00 and Monday 13:00–17:00 is a schedule with a
+/// gap, not a schedule with an attribute.
+model WorkingHours {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Null means "wherever this provider works". Set it when a provider keeps
+  /// different hours at different sites.
+  locationId String?   @map("location_id")
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  /// ISO 8601: Monday = 1 … Sunday = 7.
+  weekday Int
+
+  /// Local `HH:mm`. `24:00` is permitted as an end, meaning midnight; the
+  /// format is enforced by a CHECK constraint in the migration, because a
+  /// malformed time here would fail deep inside a slot calculation.
+  startTime String @map("start_time") @db.VarChar(5)
+  endTime   String @map("end_time") @db.VarChar(5)
+
+  /// Optional validity window, for a schedule that changes on a known date.
+  /// Dates rather than timestamps: "from the first of March" is a calendar
+  /// fact, not an instant.
+  validFrom  DateTime? @map("valid_from") @db.Date
+  validUntil DateTime? @map("valid_until") @db.Date
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([tenantId, providerId, weekday])
+  @@index([locationId])
+  @@map("working_hours")
+}
+
+/// A one-off change to a provider's availability. tech-impl §10.10.
+model AvailabilityException {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Both optional: an exception can be narrowed to one site or one service,
+  /// or apply to everything the provider does.
+  locationId String?   @map("location_id")
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  serviceId String?  @map("service_id")
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  type ExceptionType @map("exception_type")
+
+  /// Absolute instants — this is an event, not a rule. A CHECK constraint in
+  /// the migration enforces that it ends after it starts.
+  startAt DateTime @map("start_at") @db.Timestamptz(3)
+  endAt   DateTime @map("end_at") @db.Timestamptz(3)
+
+  /// Shown to staff, never to customers: "dentist appointment" is nobody
+  /// else's business.
+  reason String?
+
+  source ExceptionSource @default(DASHBOARD)
+
+  /// Null when the platform created it — a calendar sync, for instance.
+  createdByUserId String? @map("created_by")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// The shape of every availability query: this provider, overlapping this
+  /// window.
+  @@index([tenantId, providerId, startAt, endAt])
+  @@index([locationId])
+  @@index([serviceId])
+  @@map("availability_exceptions")
 }

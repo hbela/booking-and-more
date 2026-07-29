@@ -50,6 +50,9 @@ importers:
       '@bam/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@bam/availability-engine':
+        specifier: workspace:*
+        version: link:../../packages/availability-engine
       '@bam/config':
         specifier: workspace:*
         version: link:../../packages/config

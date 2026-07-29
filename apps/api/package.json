@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@bam/auth": "workspace:*",
+    "@bam/availability-engine": "workspace:*",
     "@bam/config": "workspace:*",
     "@bam/contracts": "workspace:*",
     "@bam/db": "workspace:*",

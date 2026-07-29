@@ -5,8 +5,8 @@ Multi-tenant, voice-enabled booking SaaS. Specs live in [docs/PRD.md](docs/PRD.m
 
 Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md) ·
-[Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md). Next up is Epic 3
-(the availability engine).
+[Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md) ·
+[Phase 3 — availability engine](docs/phase-3-availability-engine.md). Next up is Epic 4 (the booking engine).
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -78,6 +78,13 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
     quietly publish it. What a stranger may see is decided by one class (`PublicCatalogueService`), and every
     query there carries the same active/archived/assigned predicate.
 
+13. **A schedule is wall-clock; an exception is an instant.** `working_hours` stores local `HH:mm` strings,
+    never timestamps — "Mondays 09:00–17:00" has to stay 09:00–17:00 on the Monday the clocks change, and a
+    stored UTC offset is right for half the year and an hour wrong for the other half (tech-impl §13.4).
+    `availability_exceptions` stores `timestamptz`, because it names actual moments. Never convert a
+    recurring time by adding an offset by hand; go through `@bam/availability-engine`'s `zone.ts`, which
+    reports whether a reading was skipped or repeated by a daylight-saving transition.
+
 ## Layout
 
 ```
@@ -85,6 +92,7 @@ apps/api          Fastify. buildApp() in app.ts is the composition root; server.
 apps/web          Next.js App Router.
 apps/worker       BullMQ. Idles cleanly while REDIS_URL is unset.
 packages/auth     Roles, permissions, pure policy functions, Better Auth factory.
+packages/availability-engine  Pure slot generation. No runtime dependencies, deliberately.
 packages/config   Zod-validated env.
 packages/contracts Shared Zod schemas, error codes, API envelope types.
 packages/db       Prisma schema, migrations, client singleton.

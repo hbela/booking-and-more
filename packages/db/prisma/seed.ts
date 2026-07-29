@@ -129,7 +129,24 @@ async function main(): Promise<void> {
       locationIds: [surgery.id],
     });
 
-    console.log(`Seeded 2 services, 2 providers and 2 locations for ${tenant.slug}`);
+    // --- Availability (Epic 3) ----------------------------------------------
+    // Without working hours the catalogue is fully configured and nothing is
+    // bookable, which makes a fresh clone look broken. Anna works weekdays with
+    // a lunch break — two periods on one day, which is how a break is expressed
+    // (tech-impl §10.9). Béla does Tuesday and Thursday afternoons.
+    await setWorkingHours(prisma, tenant.id, anna.id, [
+      ...[1, 2, 3, 4, 5].flatMap((weekday) => [
+        { weekday, startTime: "09:00", endTime: "12:00" },
+        { weekday, startTime: "13:00", endTime: "17:00" },
+      ]),
+    ]);
+
+    await setWorkingHours(prisma, tenant.id, bela.id, [
+      { weekday: 2, startTime: "14:00", endTime: "18:00" },
+      { weekday: 4, startTime: "14:00", endTime: "18:00" },
+    ]);
+
+    console.log(`Seeded 2 services, 2 providers, 2 locations and working hours for ${tenant.slug}`);
 
     const total = await prisma.tenant.count();
     console.log(`Tenants in database: ${String(total)}`);
@@ -200,6 +217,24 @@ async function assign(
       create: { tenantId, providerId, locationId },
     });
   }
+}
+
+/**
+ * Replace a provider's week.
+ *
+ * Delete-then-insert, matching what the API's PUT does, so re-running the seed
+ * converges rather than accumulating duplicate periods.
+ */
+async function setWorkingHours(
+  prisma: PrismaClient,
+  tenantId: string,
+  providerId: string,
+  periods: { weekday: number; startTime: string; endTime: string }[],
+) {
+  await prisma.workingHours.deleteMany({ where: { tenantId, providerId } });
+  await prisma.workingHours.createMany({
+    data: periods.map((period) => ({ ...period, tenantId, providerId })),
+  });
 }
 
 main().catch((error: unknown) => {

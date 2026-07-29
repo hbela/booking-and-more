@@ -84,6 +84,7 @@ const NAV = [
   { href: "/dashboard/providers", key: "providers" as const },
   { href: "/dashboard/services", key: "services" as const },
   { href: "/dashboard/locations", key: "locations" as const },
+  { href: "/dashboard/availability", key: "availability" as const },
 ];
 
 export function DashboardShell({

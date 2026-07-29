@@ -223,3 +223,41 @@ function minorUnitDigits(currency: string): number {
       .maximumFractionDigits ?? 2
   );
 }
+
+// --- Availability (Epic 3) -------------------------------------------------
+
+export interface WorkingHoursRow {
+  id: string;
+  providerId: string;
+  locationId: string | null;
+  /** ISO 8601: Monday = 1 … Sunday = 7. */
+  weekday: number;
+  /** Local `HH:mm` in the provider's zone, not an instant (tech-impl §13.4). */
+  startTime: string;
+  endTime: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  active: boolean;
+}
+
+export interface AvailabilityException {
+  id: string;
+  providerId: string;
+  locationId: string | null;
+  serviceId: string | null;
+  type: "UNAVAILABLE" | "ADDITIONAL_AVAILABILITY";
+  startAt: string;
+  endAt: string;
+  reason: string | null;
+  source: string;
+  createdAt: string;
+}
+
+export interface Slot {
+  providerId: string;
+  startAt: string;
+  endAt: string;
+  /** Includes buffers — the diary block, not the appointment. */
+  occupiedFrom: string;
+  occupiedUntil: string;
+}
