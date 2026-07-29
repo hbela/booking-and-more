@@ -12,6 +12,55 @@ import { isRecordNotFound } from "../providers/provider.repository.js";
 export class AvailabilityRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
+  // --- Claimed time ---------------------------------------------------------
+
+  /**
+   * What is already taken on these providers' diaries.
+   *
+   * Reads `capacity_reservations` and nothing else. That table is what the
+   * exclusion constraint enforces, so it is the only source that cannot
+   * disagree with the answer the database will give when somebody tries to
+   * book: querying `bookings` and `booking_holds` separately would mean
+   * assembling the same fact from two places and hoping the assembly matches.
+   *
+   * Rows already carry the occupied window, buffers included, so nothing here
+   * recomputes a span (Epic 4, part 1).
+   */
+  async listBusyReservations(args: {
+    tenantId: string;
+    providerIds: string[];
+    from: Date;
+    to: Date;
+    /** Reservations whose holds lapsed before this are treated as free. */
+    now: Date;
+    /** A booking whose own reservation is about to move — see the slot search. */
+    excludeBookingId?: string;
+  }): Promise<{ providerId: string; bookingId: string | null; startAt: Date; endAt: Date }[]> {
+    if (args.providerIds.length === 0) return [];
+
+    return this.prisma.capacityReservation.findMany({
+      where: {
+        tenantId: args.tenantId,
+        providerId: { in: args.providerIds },
+        status: "ACTIVE",
+        // Half-open overlap, matching the engine and the constraint.
+        startAt: { lt: args.to },
+        endAt: { gt: args.from },
+        // An expired hold's reservation is still ACTIVE in the database until
+        // something sweeps it, and it still blocks the exclusion constraint —
+        // but it does not mean the slot is taken, and showing it as taken would
+        // hide a free appointment for as long as nobody tried to book near it.
+        // The sweep runs inside the transaction that claims the slot, so a
+        // customer who books what this offers still succeeds.
+        OR: [{ expiresAt: null }, { expiresAt: { gt: args.now } }],
+        ...(args.excludeBookingId === undefined
+          ? {}
+          : { NOT: { bookingId: args.excludeBookingId } }),
+      },
+      select: { providerId: true, bookingId: true, startAt: true, endAt: true },
+    });
+  }
+
   // --- Working hours --------------------------------------------------------
 
   async listWorkingHours(args: {

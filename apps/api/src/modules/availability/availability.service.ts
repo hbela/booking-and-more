@@ -41,6 +41,15 @@ const DEFAULT_MAXIMUM_ADVANCE_DAYS = 180;
  */
 const DEFAULT_SLOT_INTERVAL_MINUTES = 15;
 
+/**
+ * Stands in for "no horizon" when staff book directly.
+ *
+ * A number rather than a nullable field, because the engine's contract takes a
+ * count of days and threading an optional through it would put a null check in
+ * the middle of the date arithmetic for the sake of one caller.
+ */
+const UNBOUNDED_ADVANCE_DAYS = 36_500;
+
 /** Everything the engine needs about one provider, already resolved. */
 interface ProviderPlan {
   providerId: string;
@@ -221,6 +230,22 @@ export class AvailabilityService {
     input: SlotSearchBody;
     now: Date;
     publicOnly: boolean;
+    /**
+     * Staff booking directly from the diary. The notice and advance windows
+     * exist to govern strangers; a receptionist fitting somebody in this
+     * afternoon is the business exercising its own judgement (see
+     * BookingService.createDirectBooking).
+     */
+    ignoreBookingWindow?: boolean;
+    /**
+     * Treat this booking's own reservation as free.
+     *
+     * A reschedule asks "could this booking move here?", and its current
+     * reservation is about to move out of the way. Without this, a booking
+     * could never be moved to an overlapping time — including thirty minutes
+     * later, which is the most common request there is.
+     */
+    ignoreBookingId?: string;
   }): Promise<(AvailableSlot & { providerId: string })[]> {
     const { tenantId, input } = args;
 
@@ -282,6 +307,40 @@ export class AvailabilityService {
     windowFrom.setUTCDate(windowFrom.getUTCDate() - 2);
     windowTo.setUTCDate(windowTo.getUTCDate() + 2);
 
+    // Everything already claimed on these providers' diaries.
+    //
+    // One query over capacity_reservations rather than separate reads of
+    // bookings and holds, because that table is the single answer to "is this
+    // time taken" — it is what the exclusion constraint enforces, and reading
+    // anything else here would let the search disagree with the constraint that
+    // decides. The spans are already the occupied windows, buffers included.
+    const reservations = await this.repository.listBusyReservations({
+      tenantId,
+      providerIds: assignments.map((assignment) => assignment.providerId),
+      from: windowFrom,
+      to: windowTo,
+      now: args.now,
+      ...(args.ignoreBookingId === undefined ? {} : { excludeBookingId: args.ignoreBookingId }),
+    });
+
+    const busyByProvider = new Map<
+      string,
+      { bookings: DateTimePeriod[]; holds: DateTimePeriod[] }
+    >();
+    for (const reservation of reservations) {
+      const entry = busyByProvider.get(reservation.providerId) ?? { bookings: [], holds: [] };
+      const period: DateTimePeriod = {
+        startAt: reservation.startAt.toISOString(),
+        endAt: reservation.endAt.toISOString(),
+      };
+      // The engine subtracts both identically (tech-impl §11.3). They are kept
+      // apart so a slot that vanished because somebody is mid-checkout is
+      // distinguishable in a log from one that is genuinely booked.
+      if (reservation.bookingId === null) entry.holds.push(period);
+      else entry.bookings.push(period);
+      busyByProvider.set(reservation.providerId, entry);
+    }
+
     const slots: (AvailableSlot & { providerId: string })[] = [];
 
     for (const assignment of assignments) {
@@ -307,14 +366,14 @@ export class AvailabilityService {
         workingPeriods: plan.workingPeriods,
         additionalPeriods: plan.additionalPeriods,
         unavailablePeriods: plan.unavailablePeriods,
-        // Empty until the booking engine exists (Epic 4) and calendar sync
-        // lands (Epic 6). The engine already subtracts all three; there is
-        // simply nothing yet to subtract.
-        bookings: [],
-        activeHolds: [],
+        bookings: busyByProvider.get(plan.providerId)?.bookings ?? [],
+        activeHolds: busyByProvider.get(plan.providerId)?.holds ?? [],
+        // Still empty: calendar sync lands in Epic 6. The engine subtracts it
+        // already, so that epic supplies data rather than changing logic.
         externalBusyPeriods: [],
-        minimumNoticeMinutes: plan.minimumNoticeMinutes,
-        maximumAdvanceDays: plan.maximumAdvanceDays,
+        minimumNoticeMinutes: args.ignoreBookingWindow === true ? 0 : plan.minimumNoticeMinutes,
+        maximumAdvanceDays:
+          args.ignoreBookingWindow === true ? UNBOUNDED_ADVANCE_DAYS : plan.maximumAdvanceDays,
         now: args.now.toISOString(),
       };
 

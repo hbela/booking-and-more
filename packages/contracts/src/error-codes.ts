@@ -33,13 +33,23 @@ export const ErrorCodes = {
   // --- Idempotency (tech-impl §32) -----------------------------------------
   IDEMPOTENCY_KEY_REQUIRED: "IDEMPOTENCY_KEY_REQUIRED",
   IDEMPOTENCY_KEY_REUSED: "IDEMPOTENCY_KEY_REUSED",
+  /** The first request carrying this key has not finished yet. */
+  IDEMPOTENCY_KEY_IN_PROGRESS: "IDEMPOTENCY_KEY_IN_PROGRESS",
 
   // --- Booking (Epic 4) -----------------------------------------------------
+  /** The exclusion constraint refused: somebody else got there first. */
   SLOT_NO_LONGER_AVAILABLE: "SLOT_NO_LONGER_AVAILABLE",
+  /** Nothing in the schedule offers this time — closed, blocked, or not on the
+   *  slot grid. Distinct from SLOT_NO_LONGER_AVAILABLE, which means "taken". */
+  SLOT_NOT_BOOKABLE: "SLOT_NOT_BOOKABLE",
   HOLD_EXPIRED: "HOLD_EXPIRED",
   HOLD_NOT_FOUND: "HOLD_NOT_FOUND",
+  /** The hold already became a booking — retrying must not make a second one. */
+  HOLD_ALREADY_CONFIRMED: "HOLD_ALREADY_CONFIRMED",
   BOOKING_NOT_FOUND: "BOOKING_NOT_FOUND",
   BOOKING_ALREADY_CANCELLED: "BOOKING_ALREADY_CANCELLED",
+  /** Finished, started, or past its cancellation deadline. */
+  BOOKING_NOT_MODIFIABLE: "BOOKING_NOT_MODIFIABLE",
   OUTSIDE_BOOKING_WINDOW: "OUTSIDE_BOOKING_WINDOW",
   MINIMUM_NOTICE_NOT_MET: "MINIMUM_NOTICE_NOT_MET",
 

@@ -35,7 +35,9 @@ import { providerRoutes } from "./modules/providers/provider.routes.js";
 import { serviceRoutes } from "./modules/services/service.routes.js";
 import { locationRoutes } from "./modules/locations/location.routes.js";
 import { availabilityRoutes } from "./modules/availability/availability.routes.js";
+import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
+import { publicBookingRoutes } from "./modules/public/booking.routes.js";
 
 export const API_VERSION = "0.1.0";
 
@@ -213,10 +215,18 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // `/v1/availability-exceptions/:id`), which is what tech-impl §17 specifies.
   await app.register(availabilityRoutes, { prefix: "/v1" });
 
+  // --- Bookings (Epic 4) ----------------------------------------------------
+  await app.register(bookingRoutes, { prefix: "/v1/bookings" });
+
   // The public booking catalogue: no session, tenant addressed by slug. The
   // active/archived/assigned filters in catalogue.service.ts are what keep an
   // unfinished catalogue off the internet.
   await app.register(publicCatalogueRoutes, { prefix: "/v1/public" });
+
+  // Holds, confirmation and the management-link endpoints. Same prefix, its own
+  // plugin: what a stranger may send is decided by one file whose response
+  // schemas are declared separately from the staff ones (CLAUDE.md rule 12).
+  await app.register(publicBookingRoutes, { prefix: "/v1/public" });
 
   return app;
 }

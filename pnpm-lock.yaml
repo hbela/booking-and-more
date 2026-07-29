@@ -53,6 +53,9 @@ importers:
       '@bam/availability-engine':
         specifier: workspace:*
         version: link:../../packages/availability-engine
+      '@bam/booking-engine':
+        specifier: workspace:*
+        version: link:../../packages/booking-engine
       '@bam/config':
         specifier: workspace:*
         version: link:../../packages/config
