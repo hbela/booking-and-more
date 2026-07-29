@@ -1,0 +1,36 @@
+{
+  "name": "@bam/booking-engine",
+  "version": "0.0.0",
+  "private": true,
+  "//": "@bam/availability-engine is a devDependency only, and the 'no runtime dependencies' claim stands: engine.property.test.ts asserts this package's diary block against the one the slot search produces, which is the invariant that stops a booked slot being offered twice.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check-types": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@bam/availability-engine": "workspace:*",
+    "@bam/eslint-config": "workspace:*",
+    "@bam/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "fast-check": "^4.5.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

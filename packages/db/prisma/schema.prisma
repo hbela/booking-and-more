@@ -11,10 +11,12 @@
 //
 // Phase 0 defined `Tenant`. Phase 1 (Epic 1) added identity and tenancy: the
 // Better Auth tables, plus Membership, Invitation and AuditLog. Phase 2
-// (Epic 2) adds the catalogue a tenant configures before it can take a booking:
-// Provider, Service, Location and the two join tables that connect them.
-// Working hours and availability exceptions belong to the availability engine
-// and land in Epic 3.
+// (Epic 2) added the catalogue a tenant configures before it can take a
+// booking: Provider, Service, Location and the two join tables that connect
+// them. Phase 3 (Epic 3) added WorkingHours and AvailabilityException, which is
+// what the availability engine reads. Phase 4 (Epic 4) adds the booking itself:
+// Customer, CapacityReservation, BookingHold, Booking, OutboxEvent and
+// IdempotencyKey.
 //
 // Identity vs. authorization: Better Auth owns User/Session/Account/
 // Verification and nothing else. Roles live on Membership — never on User — so
@@ -88,6 +90,13 @@ model Tenant {
   providerLocations      ProviderLocation[]
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
+
+  customers            Customer[]
+  capacityReservations CapacityReservation[]
+  bookingHolds         BookingHold[]
+  bookings             Booking[]
+  outboxEvents         OutboxEvent[]
+  idempotencyKeys      IdempotencyKey[]
 
   @@index([status])
   @@map("tenants")
@@ -437,6 +446,10 @@ model Provider {
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
 
+  capacityReservations CapacityReservation[]
+  bookingHolds         BookingHold[]
+  bookings             Booking[]
+
   @@index([tenantId, active])
   @@map("providers")
 }
@@ -467,7 +480,7 @@ model Service {
   priceMinor Int?    @map("price_minor")
   currency   String? @db.Char(3)
 
-  active Boolean @default(true)
+  active           Boolean @default(true)
   /// The booking is requested rather than confirmed; staff accept it. Honoured
   /// by the booking engine in Epic 4.
   requiresApproval Boolean @default(false) @map("requires_approval")
@@ -483,6 +496,9 @@ model Service {
   translations           ServiceTranslation[]
   providers              ProviderService[]
   availabilityExceptions AvailabilityException[]
+
+  bookingHolds BookingHold[]
+  bookings     Booking[]
 
   @@unique([tenantId, slug])
   @@index([tenantId, active])
@@ -549,6 +565,9 @@ model Location {
   providers              ProviderLocation[]
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
+
+  bookingHolds BookingHold[]
+  bookings     Booking[]
 
   @@index([tenantId, active])
   @@map("locations")
@@ -739,4 +758,394 @@ model AvailabilityException {
   @@index([locationId])
   @@index([serviceId])
   @@map("availability_exceptions")
+}
+
+// ===========================================================================
+// Bookings — Epic 4
+//
+// tech-impl §10.11-10.13, §11, §12, §32.
+//
+// ## The three tables that look like one thing
+//
+// A slot being taken is recorded in up to three rows, and the separation is
+// deliberate:
+//
+//   capacity_reservations  *the* gate. One exclusion constraint over this table
+//                          stops two people occupying one provider at one time,
+//                          whether they are holding or booked (§11.3).
+//   booking_holds          a customer's five minutes to fill in a form.
+//   bookings               the appointment itself.
+//
+// A hold owns a reservation; on confirmation the booking *adopts* that same
+// reservation row rather than swapping it, so the slot is never unguarded for
+// even an instant of the transaction (§11.5 step 6).
+//
+// ## Spans: appointment versus occupied
+//
+// `booking_holds` and `bookings` store the appointment — what the customer was
+// told, what a confirmation email says. `capacity_reservations` stores the
+// occupied window, buffers included, which is what the diary actually loses and
+// what the next availability search subtracts. Both come from
+// @bam/booking-engine's `occupiedSpanFor`, which is the only definition of
+// either.
+// ===========================================================================
+
+/// PRD §9.9.
+enum BookingStatus {
+  /// Awaiting staff acceptance — `Service.requiresApproval`. Still blocks the
+  /// slot: the customer asked first, and a slow decision must not cost them it.
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+  /// Nobody acted on a PENDING booking before its start time passed.
+  EXPIRED
+
+  @@map("booking_status")
+}
+
+/// tech-impl §10.13. Where a booking came from.
+enum BookingSource {
+  FORM
+  CHAT
+  VOICE
+  STAFF
+  API
+
+  @@map("booking_source")
+}
+
+/// tech-impl §10.12.
+enum HoldStatus {
+  ACTIVE
+  /// Became a booking.
+  CONFIRMED
+  /// Given up deliberately — the customer went back a step.
+  RELEASED
+  /// Ran out of time. Written lazily; see `expiresAt` below.
+  EXPIRED
+
+  @@map("hold_status")
+}
+
+/// tech-impl §11.3. Two values, because a reservation either blocks or it does
+/// not — a confirmed booking's reservation stays ACTIVE, since it is still
+/// occupying the diary.
+enum ReservationStatus {
+  ACTIVE
+  RELEASED
+
+  @@map("reservation_status")
+}
+
+/// tech-impl §12.
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+
+  @@map("outbox_status")
+}
+
+/// Someone who books. tech-impl §10.11.
+///
+/// Not a User: a customer never signs in during the MVP, and conflating the two
+/// would put booking history behind an account nobody has. A customer belongs to
+/// one tenant — the same person booking at two clinics is two rows, because the
+/// clinics may not see each other's records.
+model Customer {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The tenant's own identifier for this person — a patient number carried in
+  /// from whatever they used before.
+  externalReference String? @map("external_reference")
+
+  fullName String  @map("full_name")
+  email    String?
+  phone    String?
+
+  /// Matching keys, maintained by the API through @bam/booking-engine's
+  /// normalizers (tech-impl §10.11). Stored rather than computed so the lookup
+  /// is an index scan; separate from the display columns because `email` is what
+  /// the customer typed and should be what a confirmation is addressed to.
+  ///
+  /// Records are never merged on name alone — two people called Nagy Péter is a
+  /// Tuesday in Hungary, and merging them is a data-protection incident.
+  normalizedEmail String? @map("normalized_email")
+  normalizedPhone String? @map("normalized_phone")
+
+  preferredLanguage String  @default("hu") @map("preferred_language")
+  timezone          String?
+
+  marketingConsent Boolean @default(false) @map("marketing_consent")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  holds    BookingHold[]
+  bookings Booking[]
+
+  @@index([tenantId, normalizedEmail])
+  @@index([tenantId, normalizedPhone])
+  @@map("customers")
+}
+
+/// The exclusive-capacity gate. tech-impl §11.3.
+///
+/// Every row here is a claim on one provider's time. The exclusion constraint —
+/// hand-written, because Prisma cannot express it — refuses a second ACTIVE row
+/// overlapping an existing one for the same provider. That single constraint is
+/// what makes "two concurrent users cannot confirm the same slot" true, and it
+/// is true because PostgreSQL enforces it, not because application code checked
+/// first and hoped.
+///
+/// `startAt`/`endAt` are the **occupied** span: buffers included.
+model CapacityReservation {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Who owns the claim: the booking if there is one, otherwise the hold.
+  ///
+  /// Confirmation sets `bookingId` and leaves `holdId` in place, so ownership
+  /// moves within one transaction without the row ever ceasing to be ACTIVE —
+  /// the slot is never unguarded — and the booking's lineage back to the hold
+  /// that produced it stays readable. A CHECK constraint in the migration
+  /// requires an ACTIVE row to have at least one of the two: an ownerless
+  /// reservation is unreachable and would block its slot forever.
+  holdId String?      @unique @map("hold_id")
+  hold   BookingHold? @relation(fields: [holdId], references: [id], onDelete: SetNull)
+
+  bookingId String?  @unique @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  startAt DateTime @map("start_at") @db.Timestamptz(3)
+  endAt   DateTime @map("end_at") @db.Timestamptz(3)
+
+  status ReservationStatus @default(ACTIVE)
+
+  /// Set while a hold owns the row, NULL once a booking does — a booking does
+  /// not time out.
+  ///
+  /// An exclusion constraint's predicate cannot call `now()`, so an expired
+  /// reservation goes on blocking its slot until something rewrites its status.
+  /// Until Epic 5 brings a worker, the API sweeps these inside the transaction
+  /// that creates the next hold, which is the one moment the answer matters.
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([tenantId, providerId, startAt, endAt])
+  /// Drives the expiry sweep.
+  @@index([status, expiresAt])
+  @@map("capacity_reservations")
+}
+
+/// A customer's few minutes to finish the form. tech-impl §10.12, PRD §9.8.
+///
+/// `startAt`/`endAt` are the appointment, not the diary block — the block lives
+/// on the reservation this hold owns.
+model BookingHold {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  serviceId String  @map("service_id")
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  locationId String?   @map("location_id")
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  /// Set only if the customer is already known — a hold is created before any
+  /// details are collected.
+  customerId String?   @map("customer_id")
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// Opaque client-supplied string tying a hold to one browser tab or one
+  /// conversation. Not a login and not trusted for authorization; it exists so a
+  /// customer can be shown the hold they made rather than somebody else's.
+  sessionId String @map("session_id")
+
+  startAt DateTime @map("start_at") @db.Timestamptz(3)
+  endAt   DateTime @map("end_at") @db.Timestamptz(3)
+
+  status HoldStatus @default(ACTIVE)
+
+  /// The truth about whether this hold is live. `status` is a cache of it,
+  /// written when something happens to notice — see @bam/booking-engine's
+  /// `effectiveHoldStatus`.
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  reservation CapacityReservation?
+  bookings    Booking[]
+
+  @@index([tenantId, providerId, startAt])
+  @@index([tenantId, sessionId])
+  @@index([status, expiresAt])
+  @@map("booking_holds")
+}
+
+/// An appointment. tech-impl §10.13.
+model Booking {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Short, human-readable, unique within the tenant. What a customer reads out
+  /// on the phone, and what a confirmation email leads with.
+  reference String
+
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  serviceId String  @map("service_id")
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  locationId String?   @map("location_id")
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  /// The hold this came from, kept for the audit trail. NULL for a staff booking
+  /// made straight from the diary, which never needed one.
+  holdId String?      @map("hold_id")
+  hold   BookingHold? @relation(fields: [holdId], references: [id], onDelete: SetNull)
+
+  /// The appointment. The diary block, buffers included, is on the reservation.
+  startAt DateTime @map("start_at") @db.Timestamptz(3)
+  endAt   DateTime @map("end_at") @db.Timestamptz(3)
+
+  status BookingStatus @default(CONFIRMED)
+  source BookingSource @default(FORM)
+
+  // --- Snapshots ------------------------------------------------------------
+  //
+  // Catalogue rows are archived rather than deleted (CLAUDE.md rule 11), so the
+  // foreign keys above never dangle. That solves referential integrity and
+  // nothing else: a service renamed and repriced next year would make this
+  // booking claim the customer agreed to a price they never saw. These columns
+  // record what they were actually told.
+  customerNameSnapshot  String  @map("customer_name_snapshot")
+  customerEmailSnapshot String? @map("customer_email_snapshot")
+  customerPhoneSnapshot String? @map("customer_phone_snapshot")
+  serviceNameSnapshot   String  @map("service_name_snapshot")
+  priceMinorSnapshot    Int?    @map("price_minor_snapshot")
+  currencySnapshot      String? @map("currency_snapshot") @db.Char(3)
+
+  notes String?
+
+  cancellationReason String?   @map("cancellation_reason")
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(3)
+
+  /// NULL when a customer booked themselves.
+  createdByUserId String? @map("created_by_user_id")
+
+  /// SHA-256 of the token in the customer's management URL (tech-impl §34.4).
+  /// The raw token is shown once and never stored, exactly as for invitations.
+  managementTokenHash String? @unique @map("management_token_hash")
+
+  /// Optimistic-locking counter, bumped on every write.
+  version Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  reservation CapacityReservation?
+
+  @@unique([tenantId, reference])
+  @@index([tenantId, providerId, startAt])
+  @@index([tenantId, status, startAt])
+  @@index([tenantId, customerId])
+  @@map("bookings")
+}
+
+/// tech-impl §12.
+///
+/// A queue job published inside a transaction is lost if the transaction rolls
+/// back, and a transaction that waits on a queue fails when the queue is down.
+/// So nothing publishes: the confirming transaction writes a row here, and the
+/// worker turns rows into BullMQ jobs once it exists (Epic 5). Until then these
+/// accumulate, which is the correct behaviour — the events are the record that
+/// something needs sending, and nothing about them expires.
+model OutboxEvent {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// BOOKING_CONFIRMED, BOOKING_CANCELLED, … Deliberately a string rather than
+  /// an enum: adding an event type should not need a migration, and the worker
+  /// ignores what it does not recognise.
+  eventType String @map("event_type")
+
+  aggregateType String @map("aggregate_type")
+  aggregateId   String @map("aggregate_id")
+
+  payload Json @map("payload_json")
+
+  status OutboxStatus @default(PENDING)
+
+  /// Lets an event be scheduled rather than sent at once — a reminder the day
+  /// before, for instance.
+  availableAt DateTime @default(now()) @map("available_at") @db.Timestamptz(3)
+  attempts    Int      @default(0)
+  lastError   String?  @map("last_error")
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+
+  /// The worker's claim query: everything due and unsent, oldest first.
+  @@index([status, availableAt])
+  @@index([tenantId, aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+/// tech-impl §32.
+///
+/// A customer on a hotel wifi taps "Confirm", the response is lost, and the
+/// retry must return the first booking rather than make a second one. The key
+/// is the client's; `requestHash` is ours, so that reusing a key with a
+/// different payload is refused rather than silently answered with the wrong
+/// booking.
+model IdempotencyKey {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  key       String
+  /// The route this key was used for. Scoped so that one client-generated key
+  /// reused across two different operations does not collide.
+  operation String
+
+  requestHash String @map("request_hash")
+
+  responseStatus Int?  @map("response_status")
+  responseBody   Json? @map("response_body")
+
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, operation, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }
