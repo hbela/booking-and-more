@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { permissionsForRole } from "@bam/auth";
-import { commonErrorResponses, idSchema } from "@bam/contracts";
+import { commonErrorResponses, daysUntil, idSchema } from "@bam/contracts";
 
 /**
  * Who am I, and what may I do here?
@@ -34,9 +34,16 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
                 id: idSchema,
                 slug: z.string(),
                 name: z.string(),
-                status: z.enum(["TRIAL", "ACTIVE", "SUSPENDED", "CLOSED"]),
+                status: z.enum(["PENDING_SUBSCRIPTION", "TRIAL", "ACTIVE", "SUSPENDED", "CLOSED"]),
                 defaultTimezone: z.string(),
                 defaultLanguage: z.string(),
+                /** When this organization must have subscribed by. Null for an
+                 *  internal one, which has no deadline (phase-9 §2.2). */
+                subscribeBy: z.iso.datetime({ offset: true }).nullable(),
+                /** Floored at zero; null when there is no deadline at all —
+                 *  which is not the same as none left, so the pending panel
+                 *  renders no countdown rather than "0 days". */
+                daysRemaining: z.number().int().nullable(),
               })
               .nullable(),
             membership: z
@@ -83,6 +90,8 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
             status: tenant.status,
             defaultTimezone: tenant.defaultTimezone,
             defaultLanguage: tenant.defaultLanguage,
+            subscribeBy: tenant.subscribeBy?.toISOString() ?? null,
+            daysRemaining: daysUntil(tenant.subscribeBy),
           },
           membership: membership
             ? {

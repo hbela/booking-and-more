@@ -12,8 +12,10 @@ import {
   TenantStatuses,
   type Actor,
   can,
+  canBecomePlatformAdmin,
   canBlockProviderTime,
   canChangeMemberRole,
+  canHoldTenantMembership,
   canManageProviderBookings,
   canReadProviderBookings,
   isMemberOf,
@@ -256,5 +258,59 @@ describe("role table invariants", () => {
     for (const permission of ROLE_PERMISSIONS[Roles.ADMIN]) {
       expect(ROLE_PERMISSIONS[Roles.OWNER]).toContain(permission);
     }
+  });
+});
+
+describe("separation of duties — an operator is not a customer", () => {
+  it("lets an ordinary user hold a membership", () => {
+    expect(canHoldTenantMembership({ isPlatformAdmin: false })).toBe(true);
+  });
+
+  it("refuses a platform admin a membership", () => {
+    // Not a privilege they are missing: `can()` already returns true for them
+    // in every tenant, so a membership grants nothing and only makes their
+    // audit trail ambiguous.
+    expect(canHoldTenantMembership({ isPlatformAdmin: true })).toBe(false);
+  });
+
+  it("lets a user with no memberships become a platform admin", () => {
+    expect(canBecomePlatformAdmin({ membershipCount: 0 })).toBe(true);
+  });
+
+  it("refuses to promote a user who belongs to a tenant", () => {
+    expect(canBecomePlatformAdmin({ membershipCount: 1 })).toBe(false);
+    expect(canBecomePlatformAdmin({ membershipCount: 9 })).toBe(false);
+  });
+
+  it("is symmetric: neither order of operations reaches the forbidden state", () => {
+    // The state to prevent is (isPlatformAdmin && membershipCount > 0). Guard
+    // only one side and it is reachable by doing the two steps the other way
+    // round, which is how one-way guards are usually defeated.
+    const grantThenJoin = canHoldTenantMembership({ isPlatformAdmin: true });
+    const joinThenGrant = canBecomePlatformAdmin({ membershipCount: 1 });
+
+    expect(grantThenJoin).toBe(false);
+    expect(joinThenGrant).toBe(false);
+  });
+});
+
+describe("the activation gate — PENDING_SUBSCRIPTION", () => {
+  it("accepts no writes", () => {
+    // phase-9 §2.4. An organization that has not paid cannot be configured.
+    expect(tenantAcceptsWrites(TenantStatuses.PENDING_SUBSCRIPTION)).toBe(false);
+  });
+
+  it("is still readable", () => {
+    // The owner has to be able to sign in and see the organization — that is
+    // where the subscribe action lives. An organization nobody can look at
+    // cannot be paid for, and would expire while its owner tried.
+    expect(tenantIsReadable(TenantStatuses.PENDING_SUBSCRIPTION)).toBe(true);
+  });
+
+  it("keeps the write gate an allow-list", () => {
+    // Inverting this into `!== SUSPENDED` would silently un-gate every status
+    // added afterwards. Asserting the whole table makes that a failing test.
+    const writable = Object.values(TenantStatuses).filter(tenantAcceptsWrites);
+    expect(writable.sort()).toEqual([TenantStatuses.ACTIVE, TenantStatuses.TRIAL].sort());
   });
 });

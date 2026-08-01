@@ -91,6 +91,25 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
     return { cookie, email, id: user!.id };
   }
 
+  /** Sign an existing user in again, to pick up a change made under them. */
+  async function signIn(email: string): Promise<string> {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sign-in/email",
+      payload: { email, password: "correct-horse-battery-staple" },
+    });
+
+    expect(response.statusCode, `sign-in failed: ${response.body}`).toBeLessThan(400);
+
+    const setCookie = response.headers["set-cookie"];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie ?? ""];
+
+    return cookies
+      .map((entry) => entry.split(";")[0])
+      .filter(Boolean)
+      .join("; ");
+  }
+
   function as(cookie: string, tenantId?: string) {
     return {
       cookie,
@@ -179,6 +198,40 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
       expect(membership?.role).toBe("OWNER");
       expect(membership?.status).toBe("ACTIVE");
       expect(membership?.joinedAt).not.toBeNull();
+    });
+
+    it("refuses to let a platform admin own a tenant", async () => {
+      // Separation of duties: an operator of the platform is not one of its
+      // customers. A platform admin already passes every tenant permission
+      // check, so a membership grants them nothing and only makes their audit
+      // trail ambiguous — their work as an owner would be indistinguishable
+      // from platform intervention.
+      const operator = await signUp("operator");
+      await app.prisma.user.update({
+        where: { id: operator.id },
+        data: { isPlatformAdmin: true },
+      });
+
+      // A fresh session is required, not merely tidier: auth.ts enables a
+      // 60-second session cookie cache, so the cookie from sign-up still
+      // carries isPlatformAdmin: false until it expires.
+      const cookie = await signIn(operator.email);
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/tenants",
+        headers: { cookie },
+        payload: { slug: `clinic-operator-${RUN}`, name: "Operator Clinic" },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe("FORBIDDEN");
+
+      // And nothing was half-created: the refusal happens before the service.
+      const tenant = await app.prisma.tenant.findUnique({
+        where: { slug: `clinic-operator-${RUN}` },
+      });
+      expect(tenant).toBeNull();
     });
 
     it("writes an audit row for the creation", async () => {

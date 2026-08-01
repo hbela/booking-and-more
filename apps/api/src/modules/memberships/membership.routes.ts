@@ -334,7 +334,12 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) => {
       const user = request.user!;
-      const result = await service.acceptInvitation(request.body.token, user.id, user.email);
+      const result = await service.acceptInvitation(
+        request.body.token,
+        user.id,
+        user.email,
+        user.isPlatformAdmin,
+      );
 
       request.audit({
         action: "membership.invitation_accepted",
@@ -345,6 +350,110 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
       });
 
       return { tenantId: result.tenantId, role: result.membership.role };
+    },
+  );
+
+  // --- What the landing page needs before it can render ----------------------
+  // docs/phase-9-owner-onboarding.md §2.3.
+  //
+  // A POST for what is logically a read, because the token travels in the body.
+  // In the path it would be written to every access log, proxy log and browser
+  // history between the owner and us — and it is a bearer credential.
+  app.post(
+    "/lookup",
+    {
+      config: {
+        rateLimit: { max: 10, timeWindow: "1 hour" },
+      },
+      schema: {
+        tags: ["members"],
+        summary: "Describe an invitation",
+        description:
+          "Unauthenticated: the invitee may have no account yet. Returns what the acceptance page needs to greet them, and whether they must register first. Invalid, revoked and already-used tokens all return the same error.",
+        body: z.object({ token: z.string().min(20).max(200) }),
+        response: {
+          200: z.object({
+            organizationName: z.string(),
+            email: z.email(),
+            role: roleSchema,
+            expiresAt: z.iso.datetime({ offset: true }),
+            requiresRegistration: z.boolean(),
+          }),
+          ...commonErrorResponses,
+        },
+      },
+    },
+    async (request) => {
+      const result = await service.describeInvitation(request.body.token);
+
+      return { ...result, expiresAt: result.expiresAt.toISOString() };
+    },
+  );
+
+  // --- Accept and register, in one step -------------------------------------
+  // docs/phase-9-owner-onboarding.md §2.1. The route that makes onboarding one
+  // form instead of four steps.
+  app.post(
+    "/accept-and-register",
+    {
+      // Deliberately unauthenticated — the caller has no account, which is the
+      // entire point. The token is the credential.
+      config: {
+        rateLimit: { max: 10, timeWindow: "1 hour" },
+      },
+      schema: {
+        tags: ["members"],
+        summary: "Create an account from an invitation and accept it",
+        description:
+          "For an invitee with no account yet. The address is taken from the invitation, never from the request — the token is a claim about one mailbox and must not become a grant for any other. Someone who already has an account signs in and uses POST /v1/invitations/accept instead. Returns a session.",
+        body: z.object({
+          token: z.string().min(20).max(200),
+          name: z.string().trim().min(1).max(100),
+          // Matches Better Auth's minPasswordLength; a shorter value would be
+          // rejected downstream with a less useful error.
+          password: z.string().min(12).max(200),
+        }),
+        response: {
+          201: z.object({ tenantId: idSchema, role: roleSchema }),
+          ...commonErrorResponses,
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await service.registerAndAccept({
+        token: request.body.token,
+        name: request.body.name,
+        createUser: async ({ email, name }) => {
+          const { headers, response } = await app.auth.api.signUpEmail({
+            body: { email, name, password: request.body.password },
+            returnHeaders: true,
+          });
+
+          // Appended rather than set: sign-up emits several Set-Cookie headers
+          // and `Headers` collapses them into one comma-joined value, which
+          // browsers then reject. auth.plugin.ts hits the same trap at its own
+          // bridge.
+          const cookies = headers.getSetCookie();
+          for (const cookie of cookies) {
+            void reply.header("set-cookie", cookie);
+          }
+
+          return { id: response.user.id };
+        },
+      });
+
+      request.audit({
+        action: "membership.invitation_accepted_with_registration",
+        entityType: "Membership",
+        entityId: result.membership.id,
+        tenantId: result.tenantId,
+        after: { role: result.membership.role, userId: result.userId },
+      });
+
+      return reply.status(201).send({
+        tenantId: result.tenantId,
+        role: result.membership.role,
+      });
     },
   );
 };

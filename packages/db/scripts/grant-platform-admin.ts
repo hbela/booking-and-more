@@ -44,6 +44,38 @@ async function main(): Promise<void> {
       return;
     }
 
+    // Separation of duties, enforced from this side too. The API refuses to
+    // give a platform admin a membership; without this check the same end state
+    // is reachable by doing the two steps in the other order, which is how
+    // one-way guards are usually defeated — not maliciously, just by working in
+    // the order that seemed natural.
+    //
+    // The canonical rule, with its reasoning, is `canBecomePlatformAdmin` in
+    // @bam/auth/policy.ts, and this is deliberately *not* importing it:
+    // @bam/auth already depends on @bam/db for the Better Auth adapter, so the
+    // import would make the two packages cyclic. What is duplicated is one
+    // comparison; what matters — why the rule exists, and its counterpart
+    // `canHoldTenantMembership` — stays in one place, and `policy.test.ts`
+    // covers both sides.
+    if (!revoke) {
+      const membershipCount = await prisma.membership.count({ where: { userId: user.id } });
+
+      if (membershipCount > 0) {
+        const memberships = await prisma.membership.findMany({
+          where: { userId: user.id },
+          select: { role: true, tenant: { select: { slug: true } } },
+        });
+
+        console.error(
+          `${email} belongs to ${String(membershipCount)} tenant(s) and cannot be a platform admin:\n` +
+            memberships.map((m) => `  - ${m.tenant.slug} (${m.role})`).join("\n") +
+            "\n\nA platform operator is not one of the platform's customers. Either remove those\n" +
+            "memberships, or grant the flag to a separate account kept for platform work.",
+        );
+        process.exit(1);
+      }
+    }
+
     await prisma.user.update({
       where: { id: user.id },
       data: { isPlatformAdmin: !revoke },

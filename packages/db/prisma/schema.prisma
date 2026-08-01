@@ -38,10 +38,21 @@ datasource db {
 /// Lifecycle of a tenant. Gates every write: a suspended tenant accepts no new
 /// bookings (Epic 9 exit criterion). tech-impl §10.1.
 enum TenantStatus {
+  /// Reserved for a real free-trial offering. No flow reaches it yet, and it is
+  /// deliberately *not* reused for PENDING_SUBSCRIPTION: a trial is the product
+  /// working for free, which that is not.
   TRIAL
   ACTIVE
   SUSPENDED
   CLOSED
+  /// Provisioned by a platform admin, owner can sign in, nothing configurable
+  /// until a subscription arrives. See docs/phase-9-saas-administration.md §2.1.
+  ///
+  /// Listed last rather than first on purpose: PostgreSQL can only append to an
+  /// enum in place, so inserting a value mid-list makes Prisma recreate the type
+  /// — a destructive migration requiring an interactive prompt, for the sake of
+  /// alphabetical tidiness nobody reads.
+  PENDING_SUBSCRIPTION
 
   @@map("tenant_status")
 }
@@ -54,7 +65,24 @@ model Tenant {
   slug String @unique @db.Citext
   name String
 
+  /// The business's own domain, e.g. `wellness.hu`. The identity of the
+  /// organization (phase-9 §2.3) — distinct from `slug`, which is a URL segment
+  /// we choose. Unique so a prospect worked by two salespeople becomes one
+  /// organization and a constraint violation, rather than two half-configured
+  /// tenants nobody notices until billing.
+  ///
+  /// Nullable only because tenants predating Epic 9 have none; provisioning
+  /// requires it. Stored normalized (lower-cased, no scheme, no `www.`) by
+  /// `normalizeDomain` in @bam/contracts — a raw value would make the constraint
+  /// decorative, since `WWW.Wellness.HU` and `wellness.hu` are one business.
+  domain String? @unique @db.Citext
+
   status TenantStatus @default(TRIAL)
+
+  /// Deadline for the first subscription, set when a prospect organization is
+  /// provisioned and cleared when it subscribes. NULL means no deadline: an
+  /// internal or demo organization, which never expires (phase-9 §2.2).
+  subscribeBy DateTime? @map("subscribe_by") @db.Timestamptz(3)
 
   /// IANA zone, e.g. "Europe/Budapest". Validated in application code — Postgres
   /// will accept any string here.
@@ -97,8 +125,12 @@ model Tenant {
   bookings             Booking[]
   outboxEvents         OutboxEvent[]
   idempotencyKeys      IdempotencyKey[]
+  notifications        Notification[]
+  subscription         Subscription?
 
   @@index([status])
+  /// The expiry sweep's query: prospect organizations past their deadline.
+  @@index([status, subscribeBy])
   @@map("tenants")
 }
 
@@ -887,8 +919,9 @@ model Customer {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  holds    BookingHold[]
-  bookings Booking[]
+  holds         BookingHold[]
+  bookings      Booking[]
+  notifications Notification[]
 
   @@index([tenantId, normalizedEmail])
   @@index([tenantId, normalizedPhone])
@@ -1069,7 +1102,8 @@ model Booking {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  reservation CapacityReservation?
+  reservation   CapacityReservation?
+  notifications Notification[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, providerId, startAt])
@@ -1110,6 +1144,11 @@ model OutboxEvent {
   attempts    Int      @default(0)
   lastError   String?  @map("last_error")
 
+  /// When a dispatcher took this row. Without it, a worker killed mid-batch
+  /// leaves rows PROCESSING forever: nothing distinguishes "being worked on
+  /// right now" from "claimed by a process that no longer exists". The claim
+  /// query treats a stale timestamp as abandoned and takes the row back.
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
 
@@ -1117,6 +1156,137 @@ model OutboxEvent {
   @@index([status, availableAt])
   @@index([tenantId, aggregateType, aggregateId])
   @@map("outbox_events")
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+
+  @@map("notification_channel")
+}
+
+/// What happened, not which template rendered it. A tenant that later wants a
+/// different confirmation wording changes `template`; this stays the same, so
+/// "how many confirmations did we send" survives a copy rewrite.
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  BOOKING_UPDATED
+  BOOKING_CANCELLED
+  BOOKING_REMINDER
+  CALENDAR_DISCONNECTED
+  /// Sent to a newly provisioned organization's owner, carrying their
+  /// single-use acceptance link (phase-9 §2.5). Appended rather than inserted:
+  /// PostgreSQL can only add enum values at the end without recreating the type.
+  ORGANIZATION_CREATED
+  /// The owner's Stripe payment link, emailed so it can be forwarded to
+  /// whoever holds the company card (phase-9-subscription-and-activation.md
+  /// §1.1). Appended, for the same reason as the value above.
+  SUBSCRIPTION_LINK
+  /// Three days before a free trial converts to a paid subscription
+  /// (phase-9-subscription-lifecycle.md §2.1). The card is already on file, so
+  /// this is a courtesy — and a charge nobody expected is the commonest reason
+  /// a new customer disputes one. Appended, as above.
+  TRIAL_ENDING_SOON
+  /// A renewal was declined. Access continues while Stripe retries, so this
+  /// exists to get the card fixed before dunning runs out and the organization
+  /// is suspended (§2.3). Appended, as above.
+  SUBSCRIPTION_PAYMENT_FAILED
+
+  @@map("notification_type")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  /// Deliberately not FAILED. A booking taken over the phone with no email
+  /// address has nothing to send to, and that is a correct outcome — treating
+  /// it as a failure would fill a dead-letter queue with bookings that are fine.
+  SKIPPED
+
+  @@map("notification_status")
+}
+
+/// tech-impl §27.
+///
+/// One row per message the platform owes someone, written before anything is
+/// sent and updated as delivery progresses. It is the delivery-tracking record
+/// and the deduplication key at once.
+///
+/// Epic 5's exit criterion is that duplicate events do not send duplicate
+/// messages, and `dedupeKey` is how that is enforced: the unique index refuses
+/// the second row, so a redelivered outbox event, a retried job and a
+/// double-clicked confirmation all collapse to one email. Application code
+/// translates the unique violation into "already handled" — it does not SELECT
+/// first and hope, for the same reason capacity reservations do not
+/// (CLAUDE.md rule 14).
+model Notification {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Nullable because not every notification is about a booking — a calendar
+  /// disconnection is addressed to staff.
+  bookingId String?  @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  customerId String?   @map("customer_id")
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  type    NotificationType
+  channel NotificationChannel @default(EMAIL)
+
+  /// The address as it was at send time. Snapshotted for the same reason the
+  /// booking snapshots its price (rule 15): "where did we actually send this"
+  /// must survive the customer later changing their email.
+  recipient String
+
+  /// Template identifier, e.g. `booking-confirmation`. Resolved by
+  /// @bam/notification-engine; a string rather than an enum so adding a
+  /// template is not a migration.
+  template String
+  /// BCP-47, resolved from the customer then the tenant.
+  locale String
+
+  status NotificationStatus @default(PENDING)
+
+  /// The provider's id for this message, kept so a delivery webhook or a
+  /// support question can be traced back to a row.
+  providerMessageId String? @map("provider_message_id")
+
+  attempts  Int     @default(0)
+  lastError String? @map("last_error")
+
+  /// When it should go out. Now for a confirmation, hours ahead for a reminder.
+  scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz(3)
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz(3)
+
+  /// Stable identity of "this message, for this thing, once" — built by
+  /// @bam/notification-engine so the rule lives in one testable place.
+  dedupeKey String @map("dedupe_key")
+
+  /// Values the template needs that cannot be re-derived at send time.
+  ///
+  /// Almost every notification re-reads its subject from the database when the
+  /// job runs, which is why a confirmation reflects the booking as it is now.
+  /// A provisioning email cannot: it carries a single-use invitation link, and
+  /// the invitation stores only a SHA-256 hash (tech-impl §34.4), so the raw
+  /// token exists nowhere else. It is held here and cleared on successful
+  /// send, which bounds the exposure to the seconds a queued job waits.
+  payload Json? @map("payload_json")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// The exit criterion, as a constraint.
+  @@unique([tenantId, dedupeKey])
+  /// The sender's claim query: everything due and unsent.
+  @@index([status, scheduledAt])
+  @@index([tenantId, bookingId])
+  @@map("notifications")
 }
 
 /// tech-impl §32.
@@ -1148,4 +1318,126 @@ model IdempotencyKey {
   @@unique([tenantId, operation, key])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+// ===========================================================================
+// Billing — docs/phase-9-saas-administration.md
+// ===========================================================================
+
+enum SubscriptionPlan {
+  /// Not sold. Demo and internal organizations carry this so that "which plan
+  /// is this tenant on" never returns nothing, and so quota enforcement has
+  /// something to read (phase-9 §2.2).
+  INTERNAL
+  STARTER
+  PROFESSIONAL
+
+  @@map("subscription_plan")
+}
+
+/// Mirrors Stripe's subscription statuses. A string enum rather than free text
+/// so an unrecognised value from a webhook is a loud failure, not a silent one.
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  TRIALING
+  /// INTERNAL plans, which have no Stripe counterpart to be a status of.
+  NOT_APPLICABLE
+
+  @@map("subscription_status")
+}
+
+/// What the tenant is paying for. phase-9 §2.7.
+///
+/// Stripe is the source of truth for money; this mirrors only what the
+/// application acts on — whether writes are allowed, which plan's quotas apply,
+/// and enough identifiers to deep-link into Stripe from the admin dashboard.
+/// Anything else is read from Stripe on demand rather than synchronised.
+model Subscription {
+  id String @id @default(cuid(2))
+
+  /// One per tenant. The unique constraint is load-bearing: it is what stops a
+  /// redelivered Stripe webhook creating a second subscription for one payment
+  /// (CLAUDE.md rule 14 — the database decides, application code translates).
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  plan   SubscriptionPlan
+  status SubscriptionStatus @default(NOT_APPLICABLE)
+
+  /// Nullable so an INTERNAL subscription can exist with no Stripe counterpart.
+  /// PostgreSQL allows repeated NULLs under a unique index, so this still
+  /// refuses two tenants claiming one real Stripe subscription.
+  stripeCustomerId     String? @map("stripe_customer_id")
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+
+  /// What was actually bought. The plan is resolved *from* this, mapped through
+  /// STRIPE_PRICE_* config (phase-9-subscription-lifecycle.md §2.4); stored so a
+  /// wrong plan is diagnosable without opening Stripe.
+  stripePriceId String? @map("stripe_price_id")
+
+  currentPeriodEnd  DateTime? @map("current_period_end") @db.Timestamptz(3)
+  cancelAtPeriodEnd Boolean   @default(false) @map("cancel_at_period_end")
+
+  // --- Trial (phase-9-subscription-lifecycle.md §2.1, §5) -------------------
+
+  /// When the free trial ends. Stripe's `trial_end`, mirrored — the screen
+  /// counts down to this rather than to TRIAL_PERIOD_DAYS, which is only copy.
+  trialEndsAt DateTime? @map("trial_ends_at") @db.Timestamptz(3)
+
+  /// Set the first time this organization starts a trial, and never overwritten.
+  ///
+  /// It lives here rather than on Tenant because this row survives cancellation
+  /// — `customer.subscription.deleted` sets the status to CANCELED and keeps it
+  /// — which is exactly the case it answers: an owner who cancels and
+  /// resubscribes must not receive another thirty free days. `requestPaymentLink`
+  /// reads it to choose between the trial and no-trial Payment Link.
+  trialUsedAt DateTime? @map("trial_used_at") @db.Timestamptz(3)
+
+  // --- Scheduled plan change (§2.4, guide §4) -------------------------------
+  //
+  // A downgrade does not change the subscription; Stripe attaches a *schedule*
+  // whose next phase carries the new price. Mirrored so the screen can say
+  // "Professional until 18 September, then Starter" rather than showing a plan
+  // the owner has already changed and cannot see they changed.
+
+  /// The `sub_sched_…` attached to this subscription, so its events can be
+  /// recognised and its effects cleared when it is released.
+  stripeScheduleId String? @map("stripe_schedule_id")
+
+  pendingPlan         SubscriptionPlan? @map("pending_plan")
+  pendingPlanStartsAt DateTime?         @map("pending_plan_starts_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status])
+  @@map("subscriptions")
+}
+
+/// Webhook idempotency. phase-9 §2.9.
+///
+/// Stripe delivers at-least-once and retries for days, so a handler that is not
+/// idempotent eventually runs twice. The predecessor (`booking-for-all`) had no
+/// table like this and acted on every delivery, which meant a redelivered
+/// `checkout.session.completed` re-ran activation and re-sent notifications.
+///
+/// The primary key is Stripe's own event id: inserting is the claim, and a
+/// duplicate key means another delivery already has it.
+model StripeEvent {
+  /// Stripe's `evt_…` id, not ours.
+  id String @id
+
+  type String
+
+  payload Json @map("payload_json")
+
+  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  lastError   String?   @map("last_error")
+
+  @@index([processedAt])
+  @@map("stripe_events")
 }

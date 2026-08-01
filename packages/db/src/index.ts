@@ -24,11 +24,37 @@ export interface CreatePrismaClientOptions {
   logQueries?: boolean;
 }
 
+/**
+ * Every session runs in UTC. Not a preference — a correctness requirement.
+ *
+ * node-postgres serialises a JS `Date` as its UTC digits with no offset, and
+ * PostgreSQL then reads that literal in the session's `TimeZone`. On a machine
+ * set to Europe/Budapest, the instant `10:00:00Z` is written as
+ * `2026-07-29 10:00:00+02` — the instant `08:00:00Z`, two hours early. Reads
+ * apply the same offset in reverse, so a Prisma round-trip returns exactly what
+ * it stored and every test that writes and reads through Prisma passes.
+ *
+ * What does not survive is any comparison PostgreSQL performs itself:
+ * `available_at <= now()` in the outbox dispatcher, hold expiry, anything
+ * evaluated in SQL rather than in TypeScript. Those are wrong by the local UTC
+ * offset — and by a *different* amount in winter, which is the part that turns
+ * a reproducible bug into an intermittent one.
+ *
+ * Pinning the session to UTC makes the digits the driver sends mean what they
+ * say. It pairs with CLAUDE.md rule 13: a recurring schedule is wall-clock and
+ * lives in `working_hours` as local `HH:mm`; everything stored as `timestamptz`
+ * is an instant, and an instant has exactly one correct reading.
+ */
+const FORCE_UTC_SESSION = "-c timezone=UTC";
+
 export function createPrismaClient(options: CreatePrismaClientOptions): PrismaClient {
   // Prisma 7 connects through a driver adapter rather than a datasource URL in
   // the schema. `node-postgres` under the hood, so pool tuning is available here
   // when load testing in Epic 10 calls for it.
-  const adapter = new PrismaPg({ connectionString: options.databaseUrl });
+  const adapter = new PrismaPg({
+    connectionString: options.databaseUrl,
+    options: FORCE_UTC_SESSION,
+  });
 
   return new PrismaClient({
     adapter,

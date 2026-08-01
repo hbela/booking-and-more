@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { Permissions } from "@bam/auth";
-import { commonErrorResponses, idSchema } from "@bam/contracts";
+import { canHoldTenantMembership, Permissions } from "@bam/auth";
+import { commonErrorResponses, ForbiddenError, idSchema } from "@bam/contracts";
 import { TenantService } from "./tenant.service.js";
 import {
   createTenantBodySchema,
@@ -56,6 +56,16 @@ export const tenantRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       // requireAuth guarantees this.
       const user = request.user!;
+
+      // Separation of duties: creating a tenant makes the caller its OWNER, and
+      // an operator of the platform is not one of its customers. Refused here
+      // rather than in the service because there is nothing to roll back yet.
+      if (!canHoldTenantMembership(user)) {
+        throw new ForbiddenError(
+          "A platform administrator cannot own a tenant. Use a separate account for tenant work.",
+        );
+      }
+
       const tenant = await service.create(request.body, user.id);
 
       // tenantId is passed explicitly: the request had no tenant context when

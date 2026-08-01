@@ -21,10 +21,10 @@
     "db:migrate": "pnpm --filter @bam/db db:migrate",
     "db:migrate:deploy": "pnpm --filter @bam/db db:migrate:deploy",
     "db:drift-check": "pnpm --filter @bam/db db:drift-check",
-    "db:seed": "pnpm --filter @bam/db db:seed",
     "db:studio": "pnpm --filter @bam/db db:studio",
     "db:grant-platform-admin": "pnpm --filter @bam/db db:grant-platform-admin",
-    "db:join-tenant": "pnpm --filter @bam/db db:join-tenant"
+    "db:join-tenant": "pnpm --filter @bam/db db:join-tenant",
+    "db:discard-organization": "pnpm --filter @bam/db db:discard-organization"
   },
   "devDependencies": {
     "prettier": "catalog:",

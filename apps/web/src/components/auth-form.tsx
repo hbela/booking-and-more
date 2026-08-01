@@ -111,7 +111,12 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.React
   );
 }
 
-function Field({
+/**
+ * Exported so the invitation flow renders identical inputs rather than a second
+ * set that drifts — it is the same act (choosing a password) on a different
+ * screen. See accept-invitation.tsx.
+ */
+export function Field({
   id,
   label,
   type,

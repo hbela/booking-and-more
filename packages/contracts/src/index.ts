@@ -3,3 +3,5 @@ export * from "./app-error.js";
 export * from "./error-schemas.js";
 export * from "./common.js";
 export * from "./health.js";
+export * from "./domain.js";
+export * from "./billing.js";

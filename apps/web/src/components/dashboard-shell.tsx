@@ -30,6 +30,15 @@ export interface DashboardContext {
   isPending: boolean;
   /** Advisory only — the server authorises every action again. */
   can: (permission: string) => boolean;
+  /**
+   * Whether the organization is waiting for its first subscription.
+   *
+   * Deliberately a property of the *tenant*, not of the user: the owner holds
+   * every permission there is, and what is missing is a paid subscription. A
+   * `can()` check here would be both wrong and misleading, since it would imply
+   * the fix is a role change (phase-9-subscription-and-activation.md §2.1).
+   */
+  awaitingSubscription: boolean;
 }
 
 export function useDashboardContext(): DashboardContext {
@@ -54,6 +63,7 @@ export function useDashboardContext(): DashboardContext {
     me: me.data,
     isPending: tenants.isPending || me.isPending,
     can: (permission) => me.data?.permissions.includes(permission) ?? false,
+    awaitingSubscription: me.data?.tenant?.status === "PENDING_SUBSCRIPTION",
   };
 }
 
@@ -79,16 +89,26 @@ export function useSignInRedirect(signedOut: boolean): void {
   }, [signedOut, router]);
 }
 
+/**
+ * `alwaysAvailable` marks the two destinations that survive the activation gate
+ * (phase-9 §2.11): the overview, which explains the situation, and the
+ * subscription screen, which resolves it. Everything else needs a tenant that
+ * accepts writes.
+ */
 const NAV = [
-  { href: "/dashboard", key: "overview" as const },
-  // Bookings sit second, ahead of the catalogue: the catalogue is configured
-  // once and the diary is looked at every day.
-  { href: "/dashboard/bookings", key: "bookings" as const },
-  { href: "/dashboard/providers", key: "providers" as const },
-  { href: "/dashboard/services", key: "services" as const },
-  { href: "/dashboard/locations", key: "locations" as const },
-  { href: "/dashboard/availability", key: "availability" as const },
+  { href: "/dashboard", key: "overview" as const, alwaysAvailable: true },
+  { href: "/dashboard/subscription", key: "subscription" as const, alwaysAvailable: true },
+  // Bookings sit second among the gated items, ahead of the catalogue: the
+  // catalogue is configured once and the diary is looked at every day.
+  { href: "/dashboard/bookings", key: "bookings" as const, alwaysAvailable: false },
+  { href: "/dashboard/providers", key: "providers" as const, alwaysAvailable: false },
+  { href: "/dashboard/services", key: "services" as const, alwaysAvailable: false },
+  { href: "/dashboard/locations", key: "locations" as const, alwaysAvailable: false },
+  { href: "/dashboard/availability", key: "availability" as const, alwaysAvailable: false },
 ];
+
+/** One node, referenced by every disabled item, so the reason is announced. */
+const GATE_HINT_ID = "nav-gate-reason";
 
 export function DashboardShell({
   context,
@@ -160,6 +180,25 @@ export function DashboardShell({
           <ul className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
             {NAV.map((item) => {
               const current = pathname === item.href;
+              const gated = context.awaitingSubscription && !item.alwaysAvailable;
+
+              // Rendered as a span, not a dimmed Link. An anchor stays
+              // focusable and still activates on Enter however it is painted,
+              // so a "disabled" one would navigate anyway — to a screen that
+              // 403s, which is the failure this exists to remove.
+              if (gated) {
+                return (
+                  <li key={item.href}>
+                    <span
+                      aria-disabled="true"
+                      aria-describedby={GATE_HINT_ID}
+                      className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-slate-400 dark:text-slate-600"
+                    >
+                      {t(item.key)}
+                    </span>
+                  </li>
+                );
+              }
 
               return (
                 <li key={item.href}>
@@ -180,6 +219,14 @@ export function DashboardShell({
               );
             })}
           </ul>
+
+          {/* The reason, once, referenced by every disabled item above. A
+              tooltip would not reach a keyboard or screen-reader user. */}
+          {context.awaitingSubscription ? (
+            <p id={GATE_HINT_ID} className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {t("gatedUntilSubscribed")}
+            </p>
+          ) : null}
         </nav>
       ) : null}
 

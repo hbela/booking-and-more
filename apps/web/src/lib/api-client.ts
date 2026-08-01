@@ -92,9 +92,15 @@ export interface MeResponse {
     id: string;
     slug: string;
     name: string;
-    status: "TRIAL" | "ACTIVE" | "SUSPENDED" | "CLOSED";
+    /** PENDING_SUBSCRIPTION is where a newly provisioned owner lands; the API
+     *  refuses their writes until it changes (phase-9 §2.4). */
+    status: "PENDING_SUBSCRIPTION" | "TRIAL" | "ACTIVE" | "SUSPENDED" | "CLOSED";
     defaultTimezone: string;
     defaultLanguage: string;
+    subscribeBy: string | null;
+    /** Null means *no deadline*, not none left — an internal organization.
+     *  Render no countdown at all in that case (phase-9 §2.2). */
+    daysRemaining: number | null;
   } | null;
   membership: { id: string; role: string; providerId: string | null } | null;
   permissions: string[];

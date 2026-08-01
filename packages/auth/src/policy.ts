@@ -41,6 +41,8 @@ export interface Actor {
 
 /** Tenant lifecycle, mirrored from the Prisma enum. */
 export const TenantStatuses = {
+  /** Provisioned, owner can sign in, nothing configurable until they subscribe. */
+  PENDING_SUBSCRIPTION: "PENDING_SUBSCRIPTION",
   TRIAL: "TRIAL",
   ACTIVE: "ACTIVE",
   SUSPENDED: "SUSPENDED",
@@ -163,6 +165,44 @@ export function canRemoveMember(actor: Actor, tenantId: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Separation of duties
+// ---------------------------------------------------------------------------
+
+/**
+ * May this user belong to a tenant at all?
+ *
+ * No, if they operate the platform. An operator is not one of the platform's
+ * customers, and the two roles pull in opposite directions:
+ *
+ *   - `can()` already returns true for a platform admin in *every* tenant, so a
+ *     membership grants them nothing. It is not a privilege, only a claim.
+ *   - Every action they take is audited as `PLATFORM_ADMIN` (audit.plugin.ts).
+ *     An owner who is also an operator produces an audit trail in which their
+ *     ordinary work as an owner is indistinguishable from platform
+ *     intervention, which is exactly the distinction an audit trail exists to
+ *     make.
+ *   - It keeps the operator's account out of customer data by construction,
+ *     rather than by their remembering not to look.
+ *
+ * Enforced in both directions — a platform admin cannot acquire a membership,
+ * and a user holding memberships cannot be made a platform admin — because a
+ * one-way guard is satisfied by doing the two steps in the other order.
+ */
+export function canHoldTenantMembership(user: { isPlatformAdmin: boolean }): boolean {
+  return !user.isPlatformAdmin;
+}
+
+/**
+ * The same rule from the other side, for `pnpm db:grant-platform-admin`.
+ *
+ * Takes a count rather than the memberships themselves: the caller has to run
+ * the query either way, and the rule only cares whether the answer is zero.
+ */
+export function canBecomePlatformAdmin(user: { membershipCount: number }): boolean {
+  return user.membershipCount === 0;
+}
+
+// ---------------------------------------------------------------------------
 // Tenant lifecycle
 // ---------------------------------------------------------------------------
 
@@ -179,9 +219,22 @@ export function canRemoveMember(actor: Actor, tenantId: string): boolean {
  * state, called from one preHandler.
  */
 export function tenantAcceptsWrites(status: TenantStatus): boolean {
+  // Written as an allow-list rather than `!== SUSPENDED`, which is why
+  // PENDING_SUBSCRIPTION was already gated the moment it was added. That is
+  // load-bearing: it is the activation gate for the whole onboarding flow
+  // (phase-9 §2.4), so it is asserted in policy.test.ts rather than left to
+  // luck. Inverting this into a deny-list would silently un-gate every future
+  // status somebody forgets to add.
   return status === TenantStatuses.ACTIVE || status === TenantStatuses.TRIAL;
 }
 
+/**
+ * May this tenant be read?
+ *
+ * Yes unless closed. An owner in PENDING_SUBSCRIPTION must be able to sign in
+ * and see their organization — that is where the subscribe action lives, and
+ * an organization nobody can look at cannot be paid for.
+ */
 export function tenantIsReadable(status: TenantStatus): boolean {
   return status !== TenantStatuses.CLOSED;
 }

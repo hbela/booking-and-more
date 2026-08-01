@@ -25,6 +25,10 @@ import tenantContextPlugin, { TENANT_HEADER } from "./plugins/tenant-context.plu
 import authorizationPlugin from "./plugins/authorization.plugin.js";
 import auditPlugin from "./plugins/audit.plugin.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
+import { platformRoutes } from "./modules/platform/platform.routes.js";
+import { billingRoutes } from "./modules/billing/billing.routes.js";
+import { stripeWebhookRoutes } from "./modules/billing/webhook.routes.js";
+import { createStripePortalSession } from "./modules/billing/stripe.client.js";
 import { tenantRoutes } from "./modules/tenants/tenant.routes.js";
 import {
   invitationAcceptRoutes,
@@ -201,6 +205,72 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // Outside the tenant-scoped prefix: whoever is accepting is not a member yet,
   // so no tenant context can be resolved for them.
   await app.register(invitationAcceptRoutes, { prefix: "/v1/invitations" });
+
+  // --- Platform administration (Epic 9) -------------------------------------
+  // Also outside the tenant-scoped tree: these routes are *about* tenants
+  // rather than *within* one, so they carry no X-Tenant-Id. Guarded by the
+  // platform-admin user flag, not by a permission — see platform.routes.ts.
+  await app.register(platformRoutes, {
+    prefix: "/v1/platform",
+    appBaseUrl: env.APP_BASE_URL,
+    onboardingWindowDays: env.ONBOARDING_WINDOW_DAYS,
+    invitationExpiryHours: env.INVITATION_EXPIRY_HOURS,
+  });
+
+  // --- Billing (Epic 9) -----------------------------------------------------
+  // Deliberately NOT behind requireWritableTenant: subscribing is itself a
+  // write, and a PENDING_SUBSCRIPTION tenant accepts none, so gating it would
+  // make the state unescapable (phase-9 §2.4). See billing.routes.ts.
+  await app.register(billingRoutes, {
+    prefix: "/v1/billing",
+    // Two links per plan: a Payment Link's free trial is baked into the link,
+    // so skipping it for an organization that has already had one needs a
+    // second link rather than a parameter (phase-9-subscription-lifecycle §2.1).
+    // Config validation refuses a trial link with no no-trial counterpart, so
+    // the fallback below is belt-and-braces rather than a real branch.
+    paymentLinks: {
+      ...(env.STRIPE_PAYMENT_LINK_STARTER === undefined
+        ? {}
+        : {
+            STARTER: {
+              trial: env.STRIPE_PAYMENT_LINK_STARTER,
+              noTrial:
+                env.STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL ?? env.STRIPE_PAYMENT_LINK_STARTER,
+            },
+          }),
+      ...(env.STRIPE_PAYMENT_LINK_PROFESSIONAL === undefined
+        ? {}
+        : {
+            PROFESSIONAL: {
+              trial: env.STRIPE_PAYMENT_LINK_PROFESSIONAL,
+              noTrial:
+                env.STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL ??
+                env.STRIPE_PAYMENT_LINK_PROFESSIONAL,
+            },
+          }),
+    },
+    trialPeriodDays: env.TRIAL_PERIOD_DAYS,
+    // The portal is the one billing feature that needs a live Stripe call, so
+    // it is the one that disappears when there is no key — the route stays
+    // registered and answers 503, rather than 404, because the difference
+    // between "not configured" and "does not exist" matters to whoever is
+    // reading the logs (phase-9-customer-portal.md §2.1).
+    ...(env.STRIPE_SECRET_KEY === undefined
+      ? {}
+      : { createPortalSession: createStripePortalSession({ secretKey: env.STRIPE_SECRET_KEY }) }),
+    portalReturnUrl: `${env.APP_BASE_URL}/dashboard/subscription`,
+  });
+
+  // Registered only when Stripe is configured. Rule 4 in its literal form: with
+  // no key there is nothing that could verify a signature, and a route that
+  // accepted unverified webhooks would be worse than no route at all.
+  if (env.STRIPE_SECRET_KEY !== undefined && env.STRIPE_WEBHOOK_SECRET !== undefined) {
+    await app.register(stripeWebhookRoutes, {
+      prefix: "/v1/webhooks",
+      stripeSecretKey: env.STRIPE_SECRET_KEY,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+    });
+  }
 
   // --- Catalogue (Epic 2) ---------------------------------------------------
   // Staff routes. Every one of them resolves a tenant from the X-Tenant-Id

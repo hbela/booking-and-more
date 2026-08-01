@@ -12,7 +12,7 @@ export { envSchema, type Env } from "./schema.js";
  * Find the repository's `.env` by walking up from the current directory.
  *
  * The repo keeps a single `.env` at the root, but scripts run from their own
- * package directory (`pnpm --filter @bam/db db:seed` has cwd `packages/db`), so
+ * package directory (`pnpm --filter @bam/db db:join-tenant` has cwd `packages/db`), so
  * dotenv's default cwd lookup misses it. Stops at the workspace root, marked by
  * `pnpm-workspace.yaml`.
  */
@@ -134,5 +134,15 @@ export const isProduction = (env: Env): boolean => env.NODE_ENV === "production"
 export const isTest = (env: Env): boolean => env.NODE_ENV === "test";
 export const isDevelopment = (env: Env): boolean => env.NODE_ENV === "development";
 
-/** Redis is optional until Epic 5; this is how callers check. */
+/** Redis is optional; unset, the worker idles and rate limiting stays in-process. */
 export const hasRedis = (env: Env): boolean => env.REDIS_URL !== undefined;
+
+/**
+ * Whether email can actually be delivered.
+ *
+ * The schema guarantees the key and the sender travel together, so testing one
+ * would do — testing both keeps the guarantee readable at the call site rather
+ * than requiring the reader to remember the superRefine.
+ */
+export const hasEmail = (env: Env): boolean =>
+  env.RESEND_API_KEY !== undefined && env.EMAIL_FROM !== undefined;

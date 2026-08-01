@@ -48,6 +48,14 @@ export const REDACT_PATHS: readonly string[] = [
   "*.DATABASE_URL",
   "REDIS_URL",
   "*.REDIS_URL",
+  // Not a connection string, but it carries the Redis credentials and appears
+  // in ioredis error objects.
+  "options.password",
+  "*.options.password",
+
+  // Email delivery (Epic 5)
+  "RESEND_API_KEY",
+  "*.RESEND_API_KEY",
 
   // Booking-management tokens are bearer credentials for a booking (tech-impl §34.4)
   "managementToken",
@@ -62,6 +70,14 @@ export const REDACT_PATHS: readonly string[] = [
   "*.customerName",
   "transcript",
   "*.transcript",
+
+  // A notification's `recipient` is an email address, and it travels through
+  // the dispatcher and the sender on every job. Notification rows are
+  // identified in logs by id for exactly this reason (Epic 5).
+  "recipient",
+  "*.recipient",
+  "to",
+  "*.to",
 ];
 
 export const REDACTED = "[redacted]";

@@ -40,7 +40,13 @@ export const RESERVED_SLUGS: readonly string[] = [
   "www",
 ];
 
-export const tenantStatusSchema = z.enum(["TRIAL", "ACTIVE", "SUSPENDED", "CLOSED"]);
+export const tenantStatusSchema = z.enum([
+  "PENDING_SUBSCRIPTION",
+  "TRIAL",
+  "ACTIVE",
+  "SUSPENDED",
+  "CLOSED",
+]);
 
 export const createTenantBodySchema = z.object({
   name: z.string().min(2).max(120),

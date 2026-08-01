@@ -7,7 +7,31 @@ Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md) ·
 [Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md) ·
 [Phase 3 — availability engine](docs/phase-3-availability-engine.md) ·
-[Phase 4 — booking engine](docs/phase-4-booking-engine.md). Next up is Epic 5 (notifications).
+[Phase 4 — booking engine](docs/phase-4-booking-engine.md) ·
+[Phase 5 — notifications](docs/phase-5-notifications.md) (part 1 of 3 done: outbox dispatch, queues, the
+notification record; email delivery is part 2, reminders and the sweep part 3) ·
+[Phase 9 — SaaS administration](docs/phase-9-saas-administration.md) (part plan, part record: provisioning,
+the owner's invitation and its email are built; Stripe, the pending owner dashboard and the expiry sweep are
+not — its §1.2 is the authority on which is which) ·
+[Phase 9 — owner onboarding](docs/phase-9-owner-onboarding.md) (the owner's path from the emailed link to a
+signed-in session — accept-and-register, the invitation landing page; done) ·
+[Phase 9 — subscription and activation](docs/phase-9-subscription-and-activation.md) (the pending owner's
+dashboard, the emailed Stripe Payment Link, the webhook that activates; done). Its §7 **amends** the
+decision record's §5.1: a Payment Link rather than Stripe Checkout, because a Checkout Session expires in
+24 hours and the subscribe window is 14 days ·
+[Phase 9 — customer portal](docs/phase-9-customer-portal.md) (self-service billing once a subscription
+exists: change the card, read invoices, cancel; done). Its §3 is the one to read before touching the Stripe
+event processor — a portal cancellation may report `cancel_at` rather than `cancel_at_period_end`, and a
+plan the event does not name is left alone rather than guessed ·
+[Phase 9 — subscription lifecycle](docs/phase-9-subscription-lifecycle.md) (the 30-day trial, plan changes,
+scheduled downgrades, failed payments; done). **Read §3 before changing anything about access:** the whole
+entitlement rule is one table in `@bam/contracts`, and two refusals constrain it — a Stripe event may
+suspend an organization but never revive one, and `past_due` keeps access because Stripe's own dunning is
+the grace period.
+
+Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
+the booking engine existed rather than last. Note that it also delivered the first working email path, ahead
+of the booking templates Epic 5 part 2 was scoped around.
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -19,8 +43,15 @@ BullMQ worker (`apps/worker`) · PostgreSQL 18 + Prisma 7 · Better Auth 1.6 · 
 TypeScript is pinned to **5.9.x**. TS 7 exists, but `typescript-eslint@8` declares `typescript <6.1.0`, so
 upgrading silently disables type-aware linting. Revisit when typescript-eslint supports TS 7.
 
-Local dev runs against **native PostgreSQL 18 on :5432**. There is no Docker on the dev machine and no Redis
-until Epic 5 — see the phase plan for why, and for the Testcontainers deviation that follows from it.
+Local dev runs against **native PostgreSQL 18 on :5432**, and keeps doing so: **Docker arrived on the dev
+machine on 2026-07-29** (Engine 29.6, Compose v5.3) but nothing has moved into a container. Redis is still
+absent until Epic 5, where it can now run locally out of `docker/docker-compose.yml` rather than only in
+production.
+
+Docker unblocks — but has not yet cashed in — the Testcontainers deviation recorded in
+[the phase 0 record §4.1](docs/phase-0-technical-foundation.md): integration tests still run against a
+`booking_and_more_test` database on the native instance, and a `postgres:18` service container in CI. That
+record describes the machine as it was in Phase 0; this paragraph is the current state.
 
 ## The rules
 
@@ -64,6 +95,15 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
    another. `PLATFORM_ADMIN` is the sole exception and is deliberately a user flag rather than a role, so it
    cannot be granted by invitation — set it with `pnpm db:grant-platform-admin <email>`.
 
+   **A platform admin holds no memberships.** An operator of the platform is not one of its customers.
+   `can()` already returns true for them in every tenant, so a membership grants them nothing — but every
+   action they take is audited as `PLATFORM_ADMIN`, so an operator who is also an owner produces a trail in
+   which ordinary owner work is indistinguishable from platform intervention. Enforced in **both**
+   directions by `canHoldTenantMembership` and `canBecomePlatformAdmin` in `@bam/auth/policy`: tenant
+   creation and invitation acceptance refuse a platform admin, and the grant script refuses a user who
+   holds memberships. A one-way guard is defeated by doing the two steps in the other order. Use a second
+   account for tenant-side work.
+
 10. **Ask for a permission, not a role.** `requirePermission(Permissions.MEMBER_MANAGE)`, never
     `if (role === "ADMIN")`. Re-scoping a role should mean editing one table in `@bam/auth`, not auditing
     every route.
@@ -85,6 +125,13 @@ Each of these is here because a predecessor project (`booking-for-all`, `sunshin
     `availability_exceptions` stores `timestamptz`, because it names actual moments. Never convert a
     recurring time by adding an offset by hand; go through `@bam/availability-engine`'s `zone.ts`, which
     reports whether a reading was skipped or repeated by a daylight-saving transition.
+
+    **Database sessions run in UTC**, pinned in `createPrismaClient`. Without it `node-postgres` writes a
+    JS `Date` as its UTC digits with no offset and PostgreSQL reads that literal in the session timezone,
+    so the stored instant is shifted by the local offset. Reads shift back, so Prisma round-trips look
+    correct and only comparisons PostgreSQL performs itself — `available_at <= now()`, expiry checks — are
+    wrong, by a different amount in summer and winter. `packages/db/src/timezone.test.ts` asserts through
+    `extract(epoch …)` rather than through Dates, because comparing Dates is what hid it.
 
 14. **The database decides who got the slot.** Exclusive capacity is enforced by one exclusion constraint on
     `capacity_reservations` (tech-impl §11.3), never by a `SELECT` before an `INSERT` — between the check and
@@ -114,11 +161,22 @@ packages/auth     Roles, permissions, pure policy functions, Better Auth factory
 packages/availability-engine  Pure slot generation. No runtime dependencies, deliberately.
 packages/booking-engine  Pure booking decisions: spans, hold lifecycle, state machine, policy.
                          The transaction is the API's; the database owns the race.
+packages/notification-engine  Pure notification decisions: what an outbox event owes, dedupe keys,
+                         locale resolution, retry classification. Sending lives in the worker.
 packages/config   Zod-validated env.
 packages/contracts Shared Zod schemas, error codes, API envelope types.
 packages/db       Prisma schema, migrations, client singleton.
 packages/observability  Pino logger with redaction, Sentry helpers.
 ```
+
+Every one of those libraries is consumed through its `exports` map, which resolves to `dist/` — never to
+`src/`. So each has a `dev` script (`tsc -p tsconfig.build.json --watch`) and `pnpm dev` runs them
+alongside the apps. Without it, turbo's `^build` compiles each library exactly once at start-up, and an
+export added afterwards does not exist as far as an already-running `next dev` is concerned: Turbopack
+reports `Export X doesn't exist in target module` and helpfully suggests a neighbouring export from the
+stale build. That is 11 persistent tasks, which is why `turbo.json` raises `concurrency` above its default
+of 10. `@bam/db#dev` additionally depends on `@bam/db#build`, because only that runs `prisma generate` and
+the watch cannot typecheck without the generated client.
 
 API modules follow tech-impl §6: `<domain>.routes.ts`, `.schemas.ts`, `.handlers.ts`, `.service.ts`,
 `.repository.ts`, `.policy.ts`, `.errors.ts`, `.test.ts`.
@@ -132,14 +190,27 @@ duck-typed flag rather than `instanceof` on purpose — it survives bundle bound
 ## Commands
 
 ```bash
-pnpm dev                 # all three apps
+pnpm dev                 # all three apps, plus a tsc --watch per library
 pnpm build
 pnpm lint && pnpm check-types && pnpm test
 pnpm db:migrate          # create/apply a migration
 pnpm db:drift-check      # what CI runs
-pnpm db:seed
 pnpm db:grant-platform-admin <email>   # the only way to set isPlatformAdmin
+pnpm db:join-tenant <email> <slug> [ROLE]   # development only; a second membership by hand
+pnpm db:discard-organization <slug|domain> [--yes]   # development only; see below
 ```
+
+**There is no `db:seed`.** It created one demo tenant, Sunshine Dental, and was removed on 2026-08-01 along
+with that tenant — an ACTIVE organization with no subscription row, which is precisely what phase-9 §2.2's
+invariant forbids. A fresh clone therefore starts empty, and an organization comes from the same place a
+real one does: `pnpm db:grant-platform-admin` yourself, then provision through `/platform`. That path is now
+built end to end, so a hand-written fixture would only be a second, diverging way to make a tenant.
+
+`db:discard-organization` hard-deletes a tenant and everything cascading from it, then any user left with no
+memberships — because `slug` and `domain` are unique across all tenants, so a test organization otherwise
+blocks re-provisioning the same business forever. It refuses to run with `NODE_ENV=production`, where the
+equivalent is closing the organization (phase-9 §2.6) and, if the prospect returns, reopening it (§2.6.1).
+It is a script and not a route precisely because of rule 7.
 
 ## Identity vs. authorization
 

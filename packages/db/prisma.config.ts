@@ -43,9 +43,11 @@ const shadowDatabaseUrl =
 
 export default defineConfig({
   schema: "./prisma/schema.prisma",
+  // No `seed`. The demo tenant it created was removed on 2026-08-01; an
+  // organization now comes from the platform-admin provisioning flow, so
+  // `prisma migrate reset` leaves an empty database on purpose.
   migrations: {
     path: "./prisma/migrations",
-    seed: "tsx ./prisma/seed.ts",
   },
   datasource: {
     url: databaseUrl,

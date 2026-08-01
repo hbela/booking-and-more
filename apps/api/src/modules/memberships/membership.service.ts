@@ -1,7 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "@bam/db";
-import { INVITABLE_ROLES, Roles, type Role } from "@bam/auth";
-import { ConflictError, ErrorCodes, NotFoundError, ValidationError } from "@bam/contracts";
+import { canHoldTenantMembership, INVITABLE_ROLES, Roles, type Role } from "@bam/auth";
+import {
+  ConflictError,
+  ErrorCodes,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "@bam/contracts";
 
 export interface InviteInput {
   tenantId: string;
@@ -243,7 +249,138 @@ export class MembershipService {
    * invitation names a person, and letting anyone holding the link join as
    * themselves would turn a leaked email into an access grant.
    */
-  async acceptInvitation(token: string, userId: string, userEmail: string) {
+  async acceptInvitation(
+    token: string,
+    userId: string,
+    userEmail: string,
+    isPlatformAdmin: boolean,
+  ) {
+    // Separation of duties, checked before the token is even looked up: a
+    // platform admin already has access to every tenant, so accepting adds
+    // nothing but a membership that muddies their audit trail.
+    //
+    // Note that CLAUDE.md rule 9 already stops PLATFORM_ADMIN being granted by
+    // invitation; this is the mirror image — an invitation must not be able to
+    // pull an existing platform admin into a tenant either.
+    if (!canHoldTenantMembership({ isPlatformAdmin })) {
+      throw new ForbiddenError(
+        "A platform administrator cannot join a tenant. Use a separate account for tenant work.",
+      );
+    }
+
+    const invitation = await this.findValidInvitation(token);
+
+    if (invitation.email.toLowerCase() !== userEmail.toLowerCase()) {
+      throw new ConflictError(
+        ErrorCodes.FORBIDDEN,
+        `This invitation was issued to ${invitation.email}. Sign in as that user to accept it.`,
+      );
+    }
+
+    return this.claimInvitation(invitation, userId);
+  }
+
+  /**
+   * What the invitation landing page needs before it can render.
+   * docs/phase-9-owner-onboarding.md §2.3.
+   *
+   * Reveals the invited address and the organization's name to whoever holds
+   * the token. Not an enumeration risk — the caller must already possess 32
+   * bytes of CSPRNG output naming this specific invitation, and the email that
+   * carried it said all of this already.
+   */
+  async describeInvitation(token: string) {
+    const invitation = await this.findValidInvitation(token);
+
+    const [tenant, existingUser] = await Promise.all([
+      this.prisma.tenant.findUnique({
+        where: { id: invitation.tenantId },
+        select: { name: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { email: invitation.email },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!tenant) throw new NotFoundError("This invitation link is not valid.");
+
+    return {
+      organizationName: tenant.name,
+      email: invitation.email,
+      role: invitation.role,
+      expiresAt: invitation.expiresAt,
+      // Drives which screen the page shows. False sends them to sign-in
+      // instead of a form that would only refuse them.
+      requiresRegistration: existingUser === null,
+    };
+  }
+
+  /**
+   * Create the account the invitation was issued to, and claim the invitation
+   * with it. docs/phase-9-owner-onboarding.md §2.1, §2.4.
+   *
+   * `createUser` is injected rather than called directly because Better Auth
+   * owns the user row, and it is the API layer that holds the Better Auth
+   * instance. That also keeps this class free of HTTP concerns — the caller
+   * deals with the session cookie that comes back.
+   *
+   * **The email is taken from the invitation, never from the caller.** A route
+   * that accepted an address alongside the token would turn a link that is only
+   * a claim about one mailbox into a general-purpose grant: anyone holding a
+   * leaked token could register an address of their choosing and take the
+   * membership with it. This is the one security property of the whole flow.
+   */
+  async registerAndAccept(input: {
+    token: string;
+    name: string;
+    createUser: (details: { email: string; name: string }) => Promise<{ id: string }>;
+  }) {
+    const invitation = await this.findValidInvitation(input.token);
+
+    // A brand-new account cannot be a platform admin — `isPlatformAdmin` is
+    // declared to Better Auth with `input: false`, so no sign-up can set it —
+    // but the invariant is asserted rather than reasoned about, so that a
+    // future change to how users are created cannot quietly bypass rule 9.
+    const existing = await this.prisma.user.findUnique({
+      where: { email: invitation.email },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new ConflictError(
+        ErrorCodes.VALIDATION_FAILED,
+        `An account already exists for ${invitation.email}. Sign in, then open the invitation link again.`,
+      );
+    }
+
+    const user = await input.createUser({ email: invitation.email, name: input.name });
+
+    // Not in the transaction below, and cannot be: Better Auth owns this row.
+    // The token only ever existed inside the invited mailbox, so receiving it
+    // is the same proof a verification email would have collected (§2.2).
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true },
+    });
+
+    // If this throws, a user exists with no membership. Recoverable without
+    // new code: the invitation is still PENDING, and re-opening the link now
+    // takes the "account already exists" branch above, which points at sign-in
+    // and the ordinary accept route (§2.4).
+    const result = await this.claimInvitation(invitation, user.id);
+
+    return { ...result, userId: user.id, email: invitation.email };
+  }
+
+  /**
+   * Look a token up and refuse it unless it is live.
+   *
+   * Shared by every path that consumes an invitation so they cannot drift
+   * apart: the uniform error below is a security property, and a second copy
+   * of this logic is how one of them loses it.
+   */
+  private async findValidInvitation(token: string) {
     const invitation = await this.prisma.invitation.findUnique({
       where: { tokenHash: hashToken(token) },
     });
@@ -262,13 +399,14 @@ export class MembershipService {
       throw new NotFoundError("This invitation has expired. Ask for a new one.");
     }
 
-    if (invitation.email.toLowerCase() !== userEmail.toLowerCase()) {
-      throw new ConflictError(
-        ErrorCodes.FORBIDDEN,
-        `This invitation was issued to ${invitation.email}. Sign in as that user to accept it.`,
-      );
-    }
+    return invitation;
+  }
 
+  /** Grant the membership and burn the invitation, atomically. */
+  private async claimInvitation(
+    invitation: { id: string; tenantId: string; role: Role; invitedByUserId: string },
+    userId: string,
+  ) {
     return this.prisma.$transaction(async (tx) => {
       const membership = await tx.membership.upsert({
         where: { tenantId_userId: { tenantId: invitation.tenantId, userId } },

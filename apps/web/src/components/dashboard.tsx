@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { ApiError, apiFetch, type Invitation, type Member } from "@/lib/api-client";
 import {
   DashboardShell,
@@ -66,6 +67,13 @@ export function Dashboard(): React.ReactElement {
         />
       ) : (
         <>
+          {context.awaitingSubscription && context.me.tenant ? (
+            <PendingPanel
+              organizationName={context.me.tenant.name}
+              daysRemaining={context.me.tenant.daysRemaining}
+            />
+          ) : null}
+
           {canReadMembers ? (
             <Section title={t("members")}>
               <div className="overflow-x-auto">
@@ -112,6 +120,71 @@ export function Dashboard(): React.ReactElement {
         </>
       )}
     </DashboardShell>
+  );
+}
+
+/**
+ * What a pending owner sees first.
+ * docs/phase-9-subscription-and-activation.md §2.3.
+ *
+ * Three steps in the order they happen, of which exactly one is actionable.
+ * The point is that the owner arrives at an empty organization they cannot yet
+ * configure, and that screen is the product's first impression — so it explains
+ * the sequence rather than leaving them to discover it by clicking things that
+ * return 403.
+ */
+function PendingPanel({
+  organizationName,
+  daysRemaining,
+}: {
+  organizationName: string;
+  daysRemaining: number | null;
+}): React.ReactElement {
+  const t = useTranslations("dashboard");
+
+  const steps = [
+    { key: "stepSubscribe" as const, done: false, active: true },
+    { key: "stepConfigure" as const, done: false, active: false },
+    { key: "stepTakeBookings" as const, done: false, active: false },
+  ];
+
+  return (
+    <Panel title={t("pendingTitle", { organization: organizationName })}>
+      <p className="text-sm text-slate-600 dark:text-slate-400">{t("pendingIntro")}</p>
+
+      <ol className="flex flex-col gap-3">
+        {steps.map((step, index) => (
+          <li key={step.key} className="flex gap-3 text-sm">
+            <span
+              aria-hidden="true"
+              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                step.active
+                  ? "bg-brand-600 text-white"
+                  : "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+              }`}
+            >
+              {index + 1}
+            </span>
+            <span className={step.active ? "" : "text-slate-500 dark:text-slate-400"}>
+              {t(step.key)}
+            </span>
+          </li>
+        ))}
+      </ol>
+
+      {/* Null means no deadline at all — an internal organization — which is
+          not the same as none left, so nothing is rendered rather than
+          "0 days" (phase-9 §2.2). */}
+      {daysRemaining === null ? null : (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          {t("daysRemaining", { days: daysRemaining })}
+        </p>
+      )}
+
+      <Link href="/dashboard/subscription" className={buttonClass}>
+        {t("subscribeCta")}
+      </Link>
+    </Panel>
   );
 }
 

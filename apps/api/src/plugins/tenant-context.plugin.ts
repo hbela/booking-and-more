@@ -26,6 +26,9 @@ export interface ResolvedTenant {
   status: TenantStatus;
   defaultTimezone: string;
   defaultLanguage: string;
+  /** Deadline for a prospect's first subscription; null for an internal
+   *  organization, which has none (phase-9 §2.2). */
+  subscribeBy: Date | null;
 }
 
 /** Canonical way for a client to say which tenant it means. */
@@ -83,6 +86,7 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
           status: true,
           defaultTimezone: true,
           defaultLanguage: true,
+          subscribeBy: true,
         },
       });
 

@@ -3,21 +3,24 @@ import { loadEnv } from "@bam/config";
 import { createPrismaClient } from "../src/index.js";
 
 /**
- * Give an existing user a membership in a seeded tenant. Development only.
+ * Give an existing user a membership in an existing tenant. Development only.
  *
  *   pnpm db:join-tenant <email> <tenant-slug> [ROLE] [--provider "Display Name"]
  *
- * The seed builds a clinic with no people in it: `pnpm db:seed` creates
- * Sunshine Dental, its catalogue and its schedules, but memberships belong to
- * real users and the seed has no business inventing logins. So a freshly
- * signed-up account cannot see the seeded tenant at all — `/v1/tenants` lists
- * by membership, exactly as it should — and manual testing stalls before it
- * starts.
+ * Written for the demo seed, which built a clinic with no people in it. That
+ * seed was removed on 2026-08-01 and an organization now arrives through the
+ * platform-admin provisioning flow, which does create its owner — so the
+ * original need is gone.
+ *
+ * It stays because the second membership is still awkward to come by: adding a
+ * colleague means issuing and accepting an invitation, and testing a role that
+ * is not OWNER should not require driving two mailboxes. `/v1/tenants` lists by
+ * membership, exactly as it should, so an account with none sees nothing at all.
  *
  * This is the bridge, and it is deliberately a script rather than an API route:
  * granting yourself a membership is precisely what no endpoint may ever do
  * (CLAUDE.md rule 9). It refuses to run against production for the same reason
- * the seed does.
+ * every other script here does.
  *
  * `--provider` additionally links the membership to a provider by display name,
  * which is what makes the `:own` permission paths testable — a PROVIDER whose
@@ -56,7 +59,10 @@ async function main(): Promise<void> {
 
     const tenant = await prisma.tenant.findUnique({ where: { slug } });
     if (!tenant) {
-      console.error(`No tenant with slug ${slug}. Run \`pnpm db:seed\` first.`);
+      console.error(
+        `No tenant with slug ${slug}. Provision one through /platform first — ` +
+          "there is no seeded tenant to join.",
+      );
       process.exit(1);
     }
 
