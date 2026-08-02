@@ -347,7 +347,9 @@ Automated — **all green**, `billing.test.ts` and `stripe.processor.test.ts`:
 5. A row with `stripeSubscriptionId` set but status `INCOMPLETE` refuses a second link (§5.4's blind spot).
 6. A plan with no price configured is not for sale; a second request for the same plan deactivates nothing.
 
-Manual, against Stripe test mode — **not yet walked**. This is the half that matters and cannot be faked:
+Manual, against Stripe test mode — **not yet walked**. This is the half that matters and cannot be faked.
+The steps below are the billing-specific core; the full walk, with preconditions and the surrounding
+onboarding path, is [phase-9-manual-test-checklist.md](phase-9-manual-test-checklist.md):
 
 7. Complete a checkout on a per-tenant link, then reopen the same URL. Stripe must refuse it. **This is the
    assertion the whole slice rests on**; if it does not hold, §4 is wrong and needs rewriting rather than

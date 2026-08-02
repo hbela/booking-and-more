@@ -33,7 +33,10 @@ the grace period ·
 subscriptions. It **reverses §1.2 of the activation record**: a Payment Link is now created per
 organization at subscribe time, not held in config per plan, so the four `STRIPE_PAYMENT_LINK_*` variables
 are gone and `STRIPE_PRICE_*` decides what is sold. **Read its §2 before touching `requestPaymentLink` or
-`activate`** — three defects, and the reported one is not the worst.
+`activate`** — three defects, and the reported one is not the worst ·
+[Phase 9 — manual test checklist](docs/phase-9-manual-test-checklist.md) (written, **not yet walked**). The
+one document to open before testing onboarding or billing by hand: preconditions, ~60 checks from
+provisioning to cancellation, and the Stripe-side assertions no automated test can make.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead
