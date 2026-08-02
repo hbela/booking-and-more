@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
+  isLiveSubscription,
   nextTenantStatus,
   planForPrice,
   subscriptionEffect,
@@ -452,6 +453,35 @@ async function mirrorSubscription(
     { tenantId: existing.tenantId, status: effect.status, tenantStatus },
     "stripe: subscription mirrored",
   );
+
+  // The receipt for onboarding. Emitted on the *transition* into a live status
+  // rather than whenever one is seen, because `customer.subscription.updated`
+  // fires for every later change and each one carries a live status
+  // (docs/phase-9-owner-onboarding-emails.md §3).
+  //
+  // Two guards, not one: this test keeps the outbox clean, and the dedupe key
+  // on the subscription id — not the event id, unlike every other tenant
+  // notification — is what actually guarantees one email. The read-then-write
+  // here has a window in it, and the unique index is what closes it (rule 14).
+  if (isLiveSubscription(effect.status) && !isLiveSubscription(existing.status)) {
+    await requestNotification(options, {
+      tenantId: existing.tenantId,
+      eventType: "SUBSCRIPTION_CONFIRMED",
+      payload: {
+        subscriptionId,
+        plan: plan ?? existing.plan,
+        trial: effect.status === "TRIALING",
+        // The date the money moves: the trial's end while trialing, the period
+        // end once paying. Null when Stripe named neither, which drops the line
+        // rather than inventing a date the customer would be held to.
+        renewsAt:
+          (effect.status === "TRIALING"
+            ? (trialEndsAt ?? existing.trialEndsAt)
+            : timestamp(object["current_period_end"])
+          )?.toISOString() ?? null,
+      },
+    });
+  }
 }
 
 /**
@@ -648,6 +678,9 @@ async function findByStripeId(
   const select = {
     tenantId: true,
     plan: true,
+    // Read so `mirrorSubscription` can tell a transition into a live status
+    // from the many later events that merely report one.
+    status: true,
     trialUsedAt: true,
     trialEndsAt: true,
     pendingPlan: true,
@@ -691,6 +724,7 @@ async function claimByTenantMetadata(
   select: {
     tenantId: true;
     plan: true;
+    status: true;
     trialUsedAt: true;
     trialEndsAt: true;
     pendingPlan: true;

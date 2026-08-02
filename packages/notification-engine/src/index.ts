@@ -54,6 +54,7 @@ export {
   RENDERABLE_TYPES,
   renderOrganizationCreated,
   renderPaymentFailed,
+  renderSubscriptionConfirmed,
   renderSubscriptionLink,
   renderTrialEnding,
 } from "./templates.js";
@@ -61,6 +62,7 @@ export type {
   OrganizationCreatedValues,
   PaymentFailedValues,
   RenderedEmail,
+  SubscriptionConfirmedValues,
   SubscriptionLinkValues,
   TrialEndingValues,
 } from "./templates.js";

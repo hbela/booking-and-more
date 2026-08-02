@@ -125,6 +125,9 @@ const TEMPLATES: Record<NotificationType, string> = {
   // or a renewal was declined (phase-9-subscription-lifecycle.md §2.1, §2.3).
   [NotificationTypes.TRIAL_ENDING_SOON]: "trial-ending",
   [NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED]: "payment-failed",
+  // Written by the Stripe processor when a subscription first reports a live
+  // status, not planned from a booking either.
+  [NotificationTypes.SUBSCRIPTION_CONFIRMED]: "subscription-confirmed",
 };
 
 export function planNotifications(input: PlanNotificationsInput): NotificationPlanResult {

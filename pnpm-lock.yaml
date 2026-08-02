@@ -199,6 +199,9 @@ importers:
       '@bam/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@bam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@bam/db':
         specifier: workspace:*
         version: link:../../packages/db

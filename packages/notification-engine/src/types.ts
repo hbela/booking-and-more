@@ -22,6 +22,8 @@ export const NotificationTypes = {
   TRIAL_ENDING_SOON: "TRIAL_ENDING_SOON",
   /** A declined renewal, while Stripe is still retrying. */
   SUBSCRIPTION_PAYMENT_FAILED: "SUBSCRIPTION_PAYMENT_FAILED",
+  /** The subscription went live. One per Stripe subscription, ever. */
+  SUBSCRIPTION_CONFIRMED: "SUBSCRIPTION_CONFIRMED",
 } as const;
 
 export type NotificationType = (typeof NotificationTypes)[keyof typeof NotificationTypes];

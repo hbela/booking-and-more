@@ -40,6 +40,7 @@ function stubPaymentLinks() {
     tenantId: string;
     plan: string;
     trialPeriodDays: number | null;
+    returnUrl: string;
   }[] = [];
   const deactivated: string[] = [];
   /** Link IDs the fake Stripe considers already checked out. */
@@ -56,6 +57,7 @@ function stubPaymentLinks() {
         tenantId: string;
         plan: string;
         trialPeriodDays: number | null;
+        returnUrl: string;
       }) => {
         created.push(input);
         next += 1;
@@ -132,6 +134,13 @@ describe.skipIf(!databaseUrl)("billing", () => {
    */
   async function pendingOwner(
     label: string,
+    /**
+     * The organization's language. Left out it is `hu`, the schema's default —
+     * which is what every caller here wants and, until
+     * docs/phase-9-owner-language-and-return-paths.md §3, was the only value
+     * reachable through the platform form.
+     */
+    defaultLanguage?: "hu" | "en",
   ): Promise<{ cookie: string; tenantId: string; email: string }> {
     const adminEmail = `op-${label}-${RUN}@example.test`;
 
@@ -165,6 +174,7 @@ describe.skipIf(!databaseUrl)("billing", () => {
         domain: `${label}-${RUN}.hu`,
         ownerName: "Kovács Anna",
         ownerEmail,
+        ...(defaultLanguage === undefined ? {} : { defaultLanguage }),
       },
     });
     expect(provisioned.statusCode, provisioned.body).toBe(201);
@@ -249,12 +259,37 @@ describe.skipIf(!databaseUrl)("billing", () => {
       // Never had a trial, so Stripe is told to give one.
       expect(link?.trialPeriodDays).toBe(30);
 
+      // Paying brings them back to the product rather than ending on Stripe's
+      // confirmation page (docs/phase-9-owner-language-and-return-paths.md
+      // §4.1). Hungarian, so no locale prefix.
+      expect(link?.returnUrl).toBe("http://localhost:3000/dashboard/subscription");
+
       // Requested, not sent — a third-party call inside this request is how the
       // predecessor swallowed delivery failures.
       const events = await app.prisma.outboxEvent.findMany({
         where: { tenantId: owner.tenantId, eventType: "SUBSCRIPTION_LINK_REQUESTED" },
       });
       expect(events).toHaveLength(1);
+    });
+
+    it("sends an English organization back to its English screen after paying", async () => {
+      // The prefix is the whole assertion. It is baked into the link at
+      // creation, which is only sound because a link belongs to one
+      // organization (docs/phase-9-duplicate-subscription-prevention.md §4.1) —
+      // under the shared-link design there would have been no right answer.
+      const owner = await pendingOwner("linken", "en");
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(stripe.created.at(-1)?.returnUrl).toBe(
+        "http://localhost:3000/en/dashboard/subscription",
+      );
     });
 
     it("refuses a plan with no price configured", async () => {
@@ -619,12 +654,12 @@ describe.skipIf(!databaseUrl)("billing", () => {
         },
       });
 
-      const asked: { customerId: string; returnUrl: string }[] = [];
+      const asked: { customerId: string; returnUrl: string; locale: string }[] = [];
 
       const service = new BillingService(app.prisma, {
         planPrices: {},
         trialPeriodDays: 30,
-        portalReturnUrl: "http://localhost:3000/dashboard/subscription",
+        appBaseUrl: "http://localhost:3000",
         createPortalSession: async (input) => {
           asked.push(input);
           return { url: "https://billing.stripe.com/session/live_test" };
@@ -634,8 +669,61 @@ describe.skipIf(!databaseUrl)("billing", () => {
       const session = await service.portalSession(owner.tenantId);
 
       expect(session.url).toBe("https://billing.stripe.com/session/live_test");
+      // `hu` is the default locale, whose URLs carry no prefix — so this is the
+      // unchanged string, and the English case below is what proves the segment
+      // is actually being computed rather than omitted.
       expect(asked).toEqual([
-        { customerId, returnUrl: "http://localhost:3000/dashboard/subscription" },
+        {
+          customerId,
+          returnUrl: "http://localhost:3000/dashboard/subscription",
+          locale: "hu",
+        },
+      ]);
+    });
+
+    /**
+     * The other half of the same property.
+     * docs/phase-9-owner-language-and-return-paths.md §4.2, §5.1.
+     *
+     * Both values here were previously fixed: the return URL was a constant
+     * built once at composition time, and no locale was sent at all, so Stripe
+     * fell back to the browser. An English organization got a Stripe portal in
+     * whatever language the browser asked for and was returned to a Hungarian
+     * page afterwards.
+     */
+    it("returns an English organization to its own screen, in its own language", async () => {
+      const owner = await pendingOwner("portalen", "en");
+      const customerId = `cus_portalen-${RUN}`;
+
+      await app.prisma.subscription.create({
+        data: {
+          tenantId: owner.tenantId,
+          plan: "STARTER",
+          status: "ACTIVE",
+          stripeCustomerId: customerId,
+        },
+      });
+
+      const asked: { customerId: string; returnUrl: string; locale: string }[] = [];
+
+      const service = new BillingService(app.prisma, {
+        planPrices: {},
+        trialPeriodDays: 30,
+        appBaseUrl: "http://localhost:3000",
+        createPortalSession: async (input) => {
+          asked.push(input);
+          return { url: "https://billing.stripe.com/session/live_test" };
+        },
+      });
+
+      await service.portalSession(owner.tenantId);
+
+      expect(asked).toEqual([
+        {
+          customerId,
+          returnUrl: "http://localhost:3000/en/dashboard/subscription",
+          locale: "en",
+        },
       ]);
     });
 

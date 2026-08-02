@@ -34,7 +34,12 @@ export interface BillingRoutesOptions {
   paymentLinkClient?: PaymentLinkClient | undefined;
   /** Omitted when Stripe is unconfigured; the portal then reports 503. */
   createPortalSession?: PortalSessionCreator | undefined;
-  portalReturnUrl?: string | undefined;
+  /**
+   * `APP_BASE_URL`. Both Stripe round trips come back to a path under it, and
+   * the locale segment is resolved per organization rather than fixed here
+   * (docs/phase-9-owner-language-and-return-paths.md §4).
+   */
+  appBaseUrl: string;
   /**
    * The free trial's length. Told to Stripe when a link is created for an
    * organization that has not used its trial, and shown on the screen before
@@ -68,7 +73,7 @@ export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async 
     trialPeriodDays: options.trialPeriodDays,
     paymentLinkClient: options.paymentLinkClient,
     createPortalSession: options.createPortalSession,
-    portalReturnUrl: options.portalReturnUrl,
+    appBaseUrl: options.appBaseUrl,
   });
 
   // --- What the subscription screen renders --------------------------------

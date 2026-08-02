@@ -63,13 +63,26 @@ export function resetStripeForTests(): void {
 export type PortalSessionCreator = (input: {
   customerId: string;
   returnUrl: string;
+  /**
+   * The organization's language, so Stripe's own portal is not in a different
+   * one from the screen the owner clicked through from
+   * (docs/phase-9-owner-language-and-return-paths.md §5.1). Left unset, Stripe
+   * uses the customer's `preferred_locales` or the browser — which is how a
+   * Hungarian organization reached an English portal.
+   */
+  locale: string;
 }) => Promise<{ url: string }>;
 
 export function createStripePortalSession(options: StripeOptions): PortalSessionCreator {
-  return async ({ customerId, returnUrl }) => {
+  return async ({ customerId, returnUrl, locale }) => {
     const session = await getStripe(options).billingPortal.sessions.create({
       customer: customerId,
       return_url: returnUrl,
+      // Typed `string` on our side rather than Stripe's locale union: the SDK
+      // leaves that union open, so it would not have checked anything anyway.
+      // `resolveAppLocale` is what guarantees this is `hu` or `en`, both of
+      // which Stripe's portal supports.
+      locale,
     });
 
     return { url: session.url };
@@ -82,6 +95,17 @@ export function createStripePortalSession(options: StripeOptions): PortalSession
  *
  * Returned as a plain function for the same reason as the portal creator:
  * `BillingService` should depend on the shape of the call, not on Stripe.
+ *
+ * **There is deliberately no `locale` here.** `paymentLinks.create` has no such
+ * parameter — only `checkout.sessions.create` does — so the hosted payment page
+ * follows the buyer's browser and cannot be overridden. That is accepted rather
+ * than worked around: the alternatives were an undocumented `?locale=` query
+ * parameter that would fail silently, or a Checkout Session, which expires in 24
+ * hours against a 14-day subscribe window
+ * (docs/phase-9-owner-language-and-return-paths.md §5.2). Browser detection is
+ * also arguably the better answer — the link is meant to be forwardable to
+ * whoever holds the company card, and that person's browser says more about what
+ * they read than the organization's configured default does.
  */
 export type PaymentLinkCreator = (input: {
   priceId: string;
@@ -89,10 +113,12 @@ export type PaymentLinkCreator = (input: {
   plan: string;
   /** Days of free trial, or `null` for an organization that has had one. */
   trialPeriodDays: number | null;
+  /** The organization's subscription screen, in the organization's language. */
+  returnUrl: string;
 }) => Promise<{ id: string; url: string }>;
 
 export function createStripePaymentLink(options: StripeOptions): PaymentLinkCreator {
-  return async ({ priceId, tenantId, plan, trialPeriodDays }) => {
+  return async ({ priceId, tenantId, plan, trialPeriodDays, returnUrl }) => {
     const link = await getStripe(options).paymentLinks.create({
       line_items: [{ price: priceId, quantity: 1 }],
 
@@ -122,6 +148,19 @@ export function createStripePaymentLink(options: StripeOptions): PaymentLinkCrea
       },
 
       metadata: { tenantId, plan },
+
+      // **Bring them back to the product they just bought.**
+      // docs/phase-9-owner-language-and-return-paths.md §4.1.
+      //
+      // Without this the journey ended on Stripe's confirmation page and the
+      // owner had to find their way back unaided.
+      //
+      // A redirect rather than a customised `hosted_confirmation`, because the
+      // subscription screen already renders every state they can arrive in —
+      // including *not activated yet*, since activation is a webhook and a fast
+      // payer beats the event home. A static page would have to either lie or
+      // say nothing.
+      after_completion: { type: "redirect", redirect: { url: returnUrl } },
 
       // What the owner reads if they come back to a link they already used.
       // Left to Stripe's default it says only that the link is inactive, which

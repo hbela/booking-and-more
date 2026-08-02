@@ -267,7 +267,11 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     ...(options.paymentLinkClient === undefined
       ? {}
       : { paymentLinkClient: options.paymentLinkClient }),
-    portalReturnUrl: `${env.APP_BASE_URL}/dashboard/subscription`,
+    // The base only. Where Stripe returns the owner to — and in which language
+    // — is decided per organization inside the service, because the locale
+    // segment comes from the tenant
+    // (docs/phase-9-owner-language-and-return-paths.md §4).
+    appBaseUrl: env.APP_BASE_URL,
   });
 
   // Registered only when Stripe is configured. Rule 4 in its literal form: with

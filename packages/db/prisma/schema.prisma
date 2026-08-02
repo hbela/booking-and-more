@@ -1193,6 +1193,17 @@ enum NotificationType {
   /// exists to get the card fixed before dunning runs out and the organization
   /// is suspended (§2.3). Appended, as above.
   SUBSCRIPTION_PAYMENT_FAILED
+  /// The subscription went live — the receipt for the whole onboarding path.
+  ///
+  /// Sent once per Stripe subscription, ever, which is why its dedupe key is
+  /// the subscription id rather than the outbox event: `customer.subscription.*`
+  /// fires on every later change and each one would otherwise earn an email.
+  ///
+  /// It closes the loop the payment link opened. Until this existed the owner
+  /// paid on Stripe's page and heard nothing from us again — the one moment in
+  /// onboarding where silence reads as failure, because they have just been
+  /// charged. Appended, as above.
+  SUBSCRIPTION_CONFIRMED
 
   @@map("notification_type")
 }

@@ -1,10 +1,12 @@
 import type { PrismaClient } from "@bam/db";
 import {
   AppError,
+  buildAppUrl,
   ConflictError,
   ErrorCodes,
   isLiveSubscription,
   NotFoundError,
+  resolveAppLocale,
   ServiceUnavailableError,
   type SubscribablePlan,
 } from "@bam/contracts";
@@ -69,9 +71,18 @@ export interface BillingServiceOptions {
    * party can be asserted without a network round trip in the suite.
    */
   createPortalSession?: PortalSessionCreator | undefined;
-  /** Where Stripe sends the owner back to. */
-  portalReturnUrl?: string | undefined;
+  /**
+   * `APP_BASE_URL`. Both Stripe round trips end back on our subscription screen
+   * — the portal's `return_url` and the Payment Link's `after_completion`
+   * redirect — and both are built per organization rather than held here as a
+   * finished string, because the locale segment depends on the tenant
+   * (docs/phase-9-owner-language-and-return-paths.md §4).
+   */
+  appBaseUrl: string;
 }
+
+/** Where both Stripe round trips deposit the owner. */
+const SUBSCRIPTION_PATH = "/dashboard/subscription";
 
 export class BillingService {
   constructor(
@@ -128,10 +139,17 @@ export class BillingService {
    * is.
    */
   async portalSession(tenantId: string): Promise<{ url: string }> {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: { tenantId },
-      select: { stripeCustomerId: true },
-    });
+    const [subscription, tenant] = await Promise.all([
+      this.prisma.subscription.findUnique({
+        where: { tenantId },
+        select: { stripeCustomerId: true },
+      }),
+      // The language decides two things at once — which page Stripe returns
+      // them to, and which language Stripe's own portal renders in (§5.1). Left
+      // unset, Stripe falls back to the browser, which is how a Hungarian
+      // organization reached an English portal.
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { defaultLanguage: true } }),
+    ]);
 
     const customerId = subscription?.stripeCustomerId ?? null;
 
@@ -153,14 +171,24 @@ export class BillingService {
 
     const create = this.options.createPortalSession;
 
-    if (create === undefined || this.options.portalReturnUrl === undefined) {
+    if (create === undefined) {
       throw new ServiceUnavailableError(
         "Billing management is not available right now. Please contact us.",
       );
     }
 
+    const locale = resolveAppLocale(tenant?.defaultLanguage);
+
     try {
-      return await create({ customerId, returnUrl: this.options.portalReturnUrl });
+      return await create({
+        customerId,
+        returnUrl: buildAppUrl({
+          baseUrl: this.options.appBaseUrl,
+          path: SUBSCRIPTION_PATH,
+          locale,
+        }),
+        locale,
+      });
     } catch (cause) {
       // Overwhelmingly the missing portal configuration in the Stripe
       // dashboard (§2.1). A setup step should not read as a 500 and page
@@ -242,7 +270,7 @@ export class BillingService {
 
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: input.tenantId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, defaultLanguage: true },
     });
 
     if (!tenant) throw new NotFoundError("That organization does not exist.");
@@ -260,6 +288,7 @@ export class BillingService {
       priceId,
       trial,
       links,
+      locale: resolveAppLocale(tenant.defaultLanguage),
     });
 
     await this.prisma.outboxEvent.create({
@@ -301,6 +330,8 @@ export class BillingService {
     priceId: string;
     trial: boolean;
     links: PaymentLinkClient;
+    /** The organization's, for the page Stripe returns the payer to. */
+    locale: string;
   }): Promise<{ url: string; trial: boolean }> {
     const existing = await this.prisma.subscriptionCheckoutLink.findUnique({
       where: { tenantId: input.tenantId },
@@ -348,6 +379,15 @@ export class BillingService {
       tenantId: input.tenantId,
       plan: input.plan,
       trialPeriodDays: input.trial ? this.options.trialPeriodDays : null,
+      // Baked into the link at creation, which is only sound because a link now
+      // belongs to *one* organization (§4.1 of the duplicate-prevention
+      // record). Under the previous design — one permanent link per plan,
+      // shared by everyone — there would have been no single right answer here.
+      returnUrl: buildAppUrl({
+        baseUrl: this.options.appBaseUrl,
+        path: SUBSCRIPTION_PATH,
+        locale: input.locale,
+      }),
     });
 
     const url = buildPaymentUrl(created.url, input.tenantId);

@@ -5,6 +5,7 @@ import {
   NotificationTypes,
   renderOrganizationCreated,
   renderPaymentFailed,
+  renderSubscriptionConfirmed,
   renderSubscriptionLink,
   renderTrialEnding,
   type Locale,
@@ -75,6 +76,32 @@ export async function sendNotification(
     html: email.html,
     text: email.text,
   });
+
+  if (result.ok && !options.provider.delivers) {
+    // The logging provider accepted it and nothing left the building. Recording
+    // SENT here is what made five onboarding emails look delivered while Resend
+    // had never been called — `provider_message_id` was the only tell, and
+    // nobody reads a null.
+    //
+    // SKIPPED rather than FAILED for the same reason a missing template is:
+    // retrying cannot fix it, and the dead-letter queue should mean something.
+    // The payload is deliberately *not* cleared — in this mode the link in it
+    // is the only copy anyone has.
+    await options.prisma.notification.update({
+      where: { id: notification.id },
+      data: {
+        status: "SKIPPED",
+        lastError: "no email provider configured; body written to the log",
+      },
+    });
+
+    options.logger.warn(
+      { notificationId: notification.id, type: notification.type },
+      "notification: not delivered — no email provider configured",
+    );
+
+    return "SKIPPED";
+  }
 
   if (result.ok) {
     await options.prisma.notification.update({
@@ -213,6 +240,36 @@ function render(notification: RenderableNotification, logger: Logger): RenderedE
       recipientName: payload.recipientName ?? payload.organizationName,
       planName: payload.planName ?? "",
       paymentUrl: payload.paymentUrl,
+    });
+  }
+
+  if (notification.type === NotificationTypes.SUBSCRIPTION_CONFIRMED) {
+    const payload = notification.payload as {
+      organizationName?: string;
+      recipientName?: string | null;
+      planName?: string;
+      trial?: boolean;
+      renewsAt?: string | null;
+      dashboardUrl?: string;
+    } | null;
+
+    if (!payload?.organizationName || !payload.dashboardUrl) {
+      logger.error(
+        { notificationId: notification.id },
+        "notification: confirmation payload is missing; cannot render",
+      );
+      return undefined;
+    }
+
+    return renderSubscriptionConfirmed(locale, {
+      organizationName: payload.organizationName,
+      recipientName: payload.recipientName ?? payload.organizationName,
+      planName: payload.planName ?? "",
+      trial: payload.trial === true,
+      // Empty when Stripe named no date, which drops the charge line rather
+      // than inventing one — see the template's note on why that line matters.
+      renewsOn: formatExpiry(payload.renewsAt ?? null, locale),
+      dashboardUrl: payload.dashboardUrl,
     });
   }
 

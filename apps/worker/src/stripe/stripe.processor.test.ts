@@ -250,6 +250,72 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
     });
   });
 
+  describe("subscription confirmation", () => {
+    /**
+     * The email the onboarding flow was missing: the owner paid on Stripe's
+     * hosted page and heard nothing from us again
+     * (docs/phase-9-owner-onboarding-emails.md §3).
+     */
+    it("asks for a confirmation when the subscription first goes live", async () => {
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "INCOMPLETE",
+          stripeSubscriptionId: `sub_conf-${suffix}`,
+        },
+      });
+
+      const trialEnd = Math.floor(Date.now() / 1_000) + 30 * 24 * 60 * 60;
+
+      await record("evt_conf", "customer.subscription.created", {
+        id: `sub_conf-${suffix}`,
+        status: "trialing",
+        trial_end: trialEnd,
+      });
+
+      await processStripeEventBatch(options());
+
+      const events = await prisma.outboxEvent.findMany({
+        where: { tenantId, eventType: "SUBSCRIPTION_CONFIRMED" },
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.payload).toMatchObject({
+        subscriptionId: `sub_conf-${suffix}`,
+        trial: true,
+      });
+      // The date the money moves — the line that stops a customer disputing a
+      // charge they technically agreed to.
+      expect((events[0]?.payload as { renewsAt?: string }).renewsAt).not.toBeNull();
+    });
+
+    it("does not ask again on every later change to the same subscription", async () => {
+      // `customer.subscription.updated` fires for a card swap, a plan change, a
+      // renewal — each carrying a live status. Without the transition test this
+      // would congratulate the owner every time they touched their billing.
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "ACTIVE",
+          stripeSubscriptionId: `sub_again-${suffix}`,
+        },
+      });
+
+      await record("evt_again", "customer.subscription.updated", {
+        id: `sub_again-${suffix}`,
+        status: "active",
+      });
+
+      await processStripeEventBatch(options());
+
+      expect(
+        await prisma.outboxEvent.count({ where: { tenantId, eventType: "SUBSCRIPTION_CONFIRMED" } }),
+      ).toBe(0);
+    });
+  });
+
   describe("attribution by subscription metadata", () => {
     /**
      * docs/phase-9-duplicate-subscription-prevention.md §4.3.

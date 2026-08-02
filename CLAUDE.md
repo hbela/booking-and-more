@@ -34,6 +34,16 @@ subscriptions. It **reverses §1.2 of the activation record**: a Payment Link is
 organization at subscribe time, not held in config per plan, so the four `STRIPE_PAYMENT_LINK_*` variables
 are gone and `STRIPE_PRICE_*` decides what is sold. **Read its §2 before touching `requestPaymentLink` or
 `activate`** — three defects, and the reported one is not the worst ·
+[Phase 9 — owner onboarding emails](docs/phase-9-owner-onboarding-emails.md) (done). Why configured email
+delivered nothing — the worker memoises its provider at boot, so keys added later need a restart — and the
+`SUBSCRIPTION_CONFIRMED` email that closes the loop the payment link opens. Its §2 is the one to read: an
+`EmailProvider` that does not deliver must not report success, because `status: SENT` with a null
+`provider_message_id` is the predecessor's swallowed-failure bug wearing a different hat ·
+[Phase 9 — owner language and return paths](docs/phase-9-owner-language-and-return-paths.md) (done). The
+platform form never asked what language an organization speaks, so every owner was onboarded in Hungarian —
+and every URL built server-side omitted the locale segment, which is invisible while Hungarian is the
+unprefixed default. **`buildAppUrl` in `@bam/contracts` is now the only way to build a link to one of our own
+screens**; its §5.2 records why the Stripe payment page's language is *not* settable and is not going to be ·
 [Phase 9 — manual test checklist](docs/phase-9-manual-test-checklist.md) (written, **not yet walked**). The
 one document to open before testing onboarding or billing by hand: preconditions, ~60 checks from
 provisioning to cancellation, and the Stripe-side assertions no automated test can make.

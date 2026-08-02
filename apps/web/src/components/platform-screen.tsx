@@ -177,6 +177,12 @@ export function PlatformScreen(): React.ReactElement {
               ownerName: textField(data, "ownerName"),
               ownerEmail: textField(data, "ownerEmail"),
               mode: textField(data, "mode") || "PROSPECT",
+              // The field that was missing, and the reason every owner was
+              // onboarded in Hungarian: the schema has accepted
+              // `defaultLanguage` since it was written, but nothing ever sent
+              // it, so its default won every time
+              // (docs/phase-9-owner-language-and-return-paths.md §1).
+              defaultLanguage: textField(data, "defaultLanguage") || "hu",
             });
           }}
         >
@@ -203,6 +209,26 @@ export function PlatformScreen(): React.ReactElement {
               <option value="PROSPECT">{t("modeProspect")}</option>
               <option value="INTERNAL">{t("modeInternal")}</option>
             </select>
+          </Field>
+
+          {/* A select rather than a text input, matching `mode`: the API takes
+              a two-value enum, and a free-text field would turn a closed set
+              into a 400 for anybody who typed `en-GB`. The markup default and
+              the schema default are both `hu` so they cannot drift. */}
+          <Field id="defaultLanguage" label={t("language")}>
+            <select
+              id="defaultLanguage"
+              name="defaultLanguage"
+              defaultValue="hu"
+              aria-describedby="defaultLanguage-hint"
+              className={inputClass}
+            >
+              <option value="hu">{t("languageHu")}</option>
+              <option value="en">{t("languageEn")}</option>
+            </select>
+            <span id="defaultLanguage-hint" className="text-xs text-slate-500">
+              {t("languageHint")}
+            </span>
           </Field>
 
           <Field id="ownerName" label={t("ownerName")}>

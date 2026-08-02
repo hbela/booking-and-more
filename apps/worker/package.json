@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@bam/config": "workspace:*",
+    "@bam/contracts": "workspace:*",
     "@bam/db": "workspace:*",
     "@bam/notification-engine": "workspace:*",
     "@bam/observability": "workspace:*",

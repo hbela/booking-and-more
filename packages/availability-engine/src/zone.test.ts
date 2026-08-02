@@ -123,6 +123,24 @@ describe("resolveWallClock", () => {
     expect(toWallClock(resolved.epochMs, "Australia/Lord_Howe")).toEqual(wall(2026, 10, 4, 2, 30));
   });
 
+  it("takes the earlier instant across a half-hour fall-back too", () => {
+    // The counterexample the property test found on seed -952000571
+    // (docs/phase-3-availability-engine.md §2.2.1), pinned so it is not left to
+    // luck. Lord Howe goes back 30 minutes at 02:00 on 2025-04-06, so 01:30
+    // local reads at both 14:30Z (+11:00) and 15:00Z (+10:30).
+    //
+    // The old probe looked for a duplicate exactly an hour earlier, found
+    // nothing, and returned 15:00Z as "exact" — the later of the two, and the
+    // opposite of what this file promises.
+    const resolved = resolveWallClock(wall(2025, 4, 6, 1, 30), "Australia/Lord_Howe");
+
+    expect(resolved.resolution).toBe("ambiguous");
+    expect(iso(resolved.epochMs)).toBe("2025-04-05T14:30:00.000Z");
+    expect(toWallClock(resolved.epochMs + 1_800_000, "Australia/Lord_Howe")).toEqual(
+      wall(2025, 4, 6, 1, 30),
+    );
+  });
+
   it("handles a southern-hemisphere zone, where the transitions are reversed", () => {
     expect(resolveWallClock(wall(2026, 1, 15, 12, 0), "Pacific/Auckland").resolution).toBe("exact");
     expect(offsetAt(Date.parse("2026-01-15T00:00:00Z"), "Pacific/Auckland")).toBe(46_800_000);
@@ -131,8 +149,14 @@ describe("resolveWallClock", () => {
   it("agrees with itself in both directions, for any instant in any of these zones", () => {
     // The property that matters: reading the clock and then resolving that
     // reading must land back on the same instant — except inside a fall-back
-    // hour, where two instants share a reading and the earlier is chosen by
+    // window, where two instants share a reading and the earlier is chosen by
     // design.
+    //
+    // Note what this no longer says: it used to allow the resolved instant to
+    // differ by *exactly one hour*, which is the same assumption the code under
+    // test was wrong about, so the assertion could only detect the Lord Howe
+    // defect by accident rather than describe it (§2.2.1). Stated in terms of
+    // `resolution` instead, it holds for any transition size.
     fc.assert(
       fc.property(
         fc.integer({ min: Date.UTC(2024, 0, 1), max: Date.UTC(2030, 0, 1) }),
@@ -153,14 +177,49 @@ describe("resolveWallClock", () => {
           // Whatever instant came back must read the same on the clock.
           expect(toWallClock(resolved.epochMs, zone)).toEqual(reading);
 
-          // And it is either the instant we started from, or the earlier of the
-          // two that share this reading.
-          expect(resolved.epochMs === epochMs || resolved.epochMs === epochMs - 3_600_000).toBe(
-            true,
-          );
+          // A reading taken from a real instant always exists, so it is never
+          // snapped forward.
+          expect(resolved.resolution).not.toBe("skipped");
+
+          if (resolved.epochMs === epochMs) return;
+
+          // Otherwise this reading happens twice and we were handed the second
+          // occurrence. The only acceptable answer is the *earlier* one, said
+          // out loud — never a later instant, and never silently.
+          expect(resolved.resolution).toBe("ambiguous");
+          expect(resolved.epochMs).toBeLessThan(epochMs);
         },
       ),
       { numRuns: 500 },
+    );
+  });
+
+  it("agrees with itself on the seed that first caught the half-hour fall-back", () => {
+    // Kept as its own case with the seed pinned: the general property above runs
+    // 500 random instants and the window this exercises is two half-hours a year
+    // in one zone, so leaving it to chance is how it went unnoticed.
+    fc.assert(
+      fc.property(
+        fc.integer({ min: Date.UTC(2024, 0, 1), max: Date.UTC(2030, 0, 1) }),
+        fc.constantFrom("Australia/Lord_Howe"),
+        (rawMs, zone) => {
+          const epochMs = Math.floor(rawMs / 60_000) * 60_000;
+          const reading = toWallClock(epochMs, zone);
+          const resolved = resolveWallClock(reading, zone);
+
+          expect(toWallClock(resolved.epochMs, zone)).toEqual(reading);
+
+          // Never later than the instant the reading came from. Equality is not
+          // the same as unambiguity — the earlier of two occurrences resolves to
+          // itself and is still correctly reported `ambiguous` — so the two are
+          // asserted separately.
+          expect(resolved.epochMs).toBeLessThanOrEqual(epochMs);
+          expect(resolved.resolution).not.toBe("skipped");
+
+          if (resolved.epochMs !== epochMs) expect(resolved.resolution).toBe("ambiguous");
+        },
+      ),
+      { seed: -952000571, numRuns: 5000 },
     );
   });
 });

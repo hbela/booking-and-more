@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { escapeHtml, isRenderable, renderOrganizationCreated } from "./templates.js";
+import {
+  escapeHtml,
+  isRenderable,
+  renderOrganizationCreated,
+  renderSubscriptionConfirmed,
+} from "./templates.js";
 import { NotificationTypes } from "./types.js";
 
 const values = {
@@ -76,6 +81,78 @@ describe("renderOrganizationCreated", () => {
   it("includes the expiry, because the link dies before the organization does", () => {
     const email = renderOrganizationCreated("en", values);
     expect(email.text).toContain("2026-08-05 10:00");
+  });
+});
+
+describe("renderSubscriptionConfirmed", () => {
+  const confirmed = {
+    organizationName: "Wellness Kft",
+    recipientName: "Kovács Anna",
+    planName: "Starter",
+    trial: true,
+    renewsOn: "31 August 2026",
+    dashboardUrl: "http://localhost:3000/dashboard",
+  };
+
+  it.each(["hu", "en"] as const)("renders %s with a subject, html and text", (locale) => {
+    const email = renderSubscriptionConfirmed(locale, confirmed);
+
+    expect(email.subject).toContain("Wellness Kft");
+    expect(email.html).toContain("http://localhost:3000/dashboard");
+    expect(email.text).toContain("http://localhost:3000/dashboard");
+    expect(email.text).not.toContain("<");
+  });
+
+  /**
+   * The line that prevents a dispute.
+   *
+   * A trial confirmation that does not name the date of the first charge is how
+   * a customer ends up surprised by a bill they technically agreed to — the same
+   * reasoning as the trial-ending email, applied at the moment they are actually
+   * paying attention.
+   */
+  it("names the charge date and the escape hatch during a trial", () => {
+    const en = renderSubscriptionConfirmed("en", confirmed);
+
+    expect(en.text).toContain("31 August 2026");
+    expect(en.text.toLowerCase()).toContain("cancel");
+
+    const hu = renderSubscriptionConfirmed("hu", confirmed);
+    expect(hu.text).toContain("31 August 2026");
+    expect(hu.text.toLowerCase()).toContain("lemondhatja");
+  });
+
+  it("calls it a renewal, not a trial end, once they are paying", () => {
+    const email = renderSubscriptionConfirmed("en", { ...confirmed, trial: false });
+
+    expect(email.text).toContain("31 August 2026");
+    // "your free trial ends" would be a lie to somebody who has been charged.
+    expect(email.text.toLowerCase()).not.toContain("free trial");
+  });
+
+  it("drops the charge line rather than inventing a date", () => {
+    // Stripe does not always give us one. A confirmation that says "you will be
+    // charged on " is worse than one that says nothing about dates.
+    const email = renderSubscriptionConfirmed("en", { ...confirmed, renewsOn: "" });
+
+    expect(email.text).not.toContain("charge");
+    expect(email.text).toContain("Wellness Kft");
+  });
+
+  it("escapes markup in the organization name", () => {
+    const email = renderSubscriptionConfirmed("en", {
+      ...confirmed,
+      organizationName: `Smith & Sons <script>alert(1)</script>`,
+    });
+
+    expect(email.html).not.toContain("<script>");
+    expect(email.html).toContain("&amp;");
+  });
+
+  it("differs by locale", () => {
+    expect(renderSubscriptionConfirmed("hu", confirmed).subject).not.toBe(
+      renderSubscriptionConfirmed("en", confirmed).subject,
+    );
   });
 });
 

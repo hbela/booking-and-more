@@ -18,11 +18,15 @@ const suffix = Math.random().toString(36).slice(2, 10);
 
 const log = createLogger({ service: "sender-test", level: "silent", pretty: false });
 
-function provider(result: DeliveryResult): EmailProvider & { sent: EmailMessage[] } {
+function provider(
+  result: DeliveryResult,
+  delivers = true,
+): EmailProvider & { sent: EmailMessage[] } {
   const sent: EmailMessage[] = [];
 
   return {
     name: "fake",
+    delivers,
     sent,
     send(message: EmailMessage) {
       sent.push(message);
@@ -92,6 +96,41 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     expect(settled.status).toBe("SENT");
     expect(settled.providerMessageId).toBe("resend_abc");
     expect(settled.sentAt).not.toBeNull();
+  });
+
+  /**
+   * The bug this flag was added for.
+   *
+   * The logging provider returns `ok: true`, so five real onboarding emails
+   * were recorded SENT while Resend had never been called — an owner who never
+   * received their invitation looked exactly like one who did, which is the
+   * failure `requestPaymentLink` refuses to send inline to avoid, reintroduced
+   * one layer down. `provider_message_id` was the only tell, and nobody reads a
+   * null.
+   */
+  it("does not record SENT when the provider does not actually deliver", async () => {
+    const notification = await createNotification();
+    const logging = provider({ ok: true, providerMessageId: undefined }, false);
+
+    const outcome = await sendNotification(
+      { tenantId, notificationId: notification.id },
+      options(logging),
+    );
+
+    expect(outcome).toBe("SKIPPED");
+    // It was still handed to the provider — that is how the body reaches the
+    // log, which is the whole purpose of running without a key.
+    expect(logging.sent).toHaveLength(1);
+
+    const settled = await prisma.notification.findUniqueOrThrow({
+      where: { id: notification.id },
+    });
+    expect(settled.status).toBe("SKIPPED");
+    expect(settled.sentAt).toBeNull();
+    expect(settled.lastError).toContain("no email provider configured");
+    // Not cleared: in this mode the link in the payload is the only copy anyone
+    // has, and there is no delivered email to read it from.
+    expect(settled.payload).not.toEqual({});
   });
 
   it("clears the invitation link once the email is away", async () => {

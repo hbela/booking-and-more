@@ -60,6 +60,33 @@ The consequence is visible in the product: on the morning the clocks go back, a 
 open for five hours and **offers 02:00 twice**, an hour apart in real time. That is correct, and the booking
 page will need to disambiguate them for customers (see §5).
 
+### 2.2.1 Amendment, 2026-08-02 — the fall-back half only worked for one-hour transitions
+
+The paragraph above is right about the gap search and was wrong about its mirror image. The **`skipped`**
+path walks forward a minute at a time and is zone-agnostic. The **`ambiguous`** path did not: it probed for a
+duplicate reading at exactly `exact - HOUR_MS`, so it could only ever detect a one-hour fall-back.
+
+Lord Howe Island shifts by **30 minutes in both directions**. Its April transition therefore produced two
+defects at once, in a 30-minute window twice a year, in one zone:
+
+- the *later* of the two instants was returned, contradicting the rule in the table above, and
+- it was reported as **`exact`**, so a caller who checked `resolution` before deciding — the entire reason
+  the field exists — was told there was nothing to decide.
+
+Found by the property test `agrees with itself in both directions`, which failed on seed `-952000571` and
+passed on the next run. It was seed-dependent because the window is two half-hours a year in one of seven
+zones; and the assertion it failed on (`resolved === input || resolved === input - 3_600_000`) had the same
+one-hour assumption baked into it, so it could confirm the bug but not describe it.
+
+The fix replaces the fixed-size probe with the two-candidate algorithm: take the offset a day either side of
+the reading, subtract each from the reading-as-UTC, and keep whichever candidates read back correctly. Two
+survivors means ambiguous and the earlier wins; one means exact; none means skipped, and the existing walk
+takes over. Nothing in it names an hour, so no transition size can outgrow it.
+
+`zone.test.ts` gains a pinned Lord Howe fall-back case — a deterministic test for something a property test
+found by luck — and the property assertion is generalised to "the same instant, or an earlier one reported as
+`ambiguous`", which no longer encodes the assumption it was meant to be checking.
+
 ## 2.3 `now` is an input
 
 Not in §13.1's interface, and required. "Slot calculations are deterministic" is an exit criterion, and a

@@ -72,8 +72,8 @@ Hungarian is the default locale on unprefixed URLs; English lives under `/en`.
 ## A. Platform provisioning — `/admin/platform`
 
 - [ ] **A1** Sign in as the platform admin → lands on `/admin` → "Go to the platform dashboard".
-- [ ] **A2** Provision form has 6 required fields: name, domain, slug, Type (Prospect / Internal), owner
-      name, owner email. Submit as **Prospect**.
+- [ ] **A2** Provision form has 7 fields: name, domain, slug, Type (Prospect / Internal), **Language
+      (Hungarian / English, defaulting to Hungarian)**, owner name, owner email. Submit as **Prospect**.
 - [ ] **A3** Green "Acceptance link" box appears with the URL in a `<code>` block and copy saying it is shown
       once and never stored. **Copy it now** — it is React state only, and navigating away loses it.
 - [ ] **A4** The organization appears in the list: amber "Awaiting subscription" badge, "14 days to
@@ -152,6 +152,16 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
       dashboard; whether Stripe renders it for a **restriction-exhausted** link, as opposed to a manually
       deactivated one, is **open question 2** and untested.
 - [ ] **E4** In Stripe: the subscription is `trialing`, **no charge was taken**, and a card is on file.
+- [ ] **E4a** Completing the payment **redirects back to `/dashboard/subscription`** rather than stopping on
+      Stripe's own confirmation page (`after_completion`). For the English organization of §L the destination
+      is `/en/dashboard/subscription`.
+- [ ] **E4b** *Known and accepted, not a defect.* The payment page itself follows the **browser's** language,
+      not the organization's — `paymentLinks.create` has no `locale` parameter. Test it by changing your
+      browser's preferred language, not by provisioning a different organization. See
+      [phase-9-owner-language-and-return-paths.md](phase-9-owner-language-and-return-paths.md) §5.2.
+- [ ] **E4c** *Not a locale problem.* If the confirmation reads "a payment to **Stripe** will appear on your
+      statement", the account's statement descriptor is unset (Dashboard → Settings → Business → Public
+      details). It will read that way on real owners' bank statements (§5.3).
 - [ ] **E5** The subscription carries `metadata.tenantId`. *(All five pre-existing subscriptions had none —
       this is new, and §4.3 depends on it.)*
 
@@ -190,7 +200,11 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 - [ ] **H1** "Manage billing" → **same-tab** redirect. Deliberately not a new tab: the session expires within
       minutes and one left in a background tab is dead by the time anyone returns to it.
 - [ ] **H2** Change the card. **H3** Open an invoice. **H4** Cancel the subscription.
-- [ ] **H5** Returning from Stripe lands back on `/dashboard/subscription`.
+- [ ] **H5** Returning from Stripe lands back on `/dashboard/subscription` — and on
+      `/en/dashboard/subscription` for the English organization of §L.
+- [ ] **H5a** The portal itself renders in the organization's language (`locale` is sent, §5.1). Confirm it on
+      the **English** organization using a **Hungarian** browser: that combination is the one that proves our
+      value is winning rather than the browser's.
 - [ ] **H6** After cancelling in the portal the screen says **"Ends on {date}"**, not "Renews on".
       *Read [phase-9-customer-portal.md](phase-9-customer-portal.md) §3 first — a portal cancellation may
       report `cancel_at` rather than `cancel_at_period_end`, and reading only the boolean fails silently and
@@ -241,6 +255,27 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
       the gate reason.
 - [ ] **K5** `role="status"` on the acceptance link, the payment-link confirmation and the plan-change line;
       `role="alert"` on errors and the past-due notice.
+
+## L. The English organization ★
+
+The pass that would have caught the whole of
+[phase-9-owner-language-and-return-paths.md](phase-9-owner-language-and-return-paths.md). Everything above
+runs against a Hungarian organization, and Hungarian is the default locale — whose URLs carry **no prefix**.
+So a link built with no locale at all is indistinguishable from a correct one until an English organization
+exists. Provision one and repeat the path.
+
+- [ ] **L1** Provision with **Language: English** (A2). The row is created with `default_language = 'en'`.
+- [ ] **L2** The **invitation email** arrives in English *and* its acceptance link is
+      `/en/invitations/<token>`. Opening it shows the English landing page directly, with no locale redirect.
+- [ ] **L3** The **payment-link email** is English and its `billingUrl`-style links carry `/en`.
+- [ ] **L4** Subscribe → the emailed Stripe link works; after paying you land on
+      `/en/dashboard/subscription` (E4a).
+- [ ] **L5** The **confirmation email** is English and its dashboard link is `/en/dashboard`.
+- [ ] **L6** "Manage billing" opens Stripe's portal **in English** and returns to `/en/dashboard/subscription`
+      (H5, H5a).
+- [ ] **L7** Repeat L1 with Language left at **Hungarian** and confirm the links have **no** prefix. Both
+      directions matter: a helper that prefixed unconditionally would pass L2–L6 and break every existing
+      organization.
 
 ---
 

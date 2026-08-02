@@ -24,13 +24,18 @@
  *                    is a schedule that says something the calendar cannot
  *                    honour, so it resolves forward to the first real instant
  *                    (03:00), and the caller can detect it via `resolution`.
- *   Autumn back    — 02:30 happens twice, an hour apart. The earlier instant
- *                    wins, which is the convention every calendar application
- *                    uses and the one that keeps a working day from silently
- *                    starting an hour late.
+ *   Autumn back    — 02:30 happens twice. The earlier instant wins, which is
+ *                    the convention every calendar application uses and the one
+ *                    that keeps a working day from silently starting late.
  *
  * Neither case is left implicit: {@link resolveWallClock} reports which one it
  * hit, so the engine can decide rather than inherit an accident.
+ *
+ * **Nothing in here assumes a transition is an hour.** Most are; Lord Howe
+ * Island's is thirty minutes, and an earlier version of this file assumed an
+ * hour in the fall-back direction only. It answered that island's April
+ * mornings with the wrong instant and called the result `exact`
+ * (docs/phase-3-availability-engine.md §2.2.1).
  */
 
 /** A date and time with no zone attached — what a schedule actually stores. */
@@ -63,7 +68,7 @@ export interface ResolvedWallClock {
 }
 
 const MINUTE_MS = 60_000;
-const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
 
 /**
  * Formatters are expensive to construct and are asked the same question
@@ -146,34 +151,16 @@ export function offsetAt(epochMs: number, timeZone: string): number {
 /**
  * The UTC instant at which `wall` reads on the clock in `timeZone`.
  *
- * ## The algorithm
- *
- * Treat the wall-clock time as though it were UTC, which gives an instant
- * wrong by exactly the zone's offset. Look up the offset *there* and subtract
- * it. That lands in the right neighbourhood but can still be an hour out when
- * the guess fell on the far side of a transition, so the offset is looked up
- * once more at the corrected instant and applied again. Two passes is provably
- * enough for the ≤ 2-hour transitions every real zone uses.
- *
- * Then verify: format the candidate back and check it reads what was asked for.
- * A mismatch means the wall-clock time does not exist, which is reported rather
- * than papered over.
+ * Delegates the search to {@link instantsFor} and then names what it found:
+ * nothing means the reading was jumped over, one means the ordinary case, two
+ * means a fall-back and the earlier wins.
  */
 export function resolveWallClock(wall: WallClock, timeZone: string): ResolvedWallClock {
-  const exact = attempt(wall, timeZone);
+  const instants = instantsFor(wall, timeZone);
+  const [earliest] = instants;
 
-  if (exact !== null) {
-    // The time exists. It may still exist *twice* — during a fall-back hour the
-    // same reading occurs at two instants, and the two-pass search can land on
-    // either. If an hour earlier reads the same, that earlier instant is the
-    // one to return.
-    const anHourEarlier = exact - HOUR_MS;
-
-    if (readsAs(anHourEarlier, wall, timeZone)) {
-      return { epochMs: anHourEarlier, resolution: "ambiguous" };
-    }
-
-    return { epochMs: exact, resolution: "exact" };
+  if (earliest !== undefined) {
+    return { epochMs: earliest, resolution: instants.length > 1 ? "ambiguous" : "exact" };
   }
 
   // The reading does not exist: the clocks jumped over it. Walk forward a
@@ -181,10 +168,9 @@ export function resolveWallClock(wall: WallClock, timeZone: string): ResolvedWal
   // assuming a one-hour gap means Lord Howe's 30-minute shift, and any historic
   // oddity, resolves correctly instead of merely plausibly.
   for (let minutes = 1; minutes <= 180; minutes += 1) {
-    const shifted = shiftMinutes(wall, minutes);
-    const resolved = attempt(shifted, timeZone);
+    const [resolved] = instantsFor(shiftMinutes(wall, minutes), timeZone);
 
-    if (resolved !== null) {
+    if (resolved !== undefined) {
       return { epochMs: resolved, resolution: "skipped" };
     }
   }
@@ -198,22 +184,43 @@ export function resolveWallClock(wall: WallClock, timeZone: string): ResolvedWal
 }
 
 /**
- * The instant for a wall-clock reading, or null when that reading does not
- * exist in this zone.
+ * Every instant at which the clock in `timeZone` reads `wall`, ascending.
+ * Empty, one entry, or two.
  *
- * Two passes: treat the reading as UTC to get an instant wrong by the offset,
- * correct by the offset found there, then correct again in case the first guess
- * fell on the far side of a transition. Two is provably enough for the ≤ 2-hour
- * transitions every real zone uses — and the result is verified rather than
- * trusted, which is what makes the third pass unnecessary.
+ * ## The algorithm
+ *
+ * Treat the reading as though it were UTC. The true instant is that value minus
+ * the zone's offset — but *which* offset is the whole question on a transition
+ * day, and there may be two answers. So take the offset in force a day before
+ * and a day after, subtract each, and keep whichever results actually read back
+ * as `wall`. A day is comfortably wide enough: the true instant is within 14
+ * hours of the reading-as-UTC, so both probes sit on opposite sides of any
+ * transition adjacent to it, and no two IANA transitions are a day apart.
+ *
+ * **Nothing here names an hour.** That is the point. The predecessor of this
+ * function corrected by the offset twice and then looked for a duplicate at
+ * exactly `- 1 hour`, which silently could not see Lord Howe Island's 30-minute
+ * fall-back: it returned the *later* of the two instants and called it `exact`
+ * (docs/phase-3-availability-engine.md §2.2.1). Any fixed step is the same bug
+ * waiting for a different zone.
+ *
+ * Candidates are verified rather than trusted, which is what makes a gap
+ * detectable at all: a reading the clocks jumped over survives neither probe.
  */
-function attempt(wall: WallClock, timeZone: string): number | null {
+function instantsFor(wall: WallClock, timeZone: string): number[] {
   const asIfUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute);
 
-  const firstGuess = asIfUtc - offsetAt(asIfUtc, timeZone);
-  const candidate = asIfUtc - offsetAt(firstGuess, timeZone);
+  const before = offsetAt(asIfUtc - DAY_MS, timeZone);
+  const after = offsetAt(asIfUtc + DAY_MS, timeZone);
 
-  return readsAs(candidate, wall, timeZone) ? candidate : null;
+  const candidates =
+    before === after ? [asIfUtc - before] : [asIfUtc - before, asIfUtc - after].sort(ascending);
+
+  return candidates.filter((candidate) => readsAs(candidate, wall, timeZone));
+}
+
+function ascending(left: number, right: number): number {
+  return left - right;
 }
 
 /** Add minutes to a wall-clock reading, carrying into hours, days and months. */

@@ -126,6 +126,25 @@ export type DedupeInput =
       type: typeof NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED;
       channel: NotificationChannel;
       eventId: string;
+    }
+  /**
+   * **The one keyed on the subject rather than the event**, and the reason the
+   * distinction in this file earns its keep.
+   *
+   * A subscription goes live once but reports itself many times: Stripe sends
+   * `customer.subscription.updated` for every later change — a card swap, a plan
+   * change, a renewal — and each carries a live status. Keyed on the event id
+   * like its neighbours, this would congratulate the owner on subscribing every
+   * time they touched their billing settings.
+   *
+   * Keyed on the subscription it confirms, a customer who cancels and comes back
+   * still gets a fresh one, because that is a new Stripe subscription with a new
+   * id. Which is right: they did subscribe again.
+   */
+  | {
+      type: typeof NotificationTypes.SUBSCRIPTION_CONFIRMED;
+      channel: NotificationChannel;
+      subscriptionId: string;
     };
 
 /**
@@ -177,6 +196,11 @@ function discriminatorFor(input: DedupeInput): string[] {
     case NotificationTypes.TRIAL_ENDING_SOON:
     case NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED:
       return [input.eventId];
+
+    // `sub_…`, so the confirmation survives every later event about the same
+    // subscription. See the comment on the variant.
+    case NotificationTypes.SUBSCRIPTION_CONFIRMED:
+      return [input.subscriptionId];
   }
 }
 

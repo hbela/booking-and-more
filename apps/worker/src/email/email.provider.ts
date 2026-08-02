@@ -29,6 +29,21 @@ export type DeliveryResult =
 
 export interface EmailProvider {
   readonly name: string;
+  /**
+   * Whether a successful `send` means a message actually left the building.
+   *
+   * False for the logging provider, and the sender must not record `SENT` for a
+   * provider that says so. Without this the two are indistinguishable in the
+   * database — `status: SENT`, `provider_message_id: null` — which is how five
+   * onboarding emails were believed sent while Resend had never been called.
+   *
+   * The irony is worth recording: `requestPaymentLink` refuses to send email
+   * inline precisely because the predecessor "swallowed the failure, so an
+   * owner who never received their link looked identical to one who did". The
+   * logging provider reintroduced exactly that, one layer down, by returning
+   * `ok: true`.
+   */
+  readonly delivers: boolean;
   send(message: EmailMessage): Promise<DeliveryResult>;
 }
 
@@ -48,6 +63,9 @@ export interface EmailProvider {
 export function createLoggingProvider(logger: Logger): EmailProvider {
   return {
     name: "logger",
+    // The whole point. `ok: true` below means "the body was written out", not
+    // "the owner received it", and only this flag can tell the sender apart.
+    delivers: false,
     send(message: EmailMessage): Promise<DeliveryResult> {
       logger.info(
         { to: message.to, subject: message.subject, body: message.text },
@@ -77,6 +95,7 @@ export interface ResendProviderOptions {
 export function createResendProvider(options: ResendProviderOptions): EmailProvider {
   return {
     name: "resend",
+    delivers: true,
 
     async send(message: EmailMessage): Promise<DeliveryResult> {
       try {
@@ -147,8 +166,11 @@ export function getEmailProvider(options: EmailProviderOptions): EmailProvider {
   if (provider !== undefined) return provider;
 
   if (options.apiKey === undefined || options.from === undefined) {
+    // Env is read once at module load and this is memoised, so configuring the
+    // key later has no effect until the worker restarts. Said plainly, because
+    // "I set RESEND_API_KEY and nothing sends" is otherwise a long afternoon.
     options.logger.warn(
-      "email: RESEND_API_KEY is not configured — messages will be logged, not sent",
+      "email: RESEND_API_KEY/EMAIL_FROM not configured — nothing will be delivered. Messages are written to this log and their notifications recorded SKIPPED. Set both and restart the worker.",
     );
     provider = createLoggingProvider(options.logger);
     return provider;

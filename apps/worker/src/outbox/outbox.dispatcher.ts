@@ -1,3 +1,4 @@
+import { buildAppUrl } from "@bam/contracts";
 import { type Prisma, type PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
@@ -235,6 +236,10 @@ async function dispatchTenantEvent(
     return dispatchBillingNotice(event, options);
   }
 
+  if (event.eventType === "SUBSCRIPTION_CONFIRMED") {
+    return dispatchSubscriptionConfirmed(event, options);
+  }
+
   if (event.eventType !== "ORGANIZATION_PROVISIONED") {
     options.logger.debug(
       { eventId: event.id, eventType: event.eventType },
@@ -298,7 +303,15 @@ async function dispatchTenantEvent(
     payload: {
       organizationName: tenant.name,
       ownerName: payload?.ownerName ?? recipient,
-      acceptUrl: `${options.appBaseUrl}/invitations/${token}`,
+      // Locale-prefixed, like every link we put in an email: the email is
+      // already written in the organization's language and used to send them to
+      // the Hungarian page regardless
+      // (docs/phase-9-owner-language-and-return-paths.md §2).
+      acceptUrl: buildAppUrl({
+        baseUrl: options.appBaseUrl,
+        path: `/invitations/${token}`,
+        locale: tenant.defaultLanguage,
+      }),
       expiresAt: payload?.expiresAt ?? null,
     },
   });
@@ -483,13 +496,131 @@ async function dispatchBillingNotice(
       // expires in minutes and cannot be put in an email
       // (phase-9-customer-portal.md §1.1). The owner signs in and clicks
       // through from there.
-      billingUrl: `${options.appBaseUrl}/dashboard/subscription`,
+      billingUrl: buildAppUrl({
+        baseUrl: options.appBaseUrl,
+        path: "/dashboard/subscription",
+        locale: tenant.defaultLanguage,
+      }),
       ...(trialEnding
         ? { trialEndsAt: payload?.trialEndsAt ?? null }
         : {
             amountDueMinor: payload?.amountDueMinor ?? null,
             currency: payload?.currency ?? null,
           }),
+    },
+  });
+
+  if (created === undefined) return { created: 0, duplicate: 1 };
+
+  await enqueueIfDue(options, {
+    tenantId: event.tenantId,
+    notificationId: created.id,
+    scheduledAtIso,
+  });
+
+  return { created: 1, duplicate: 0 };
+}
+
+/**
+ * The subscription went live. docs/phase-9-owner-onboarding-emails.md §3.
+ *
+ * The receipt for the whole onboarding path, and the one email the flow was
+ * missing: the owner paid on Stripe's hosted page and heard nothing from us
+ * again. Stripe sends its own receipt, but that confirms a payment; this
+ * confirms that the thing they bought is ready and points them at it.
+ *
+ * The owner is looked up now rather than carried in the payload, for the same
+ * reason `dispatchBillingNotice` does it: the event came from a Stripe webhook,
+ * which knows about a subscription and nothing about who should read this.
+ */
+async function dispatchSubscriptionConfirmed(
+  event: ClaimedOutboxEvent,
+  options: DispatcherOptions,
+): Promise<DispatchOneResult> {
+  const payload = event.payload as {
+    plan?: string;
+    subscriptionId?: string;
+    trial?: boolean;
+    renewsAt?: string | null;
+  } | null;
+
+  // The dedupe key is the subscription, so without one there is nothing to key
+  // on and a repeated event would email on every later subscription change.
+  // Dropping beats sending an unbounded number of congratulations.
+  if (!payload?.subscriptionId) {
+    options.logger.warn(
+      { eventId: event.id },
+      "outbox: subscription confirmation carries no subscription id; discarded",
+    );
+    return { created: 0, duplicate: 0 };
+  }
+
+  const tenant = await options.prisma.tenant.findUnique({
+    where: { id: event.aggregateId },
+    select: {
+      id: true,
+      name: true,
+      defaultLanguage: true,
+      memberships: {
+        where: { role: "OWNER", status: "ACTIVE" },
+        select: { user: { select: { email: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+      },
+    },
+  });
+
+  if (tenant === null) {
+    options.logger.warn(
+      { eventId: event.id, tenantId: event.aggregateId },
+      "outbox: organization no longer exists; event discarded",
+    );
+    return { created: 0, duplicate: 0 };
+  }
+
+  const owner = tenant.memberships[0]?.user;
+
+  if (owner === undefined) {
+    options.logger.warn(
+      { eventId: event.id, tenantId: tenant.id },
+      "outbox: organization has no active owner to notify",
+    );
+    return { created: 0, duplicate: 0 };
+  }
+
+  const scheduledAtIso = new Date().toISOString();
+
+  const created = await persistNotification(options.prisma, event.tenantId, {
+    type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+    channel: NotificationChannels.EMAIL,
+    template: "subscription-confirmed",
+    locale: resolveLocale({ tenantLanguage: tenant.defaultLanguage }),
+    recipient: owner.email,
+    scheduledAtIso,
+    // **Keyed on the subscription, not the event** — the one notification in
+    // this file that is. `customer.subscription.updated` fires for every later
+    // change and each carries a live status, so an event-keyed confirmation
+    // would congratulate the owner every time they touched their billing.
+    dedupeKey: buildDedupeKey({
+      type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+      channel: NotificationChannels.EMAIL,
+      subscriptionId: payload.subscriptionId,
+    }),
+    bookingId: null,
+    customerId: null,
+    payload: {
+      organizationName: tenant.name,
+      recipientName: owner.name,
+      planName: payload.plan ?? "",
+      trial: payload.trial === true,
+      renewsAt: payload.renewsAt ?? null,
+      // Their dashboard, not Stripe's. The point of this email is that the
+      // product is ready, so it points at the product.
+      dashboardUrl: buildAppUrl({
+        baseUrl: options.appBaseUrl,
+        path: "/dashboard",
+        locale: tenant.defaultLanguage,
+      }),
     },
   });
 

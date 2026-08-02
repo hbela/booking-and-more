@@ -262,6 +262,147 @@ export function renderSubscriptionLink(
   return { subject: subject(values.organizationName), html, text };
 }
 
+// --- Subscription confirmed ------------------------------------------------
+
+export interface SubscriptionConfirmedValues {
+  organizationName: string;
+  recipientName: string;
+  /** Already localized by the caller; this file does no plan naming. */
+  planName: string;
+  /** True while the free trial runs — it changes what the money line may say. */
+  trial: boolean;
+  /**
+   * When the trial converts, or when the period renews. Already formatted by
+   * the caller; empty when Stripe did not give us one.
+   */
+  renewsOn: string;
+  /** Where they configure the thing they have just paid for. */
+  dashboardUrl: string;
+}
+
+interface SubscriptionConfirmedCopy {
+  greeting: (name: string) => string;
+  intro: (organization: string, plan: string) => string;
+  /** Said only during a trial, and it is the line that prevents a dispute. */
+  trialCharge: (date: string) => string;
+  paidCharge: (date: string) => string;
+  unlocked: string;
+  action: string;
+  button: string;
+  fallback: string;
+  manage: string;
+  signoff: string;
+}
+
+const SUBSCRIPTION_CONFIRMED_COPY: Record<
+  Locale,
+  { subject: (organization: string) => string; body: SubscriptionConfirmedCopy }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — az előfizetés aktív`,
+    body: {
+      greeting: (name) => `Kedves ${name}!`,
+      intro: (organization, plan) =>
+        `Köszönjük! A(z) ${organization} előfizetése aktív a(z) ${plan} csomagon.`,
+      trialCharge: (date) =>
+        `A próbaidőszak ${date} napján ér véget — az első terhelés ekkor történik. Addig bármikor lemondhatja, és nem számlázunk semmit.`,
+      paidCharge: (date) => `A következő megújulás időpontja: ${date}.`,
+      unlocked:
+        "Mostantól minden funkció elérhető: felvehet szolgáltatókat, szolgáltatásokat és helyszíneket, majd elindíthatja a foglalásokat.",
+      action: "Kezdje itt:",
+      button: "Ugrás a vezérlőpultra",
+      fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
+      manage:
+        "A számlázást — bankkártya módosítása, számlák letöltése, lemondás — a vezérlőpult Előfizetés oldalán kezelheti.",
+      signoff: "Üdvözlettel,\na Booking and More csapata",
+    },
+  },
+  en: {
+    subject: (organization) => `${organization} — your subscription is active`,
+    body: {
+      greeting: (name) => `Dear ${name},`,
+      intro: (organization, plan) =>
+        `Thank you. ${organization} is now subscribed on the ${plan} plan.`,
+      trialCharge: (date) =>
+        `Your free trial ends on ${date}, and that is when the first charge is taken. Cancel any time before then and you will not be billed.`,
+      paidCharge: (date) => `Your next renewal is on ${date}.`,
+      unlocked:
+        "Everything is unlocked: add your providers, services and locations, then start taking bookings.",
+      action: "Start here:",
+      button: "Go to your dashboard",
+      fallback: "If the button does not work, paste this address into your browser:",
+      manage:
+        "You can change your card, download invoices or cancel from the Subscription page in your dashboard.",
+      signoff: "Best regards,\nthe Booking and More team",
+    },
+  },
+};
+
+/**
+ * The receipt for the whole onboarding path.
+ *
+ * Until this existed the owner paid on Stripe's hosted page and heard nothing
+ * from us again — the one moment in onboarding where silence reads as failure,
+ * because they have just handed over a card. Stripe emails its own receipt, but
+ * that confirms a *payment*; this confirms that the thing they bought is ready,
+ * and points at it.
+ *
+ * **The charge line is the part that matters.** During a trial it names the date
+ * of the first charge and the fact that cancelling before it costs nothing —
+ * the same reasoning as the trial-ending email, applied earlier: a charge
+ * nobody expected is the commonest reason a new customer disputes one, and the
+ * cheapest place to prevent that is the email they actually read, which is this
+ * one. It is dropped entirely rather than guessed at when Stripe gave us no
+ * date.
+ */
+export function renderSubscriptionConfirmed(
+  locale: Locale,
+  values: SubscriptionConfirmedValues,
+): RenderedEmail {
+  const { subject, body } = SUBSCRIPTION_CONFIRMED_COPY[locale];
+
+  const chargeLine =
+    values.renewsOn === ""
+      ? []
+      : [values.trial ? body.trialCharge(values.renewsOn) : body.paidCharge(values.renewsOn)];
+
+  const text = [
+    body.greeting(values.recipientName),
+    "",
+    body.intro(values.organizationName, values.planName),
+    ...chargeLine,
+    "",
+    body.unlocked,
+    "",
+    body.action,
+    values.dashboardUrl,
+    "",
+    body.manage,
+    "",
+    body.signoff,
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(body.greeting(values.recipientName))}</p>
+    <p>${escapeHtml(body.intro(values.organizationName, values.planName))}</p>
+    ${chargeLine.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+    <p>${escapeHtml(body.unlocked)}</p>
+    <p>${escapeHtml(body.action)}</p>
+    <p>
+      <a href="${escapeHtml(values.dashboardUrl)}" style="${BUTTON_STYLE}">
+        ${escapeHtml(body.button)}
+      </a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.fallback)}<br />
+      <a href="${escapeHtml(values.dashboardUrl)}">${escapeHtml(values.dashboardUrl)}</a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.manage)}</p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.signoff).replace(/\n/gu, "<br />")}</p>
+  `);
+
+  return { subject: subject(values.organizationName), html, text };
+}
+
 // --- Trial ending ----------------------------------------------------------
 
 export interface TrialEndingValues {
@@ -468,6 +609,7 @@ export function renderPaymentFailed(locale: Locale, values: PaymentFailedValues)
 export const RENDERABLE_TYPES: readonly NotificationType[] = [
   NotificationTypes.ORGANIZATION_CREATED,
   NotificationTypes.SUBSCRIPTION_LINK,
+  NotificationTypes.SUBSCRIPTION_CONFIRMED,
   NotificationTypes.TRIAL_ENDING_SOON,
   NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED,
 ];

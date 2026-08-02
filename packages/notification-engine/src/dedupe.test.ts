@@ -31,6 +31,49 @@ describe("buildDedupeKey", () => {
     expect(confirmation).not.toBe(cancellation);
   });
 
+  /**
+   * The only tenant notification keyed on its subject rather than its event,
+   * and the reason that distinction exists.
+   *
+   * A subscription goes live once but reports itself many times: Stripe sends
+   * `customer.subscription.updated` for every later change — a card swap, a plan
+   * change, a renewal — and each carries a live status. Keyed on the event id
+   * like its neighbours, the confirmation would congratulate the owner every
+   * time they touched their billing settings.
+   */
+  it("keys a subscription confirmation on the subscription, so later events collide", () => {
+    const first = buildDedupeKey({
+      type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+      channel: EMAIL,
+      subscriptionId: "sub_1",
+    });
+    const afterACardChange = buildDedupeKey({
+      type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+      channel: EMAIL,
+      subscriptionId: "sub_1",
+    });
+
+    expect(afterACardChange).toBe(first);
+    expect(first).toContain("sub_1");
+  });
+
+  it("still confirms a customer who cancelled and came back", () => {
+    // A new Stripe subscription is a new id, so they get a fresh confirmation.
+    // Which is right: they did subscribe again.
+    const before = buildDedupeKey({
+      type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+      channel: EMAIL,
+      subscriptionId: "sub_old",
+    });
+    const after = buildDedupeKey({
+      type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
+      channel: EMAIL,
+      subscriptionId: "sub_new",
+    });
+
+    expect(before).not.toBe(after);
+  });
+
   it("separates channels: the same news by email and by SMS is two messages", () => {
     const byEmail = buildDedupeKey({
       type: NotificationTypes.BOOKING_CONFIRMATION,
