@@ -293,6 +293,19 @@
     "noShow": "Mark no-show",
     "cancel": "Cancel"
   },
+  "admin": {
+    "title": "Platform administration",
+    "loading": "Loading…",
+    "signedOutTitle": "Sign in to continue",
+    "signedOutHint": "This area is for platform administrators. Sign in to manage organizations and their subscriptions.",
+    "signedOutLink": "Sign in",
+    "notAdminTitle": "You do not have platform access",
+    "notAdminHint": "This area is for platform administrators. Your organization's own dashboard is where your work lives.",
+    "notAdminLink": "Go to your dashboard",
+    "platformAdminTitle": "You are signed in as a platform administrator",
+    "platformAdminHint": "Platform administrators do not belong to any organization, so there is nothing to show here. Organizations and their subscriptions are managed on the platform dashboard.",
+    "platformAdminLink": "Go to the platform dashboard"
+  },
   "platform": {
     "title": "Platform administration",
     "subtitle": "Organizations, owners and subscriptions across the whole platform.",

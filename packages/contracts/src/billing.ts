@@ -238,3 +238,38 @@ export function nextTenantStatus(
 
   return current === effect ? null : effect;
 }
+
+/**
+ * What an organization goes back to when a platform admin lifts a suspension.
+ *
+ * The counterpart to {@link nextTenantStatus}: that one refuses to revive a
+ * suspended organization from a Stripe event, which leaves exactly one way back
+ * — a deliberate act by an operator. This decides where that act lands.
+ *
+ * Not `ACTIVE`, which is what suspending and reactivating used to produce
+ * whatever the organization had been. Two ways that was wrong:
+ *
+ *  - A **trialling** organization came back `ACTIVE` while its subscription row
+ *    still said `TRIALING`, so the two disagreed about the same customer.
+ *  - A **prospect** that had never paid came back `ACTIVE` with no subscription
+ *    row at all — precisely the state phase-9 §2.2 forbids, and the reason the
+ *    demo seed was deleted.
+ *
+ * Derived from the subscription rather than remembered, because the tenant row
+ * does not record what it was before it was suspended, and a subscription can
+ * legitimately have expired *during* the suspension — the entitlement now is
+ * the honest answer, not the one from before.
+ *
+ * `isLiveSubscription` is reused rather than restated so this cannot drift from
+ * the definition the rest of billing uses; `PAST_DUE` therefore restores access,
+ * for the same reason it keeps it (§2.3: Stripe's dunning is the grace period).
+ */
+export function restoredTenantStatus(
+  subscriptionStatus: string | null | undefined,
+): "TRIAL" | "ACTIVE" | "PENDING_SUBSCRIPTION" {
+  // No live entitlement — including no row at all — means they are back to
+  // needing one, not back to being a customer.
+  if (!isLiveSubscription(subscriptionStatus)) return "PENDING_SUBSCRIPTION";
+
+  return subscriptionStatus === "TRIALING" ? "TRIAL" : "ACTIVE";
+}

@@ -158,7 +158,11 @@ export const platformRoutes: FastifyPluginAsyncZod<PlatformRoutesOptions> = asyn
         entityType: "Tenant",
         entityId: request.params.id,
         tenantId: request.params.id,
-        after: { status: request.body.status },
+        // The status reached, not the one asked for: reactivation resolves to
+        // TRIAL or PENDING_SUBSCRIPTION depending on the subscription, and an
+        // audit trail that records the request rather than the outcome is a
+        // trail of what somebody clicked, not of what happened.
+        after: { status: organization.status },
       });
 
       return organization;

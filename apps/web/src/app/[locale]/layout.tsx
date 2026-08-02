@@ -50,7 +50,13 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale}>
-      <body>
+      {/* Browser extensions — Grammarly is the common one — add attributes to
+          <body> before React hydrates (`data-gr-ext-installed`,
+          `data-new-gr-c-s-check-loaded`), which React reports as a mismatch
+          nobody can fix from here. This suppresses one element's attributes and
+          text, not its subtree, so a genuine mismatch inside the app is still
+          reported. */}
+      <body suppressHydrationWarning>
         <NextIntlClientProvider>
           <QueryProvider>{children}</QueryProvider>
         </NextIntlClientProvider>

@@ -6,6 +6,7 @@ import {
   daysUntil,
   ErrorCodes,
   ForbiddenError,
+  restoredTenantStatus,
   NotFoundError,
 } from "@bam/contracts";
 
@@ -243,15 +244,7 @@ export class PlatformService {
     const tenants = await this.prisma.tenant.findMany({
       where: {
         ...(filter.status === undefined ? {} : { status: filter.status as "ACTIVE" | "SUSPENDED" }),
-        ...(search === undefined || search === ""
-          ? {}
-          : {
-              OR: [
-                { name: { contains: search, mode: "insensitive" as const } },
-                { slug: { contains: search } },
-                { domain: { contains: search } },
-              ],
-            }),
+        ...(search === undefined || search === "" ? {} : { OR: searchTerms(search) }),
       },
       orderBy: { createdAt: "desc" },
       select: {
@@ -287,10 +280,20 @@ export class PlatformService {
     return tenants.map((tenant) => toSummary(tenant));
   }
 
+  /**
+   * Suspend an organization, or lift a suspension.
+   *
+   * `ACTIVE` from the caller means *restore access*, not *set the status to
+   * ACTIVE* — where it actually lands is `restoredTenantStatus`, derived from
+   * the subscription. Writing the literal back used to make a trialling
+   * organization come back ACTIVE, and a prospect that had never paid come back
+   * ACTIVE with no subscription row at all (phase-9 §2.2). The response carries
+   * the status it really reached.
+   */
   async setStatus(tenantId: string, status: "ACTIVE" | "SUSPENDED"): Promise<OrganizationSummary> {
     const existing = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, subscription: { select: { status: true } } },
     });
 
     if (!existing) throw new NotFoundError("That organization does not exist.");
@@ -302,7 +305,12 @@ export class PlatformService {
       );
     }
 
-    await this.prisma.tenant.update({ where: { id: tenantId }, data: { status } });
+    const next =
+      status === "SUSPENDED"
+        ? "SUSPENDED"
+        : restoredTenantStatus(existing.subscription?.status);
+
+    await this.prisma.tenant.update({ where: { id: tenantId }, data: { status: next } });
 
     const summary = (await this.list({})).find((entry) => entry.id === tenantId);
 
@@ -396,6 +404,37 @@ interface TenantRow {
   } | null;
   memberships: { user: { email: string; name: string | null } }[];
   invitations: { email: string; status: string }[];
+}
+
+/**
+ * What an operator may search an organization by.
+ *
+ * The owner is searchable as well as the organization, because the list shows
+ * an owner column and "which organization does this person own?" is the
+ * question that column invites. It used to match the tenant's own fields only,
+ * so searching an owner's address returned an empty list rather than saying it
+ * could not look that up — the organization simply vanished, owner column and
+ * all.
+ *
+ * Restricted to the OWNER role on purpose: matching any member would return an
+ * organization whose owner column names somebody else, which reads as the wrong
+ * row rather than a wider search. Invitations are covered too, so an owner who
+ * has not accepted yet — the case the column flags in amber — is findable by
+ * the address the invitation went to.
+ *
+ * Every comparison is case-insensitive. `slug` and `domain` were not, so a
+ * domain typed with a capital letter matched the name and missed the domain.
+ */
+function searchTerms(search: string) {
+  const like = { contains: search, mode: "insensitive" as const };
+
+  return [
+    { name: like },
+    { slug: like },
+    { domain: like },
+    { memberships: { some: { role: Roles.OWNER, user: { OR: [{ email: like }, { name: like }] } } } },
+    { invitations: { some: { role: Roles.OWNER, email: like } } },
+  ];
 }
 
 function toSummary(tenant: TenantRow): OrganizationSummary {

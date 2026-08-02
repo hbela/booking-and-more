@@ -60,11 +60,21 @@ export function Dashboard(): React.ReactElement {
   return (
     <DashboardShell context={context}>
       {context.tenants.length === 0 ? (
-        <CreateTenantPanel
-          onCreated={() => {
-            void queryClient.invalidateQueries();
-          }}
-        />
+        // A platform admin holds no memberships by design (CLAUDE.md rule 9),
+        // so `tenants` is permanently empty for them and this branch is the
+        // only thing they would ever see here. Offering them the create form
+        // would be offering an action the API refuses on purpose —
+        // `canHoldTenantMembership` rejects it in tenant.routes.ts — so they
+        // are pointed at the screen that is actually theirs instead.
+        context.me.user.isPlatformAdmin ? (
+          <PlatformAdminPanel />
+        ) : (
+          <CreateTenantPanel
+            onCreated={() => {
+              void queryClient.invalidateQueries();
+            }}
+          />
+        )
       ) : (
         <>
           {context.awaitingSubscription && context.me.tenant ? (
@@ -183,6 +193,32 @@ function PendingPanel({
 
       <Link href="/dashboard/subscription" className={buttonClass}>
         {t("subscribeCta")}
+      </Link>
+    </Panel>
+  );
+}
+
+/**
+ * What an operator of the platform sees if they land on the tenant dashboard.
+ *
+ * Sign-in sends them to `/admin` now, so this is the catch for the ways round
+ * that — a bookmark, a link from a colleague, the back button. Not a redirect:
+ * a platform admin can legitimately be here, and bouncing them would make the
+ * URL unusable.
+ *
+ * Strings come from the `admin` namespace rather than `dashboard` because the
+ * `/admin` landing page says the same thing, and one sentence maintained twice
+ * is one sentence that drifts.
+ */
+function PlatformAdminPanel(): React.ReactElement {
+  const t = useTranslations("admin");
+
+  return (
+    <Panel title={t("platformAdminTitle")}>
+      <p className="text-sm text-slate-600 dark:text-slate-400">{t("platformAdminHint")}</p>
+
+      <Link href="/admin" className={buttonClass}>
+        {t("platformAdminLink")}
       </Link>
     </Panel>
   );

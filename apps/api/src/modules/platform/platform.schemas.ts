@@ -131,6 +131,11 @@ export const setStatusBodySchema = z.object({
    * an organization is a separate, heavier action with its own route, and
    * folding it into a status setter makes it one typo away from every
    * suspension (§2.6).
+   *
+   * `ACTIVE` reads as *restore access* rather than a literal target. What the
+   * organization actually becomes is derived from its subscription — a
+   * trialling one returns to TRIAL, one with no live subscription to
+   * PENDING_SUBSCRIPTION. The response carries the status it reached.
    */
   status: z.enum(["ACTIVE", "SUSPENDED"]),
 });

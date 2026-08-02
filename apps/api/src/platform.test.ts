@@ -348,6 +348,65 @@ describe.skipIf(!databaseUrl)("platform administration", () => {
       expect(reactivated.json().status).toBe("ACTIVE");
     });
 
+    it("returns a trialling organization to TRIAL, not ACTIVE", async () => {
+      const admin = await operator("op-suspend-trial");
+      const created = await provision(admin.cookie, {
+        slug: `suspend-trial-${RUN}`,
+        domain: `suspend-trial-${RUN}.hu`,
+        ownerEmail: `owner-suspend-trial-${RUN}@example.test`,
+      });
+      const id = created.json().organization.id;
+
+      // The state a real organization reaches once its checkout completes: the
+      // Stripe events do this, so it is set up directly rather than replayed.
+      await app.prisma.subscription.create({
+        data: { tenantId: id, plan: "STARTER", status: "TRIALING" },
+      });
+      await app.prisma.tenant.update({ where: { id }, data: { status: "TRIAL" } });
+
+      const setStatus = (status: string) =>
+        app.inject({
+          method: "PATCH",
+          url: `/v1/platform/organizations/${id}/status`,
+          headers: { cookie: admin.cookie },
+          payload: { status },
+        });
+
+      expect((await setStatus("SUSPENDED")).json().status).toBe("SUSPENDED");
+
+      // Not ACTIVE: the subscription still says TRIALING, and the two must not
+      // disagree about the same customer.
+      expect((await setStatus("ACTIVE")).json().status).toBe("TRIAL");
+    });
+
+    it("returns a prospect that never paid to PENDING_SUBSCRIPTION", async () => {
+      // Reactivating used to hardcode ACTIVE, which produced an active
+      // organization with no subscription row — the state phase-9 §2.2 forbids.
+      const admin = await operator("op-suspend-pending");
+      const created = await provision(admin.cookie, {
+        slug: `suspend-pending-${RUN}`,
+        domain: `suspend-pending-${RUN}.hu`,
+        ownerEmail: `owner-suspend-pending-${RUN}@example.test`,
+      });
+      const id = created.json().organization.id;
+
+      expect(created.json().organization.status).toBe("PENDING_SUBSCRIPTION");
+
+      const setStatus = (status: string) =>
+        app.inject({
+          method: "PATCH",
+          url: `/v1/platform/organizations/${id}/status`,
+          headers: { cookie: admin.cookie },
+          payload: { status },
+        });
+
+      expect((await setStatus("SUSPENDED")).json().status).toBe("SUSPENDED");
+
+      const reactivated = await setStatus("ACTIVE");
+      expect(reactivated.json().status).toBe("PENDING_SUBSCRIPTION");
+      expect(reactivated.json().subscription).toBeNull();
+    });
+
     it("will not set CLOSED through the status route", async () => {
       // Closing is heavier and has its own path; folding it in here would put
       // it one typo away from every suspension.
@@ -438,6 +497,102 @@ describe.skipIf(!databaseUrl)("platform administration", () => {
       expect(reissue?.invitationToken).not.toBe(
         (events[0]?.payload as { invitationToken?: string } | null)?.invitationToken,
       );
+    });
+  });
+
+  describe("search", () => {
+    const find = (cookie: string, term: string) =>
+      app.inject({
+        method: "GET",
+        url: `/v1/platform/organizations?search=${encodeURIComponent(term)}`,
+        headers: { cookie },
+      });
+
+    const slugsIn = (response: Awaited<ReturnType<typeof find>>): string[] =>
+      response.json<{ items: { slug: string }[] }>().items.map((entry) => entry.slug);
+
+    it("finds an organization by the address its owner invitation went to", async () => {
+      // The owner column shows this address before it is accepted, so an
+      // operator chasing "who has not clicked the link" searches by it.
+      const admin = await operator("op-search-invited");
+      const slug = `search-invited-${RUN}`;
+      await provision(admin.cookie, {
+        slug,
+        domain: `search-invited-${RUN}.hu`,
+        ownerEmail: `findme-invited-${RUN}@example.test`,
+      });
+
+      expect(slugsIn(await find(admin.cookie, `findme-invited-${RUN}`))).toContain(slug);
+    });
+
+    it("finds an organization by its accepted owner's name and email", async () => {
+      const admin = await operator("op-search-member");
+      const slug = `search-member-${RUN}`;
+      const created = await provision(admin.cookie, {
+        slug,
+        domain: `search-member-${RUN}.hu`,
+        ownerEmail: `owner-member-${RUN}@example.test`,
+      });
+
+      // Accepting for real needs the emailed token; the membership is what the
+      // search matches on, so it is created directly.
+      const owner = await signUp("owner-member");
+      await app.prisma.membership.create({
+        data: {
+          tenantId: created.json().organization.id,
+          userId: owner.id,
+          role: "OWNER",
+          status: "ACTIVE",
+        },
+      });
+
+      // Set apart from the address on purpose, so matching the name is not
+      // satisfied by the email containing the same label.
+      const displayName = `Zsóka${RUN}`;
+      await app.prisma.user.update({ where: { id: owner.id }, data: { name: displayName } });
+
+      expect(slugsIn(await find(admin.cookie, displayName))).toContain(slug);
+      expect(slugsIn(await find(admin.cookie, owner.email))).toContain(slug);
+    });
+
+    it("does not match a member who is not the owner", async () => {
+      // The column names the owner, so matching any member would return a row
+      // whose owner is a stranger to the term that found it.
+      const admin = await operator("op-search-staff");
+      const created = await provision(admin.cookie, {
+        slug: `search-staff-${RUN}`,
+        domain: `search-staff-${RUN}.hu`,
+        ownerEmail: `owner-staff-${RUN}@example.test`,
+      });
+
+      const assistant = await signUp("assistant-staff");
+      await app.prisma.membership.create({
+        data: {
+          tenantId: created.json().organization.id,
+          userId: assistant.id,
+          role: "ASSISTANT",
+          status: "ACTIVE",
+        },
+      });
+
+      expect(slugsIn(await find(admin.cookie, assistant.email))).not.toContain(
+        `search-staff-${RUN}`,
+      );
+    });
+
+    it("matches slug and domain regardless of case", async () => {
+      // `name` was insensitive and these two were not, so a domain typed with a
+      // capital letter matched the name and missed the domain.
+      const admin = await operator("op-search-case");
+      const slug = `search-case-${RUN}`;
+      await provision(admin.cookie, {
+        slug,
+        domain: `search-case-${RUN}.hu`,
+        ownerEmail: `owner-case-${RUN}@example.test`,
+      });
+
+      expect(slugsIn(await find(admin.cookie, `SEARCH-CASE-${RUN}`.toUpperCase()))).toContain(slug);
+      expect(slugsIn(await find(admin.cookie, `SEARCH-CASE-${RUN}.HU`))).toContain(slug);
     });
   });
 });

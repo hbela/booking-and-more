@@ -293,6 +293,19 @@
     "noShow": "Nem jelent meg",
     "cancel": "Lemondás"
   },
+  "admin": {
+    "title": "Platformadminisztráció",
+    "loading": "Betöltés…",
+    "signedOutTitle": "Jelentkezzen be a folytatáshoz",
+    "signedOutHint": "Ez a felület platformadminisztrátoroknak szól. Jelentkezzen be a szervezetek és előfizetéseik kezeléséhez.",
+    "signedOutLink": "Bejelentkezés",
+    "notAdminTitle": "Nincs platformszintű hozzáférése",
+    "notAdminHint": "Ez a felület platformadminisztrátoroknak szól. Az Ön munkája a saját szervezete vezérlőpultján található.",
+    "notAdminLink": "Tovább a vezérlőpultra",
+    "platformAdminTitle": "Platformadminisztrátorként van bejelentkezve",
+    "platformAdminHint": "A platformadminisztrátorok egyetlen szervezethez sem tartoznak, így itt nincs megjeleníthető tartalom. A szervezeteket és előfizetéseiket a platform vezérlőpultján kezelheti.",
+    "platformAdminLink": "Tovább a platform vezérlőpultjára"
+  },
   "platform": {
     "title": "Platformadminisztráció",
     "subtitle": "Szervezetek, tulajdonosok és előfizetések a teljes platformon.",

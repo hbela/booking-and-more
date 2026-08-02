@@ -1,20 +1,21 @@
-import { setRequestLocale } from "next-intl/server";
-import { PlatformScreen } from "@/components/platform-screen";
+import { redirect } from "@/i18n/navigation";
 
 /**
- * The platform-admin dashboard. docs/phase-9-saas-administration.md §7.
+ * Kept as a redirect, not deleted.
  *
- * Deliberately outside `/dashboard`: that tree resolves a tenant from the
- * switcher and every screen inside it is scoped to one. These routes are about
- * tenants rather than within one, and share none of that chrome.
+ * The screen moved to `/admin/platform` when platform administration gained its
+ * own section. This URL appears in docs/phase-9-*.md and in the bookmarks of
+ * anyone who used it before the move, and a 404 would be an avoidable dead end.
  */
+// `Promise<void>`, not `Promise<never>`: `redirect` throws rather than
+// returning, but next-intl does not type it that way, so `never` makes the
+// function's end point unreachable in fact and reachable to the compiler.
 export default async function PlatformPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
-}): Promise<React.ReactElement> {
+}): Promise<void> {
   const { locale } = await params;
-  setRequestLocale(locale);
 
-  return <PlatformScreen />;
+  redirect({ href: "/admin/platform", locale });
 }

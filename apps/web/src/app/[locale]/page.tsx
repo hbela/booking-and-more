@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ApiStatus } from "@/components/api-status";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { AuthHeader } from "@/components/auth-header";
 
 export default async function HomePage({
   params,
@@ -20,7 +20,9 @@ export default async function HomePage({
           <p className="text-sm font-medium text-brand-600">{common("appName")}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{t("title")}</h1>
         </div>
-        <LocaleSwitcher label={common("language")} />
+        {/* Carries the locale switcher this header already had, and adds the
+            way in — this is where an operator starts before reaching /admin. */}
+        <AuthHeader signOutTo="/" />
       </header>
 
       <p className="max-w-2xl text-lg leading-relaxed text-slate-600 dark:text-slate-300">

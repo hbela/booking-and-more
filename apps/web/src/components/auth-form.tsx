@@ -3,7 +3,25 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
+import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signIn, signUp } from "@/lib/auth-client";
+
+/**
+ * Where a freshly signed-in person belongs.
+ *
+ * A platform admin holds no memberships by design (CLAUDE.md rule 9), so
+ * `/dashboard` can only tell them they are in the wrong place — it has nothing
+ * else to show. They go to `/admin` instead.
+ *
+ * A failure here must not strand somebody who *did* authenticate successfully,
+ * so an unreadable `/v1/me` falls back to `/dashboard`, which is exactly where
+ * everyone went before this existed.
+ */
+async function landingFor(): Promise<string> {
+  const me = await apiFetch<MeResponse>("/v1/me").catch(() => null);
+
+  return me?.user.isPlatformAdmin === true ? "/admin" : "/dashboard";
+}
 
 /**
  * Sign-in and sign-up, sharing one form because the fields differ by exactly
@@ -38,7 +56,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.React
         return;
       }
 
-      router.push("/dashboard");
+      router.push(mode === "sign-up" ? "/dashboard" : await landingFor());
       router.refresh();
     } catch {
       // Network-level failure — the API never answered.

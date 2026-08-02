@@ -5,6 +5,7 @@ import {
   isLiveSubscription,
   nextTenantStatus,
   planForPrice,
+  restoredTenantStatus,
   subscribablePlanSchema,
   subscriptionEffect,
 } from "./billing.js";
@@ -163,5 +164,36 @@ describe("nextTenantStatus", () => {
     expect(nextTenantStatus("ACTIVE", "ACTIVE")).toBeNull();
     expect(nextTenantStatus("SUSPENDED", "SUSPENDED")).toBeNull();
     expect(nextTenantStatus("ACTIVE", null)).toBeNull();
+  });
+});
+
+describe("restoredTenantStatus", () => {
+  it("returns a trialling organization to TRIAL, not ACTIVE", () => {
+    // The bug this exists to stop: reactivating used to hardcode ACTIVE, so the
+    // tenant claimed ACTIVE while its subscription row still said TRIALING.
+    expect(restoredTenantStatus("TRIALING")).toBe("TRIAL");
+  });
+
+  it("returns a paying organization to ACTIVE", () => {
+    expect(restoredTenantStatus("ACTIVE")).toBe("ACTIVE");
+  });
+
+  it("restores access while Stripe is still retrying", () => {
+    // §2.3: dunning is the grace period, so PAST_DUE keeps access — and must
+    // therefore also get it back.
+    expect(restoredTenantStatus("PAST_DUE")).toBe("ACTIVE");
+  });
+
+  it("restores an INTERNAL organization, which has no Stripe status", () => {
+    expect(restoredTenantStatus("NOT_APPLICABLE")).toBe("ACTIVE");
+  });
+
+  it("sends an organization with no live subscription back to PENDING_SUBSCRIPTION", () => {
+    // Never ACTIVE: an active organization with no subscription is the state
+    // phase-9 §2.2 forbids, and reactivation used to create it out of nothing.
+    expect(restoredTenantStatus("CANCELED")).toBe("PENDING_SUBSCRIPTION");
+    expect(restoredTenantStatus("INCOMPLETE")).toBe("PENDING_SUBSCRIPTION");
+    expect(restoredTenantStatus(null)).toBe("PENDING_SUBSCRIPTION");
+    expect(restoredTenantStatus(undefined)).toBe("PENDING_SUBSCRIPTION");
   });
 });

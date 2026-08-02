@@ -269,6 +269,14 @@ export function PlatformScreen(): React.ReactElement {
 
                   <td className="py-3 pr-4">
                     <div>{organization.owner?.email ?? "—"}</div>
+                    {/* The API has always carried the owner's name and the
+                        column dropped it, so an operator looking for a person
+                        by the name they know them by found only an address. */}
+                    {organization.owner?.name ? (
+                      <div className="text-xs text-slate-600 dark:text-slate-400">
+                        {organization.owner.name}
+                      </div>
+                    ) : null}
                     {organization.owner?.accepted === false ? (
                       <div className="text-xs text-amber-700 dark:text-amber-500">
                         {t("ownerPending")}
