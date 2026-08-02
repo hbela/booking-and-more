@@ -23,11 +23,64 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 
 const RUN = `bil${randomBytes(4).toString("hex")}`;
 const PASSWORD = "correct-horse-battery-staple";
-const STARTER_LINK = "https://buy.stripe.com/test_starter";
-const STARTER_LINK_NO_TRIAL = "https://buy.stripe.com/test_starter_no_trial";
+const STARTER_PRICE = "price_test_starter";
+
+/**
+ * A stand-in for Stripe's payment-link API.
+ *
+ * Selling a subscription makes a real API call since
+ * docs/phase-9-duplicate-subscription-prevention.md §4.1, so the suite needs a
+ * seam. It records every call, which is most of what these tests assert: how
+ * many links were created for one organization is the question the whole slice
+ * is about.
+ */
+function stubPaymentLinks() {
+  const created: {
+    priceId: string;
+    tenantId: string;
+    plan: string;
+    trialPeriodDays: number | null;
+  }[] = [];
+  const deactivated: string[] = [];
+  /** Link IDs the fake Stripe considers already checked out. */
+  const completed = new Set<string>();
+  let next = 0;
+
+  return {
+    created,
+    deactivated,
+    completed,
+    client: {
+      create: async (input: {
+        priceId: string;
+        tenantId: string;
+        plan: string;
+        trialPeriodDays: number | null;
+      }) => {
+        created.push(input);
+        next += 1;
+
+        // Suffixed with the run, like every other Stripe id in this suite:
+        // `stripe_payment_link_id` is unique across the whole table, not per
+        // tenant, so a counter alone collides with the rows the previous run
+        // left behind — and the collision surfaces as a 500 from the P2002
+        // path, which is the least obvious symptom it could have.
+        return {
+          id: `plink_${RUN}_${next}`,
+          url: `https://buy.stripe.com/test_${RUN}_${next}`,
+        };
+      },
+      deactivate: async (id: string) => {
+        deactivated.push(id);
+      },
+      hasCompletedCheckout: async (id: string) => completed.has(id),
+    },
+  };
+}
 
 describe.skipIf(!databaseUrl)("billing", () => {
   let app: AppInstance;
+  let stripe: ReturnType<typeof stubPaymentLinks>;
 
   beforeAll(async () => {
     const env = loadEnv({
@@ -38,13 +91,23 @@ describe.skipIf(!databaseUrl)("billing", () => {
         API_BASE_URL: "http://localhost:3001",
         DATABASE_URL: databaseUrl!,
         BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
-        STRIPE_PAYMENT_LINK_STARTER: STARTER_LINK,
-        STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL: STARTER_LINK_NO_TRIAL,
+        // STARTER only, deliberately: "a plan with no price is not for sale" is
+        // asserted below, and it needs a plan that has none. Legal because the
+        // superRefine only demands both prices alongside a secret key, and this
+        // app has no key — the payment-link client is injected instead.
+        STRIPE_PRICE_STARTER: STARTER_PRICE,
       },
       loadDotenvFile: false,
     });
 
-    app = await buildApp({ env, logger: false, rateLimit: false });
+    stripe = stubPaymentLinks();
+
+    app = await buildApp({
+      env,
+      logger: false,
+      rateLimit: false,
+      paymentLinkClient: stripe.client,
+    });
     await app.ready();
   });
 
@@ -172,12 +235,19 @@ describe.skipIf(!databaseUrl)("billing", () => {
       const body = response.json<{ paymentUrl: string; emailedTo: string }>();
       const url = new URL(body.paymentUrl);
 
-      // The only thing tying a payment back to an organization: a Payment Link
-      // is shared by every customer on the plan (§3.2).
+      // Still the join key the checkout session carries back (§3.2), even
+      // though the link now also stamps `metadata.tenantId` on the subscription.
       expect(url.searchParams.get("client_reference_id")).toBe(owner.tenantId);
-      // The *trial* link, because this organization has never had one.
-      expect(url.origin + url.pathname).toBe(STARTER_LINK);
       expect(body.emailedTo).toBe(owner.email);
+
+      // Created for this organization alone, and limited by Stripe to one
+      // completed session (docs/phase-9-duplicate-subscription-prevention.md
+      // §4.1). The limit lives in stripe.client.ts and is asserted there; what
+      // matters here is that the link is per-tenant at all.
+      const link = stripe.created.at(-1);
+      expect(link).toMatchObject({ tenantId: owner.tenantId, priceId: STARTER_PRICE });
+      // Never had a trial, so Stripe is told to give one.
+      expect(link?.trialPeriodDays).toBe(30);
 
       // Requested, not sent — a third-party call inside this request is how the
       // predecessor swallowed delivery failures.
@@ -187,8 +257,9 @@ describe.skipIf(!databaseUrl)("billing", () => {
       expect(events).toHaveLength(1);
     });
 
-    it("refuses a plan with no payment link configured", async () => {
-      // PROFESSIONAL has no link in this app's config, so it is not for sale.
+    it("refuses a plan with no price configured", async () => {
+      // PROFESSIONAL has no price in this app's config, so no link can be built
+      // for it and it is not for sale.
       const owner = await pendingOwner("noplan");
 
       const response = await app.inject({
@@ -232,6 +303,152 @@ describe.skipIf(!databaseUrl)("billing", () => {
       expect(response.statusCode).toBe(409);
     });
 
+    /**
+     * The incident, reproduced.
+     * docs/phase-9-duplicate-subscription-prevention.md §1.
+     *
+     * The old guard read the local `subscriptions` row, which the worker writes
+     * when `checkout.session.completed` is processed — so it asked the payment
+     * path whether the payment path had finished. With no webhook processed at
+     * all, as here, it answered "no" every time and vended a fresh link on every
+     * click. One tenant reached three live Stripe subscriptions that way.
+     */
+    it("hands back the same link rather than minting a second one", async () => {
+      const owner = await pendingOwner("oncelink");
+      const before = stripe.created.length;
+
+      const first = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+      const second = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode, second.body).toBe(201);
+
+      // Not merely equivalent URLs — the identical one. A regenerated link that
+      // looks the same is a second link as far as Stripe is concerned, with its
+      // own allowance of one completed session.
+      expect(second.json<{ paymentUrl: string }>().paymentUrl).toBe(
+        first.json<{ paymentUrl: string }>().paymentUrl,
+      );
+
+      // The assertion that would have caught the incident: one link exists, so
+      // Stripe's per-link limit of one completed session is a limit of one
+      // payment.
+      expect(stripe.created.length - before).toBe(1);
+      expect(
+        await app.prisma.subscriptionCheckoutLink.count({ where: { tenantId: owner.tenantId } }),
+      ).toBe(1);
+    });
+
+    /**
+     * The other half of §2.1: nothing local knows they have paid yet.
+     *
+     * No Stripe event has been recorded, so every row we own still says this
+     * organization has no subscription. The refusal comes from asking Stripe
+     * whether the link has been checked out — a *list*, strongly consistent,
+     * with none of `subscriptions.search`'s "up to an hour behind" caveat (§3.1).
+     */
+    it("refuses a second attempt once Stripe says the link was used, webhook or not", async () => {
+      const owner = await pendingOwner("paidalready");
+
+      const first = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const link = await app.prisma.subscriptionCheckoutLink.findUniqueOrThrow({
+        where: { tenantId: owner.tenantId },
+      });
+
+      // They pay. Stripe knows; we do not — no webhook, no worker, no rows.
+      stripe.completed.add(link.stripePaymentLinkId);
+
+      const second = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(second.statusCode, second.body).toBe(409);
+
+      // Still nothing mirrored locally — proving the refusal came from Stripe
+      // and not from a row that happened to arrive in time.
+      expect(await app.prisma.subscription.count({ where: { tenantId: owner.tenantId } })).toBe(0);
+
+      // Learned once and remembered, so the next attempt costs no API call.
+      const after = await app.prisma.subscriptionCheckoutLink.findUniqueOrThrow({
+        where: { tenantId: owner.tenantId },
+      });
+      expect(after.consumedAt).not.toBeNull();
+    });
+
+    it("replaces the link when the owner changes plan before paying", async () => {
+      const owner = await pendingOwner("switch");
+
+      // This app sells STARTER only, so the swap is asserted the other way
+      // round: a second request for the *same* plan must not deactivate
+      // anything, which is the regression that would make every double-click
+      // burn a link.
+      await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      const link = await app.prisma.subscriptionCheckoutLink.findUniqueOrThrow({
+        where: { tenantId: owner.tenantId },
+      });
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(stripe.deactivated).not.toContain(link.stripePaymentLinkId);
+    });
+
+    it("refuses a checkout that completed but has only reached us as an id", async () => {
+      // The INCOMPLETE hole (§2.1). `activate()` writes the row as INCOMPLETE,
+      // which `isLiveSubscription` correctly calls not-live — so a status test
+      // alone stayed open until `customer.subscription.created` had *also* been
+      // processed. Any Stripe subscription id at all means somebody paid.
+      const owner = await pendingOwner("incomplete");
+
+      await app.prisma.subscription.create({
+        data: {
+          tenantId: owner.tenantId,
+          plan: "STARTER",
+          status: "INCOMPLETE",
+          stripeSubscriptionId: `sub_incomplete_${RUN}`,
+        },
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(response.statusCode, response.body).toBe(409);
+    });
+
     it("offers only the plans that can actually be paid for", async () => {
       const owner = await pendingOwner("plans");
 
@@ -250,11 +467,14 @@ describe.skipIf(!databaseUrl)("billing", () => {
   });
 
   describe("the free trial", () => {
-    // docs/phase-9-subscription-lifecycle.md §2.1. A Payment Link's trial is a
-    // property of the link, so "skip the trial for a returning customer" is a
-    // second link rather than a parameter — which makes *which link was sent*
-    // the only observable proof the gate works.
-    it("sends the trial link to an organization that has never had one", async () => {
+    // docs/phase-9-subscription-lifecycle.md §2.1, as amended by
+    // docs/phase-9-duplicate-subscription-prevention.md §4.2. The trial used to
+    // be a property of a link created once per plan, so "skip the trial for a
+    // returning customer" needed a second configured URL and *which link was
+    // sent* was the only observable proof. A link created per organization
+    // carries `subscription_data.trial_period_days`, so the proof is now what
+    // Stripe was told.
+    it("gives an organization that has never subscribed its free days", async () => {
       const owner = await pendingOwner("trialnew");
 
       const response = await app.inject({
@@ -265,23 +485,19 @@ describe.skipIf(!databaseUrl)("billing", () => {
       });
 
       expect(response.statusCode).toBe(201);
-
-      const body = response.json<{ paymentUrl: string; trial: boolean }>();
-      const url = new URL(body.paymentUrl);
-
-      expect(url.origin + url.pathname).toBe(STARTER_LINK);
-      expect(body.trial).toBe(true);
+      expect(response.json<{ trial: boolean }>().trial).toBe(true);
+      expect(stripe.created.at(-1)?.trialPeriodDays).toBe(30);
     });
 
     /**
      * The returning customer, and the reason `trialUsedAt` lives on a row that
      * survives cancellation.
      *
-     * CANCELED is not a live status, so the duplicate-subscription guard lets
-     * them through — which is right, they are allowed to come back. What they
-     * are not allowed is another thirty free days.
+     * They are allowed to come back. What they are not allowed is another
+     * thirty free days — so the link is created with no trial at all rather
+     * than with a different URL.
      */
-    it("sends the no-trial link to one that has already used its trial", async () => {
+    it("gives none to one that has already used its trial", async () => {
       const owner = await pendingOwner("trialused");
 
       await app.prisma.subscription.create({
@@ -303,12 +519,11 @@ describe.skipIf(!databaseUrl)("billing", () => {
       expect(response.statusCode, response.body).toBe(201);
 
       const body = response.json<{ paymentUrl: string; trial: boolean }>();
-      const url = new URL(body.paymentUrl);
 
-      expect(url.origin + url.pathname).toBe(STARTER_LINK_NO_TRIAL);
       expect(body.trial).toBe(false);
+      expect(stripe.created.at(-1)?.trialPeriodDays).toBeNull();
       // Still carries the tenant: the join key matters just as much second time.
-      expect(url.searchParams.get("client_reference_id")).toBe(owner.tenantId);
+      expect(new URL(body.paymentUrl).searchParams.get("client_reference_id")).toBe(owner.tenantId);
     });
 
     it("tells the screen the trial is gone, so it stops promising one", async () => {
@@ -407,7 +622,8 @@ describe.skipIf(!databaseUrl)("billing", () => {
       const asked: { customerId: string; returnUrl: string }[] = [];
 
       const service = new BillingService(app.prisma, {
-        paymentLinks: {},
+        planPrices: {},
+        trialPeriodDays: 30,
         portalReturnUrl: "http://localhost:3000/dashboard/subscription",
         createPortalSession: async (input) => {
           asked.push(input);

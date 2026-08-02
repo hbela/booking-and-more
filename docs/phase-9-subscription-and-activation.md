@@ -54,6 +54,15 @@ premise of the whole epic.
 
 This is the substantive change from §5.1's original decision, which said Stripe Checkout.
 
+> **Half-reversed 2026-08-02** by
+> [phase-9-duplicate-subscription-prevention.md](phase-9-duplicate-subscription-prevention.md) §4. A Payment
+> Link is still right — the never-expires argument below stands, and is why Checkout is still not used. What
+> is wrong is "created once per plan and held in config": that made the link permanent, reusable *and shared
+> by every customer on the plan*, so nothing on our side could stop one organization paying twice. One
+> reached three live subscriptions. Links are now created per organization, with
+> `restrictions[completed_sessions][limit]=1`. The paragraph below about the cost being "plans configured in
+> the Stripe dashboard" is therefore also refunded.
+
 **A Checkout Session expires within 24 hours.** The subscribe window is `ONBOARDING_WINDOW_DAYS`, default 14. Emailing a Checkout Session URL therefore produces a link that is dead for thirteen of the fourteen days
 it is supposed to cover — and dead in the least helpful way, since the owner discovers it at the moment they
 finally sat down to pay.
@@ -193,22 +202,29 @@ completion finds the tenant already `ACTIVE` and does nothing.
 
 # 5. Config
 
+> **Amended 2026-08-02** by
+> [phase-9-duplicate-subscription-prevention.md](phase-9-duplicate-subscription-prevention.md) §4.2. The two
+> `STRIPE_PAYMENT_LINK_*` variables below — and the two `_NO_TRIAL` ones the lifecycle slice added — are
+> gone, replaced by `STRIPE_PRICE_STARTER` / `STRIPE_PRICE_PROFESSIONAL`, which were already required. The
+> "exactly one call" claim below is also no longer true: it is three, because a link is now created per
+> organization.
+
 ```text
 STRIPE_SECRET_KEY                  optional
 STRIPE_WEBHOOK_SECRET              required if STRIPE_SECRET_KEY is set
-STRIPE_PAYMENT_LINK_STARTER        optional
-STRIPE_PAYMENT_LINK_PROFESSIONAL   optional
+STRIPE_PAYMENT_LINK_STARTER        optional          ← removed, see above
+STRIPE_PAYMENT_LINK_PROFESSIONAL   optional          ← removed, see above
 ```
 
 Paired as a `superRefine`, for the same reason `RESEND_API_KEY`/`EMAIL_FROM` are: a secret key with no
 webhook secret fails at the worst possible moment — after a customer has paid, when the event arrives and
-cannot be verified.
+cannot be verified. Still true, and the price IDs are paired the same way for the same kind of reason.
 
 `stripe` is a new dependency, API only, behind a lazy `getStripe()` (rule 4). It is needed for exactly one
 call — `webhooks.constructEvent` — because a Payment Link requires no API call to produce.
 
 The subscription screen offers only plans whose link is configured. A button leading to a blank Stripe page
-is worse than a plan that is not offered.
+is worse than a plan that is not offered. Still the rule; it is a *price* that must be configured now.
 
 ---
 

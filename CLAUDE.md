@@ -27,7 +27,13 @@ plan the event does not name is left alone rather than guessed ·
 scheduled downgrades, failed payments; done). **Read §3 before changing anything about access:** the whole
 entitlement rule is one table in `@bam/contracts`, and two refusals constrain it — a Stripe event may
 suspend an organization but never revive one, and `past_due` keeps access because Stripe's own dunning is
-the grace period.
+the grace period ·
+[Phase 9 — duplicate subscription prevention](docs/phase-9-duplicate-subscription-prevention.md) (done bar
+§5.3's reconciliation sweep and §6's manual walk against Stripe). One organization reached three live Stripe
+subscriptions. It **reverses §1.2 of the activation record**: a Payment Link is now created per
+organization at subscribe time, not held in config per plan, so the four `STRIPE_PAYMENT_LINK_*` variables
+are gone and `STRIPE_PRICE_*` decides what is sold. **Read its §2 before touching `requestPaymentLink` or
+`activate`** — three defects, and the reported one is not the worst.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

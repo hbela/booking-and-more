@@ -97,9 +97,14 @@ const baseEnvSchema = z.object({
   // --- Billing (Epic 9) ----------------------------------------------------
   /**
    * Stripe. Optional per rule 4: absent, the subscription screen says so and
-   * everything else keeps working. Needed for exactly one call —
-   * `webhooks.constructEvent` — because a Payment Link requires no API call to
-   * produce (phase-9-subscription-and-activation.md §5).
+   * everything else keeps working.
+   *
+   * It is now needed for three calls, not one: `webhooks.constructEvent`, the
+   * customer-portal session, and creating the per-organization Payment Link
+   * that `POST /v1/billing/subscribe` hands out
+   * (docs/phase-9-duplicate-subscription-prevention.md §4.1). That last one is
+   * new — the links used to be permanent URLs held in the four
+   * `STRIPE_PAYMENT_LINK_*` variables this replaced.
    */
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
 
@@ -107,53 +112,31 @@ const baseEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
 
   /**
-   * A permanent Payment Link per sellable plan, created once in the Stripe
-   * dashboard. A link rather than a Checkout Session because a session expires
-   * within 24 hours and the subscribe window is 14 days, so an emailed checkout
-   * URL would be dead for most of the period it exists to cover (§1.2).
+   * Stripe price IDs. A plan *is* its price from Epic 9's lifecycle slice on
+   * (docs/phase-9-subscription-lifecycle.md §2.4), and since the duplicate-
+   * prevention slice these also decide what can be sold at all: a link is built
+   * from a price, so a plan with no price configured is a plan not offered.
    *
-   * Unset simply means that plan is not offered — better than a button leading
-   * to a blank Stripe page.
-   */
-  STRIPE_PAYMENT_LINK_STARTER: z.url().optional(),
-  STRIPE_PAYMENT_LINK_PROFESSIONAL: z.url().optional(),
-
-  /**
-   * The same plans, without the free trial.
-   * docs/phase-9-subscription-lifecycle.md §2.1.
-   *
-   * A Payment Link's trial is a property of the link, so it cannot be skipped
-   * per customer the way Checkout's `trial_period_days` can. Two links per plan
-   * is what buys the guide's trial-abuse protection while keeping §1.2's
-   * decision: the server sends this one to anyone whose organization has
-   * already used its trial.
-   *
-   * Unset means a repeat subscriber cannot resubscribe to that plan — which is
-   * why the pairing is checked below rather than left to be discovered by a
-   * customer trying to come back.
-   */
-  STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL: z.url().optional(),
-  STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL: z.url().optional(),
-
-  /**
-   * Stripe price IDs, which are how a plan is identified from here on
-   * (docs/phase-9-subscription-lifecycle.md §2.4).
-   *
-   * `metadata[plan]` used to answer this and cannot any longer: a subscription
-   * schedule phase carries `items[0].price` as a bare ID string with no
-   * metadata attached, so a scheduled downgrade has nothing to read. Required
-   * alongside the secret key — see the superRefine.
+   * `metadata[plan]` used to answer the identification question and cannot any
+   * longer: a subscription schedule phase carries `items[0].price` as a bare ID
+   * string with no metadata attached, so a scheduled downgrade has nothing to
+   * read. Required alongside the secret key — see the superRefine.
    */
   STRIPE_PRICE_STARTER: z.string().startsWith("price_").optional(),
   STRIPE_PRICE_PROFESSIONAL: z.string().startsWith("price_").optional(),
 
   /**
-   * The trial length, for copy only — "start your 30-day free trial".
+   * The free trial's length, in days.
    *
-   * Stripe owns the real one: it is configured on the Payment Link, and
-   * `trial_end` on the subscription is what the screen counts down to once a
-   * trial exists. This number is what we can say *before* there is a
-   * subscription to read, and it must match what the links are configured with.
+   * No longer copy-only. A Payment Link created per organization carries
+   * `subscription_data.trial_period_days`, so this number is now what Stripe is
+   * actually told — which is what let the trial/no-trial link pair go away
+   * (docs/phase-9-duplicate-subscription-prevention.md §4.2). An organization
+   * that has already used its trial gets a link created without the parameter
+   * at all, rather than a second URL.
+   *
+   * `trial_end` on the subscription is still what the screen counts down to
+   * once a trial exists; this is what we can say before there is one.
    */
   TRIAL_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
 
@@ -235,38 +218,20 @@ export const envSchema = baseEnvSchema.superRefine((env, ctx) => {
   }
 
   // The price IDs are how a plan is identified everywhere from Epic 9's
-  // lifecycle slice on (§2.4). Missing, a scheduled downgrade resolves to no
-  // plan at all and is silently ignored — the failure surfaces weeks later, as
-  // a customer still on the plan they downgraded away from.
+  // lifecycle slice on (§2.4), and since the duplicate-prevention slice they
+  // are also what a Payment Link is built from. Missing, two things break at
+  // once: a scheduled downgrade resolves to no plan and is silently ignored —
+  // surfacing weeks later as a customer still on the plan they downgraded away
+  // from — and the plan cannot be sold at all.
   if (env.STRIPE_SECRET_KEY !== undefined) {
     for (const key of ["STRIPE_PRICE_STARTER", "STRIPE_PRICE_PROFESSIONAL"] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({
           code: "custom",
           path: [key],
-          message: `${key} is required when STRIPE_SECRET_KEY is set — a plan is identified by its price ID, and without it a scheduled plan change cannot be resolved.`,
+          message: `${key} is required when STRIPE_SECRET_KEY is set — a plan is identified by its price ID, and without it neither a payment link nor a scheduled plan change can be resolved.`,
         });
       }
-    }
-  }
-
-  // A plan sold with no no-trial link is a plan a returning customer cannot buy
-  // (§2.1). They reach the subscription screen, pick the plan they used to have,
-  // and get a 404 — which looks like our bug, because it is.
-  for (const [plan, trial, noTrial] of [
-    ["STARTER", env.STRIPE_PAYMENT_LINK_STARTER, env.STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL],
-    [
-      "PROFESSIONAL",
-      env.STRIPE_PAYMENT_LINK_PROFESSIONAL,
-      env.STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL,
-    ],
-  ] as const) {
-    if (trial !== undefined && noTrial === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        path: [`STRIPE_PAYMENT_LINK_${plan}_NO_TRIAL`],
-        message: `STRIPE_PAYMENT_LINK_${plan}_NO_TRIAL is required alongside STRIPE_PAYMENT_LINK_${plan} — an organization that has already used its trial is sent the no-trial link, and without one it cannot resubscribe.`,
-      });
     }
   }
 });

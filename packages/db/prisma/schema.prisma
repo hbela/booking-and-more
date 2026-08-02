@@ -127,6 +127,7 @@ model Tenant {
   idempotencyKeys      IdempotencyKey[]
   notifications        Notification[]
   subscription         Subscription?
+  checkoutLink         SubscriptionCheckoutLink?
 
   @@index([status])
   /// The expiry sweep's query: prospect organizations past their deadline.
@@ -1415,6 +1416,69 @@ model Subscription {
 
   @@index([status])
   @@map("subscriptions")
+}
+
+/// The one outstanding checkout link for an organization.
+/// docs/phase-9-duplicate-subscription-prevention.md §4.
+///
+/// ## Why this is not a column on Subscription
+///
+/// Because at the moment a link is issued there is no Subscription row, and
+/// that is the whole bug this table exists to fix. The row is written by
+/// `activate()` when `checkout.session.completed` is processed — so a guard
+/// that reads it is asking the payment path whether the payment path has
+/// finished, and gets "no" for as long as the webhook is late. One tenant
+/// reached three live Stripe subscriptions through that window.
+///
+/// This row is written *before* the customer is sent anywhere, so it exists
+/// during exactly the interval in which nothing else does.
+///
+/// ## What `@unique` on tenantId buys
+///
+/// One outstanding link per organization, decided by PostgreSQL rather than by
+/// a read-then-write in the service (rule 14). Two concurrent `POST /subscribe`
+/// calls — the double-clicked button — produce one row and one link, and the
+/// loser is told to use the winner's. Without it both would mint a link, and a
+/// per-link limit of one completed session would then permit two payments.
+///
+/// The Stripe-side half of the same constraint is
+/// `restrictions.completed_sessions.limit = 1` on the link itself, which is the
+/// only guard actually standing on the path between the customer's browser and
+/// Stripe's hosted page. Neither half is sufficient alone: this one stops two
+/// links existing, that one stops one link being used twice.
+model SubscriptionCheckoutLink {
+  id String @id @default(cuid(2))
+
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// What this link sells. A change of mind before paying deactivates the link
+  /// in Stripe and replaces this row, rather than leaving two buyable links.
+  plan SubscriptionPlan
+
+  /// Whether this link was issued with a free trial, so the emailed copy and
+  /// the screen can agree about whether anything is charged today.
+  trial Boolean @default(false)
+
+  /// `plink_…`. Kept so the link can be deactivated on a plan change, and so a
+  /// customer stranded by a burnt link can be diagnosed without guessing.
+  stripePaymentLinkId String @unique @map("stripe_payment_link_id")
+
+  /// The URL as sent, `client_reference_id` and all. Stored rather than rebuilt
+  /// so a second request returns the identical link — a regenerated URL that
+  /// merely looks the same is a second link as far as Stripe is concerned.
+  url String
+
+  /// Set when `checkout.session.completed` is attributed to this link. The row
+  /// is kept rather than deleted: "this organization already paid through this
+  /// link" is the fact a duplicate investigation needs, and deleting it would
+  /// make a burnt link indistinguishable from one that never existed.
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("subscription_checkout_links")
 }
 
 /// Webhook idempotency. phase-9 §2.9.

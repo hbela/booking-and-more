@@ -28,7 +28,11 @@ import { healthRoutes } from "./modules/health/health.routes.js";
 import { platformRoutes } from "./modules/platform/platform.routes.js";
 import { billingRoutes } from "./modules/billing/billing.routes.js";
 import { stripeWebhookRoutes } from "./modules/billing/webhook.routes.js";
-import { createStripePortalSession } from "./modules/billing/stripe.client.js";
+import {
+  createStripePaymentLinkClient,
+  createStripePortalSession,
+  type PaymentLinkClient,
+} from "./modules/billing/stripe.client.js";
 import { tenantRoutes } from "./modules/tenants/tenant.routes.js";
 import {
   invitationAcceptRoutes,
@@ -71,6 +75,20 @@ export interface BuildAppOptions {
    * limiter is still exercised by the test that specifically asserts it.
    */
   rateLimit?: boolean;
+  /**
+   * Test seam: the Stripe payment-link client, overriding the one built from
+   * `STRIPE_SECRET_KEY`.
+   *
+   * Selling a subscription now makes a real Stripe API call
+   * (docs/phase-9-duplicate-subscription-prevention.md §4.1), where it used to
+   * be pure URL construction from config. Without a seam the suite would either
+   * hit the network or be unable to exercise subscribing at all — and
+   * subscribing is what the most important test in `billing.test.ts` is about.
+   *
+   * Expressed here rather than as an `if (NODE_ENV === "test")` inside the
+   * composition root, for the same reason `rateLimit` is.
+   */
+  paymentLinkClient?: PaymentLinkClient;
 }
 
 /**
@@ -223,41 +241,32 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // make the state unescapable (phase-9 §2.4). See billing.routes.ts.
   await app.register(billingRoutes, {
     prefix: "/v1/billing",
-    // Two links per plan: a Payment Link's free trial is baked into the link,
-    // so skipping it for an organization that has already had one needs a
-    // second link rather than a parameter (phase-9-subscription-lifecycle §2.1).
-    // Config validation refuses a trial link with no no-trial counterpart, so
-    // the fallback below is belt-and-braces rather than a real branch.
-    paymentLinks: {
-      ...(env.STRIPE_PAYMENT_LINK_STARTER === undefined
+    // A plan is its price. Links are built from these per organization rather
+    // than held in config as four permanent URLs — the change that made it
+    // possible to stop one organization paying twice
+    // (docs/phase-9-duplicate-subscription-prevention.md §4).
+    planPrices: {
+      ...(env.STRIPE_PRICE_STARTER === undefined ? {} : { STARTER: env.STRIPE_PRICE_STARTER }),
+      ...(env.STRIPE_PRICE_PROFESSIONAL === undefined
         ? {}
-        : {
-            STARTER: {
-              trial: env.STRIPE_PAYMENT_LINK_STARTER,
-              noTrial:
-                env.STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL ?? env.STRIPE_PAYMENT_LINK_STARTER,
-            },
-          }),
-      ...(env.STRIPE_PAYMENT_LINK_PROFESSIONAL === undefined
-        ? {}
-        : {
-            PROFESSIONAL: {
-              trial: env.STRIPE_PAYMENT_LINK_PROFESSIONAL,
-              noTrial:
-                env.STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL ??
-                env.STRIPE_PAYMENT_LINK_PROFESSIONAL,
-            },
-          }),
+        : { PROFESSIONAL: env.STRIPE_PRICE_PROFESSIONAL }),
     },
     trialPeriodDays: env.TRIAL_PERIOD_DAYS,
-    // The portal is the one billing feature that needs a live Stripe call, so
-    // it is the one that disappears when there is no key — the route stays
-    // registered and answers 503, rather than 404, because the difference
-    // between "not configured" and "does not exist" matters to whoever is
-    // reading the logs (phase-9-customer-portal.md §2.1).
+    // Both billing features now need a live Stripe call, so both disappear
+    // together when there is no key — the routes stay registered and answer
+    // 503, rather than 404, because the difference between "not configured" and
+    // "does not exist" matters to whoever is reading the logs
+    // (phase-9-customer-portal.md §2.1).
     ...(env.STRIPE_SECRET_KEY === undefined
       ? {}
-      : { createPortalSession: createStripePortalSession({ secretKey: env.STRIPE_SECRET_KEY }) }),
+      : {
+          paymentLinkClient: createStripePaymentLinkClient({ secretKey: env.STRIPE_SECRET_KEY }),
+          createPortalSession: createStripePortalSession({ secretKey: env.STRIPE_SECRET_KEY }),
+        }),
+    // After the spread, so a supplied stub wins over the real client.
+    ...(options.paymentLinkClient === undefined
+      ? {}
+      : { paymentLinkClient: options.paymentLinkClient }),
     portalReturnUrl: `${env.APP_BASE_URL}/dashboard/subscription`,
   });
 

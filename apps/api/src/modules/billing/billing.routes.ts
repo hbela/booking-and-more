@@ -3,8 +3,8 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions } from "@bam/auth";
 import { commonErrorResponses, subscribablePlanSchema } from "@bam/contracts";
 
-import { BillingService, type PaymentLinks } from "./billing.service.js";
-import type { PortalSessionCreator } from "./stripe.client.js";
+import { BillingService, type PlanPriceIds } from "./billing.service.js";
+import type { PaymentLinkClient, PortalSessionCreator } from "./stripe.client.js";
 
 /**
  * Billing. docs/phase-9-subscription-and-activation.md §3.
@@ -28,11 +28,19 @@ import type { PortalSessionCreator } from "./stripe.client.js";
  */
 
 export interface BillingRoutesOptions {
-  paymentLinks: PaymentLinks;
+  /** Stripe price ID per sellable plan. A plan with no price is not offered. */
+  planPrices: PlanPriceIds;
+  /** Omitted when Stripe is unconfigured; subscribing then reports 503. */
+  paymentLinkClient?: PaymentLinkClient | undefined;
   /** Omitted when Stripe is unconfigured; the portal then reports 503. */
   createPortalSession?: PortalSessionCreator | undefined;
   portalReturnUrl?: string | undefined;
-  /** Copy only. Stripe owns the real trial length — see the config comment. */
+  /**
+   * The free trial's length. Told to Stripe when a link is created for an
+   * organization that has not used its trial, and shown on the screen before
+   * there is a subscription to read
+   * (docs/phase-9-duplicate-subscription-prevention.md §4.2).
+   */
   trialPeriodDays: number;
 }
 
@@ -56,7 +64,9 @@ const subscriptionSchema = z
 
 export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async (app, options) => {
   const service = new BillingService(app.prisma, {
-    paymentLinks: options.paymentLinks,
+    planPrices: options.planPrices,
+    trialPeriodDays: options.trialPeriodDays,
+    paymentLinkClient: options.paymentLinkClient,
     createPortalSession: options.createPortalSession,
     portalReturnUrl: options.portalReturnUrl,
   });
@@ -122,7 +132,7 @@ export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async 
         tags: ["billing"],
         summary: "Email the owner a payment link, and return it",
         description:
-          "Returns the Stripe payment link and emails it to the caller. Both, deliberately: the owner sitting in front of the screen should not be blocked on mail delivery, and the emailed copy can be forwarded to whoever holds the company card. No card details ever reach this API — the link leads to Stripe's hosted page.",
+          "Returns the Stripe payment link and emails it to the caller. Both, deliberately: the owner sitting in front of the screen should not be blocked on mail delivery, and the emailed copy can be forwarded to whoever holds the company card. No card details ever reach this API — the link leads to Stripe's hosted page. Safe to repeat: the organization has at most one link, and calling again returns that same link rather than creating a second one. 409 when a checkout has already been completed — including while the webhook confirming it is still in flight, which is checked against Stripe rather than against our own records.",
         body: z.object({ plan: subscribablePlanSchema }),
         response: {
           201: z.object({

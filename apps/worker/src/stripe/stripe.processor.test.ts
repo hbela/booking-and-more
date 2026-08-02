@@ -162,6 +162,50 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       );
     });
 
+    it("keeps the first subscription when a second one is paid for, and says so", async () => {
+      // The incident this was written for
+      // (docs/phase-9-duplicate-subscription-prevention.md §2.3): one tenant
+      // reached three live Stripe subscriptions. The old code overwrote
+      // `stripeSubscriptionId` with the newest, so every later event for the
+      // older ones found no row, threw OrphanEventError, retried to the timeout
+      // and was marked processed. They billed monthly, invisibly.
+      await record("evt_first", "checkout.session.completed", {
+        client_reference_id: tenantId,
+        customer: "cus_first",
+        subscription: `sub_first-${suffix}`,
+        metadata: { plan: "STARTER" },
+      });
+      await processStripeEventBatch(options());
+
+      // A Payment Link is permanent and shared, so this is the owner reopening
+      // the emailed link — no local guard is on that path.
+      await record("evt_second", "checkout.session.completed", {
+        client_reference_id: tenantId,
+        customer: "cus_second",
+        subscription: `sub_second-${suffix}`,
+        metadata: { plan: "STARTER" },
+      });
+      const summary = await processStripeEventBatch(options());
+
+      // Processed, not failed: the event is fully handled. Retrying it would
+      // not undo a charge, and a permanently failing row helps nobody.
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+
+      const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+      expect(subscription?.stripeSubscriptionId).toBe(`sub_first-${suffix}`);
+      expect(subscription?.stripeCustomerId).toBe("cus_first");
+
+      // The part that makes it findable without opening the Stripe dashboard.
+      const audit = await prisma.auditLog.findFirst({
+        where: { tenantId, action: "billing.duplicate_subscription_detected" },
+      });
+      expect(audit?.actorType).toBe("SYSTEM");
+      expect(audit?.afterJson).toMatchObject({
+        keptSubscriptionId: `sub_first-${suffix}`,
+        duplicateSubscriptionId: `sub_second-${suffix}`,
+      });
+    });
+
     it("fails loudly when the payment cannot be attributed", async () => {
       // Somebody paid and we cannot tell who. Skipping quietly would leave a
       // paying customer gated with no trace of why.
@@ -203,6 +247,65 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
       expect(tenant?.status).toBe("SUSPENDED");
       expect(tenant?.status).not.toBe("CLOSED");
+    });
+  });
+
+  describe("attribution by subscription metadata", () => {
+    /**
+     * docs/phase-9-duplicate-subscription-prevention.md §4.3.
+     *
+     * `customer.subscription.created` carries no `client_reference_id` — that
+     * belongs to the checkout session — so it used to be attributable only via
+     * a subscription id that `checkout.session.completed` had already written.
+     * Arriving first, which Stripe permits, it found nothing and retried
+     * (lifecycle record §4).
+     *
+     * Links created per organization set `subscription_data.metadata.tenantId`,
+     * which propagates onto the subscription, so the event now says whose it is.
+     */
+    it("binds a subscription that arrives before its checkout session", async () => {
+      await record("evt_meta", "customer.subscription.created", {
+        id: `sub_meta-${suffix}`,
+        status: "trialing",
+        metadata: { tenantId },
+      });
+
+      // No prior subscription row at all — the old code's OrphanEventError case.
+      const summary = await processStripeEventBatch(options());
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+
+      const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+      expect(subscription?.stripeSubscriptionId).toBe(`sub_meta-${suffix}`);
+      expect(subscription?.status).toBe("TRIALING");
+    });
+
+    it("refuses to steal a subscription from a tenant that already has one", async () => {
+      // Metadata naming a tenant whose row points at a *different* subscription
+      // is the duplicate-payment case, not a late binding. Rebinding here would
+      // reintroduce §2.3's silent overwrite through a second door.
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "ACTIVE",
+          stripeSubscriptionId: `sub_held-${suffix}`,
+        },
+      });
+
+      await record("evt_steal", "customer.subscription.created", {
+        id: `sub_thief-${suffix}`,
+        status: "active",
+        metadata: { tenantId },
+      });
+
+      const summary = await processStripeEventBatch(options());
+
+      // Unattributable, so it retries and eventually gives up — which is right:
+      // it is somebody else's subscription, or a duplicate for an operator.
+      expect(summary).toMatchObject({ processed: 0, failed: 1 });
+
+      const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+      expect(subscription?.stripeSubscriptionId).toBe(`sub_held-${suffix}`);
     });
   });
 

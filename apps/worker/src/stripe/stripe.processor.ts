@@ -222,6 +222,10 @@ async function dispatch(
  * carry the subscription's status — so `TRIAL` versus `ACTIVE` is decided by
  * `customer.subscription.*`, which does. This one only makes the subscription
  * findable, which is what lets those events be attributed at all (§4).
+ *
+ * Nor does it overwrite a subscription this organization already has. See
+ * {@link recordDuplicateSubscription} — that overwrite is how three live
+ * subscriptions for one tenant stayed invisible.
  */
 async function activate(
   object: Record<string, unknown>,
@@ -253,6 +257,29 @@ async function activate(
     ...(subscriptionId === undefined ? {} : { stripeSubscriptionId: subscriptionId }),
   };
 
+  const existing = await options.prisma.subscription.findUnique({
+    where: { tenantId },
+    select: { stripeSubscriptionId: true },
+  });
+
+  // A second, *different* subscription for one organization — somebody paid
+  // twice (docs/phase-9-duplicate-subscription-prevention.md §2.3). The same id
+  // arriving again is a redelivery and falls through to the idempotent upsert.
+  if (
+    subscriptionId !== undefined &&
+    existing?.stripeSubscriptionId != null &&
+    existing.stripeSubscriptionId !== subscriptionId
+  ) {
+    await recordDuplicateSubscription(options, {
+      tenantId,
+      keptSubscriptionId: existing.stripeSubscriptionId,
+      duplicateSubscriptionId: subscriptionId,
+      duplicateCustomerId: customerId ?? null,
+    });
+
+    return;
+  }
+
   await options.prisma.$transaction(async (tx) => {
     await tx.tenant.update({
       where: { id: tenantId },
@@ -272,9 +299,89 @@ async function activate(
       // session's metadata is the weaker source (§2.4).
       update: identifiers,
     });
+
+    // The link has done its job. Recorded rather than deleted so that "this
+    // organization already paid through this link" stays answerable — it is the
+    // first fact a duplicate-payment investigation needs, and a deleted row
+    // makes a burnt link look like one that never existed
+    // (docs/phase-9-duplicate-subscription-prevention.md §4).
+    //
+    // `updateMany` because a tenant may legitimately have no link row: an
+    // INTERNAL organization, or one activated before this table existed.
+    await tx.subscriptionCheckoutLink.updateMany({
+      where: { tenantId, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
   });
 
   options.logger.info({ tenantId, subscriptionId }, "stripe: checkout bound to organization");
+}
+
+/**
+ * One organization, two live Stripe subscriptions. Somebody is being billed
+ * twice. docs/phase-9-duplicate-subscription-prevention.md §5.1.
+ *
+ * ## Why the first one is kept and the second discarded
+ *
+ * This used to be an unconditional `upsert` whose `update` overwrote
+ * `stripeSubscriptionId`, which is how one tenant reached three live
+ * subscriptions with nobody noticing: the row pointed at the newest, and every
+ * later event for the *older* ones found no row, threw {@link OrphanEventError},
+ * retried until the timeout and was then quietly marked processed. They billed
+ * monthly with nothing in our database pointing at them.
+ *
+ * Keeping the first is the conservative choice rather than the correct one —
+ * there is no correct one at this point, because both subscriptions are real and
+ * both are charging. The first is the one whose trial, plan and period we have
+ * already mirrored, so it is the one that leaves the fewest facts wrong while an
+ * operator sorts it out.
+ *
+ * ## Why this does not cancel or refund anything
+ *
+ * That is a money movement on a live account, made with the whole picture in
+ * view — including whether these are two organizations that share a domain, or
+ * one that legitimately upgraded (§7). A worker acting alone on a heuristic is
+ * how you refund a customer who wanted both.
+ *
+ * The audit row is written with `SYSTEM` as the actor and both subscription IDs
+ * in `afterJson`, so the trail names what an operator has to go and look at.
+ */
+async function recordDuplicateSubscription(
+  options: StripeProcessorOptions,
+  input: {
+    tenantId: string;
+    keptSubscriptionId: string;
+    duplicateSubscriptionId: string;
+    duplicateCustomerId: string | null;
+  },
+): Promise<void> {
+  await options.prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      actorType: "SYSTEM",
+      action: "billing.duplicate_subscription_detected",
+      entityType: "Subscription",
+      entityId: input.tenantId,
+      // No customer or card data — only Stripe's own identifiers, which are
+      // what the operator needs and all rule 6 permits here.
+      afterJson: {
+        keptSubscriptionId: input.keptSubscriptionId,
+        duplicateSubscriptionId: input.duplicateSubscriptionId,
+        duplicateCustomerId: input.duplicateCustomerId,
+      },
+    },
+  });
+
+  // `error`, not `warn`: this reaches Sentry, and it should. A customer is
+  // paying twice for one thing until somebody acts.
+  options.logger.error(
+    {
+      tenantId: input.tenantId,
+      keptSubscriptionId: input.keptSubscriptionId,
+      duplicateSubscriptionId: input.duplicateSubscriptionId,
+    },
+    "stripe: organization has a second live subscription; it is billing and needs cancelling by hand",
+  );
 }
 
 /**
@@ -288,7 +395,7 @@ async function mirrorSubscription(
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
 
-  const existing = await findByStripeId(subscriptionId, options);
+  const existing = await findByStripeId(subscriptionId, options, object);
 
   // Throws an unrecognised status rather than storing it (phase-9 §2.7): the
   // predecessor kept Stripe's status as free text, so a value nobody had
@@ -362,7 +469,7 @@ async function endSubscription(
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
 
-  const existing = await findByStripeId(subscriptionId, options);
+  const existing = await findByStripeId(subscriptionId, options, object);
 
   await options.prisma.$transaction(async (tx) => {
     await tx.subscription.update({
@@ -454,7 +561,7 @@ async function notifyTrialEnding(
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
 
-  const existing = await findByStripeId(subscriptionId, options);
+  const existing = await findByStripeId(subscriptionId, options, object);
 
   await requestNotification(options, {
     tenantId: existing.tenantId,
@@ -522,21 +629,102 @@ async function requestNotification(
  * before its sibling used to be dropped silently, which is the guide's test #15
  * failing in the least visible way possible.
  */
-async function findByStripeId(subscriptionId: string, options: StripeProcessorOptions) {
+async function findByStripeId(
+  subscriptionId: string,
+  options: StripeProcessorOptions,
+  /**
+   * The event's own object, so a subscription we have not bound yet can still
+   * be attributed. Links created since
+   * docs/phase-9-duplicate-subscription-prevention.md §4.1 carry
+   * `subscription_data.metadata.tenantId`, which propagates onto the
+   * subscription — so `customer.subscription.created` arriving before its
+   * checkout session is no longer unattributable, and the ordering race in
+   * §4 of the lifecycle record stops being routine.
+   *
+   * Omitted by callers whose event carries no such metadata.
+   */
+  object?: Record<string, unknown>,
+) {
+  const select = {
+    tenantId: true,
+    plan: true,
+    trialUsedAt: true,
+    trialEndsAt: true,
+    pendingPlan: true,
+  } as const;
+
   const existing = await options.prisma.subscription.findUnique({
     where: { stripeSubscriptionId: subscriptionId },
-    select: {
-      tenantId: true,
-      plan: true,
-      trialUsedAt: true,
-      trialEndsAt: true,
-      pendingPlan: true,
-    },
+    select,
   });
 
-  if (existing === null) throw new OrphanEventError(subscriptionId);
+  if (existing !== null) return existing;
 
-  return existing;
+  // Not bound yet. Bind it now if the subscription says whose it is, rather
+  // than throwing and waiting for a sibling event that may already have been
+  // processed.
+  const tenantId = object === undefined ? undefined : asString(asRecord(object["metadata"])?.["tenantId"]);
+
+  if (tenantId !== undefined) {
+    const claimed = await claimByTenantMetadata(tenantId, subscriptionId, options, select);
+
+    if (claimed !== null) return claimed;
+  }
+
+  // Subscriptions predating §4.1 carry no metadata, and a genuinely foreign one
+  // never will. Both still need the retry-then-give-up behaviour.
+  throw new OrphanEventError(subscriptionId);
+}
+
+/**
+ * Attach a subscription to the tenant its metadata names.
+ *
+ * Deliberately refuses to steal one: if that tenant's row already points at a
+ * *different* Stripe subscription, this is the duplicate-payment case, not a
+ * late binding. Overwriting is precisely the bug §2.3 records, so it is left to
+ * `activate()`'s conflict path rather than done quietly here.
+ */
+async function claimByTenantMetadata(
+  tenantId: string,
+  subscriptionId: string,
+  options: StripeProcessorOptions,
+  select: {
+    tenantId: true;
+    plan: true;
+    trialUsedAt: true;
+    trialEndsAt: true;
+    pendingPlan: true;
+  },
+) {
+  const row = await options.prisma.subscription.findUnique({
+    where: { tenantId },
+    select: { ...select, stripeSubscriptionId: true },
+  });
+
+  if (row !== null && row.stripeSubscriptionId !== null) return null;
+
+  if (row === null) {
+    // No row at all: the subscription event beat its checkout session here.
+    // Plan is left to be resolved from the price by the caller.
+    await options.prisma.subscription.create({
+      data: { tenantId, plan: "STARTER", status: "INCOMPLETE", stripeSubscriptionId: subscriptionId },
+    });
+  } else {
+    await options.prisma.subscription.update({
+      where: { tenantId },
+      data: { stripeSubscriptionId: subscriptionId },
+    });
+  }
+
+  options.logger.info(
+    { tenantId, subscriptionId },
+    "stripe: subscription attributed by its own metadata",
+  );
+
+  return options.prisma.subscription.findUniqueOrThrow({
+    where: { stripeSubscriptionId: subscriptionId },
+    select,
+  });
 }
 
 /** Stripe wraps the interesting part in `data.object`. */

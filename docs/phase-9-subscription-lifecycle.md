@@ -189,7 +189,17 @@ thing it constrains.
 **This integration is half configuration.** None of the below is optional, and none of it is visible in the
 repository, which is why it is a checklist rather than a paragraph.
 
-### Payment Links — four, created once
+### ~~Payment Links — four, created once~~ — **superseded 2026-08-02**
+
+> Replaced by [phase-9-duplicate-subscription-prevention.md](phase-9-duplicate-subscription-prevention.md)
+> §4. **There are no Payment Links to create in the dashboard any more**, and the four
+> `STRIPE_PAYMENT_LINK_*` variables below no longer exist. A link is created per organization at subscribe
+> time, carrying `restrictions[completed_sessions][limit]=1` and `subscription_data[trial_period_days]`.
+>
+> This section is kept rather than deleted because it records *why* there were four: §2.1 below is still the
+> right explanation of the trial-once rule, and only its mechanism changed. The reason the links had to go is
+> that a link created once per plan is permanent, reusable and shared by every customer — so one organization
+> could pay twice and did.
 
 | Link                                       | Trial     | Card |
 | ------------------------------------------ | --------- | ---- |
@@ -201,6 +211,8 @@ repository, which is why it is a checklist rather than a paragraph.
 Each must accept `client_reference_id` — without it a completed payment cannot be attributed (§3.2 of the
 subscription record). On the trial links, **do not** tick "let customers start trial without payment
 method": the card upfront is the whole point, and without it the trial ends in a pause rather than a sale.
+That last constraint survives the change: a link created in code sets `trial_period_days` and nothing else,
+so Checkout collects the card by default.
 
 ### Prices
 
