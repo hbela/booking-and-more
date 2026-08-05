@@ -664,8 +664,7 @@ const PROVIDER_INVITED_COPY: Record<
       fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
       expiry: (when) => `A link ${when}-ig érvényes.`,
       noPassword: "Jelszót nem küldünk e-mailben — a linken saját jelszót állíthat be.",
-      unexpected:
-        "Ha nem számított erre a levélre, hagyja figyelmen kívül — a link magától lejár.",
+      unexpected: "Ha nem számított erre a levélre, hagyja figyelmen kívül — a link magától lejár.",
       signoff: "Üdvözlettel,\na Booking and More csapata",
     },
   },
@@ -1016,7 +1015,8 @@ const CONFIRMATION_COPY: Record<
   },
   en: {
     subject: (organization) => `${organization} — your appointment is confirmed`,
-    intro: (organization) => `${organization} has confirmed your appointment. We look forward to it.`,
+    intro: (organization) =>
+      `${organization} has confirmed your appointment. We look forward to it.`,
     lead: "You can change or cancel it here:",
     button: "Manage your booking",
     useOriginal:

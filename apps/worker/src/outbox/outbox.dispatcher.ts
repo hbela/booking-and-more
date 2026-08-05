@@ -325,7 +325,10 @@ async function dispatchTenantEvent(
     return dispatchSubscriptionLink(event, options);
   }
 
-  if (event.eventType === "TRIAL_ENDING_SOON" || event.eventType === "SUBSCRIPTION_PAYMENT_FAILED") {
+  if (
+    event.eventType === "TRIAL_ENDING_SOON" ||
+    event.eventType === "SUBSCRIPTION_PAYMENT_FAILED"
+  ) {
     return dispatchBillingNotice(event, options);
   }
 

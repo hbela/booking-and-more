@@ -182,9 +182,7 @@ export function ProviderFields({
                     // is stable and `diffPatch`'s content comparison is not
                     // defeated by two equal sets in different orders.
                     languages: event.target.checked
-                      ? LOCALES.filter(
-                          (code) => code === locale || state.languages.includes(code),
-                        )
+                      ? LOCALES.filter((code) => code === locale || state.languages.includes(code))
                       : state.languages.filter((code) => code !== locale),
                   });
                 }}

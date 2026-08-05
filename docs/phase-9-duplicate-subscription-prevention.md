@@ -60,7 +60,7 @@ record). But `isLiveSubscription("INCOMPLETE")` is **false**
 [billing.test.ts:126](../packages/contracts/src/billing.test.ts#L126)).
 
 So the guard stays open not until `checkout.session.completed` is processed, but until
-`customer.subscription.created` is *also* processed and sets `TRIALING` or `ACTIVE`. Two events, two poll
+`customer.subscription.created` is _also_ processed and sets `TRIALING` or `ACTIVE`. Two events, two poll
 intervals, and — per §4 of the lifecycle record — an ordering race between them that is explicitly expected
 to need retries.
 
@@ -76,7 +76,7 @@ Consequences:
 
 - The owner has the link in their inbox forever. They can open it again next week and check out again.
 - Our API is not on the path between their browser and Stripe's hosted page. `POST /v1/billing/subscribe`
-  is a *link vending machine*, not a checkout gate. Refusing to vend a second link does nothing about the
+  is a _link vending machine_, not a checkout gate. Refusing to vend a second link does nothing about the
   first one, which still works.
 - Therefore **every purely local guard is decorative**, however consistent its data. The guard could read a
   perfectly fresh source and the second payment would still go through.
@@ -91,7 +91,7 @@ The constraint has to live in the only system that is on the payment path: Strip
 await tx.subscription.upsert({
   where: { tenantId },
   create: { tenantId, plan, status: "INCOMPLETE", ...identifiers },
-  update: identifiers,          // ← overwrites stripeSubscriptionId
+  update: identifiers, // ← overwrites stripeSubscriptionId
 });
 ```
 
@@ -103,7 +103,7 @@ monthly, forever, and no row in our database points at it.
 
 The `@unique` on `tenantId` — described in the schema as "load-bearing … what stops a redelivered Stripe
 webhook creating a second subscription for one payment" — does exactly what it says and nothing more. It
-stops *two rows*. It does not stop *two subscriptions*; it guarantees we can only see one of them.
+stops _two rows_. It does not stop _two subscriptions_; it guarantees we can only see one of them.
 
 This is the defect that turned "a duplicate happened" into "a duplicate happened three times and nobody
 knew".
@@ -132,7 +132,7 @@ That is the same failure mode we have now — a stale replica, with a window tha
 are going wrong — just with Stripe's lag substituted for our webhook's. It would narrow the window in the
 common case and reopen it in the incident case. Not a fix.
 
-**The distinction that matters is search versus list.** `GET /v1/checkout/sessions` is a *list*, filterable
+**The distinction that matters is search versus list.** `GET /v1/checkout/sessions` is a _list_, filterable
 on `payment_link` and `status`, read straight through with no such caveat — and it turned out to answer
 exactly the question the guard needs to ask. That is §4.4, and it is the piece this section was originally
 written to say did not exist. It was found while building, not while planning; the search endpoint's caveat
@@ -142,7 +142,7 @@ is prominent and the list endpoint's filters are not.
 
 `GET /v1/subscriptions?customer=…` is a list, not a search, and is strongly consistent. But a Payment Link
 **cannot be pinned to an existing customer** (`customer` is not a parameter on payment link creation;
-`customer_creation` only chooses whether one is made). Each completed session mints a *new* Customer.
+`customer_creation` only chooses whether one is made). Each completed session mints a _new_ Customer.
 
 So the three duplicate subscriptions sit on three different customer IDs, and a lookup keyed on the one
 customer we know about finds only its own subscription. This is also why the incident was invisible in
@@ -151,7 +151,7 @@ Stripe's own UI until somebody sorted by subscription rather than by customer.
 ## 3.3 Restrict the shared link — wrong granularity
 
 Payment Links do support `restrictions.completed_sessions.limit`. On a link shared by every customer on a
-plan, a limit of 1 means the *first customer in the world* to subscribe closes the plan for everyone else.
+plan, a limit of 1 means the _first customer in the world_ to subscribe closes the plan for everyone else.
 The restriction is the right mechanism; the shared link is the wrong object to put it on.
 
 ---
@@ -199,23 +199,23 @@ the code already produces.
 ## 4.2 It also collapses the two-links-per-plan config
 
 `subscription_data.trial_period_days` is settable per link. Lifecycle record §2.1 introduced `PlanLinks
-{ trial, noTrial }` because *"a Payment Link's free trial is a property of the link and cannot be varied per
-customer the way Checkout's `trial_period_days` can"*. That is true of a link created once in the dashboard.
+{ trial, noTrial }` because _"a Payment Link's free trial is a property of the link and cannot be varied per
+customer the way Checkout's `trial_period_days` can"_. That is true of a link created once in the dashboard.
 It is false of a link created per tenant.
 
 So four env vars go away and are replaced by two that are already required:
 
-| Before                                          | After                       |
-| ----------------------------------------------- | --------------------------- |
-| `STRIPE_PAYMENT_LINK_STARTER`                   | `STRIPE_PRICE_STARTER`      |
-| `STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL`          | (already required)          |
-| `STRIPE_PAYMENT_LINK_PROFESSIONAL`              | `STRIPE_PRICE_PROFESSIONAL` |
-| `STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL`     | (already required)          |
+| Before                                      | After                       |
+| ------------------------------------------- | --------------------------- |
+| `STRIPE_PAYMENT_LINK_STARTER`               | `STRIPE_PRICE_STARTER`      |
+| `STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL`      | (already required)          |
+| `STRIPE_PAYMENT_LINK_PROFESSIONAL`          | `STRIPE_PRICE_PROFESSIONAL` |
+| `STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL` | (already required)          |
 
 Plans stop being configured in the Stripe dashboard, which was the stated cost of §1.2 and is now refunded.
 The `PlanLinks` type, the superRefine pairing check in
 [schema.ts:257](../packages/config/src/schema.ts#L257), and the `trial ? links.trial : links.noTrial`
-branch all disappear. `trialUsedAt` keeps its job — it now chooses whether to *set* `trial_period_days`
+branch all disappear. `trialUsedAt` keeps its job — it now chooses whether to _set_ `trial_period_days`
 rather than which of two URLs to send.
 
 ## 4.3 It also kills the orphan race
@@ -249,7 +249,7 @@ The result is stamped onto `consumed_at` so the next request costs no API call.
 
 ## 4.5 One link row per organization
 
-The Stripe-side limit is worth nothing on its own. A double-clicked button that mints *two* links gives the
+The Stripe-side limit is worth nothing on its own. A double-clicked button that mints _two_ links gives the
 customer two allowances of one session each — so the restriction has to be paired with a guarantee that an
 organization only ever has one link.
 
@@ -279,7 +279,7 @@ The link restriction is the fix. These make it survive being wrong.
 
 **Built.** `activate()` refuses to overwrite a different, non-null `stripeSubscriptionId`: it keeps the
 first subscription, writes a `billing.duplicate_subscription_detected` audit row (actor `SYSTEM`, both
-subscription IDs in `after_json`) and logs at `error` so it reaches Sentry. The event is marked *processed*,
+subscription IDs in `after_json`) and logs at `error` so it reaches Sentry. The event is marked _processed_,
 not failed — retrying it would not undo a charge, and a permanently failing row helps nobody.
 
 Keeping the first is the conservative choice rather than the correct one; there is no correct one at that
@@ -314,7 +314,7 @@ is the one place this slice leaves a rule unapplied.
 has: `subscriptions.search({ query: "metadata['tenantId']:'…'" })`, plus a sweep over all active
 subscriptions on the account looking for two carrying the same `tenantId`.
 
-The eventual consistency that disqualifies search as a *gate* (§3.1) is fine for a *sweep* — it runs on a
+The eventual consistency that disqualifies search as a _gate_ (§3.1) is fine for a _sweep_ — it runs on a
 schedule, not in a request, and a minute of lag changes nothing.
 
 This is the layer that catches whatever the other three miss, and its absence is the largest remaining gap.
@@ -342,7 +342,7 @@ Automated — **all green**, `billing.test.ts` and `stripe.processor.test.ts`:
 3. `activate()` receiving a second `checkout.session.completed` with a different subscription ID keeps the
    first, writes the audit row, does not overwrite (§5.1).
 4. A `customer.subscription.created` arriving before any checkout session binds via `metadata.tenantId`
-   (§4.3) — and *refuses* to bind when that tenant's row already points at a different subscription, which
+   (§4.3) — and _refuses_ to bind when that tenant's row already points at a different subscription, which
    would otherwise reintroduce §2.3's overwrite through a second door.
 5. A row with `stripeSubscriptionId` set but status `INCOMPLETE` refuses a second link (§5.4's blind spot).
 6. A plan with no price configured is not for sale; a second request for the same plan deactivates nothing.
@@ -380,22 +380,22 @@ happen to be the same business (§3.2 makes the latter look like the former in t
 
 # 8. What was built
 
-| Thing                                                          | Where                                              |
-| -------------------------------------------------------------- | -------------------------------------------------- |
-| `SubscriptionCheckoutLink`, `@unique` on `tenantId`             | `packages/db/prisma/schema.prisma`                  |
-| Per-tenant link, `completed_sessions.limit = 1`, metadata       | `apps/api/…/billing/stripe.client.ts`               |
-| `checkout.sessions.list` usage check                            | `apps/api/…/billing/stripe.client.ts`               |
-| Reuse-or-create, plan-change replacement, P2002 loser path      | `apps/api/…/billing/billing.service.ts`             |
-| Guard widened past `INCOMPLETE`                                 | `apps/api/…/billing/billing.service.ts`             |
-| `paymentLinkClient` test seam on `buildApp`                     | `apps/api/src/app.ts`                               |
-| Duplicate detection + audit row                                 | `apps/worker/…/stripe.processor.ts`                 |
-| Attribution by `metadata.tenantId`                              | `apps/worker/…/stripe.processor.ts`                 |
-| Four `STRIPE_PAYMENT_LINK_*` vars removed                       | `packages/config/src/schema.ts`, `.env.example`     |
+| Thing                                                      | Where                                           |
+| ---------------------------------------------------------- | ----------------------------------------------- |
+| `SubscriptionCheckoutLink`, `@unique` on `tenantId`        | `packages/db/prisma/schema.prisma`              |
+| Per-tenant link, `completed_sessions.limit = 1`, metadata  | `apps/api/…/billing/stripe.client.ts`           |
+| `checkout.sessions.list` usage check                       | `apps/api/…/billing/stripe.client.ts`           |
+| Reuse-or-create, plan-change replacement, P2002 loser path | `apps/api/…/billing/billing.service.ts`         |
+| Guard widened past `INCOMPLETE`                            | `apps/api/…/billing/billing.service.ts`         |
+| `paymentLinkClient` test seam on `buildApp`                | `apps/api/src/app.ts`                           |
+| Duplicate detection + audit row                            | `apps/worker/…/stripe.processor.ts`             |
+| Attribution by `metadata.tenantId`                         | `apps/worker/…/stripe.processor.ts`             |
+| Four `STRIPE_PAYMENT_LINK_*` vars removed                  | `packages/config/src/schema.ts`, `.env.example` |
 
 ## 8.1 A test trap this hit
 
 `stripe_payment_link_id` is unique across the whole table, not per tenant — so the stub's `plink_1`,
-`plink_2` collided with rows the *previous run* of the same suite had left behind. The symptom was a 500,
+`plink_2` collided with rows the _previous run_ of the same suite had left behind. The symptom was a 500,
 not a constraint error, because the service's `P2002` handler correctly interprets a duplicate key as "a
 concurrent request won", looks for the winner by `tenantId`, finds none, and rethrows.
 
@@ -409,7 +409,7 @@ new column. Fixed the same way — suffix with the run.
 1. **Does `restrictions.completed_sessions.limit` behave on a subscription-mode link the way §6's test 7
    assumes?** The parameter is documented without a mode caveat, but this has not been walked. Everything in
    §4 is contingent on it, and the automated suite cannot tell us — it stubs Stripe.
-2. **Is `inactive_message` shown for a *restriction*-exhausted link, or only for a manually deactivated
+2. **Is `inactive_message` shown for a _restriction_-exhausted link, or only for a manually deactivated
    one?** One is set (`stripe.client.ts`), pointing the owner back at their dashboard rather than leaving
    them on a bare "link no longer active" page. Whether Stripe renders it in this case is untested.
 3. **Should the platform admin be able to issue a replacement link?** If a link is burnt by a checkout that
@@ -417,5 +417,5 @@ new column. Fixed the same way — suffix with the run.
    evidence available. Probably a `/platform` action rather than a self-service one, but it is not designed
    here. **This is the most likely support ticket this slice creates.**
 4. **Should §5.3's sweep exist before this is trusted in production?** The three built layers are all
-   preventive; nothing yet *detects* a duplicate that slips past them except §5.1, which only fires if the
+   preventive; nothing yet _detects_ a duplicate that slips past them except §5.1, which only fires if the
    duplicate reaches `activate()`.

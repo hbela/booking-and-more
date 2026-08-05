@@ -69,7 +69,7 @@ duplicate reading at exactly `exact - HOUR_MS`, so it could only ever detect a o
 Lord Howe Island shifts by **30 minutes in both directions**. Its April transition therefore produced two
 defects at once, in a 30-minute window twice a year, in one zone:
 
-- the *later* of the two instants was returned, contradicting the rule in the table above, and
+- the _later_ of the two instants was returned, contradicting the rule in the table above, and
 - it was reported as **`exact`**, so a caller who checked `resolution` before deciding — the entire reason
   the field exists — was told there was nothing to decide.
 
@@ -244,6 +244,7 @@ the catalogue is fully configured and nothing is bookable, which makes a fresh c
    > through this package's `resolveWallClock`, which additionally warns the user when a reading was skipped
    > or repeated by a transition. The list had the mirror bug (`toLocaleString`, the reader's zone) and was
    > fixed with it.
+
 7. **No calendar view.** The availability screen is a form, not a week grid. Epic 6 brings the visual
    calendar.
 

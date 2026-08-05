@@ -280,7 +280,10 @@ describe("planNotifications", () => {
 
 describe("BOOKING_REQUESTED", () => {
   it("plans the request email and nothing else", () => {
-    const result = plan({ eventType: OutboxEventTypes.BOOKING_REQUESTED, facts: facts({ bookingStatus: "PENDING" }) });
+    const result = plan({
+      eventType: OutboxEventTypes.BOOKING_REQUESTED,
+      facts: facts({ bookingStatus: "PENDING" }),
+    });
 
     expect(result.recognised).toBe(true);
     expect(result.plans.map((entry) => entry.type)).toEqual([NotificationTypes.BOOKING_REQUESTED]);
@@ -291,7 +294,10 @@ describe("BOOKING_REQUESTED", () => {
     // nobody has accepted is worse than silence — the reminder is planned by
     // the BOOKING_CONFIRMED event acceptance writes
     // (docs/phase-5-booking-notifications.md §2.4).
-    const result = plan({ eventType: OutboxEventTypes.BOOKING_REQUESTED, facts: facts({ bookingStatus: "PENDING" }) });
+    const result = plan({
+      eventType: OutboxEventTypes.BOOKING_REQUESTED,
+      facts: facts({ bookingStatus: "PENDING" }),
+    });
 
     expect(result.plans.map((entry) => entry.type)).not.toContain(
       NotificationTypes.BOOKING_REMINDER,

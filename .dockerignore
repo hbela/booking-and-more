@@ -10,6 +10,21 @@ dist
 **/.turbo
 coverage
 **/coverage
+
+# Must be excluded, and for a reason worth writing down.
+#
+# `incremental: true` (packages/tsconfig/base.json) makes tsc record what it has
+# already emitted in a .tsbuildinfo beside each tsconfig. Those files are
+# gitignored, so they never reach CI — but a Docker build copies the working
+# tree, not a clean checkout. Copy them in while `dist` above is excluded and
+# tsc reads a manifest claiming the outputs exist, finds nothing to do, and
+# emits almost nothing: exit code 0, no diagnostics, and an image whose
+# libraries are missing most of their compiled files. The failure surfaces
+# later, as `Module '@bam/observability' has no exported member …` in whichever
+# app happens to import one of them first.
+*.tsbuildinfo
+**/*.tsbuildinfo
+
 .env
 .env.*
 !.env.example

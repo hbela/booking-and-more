@@ -76,16 +76,16 @@ omission is not a protection (§2.4).
 
 ## 2.1 What it refuses, and with what
 
-| Condition                                  | Answer                                               |
-| ------------------------------------------ | ---------------------------------------------------- |
-| Stripe unconfigured (`STRIPE_SECRET_KEY`)  | `503 SERVICE_UNAVAILABLE`                            |
-| No subscription, or no Stripe customer id  | `409 VALIDATION_FAILED` — nothing to manage yet      |
-| Stripe rejects the call                    | `503 SERVICE_UNAVAILABLE`, cause logged, not returned |
+| Condition                                 | Answer                                                |
+| ----------------------------------------- | ----------------------------------------------------- |
+| Stripe unconfigured (`STRIPE_SECRET_KEY`) | `503 SERVICE_UNAVAILABLE`                             |
+| No subscription, or no Stripe customer id | `409 VALIDATION_FAILED` — nothing to manage yet       |
+| Stripe rejects the call                   | `503 SERVICE_UNAVAILABLE`, cause logged, not returned |
 
 The last row is the one worth stating. The commonest cause by far is that **no portal configuration exists
 in the Stripe dashboard**, which Stripe reports as an ordinary API error. Letting that surface as a 500
 would page somebody over a setup step; `ensurePortalConfig()` — creating the configuration on demand — is
-listed in §2.7 among the things worth taking from the predecessor and is deliberately *not* built here,
+listed in §2.7 among the things worth taking from the predecessor and is deliberately _not_ built here,
 because a configuration created by code is a billing policy nobody reviewed.
 
 `GET /v1/billing/subscription` gains **`portalAvailable`**, so the screen can decide whether to render the
@@ -100,7 +100,7 @@ when a secret key is configured and omits it otherwise, which is what produces t
 
 This is dependency injection for a testing reason, stated plainly: every other billing behaviour is
 integration-tested against a real database, but there is no real Stripe to test against and no appetite for
-a network call in a suite. The seam lets the happy path be asserted — a session is requested for *this*
+a network call in a suite. The seam lets the happy path be asserted — a session is requested for _this_
 tenant's customer id, and the returned URL is what the route sends — without stubbing modules.
 
 ---
@@ -138,7 +138,7 @@ The plan is resolved, in order, from `subscription.metadata.plan`, then `items.d
 **If neither is present the existing plan is left alone.** That asymmetry with `planFromMetadata`'s
 fall-back-to-STARTER is deliberate and the reasoning inverts cleanly:
 
-- At activation there is no plan yet and the customer has paid, so *any* answer beats a locked-out customer,
+- At activation there is no plan yet and the customer has paid, so _any_ answer beats a locked-out customer,
   and the cheapest is the safe one to be wrong with.
 - At update there is already a plan that was right five minutes ago. Guessing STARTER here would silently
   **downgrade a customer who just upgraded**, and would do it on every unrelated update event thereafter.
@@ -209,15 +209,15 @@ payment method updates, invoice history and cancellation. If plan switching is t
 
 # 7. What was built
 
-| Piece                                      | Where                                                       |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| `createStripePortalSession`                | `modules/billing/stripe.client.ts`                          |
-| `portalSession`, `portalAvailable`         | `modules/billing/billing.service.ts`                        |
-| `POST /v1/billing/portal`                  | `modules/billing/billing.routes.ts`                         |
-| Wiring, present only when Stripe is set up | `app.ts`                                                    |
-| `cancel_at` and plan mirroring             | `apps/worker/src/stripe/stripe.processor.ts`                |
-| Manage billing                             | `apps/web/src/components/subscription-screen.tsx`, en + hu  |
-| 7 tests                                    | `apps/api/src/billing.test.ts`, `stripe.processor.test.ts`  |
+| Piece                                      | Where                                                      |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `createStripePortalSession`                | `modules/billing/stripe.client.ts`                         |
+| `portalSession`, `portalAvailable`         | `modules/billing/billing.service.ts`                       |
+| `POST /v1/billing/portal`                  | `modules/billing/billing.routes.ts`                        |
+| Wiring, present only when Stripe is set up | `app.ts`                                                   |
+| `cancel_at` and plan mirroring             | `apps/worker/src/stripe/stripe.processor.ts`               |
+| Manage billing                             | `apps/web/src/components/subscription-screen.tsx`, en + hu |
+| 7 tests                                    | `apps/api/src/billing.test.ts`, `stripe.processor.test.ts` |
 
 ---
 

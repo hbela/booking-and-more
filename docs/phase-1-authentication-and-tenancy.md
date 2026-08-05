@@ -189,12 +189,13 @@ only; every action is authorised again server-side.
    dashboard. Email delivery needs the notification worker, which is Epic 5. Flagged in the endpoint's own
    OpenAPI description rather than left implicit.
 
-   **Partially closed.** An *owner* invitation has been emailed since provisioning landed
-   (phase-9-saas-administration §1.4), and a *provider* invitation since 2026-08-04
+   **Partially closed.** An _owner_ invitation has been emailed since provisioning landed
+   (phase-9-saas-administration §1.4), and a _provider_ invitation since 2026-08-04
    ([phase-9-provider-onboarding.md](phase-9-provider-onboarding.md)). What is still true is the generic
    `POST /v1/members/invitations` — inviting an admin or an assistant still means copying a link out of the
    dashboard and pasting it into your own mail client. Kept as an open item rather than deleted, so the
    remaining gap does not disappear along with the part that was fixed.
+
 2. **Email verification is off.** `requireEmailVerification: false` — until there is a way to deliver the
    mail, enabling it would lock every new account out. Turn on in Epic 5.
 3. **Rate limiting is per-instance.** In-process store until Redis arrives in Epic 5. `buildApp` takes an

@@ -61,18 +61,18 @@ row's payload, out again at dispatch, into `notifications.payload` as a finished
 commit and delivery, which is the same bound the onboarding emails have run under since Epic 9.
 
 **Which emails get it is decided by which ones can.** `confirmBooking` and `createDirectBooking` hold
-the raw token; nothing else does. A public reschedule is authenticated *by* the token and could pass
+the raw token; nothing else does. A public reschedule is authenticated _by_ the token and could pass
 it along, but a staff reschedule cannot — so making the link conditional on who moved the booking
 would produce an email that sometimes has a button and sometimes does not, for a reason no recipient
 could infer. Instead:
 
-| Email | Manage link | Why |
-| --- | --- | --- |
-| `booking-requested` | yes | the customer's first and only copy |
+| Email                  | Manage link             | Why                                                                                                                        |
+| ---------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `booking-requested`    | yes                     | the customer's first and only copy                                                                                         |
 | `booking-confirmation` | when a token is present | present on a straight-through booking; absent when staff accept a request, and the copy points back at the requested email |
-| `booking-updated` | no | the link they already hold still works, and the copy says so |
-| `booking-cancelled` | no | there is nothing left to manage; it offers the public booking page instead |
-| `booking-reminder` | no | see §2.2 |
+| `booking-updated`      | no                      | the link they already hold still works, and the copy says so                                                               |
+| `booking-cancelled`    | no                      | there is nothing left to manage; it offers the public booking page instead                                                 |
+| `booking-reminder`     | no                      | see §2.2                                                                                                                   |
 
 ## 2.2 The reminder carries no link, and that is the point
 
@@ -120,7 +120,7 @@ the copy: "we have your request" and "you are booked" are different promises, an
 between them would have to hedge both.
 
 **A request plans no reminder.** `planNotifications` plans a confirmation and its reminder together,
-because the moment a booking exists is the moment both are owed. A *request* is not a booking yet —
+because the moment a booking exists is the moment both are owed. A _request_ is not a booking yet —
 reminding somebody about an appointment nobody has accepted is worse than silence — so the reminder
 is planned by the `BOOKING_CONFIRMED` event that acceptance now writes. The reminder's dedupe key is
 `{ bookingId, startAtIso }`, so a booking that goes straight through and one that is accepted later
@@ -148,12 +148,12 @@ scheduledAt])` on `notifications` was added in Epic 5 part 1 for exactly this qu
 
 ## 3.1 `packages/notification-engine`
 
-| File           | Change                                                                              |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `types.ts`     | `BOOKING_REQUESTED` appended                                                        |
-| `dedupe.ts`    | its variant, keyed `{ bookingId }` — one request email per booking                   |
+| File           | Change                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `types.ts`     | `BOOKING_REQUESTED` appended                                                           |
+| `dedupe.ts`    | its variant, keyed `{ bookingId }` — one request email per booking                     |
 | `planning.ts`  | `BOOKING_REQUESTED` mapped (no reminder), and `checkStillOwed` for the send-time check |
-| `templates.ts` | five renderers in `hu` and `en`, plus the shared appointment block they all print    |
+| `templates.ts` | five renderers in `hu` and `en`, plus the shared appointment block they all print      |
 
 `bookingEmail` assembles all five so they differ only where they mean to: greeting, one sentence, the
 same six-fact details table, then whatever that message adds. `detailPairs` drops the place and price
@@ -172,11 +172,11 @@ needed no change and would have failed had only one side been updated.
 
 `writeOutbox` takes an optional payload. Three callers use it:
 
-| Event                | Carries                        | Because                                             |
-| -------------------- | ------------------------------ | --------------------------------------------------- |
-| `BOOKING_CONFIRMED` (from `confirmBooking`, `createDirectBooking`) | `managementToken` | only the hash is stored |
-| `BOOKING_REQUESTED`  | `managementToken`              | same, and it is the customer's only copy            |
-| `BOOKING_RESCHEDULED`| `previousStartAt`              | the booking has already moved by the time it is read |
+| Event                                                              | Carries           | Because                                              |
+| ------------------------------------------------------------------ | ----------------- | ---------------------------------------------------- |
+| `BOOKING_CONFIRMED` (from `confirmBooking`, `createDirectBooking`) | `managementToken` | only the hash is stored                              |
+| `BOOKING_REQUESTED`                                                | `managementToken` | same, and it is the customer's only copy             |
+| `BOOKING_RESCHEDULED`                                              | `previousStartAt` | the booking has already moved by the time it is read |
 
 And `updateBooking` now writes a `BOOKING_CONFIRMED` event when the transition is PENDING →
 CONFIRMED, inside the same transaction as the audit row. Nothing else there does: COMPLETED and
@@ -223,7 +223,7 @@ React reports an unpatchable attribute mismatch on `<html>` — see §4.8.
 1. **The reminder has no cancel link.** §2.2. The trade is real — a one-tap cancel in the reminder is
    the most effective anti-no-show device there is — and it is the deviation to revisit first. The fix
    is not "carry the token anyway": it is a second, short-lived token minted when the reminder is
-   *sent*, which needs a column and a decision about its lifetime.
+   _sent_, which needs a column and a decision about its lifetime.
 2. **Only the customer is emailed.** Nothing tells staff a booking arrived; the diary is the only
    place it shows up. `CALENDAR_DISCONNECTED` is still the one notification type in the schema with
    no renderer, and staff-facing notification is its neighbourhood.
@@ -244,13 +244,13 @@ React reports an unpatchable attribute mismatch on `<html>` — see §4.8.
    [phase-9-owner-language-and-return-paths.md](phase-9-owner-language-and-return-paths.md) §2 fixed
    for every server-built URL. Pre-existing, found while changing the copy beside it, and left alone
    because the fix belongs with a pass over the client-side links rather than in this one. The
-   *emailed* link is correct: it goes through `buildAppUrl`, and a test asserts the prefix.
+   _emailed_ link is correct: it goes through `buildAppUrl`, and a test asserts the prefix.
 8. **Every 404 under a locale still throws a hydration error**, and §3.5 only moved one URL out of the
    way of it. The cause is two documents: the global `app/not-found.tsx` must render `<html>` because
    no root layout wraps it, and `[locale]/layout.tsx` renders another with a different `lang`.
 
    Three fixes were tried and none worked, which is worth recording so nobody repeats them. A
-   locale-scoped `[locale]/not-found.tsx` does not help — Next sends *unmatched* URLs to the global
+   locale-scoped `[locale]/not-found.tsx` does not help — Next sends _unmatched_ URLs to the global
    not-found, never a nested one, and nothing in the locale tree calls `notFound()` except the layout
    itself, whose throw cannot be caught beneath it. A `[locale]/[...rest]` catch-all does not help
    either: it compiles and registers, but loses to the sibling `[tenantSlug]` segment, so the request
@@ -259,6 +259,7 @@ React reports an unpatchable attribute mismatch on `<html>` — see §4.8.
    The fix that would work is structural — a root `app/layout.tsx` owning `<html lang>` (read through
    next-intl's `getLocale()`), with `[locale]/layout.tsx` rendering neither `<html>` nor `<body>`.
    That is a layout refactor touching every route, and it did not belong in a phase about email.
+
 9. **The staff diary's row actions are one click and irreversible**, and until the walk found it, the
    first of them was invisible. `ActionButton` composed `buttonClass` (`bg-brand-600 text-white`) with
    `bg-transparent text-slate-900` appended — which does not override anything, because Tailwind
@@ -286,20 +287,20 @@ pnpm db:drift-check
 
 ## 5.1 Results — 2026-08-05
 
-| Suite                        | Result                             |
-| ---------------------------- | ---------------------------------- |
-| `@bam/notification-engine`   | 138 passed (was 92)                |
-| `@bam/worker`                | 84 passed (was 63)                 |
-| `@bam/api`                   | 254 passed (was 250)               |
-| `@bam/booking-engine`        | 89 passed                          |
-| `@bam/availability-engine`   | 76 passed                          |
-| `@bam/contracts`             | 57 passed                          |
-| `@bam/auth`                  | 36 passed                          |
-| `@bam/web`                   | 33 passed                          |
-| `@bam/db`                    | 29 passed                          |
-| `@bam/config`                | 14 passed                          |
-| `@bam/observability`         | 5 passed                           |
-| **Total**                    | **815 passed**, 19/19 turbo tasks  |
+| Suite                      | Result                            |
+| -------------------------- | --------------------------------- |
+| `@bam/notification-engine` | 138 passed (was 92)               |
+| `@bam/worker`              | 84 passed (was 63)                |
+| `@bam/api`                 | 254 passed (was 250)              |
+| `@bam/booking-engine`      | 89 passed                         |
+| `@bam/availability-engine` | 76 passed                         |
+| `@bam/contracts`           | 57 passed                         |
+| `@bam/auth`                | 36 passed                         |
+| `@bam/web`                 | 33 passed                         |
+| `@bam/db`                  | 29 passed                         |
+| `@bam/config`              | 14 passed                         |
+| `@bam/observability`       | 5 passed                          |
+| **Total**                  | **815 passed**, 19/19 turbo tasks |
 
 `pnpm build` green, `pnpm db:drift-check` reports no drift.
 
@@ -327,7 +328,7 @@ organization (there is no `db:seed` — `pnpm db:grant-platform-admin`, then pro
    in it**.
 4. Reschedule from the manage page, then cancel. Two more emails; the cancellation offers a
    book-again link; the reschedule names the old time and no link of its own.
-5. Set a service to `requiresApproval` and book it: a "request received" email that says it is *not*
+5. Set a service to `requiresApproval` and book it: a "request received" email that says it is _not_
    confirmed, then accept it from `/dashboard/bookings` and confirm a confirmation follows.
 6. Backdate a reminder's `scheduled_at` in `psql`. The sweep picks it up within a minute; with
    `RESEND_API_KEY` unset the row must land `SKIPPED`, never `SENT`

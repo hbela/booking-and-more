@@ -49,14 +49,14 @@ delivered nothing — the worker memoises its provider at boot, so keys added la
 platform form never asked what language an organization speaks, so every owner was onboarded in Hungarian —
 and every URL built server-side omitted the locale segment, which is invisible while Hungarian is the
 unprefixed default. **`buildAppUrl` in `@bam/contracts` is now the only way to build a link to one of our own
-screens**; its §5.2 records why the Stripe payment page's language is *not* settable and is not going to be ·
+screens**; its §5.2 records why the Stripe payment page's language is _not_ settable and is not going to be ·
 [Phase 9 — manual test checklist](docs/phase-9-manual-test-checklist.md) (written, **not yet walked**). The
 one document to open before testing onboarding or billing by hand: preconditions, ~60 checks from
 provisioning to cancellation, and the Stripe-side assertions no automated test can make ·
 [Phase 9 — provider onboarding](docs/phase-9-provider-onboarding.md) (done bar its §6 manual walk). The
 Providers screen can now give a provider a login: one row action issues an invitation carrying the diary,
 emails it, and acceptance links the membership in the same transaction that burns the token. Closes
-phase-2-3 §5.11. **Read its §2.7 before touching `claimInvitation`** — the link is made *inside* the
+phase-2-3 §5.11. **Read its §2.7 before touching `claimInvitation`** — the link is made _inside_ the
 acceptance transaction, and the unique index that decides the race is also what leaves the invitation
 PENDING for a second try. Its §2.9 is why a `PROVIDER` now sees three navigation items rather than seven ·
 [Phases 2–3 — owner management](docs/phase-2-3-owner-management.md) (done bar its §6.2 manual walk). The
@@ -70,6 +70,16 @@ recorded deviation. §2.6 is the other half of the same decision — **who decid
 the catalogue and each provider's base location, and **availability belongs to the provider**. Also closes
 phase-2 §5.4 and phase-3 §5.6, adds `POST /v1/{providers,services,locations}/:id/restore`, and is why
 `apps/web` now depends on `@bam/availability-engine`.
+[Phase 10 — deployment to Hetzner with Coolify](docs/phase-10-deployment-hetzner-coolify.md) (the guide is
+written and the stack is verified locally; the walk on a real VPS is not done — its §9.1 says exactly what
+that leaves unproven). Phase 0's Docker files had never been run: all three images failed to build and the
+database container could not start at all. **Read its §2.3 before adding anything to `.dockerignore`** —
+`incremental: true` leaves `.tsbuildinfo` files that are gitignored but were not dockerignored, so tsc
+believed outputs already existed, emitted almost nothing, and exited 0. A Docker build copies the working
+tree; CI checks out clean, which is why CI never saw it. §2.4 is the other one that bites: `postgres:18`
+**refuses to start** if the volume is mounted at `/var/lib/postgresql/data` rather than one level up. Adds
+`docker-compose.coolify.yml` at the root — the Coolify file publishes no host ports, and
+`docker/docker-compose.yml` remains the local-parity one that does.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

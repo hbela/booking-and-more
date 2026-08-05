@@ -66,11 +66,7 @@ describe("the weekly schedule", () => {
   });
 
   it("orders the flattened week Monday first", () => {
-    const week = seedWorkingWeek([
-      row({ weekday: 7 }),
-      row({ weekday: 1 }),
-      row({ weekday: 3 }),
-    ]);
+    const week = seedWorkingWeek([row({ weekday: 7 }), row({ weekday: 1 }), row({ weekday: 3 })]);
 
     expect(buildWorkingHoursBody(week).workingHours.map((entry) => entry.weekday)).toEqual([
       1, 3, 7,

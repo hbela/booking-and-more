@@ -76,7 +76,7 @@ provisioned ──► PENDING_SUBSCRIPTION ──► TRIAL ──► ACTIVE
                  (tenant.subscribeBy)     (subscription.trialEndsAt)
 ```
 
-They answer different questions — *did the prospect ever engage* and *did the trial convert* — so they are
+They answer different questions — _did the prospect ever engage_ and _did the trial convert_ — so they are
 different fields on different rows and neither is derived from the other. `Tenant` is unchanged by this
 slice.
 
@@ -115,16 +115,16 @@ One pure function, one table, unit-tested exhaustively. This is the whole of "wh
 for access", and it exists in one place so it cannot drift between the three call sites that used to
 each decide a piece of it.
 
-| Stripe status        | `Subscription.status` | Tenant                             |
-| -------------------- | --------------------- | ---------------------------------- |
-| `trialing`           | `TRIALING`            | `TRIAL`                            |
-| `active`             | `ACTIVE`              | `ACTIVE`                           |
-| `past_due`           | `PAST_DUE`            | unchanged — dunning is the grace   |
-| `unpaid`             | `PAST_DUE`            | `SUSPENDED`                        |
-| `canceled`           | `CANCELED`            | `SUSPENDED`                        |
+| Stripe status        | `Subscription.status` | Tenant                                 |
+| -------------------- | --------------------- | -------------------------------------- |
+| `trialing`           | `TRIALING`            | `TRIAL`                                |
+| `active`             | `ACTIVE`              | `ACTIVE`                               |
+| `past_due`           | `PAST_DUE`            | unchanged — dunning is the grace       |
+| `unpaid`             | `PAST_DUE`            | `SUSPENDED`                            |
+| `canceled`           | `CANCELED`            | `SUSPENDED`                            |
 | `incomplete`         | `INCOMPLETE`          | unchanged — nothing granted or revoked |
-| `incomplete_expired` | `INCOMPLETE`          | `SUSPENDED`                        |
-| `paused`             | `PAST_DUE`            | `SUSPENDED`                        |
+| `incomplete_expired` | `INCOMPLETE`          | `SUSPENDED`                            |
+| `paused`             | `PAST_DUE`            | `SUSPENDED`                            |
 
 Two rules constrain every row and are worth stating separately, because they are what stops this table
 being edited carelessly later:
@@ -167,14 +167,14 @@ mechanism was there, only the decision was wrong.
 
 One migration. All of it on `Subscription`; `Tenant` is untouched (§2.2).
 
-| Column                    | Why                                                                     |
-| ------------------------- | ----------------------------------------------------------------------- |
-| `stripe_price_id`         | What was actually bought. Makes a wrong plan diagnosable without Stripe |
-| `trial_ends_at`           | The screen's countdown, and the authoritative trial end                 |
-| `trial_used_at`           | The trial-once gate. Set once, never overwritten                        |
-| `stripe_schedule_id`      | A scheduled downgrade's schedule, so it can be recognised and cleared   |
-| `pending_plan`            | What the plan becomes at renewal                                        |
-| `pending_plan_starts_at`  | When                                                                    |
+| Column                   | Why                                                                     |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `stripe_price_id`        | What was actually bought. Makes a wrong plan diagnosable without Stripe |
+| `trial_ends_at`          | The screen's countdown, and the authoritative trial end                 |
+| `trial_used_at`          | The trial-once gate. Set once, never overwritten                        |
+| `stripe_schedule_id`     | A scheduled downgrade's schedule, so it can be recognised and cleared   |
+| `pending_plan`           | What the plan becomes at renewal                                        |
+| `pending_plan_starts_at` | When                                                                    |
 
 `trial_used_at` lives here rather than on `Tenant` because the subscription row is 1:1 with the tenant and
 **survives cancellation** — `customer.subscription.deleted` sets the status to `CANCELED` and keeps the row.
@@ -196,17 +196,17 @@ repository, which is why it is a checklist rather than a paragraph.
 > `STRIPE_PAYMENT_LINK_*` variables below no longer exist. A link is created per organization at subscribe
 > time, carrying `restrictions[completed_sessions][limit]=1` and `subscription_data[trial_period_days]`.
 >
-> This section is kept rather than deleted because it records *why* there were four: §2.1 below is still the
+> This section is kept rather than deleted because it records _why_ there were four: §2.1 below is still the
 > right explanation of the trial-once rule, and only its mechanism changed. The reason the links had to go is
 > that a link created once per plan is permanent, reusable and shared by every customer — so one organization
 > could pay twice and did.
 
-| Link                                       | Trial     | Card |
-| ------------------------------------------ | --------- | ---- |
-| `STRIPE_PAYMENT_LINK_STARTER`              | 30 days   | yes  |
-| `STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL`     | none      | yes  |
-| `STRIPE_PAYMENT_LINK_PROFESSIONAL`         | 30 days   | yes  |
-| `STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL`| none      | yes  |
+| Link                                        | Trial   | Card |
+| ------------------------------------------- | ------- | ---- |
+| `STRIPE_PAYMENT_LINK_STARTER`               | 30 days | yes  |
+| `STRIPE_PAYMENT_LINK_STARTER_NO_TRIAL`      | none    | yes  |
+| `STRIPE_PAYMENT_LINK_PROFESSIONAL`          | 30 days | yes  |
+| `STRIPE_PAYMENT_LINK_PROFESSIONAL_NO_TRIAL` | none    | yes  |
 
 Each must accept `client_reference_id` — without it a completed payment cannot be attributed (§3.2 of the
 subscription record). On the trial links, **do not** tick "let customers start trial without payment
@@ -241,16 +241,16 @@ Retries exhausted after roughly a week, then **cancel the subscription**. This i
 
 # 7. What was built
 
-| Piece                                                        | Where                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------- |
-| `planForPrice`, `subscriptionEffect`, `nextTenantStatus`     | `packages/contracts/src/billing.ts` — pure, 20 tests    |
-| Two links per plan, price IDs, trial length, orphan timeout  | `packages/config/src/schema.ts` — three new `superRefine`s |
-| `trialEndsAt`, `trialUsedAt`, `stripePriceId`, schedule cols | migration `…_subscription_lifecycle`                    |
-| Trial vs no-trial link selection                             | `billing.service.ts` `requestPaymentLink`               |
-| `trialAvailable`, `pendingPlan`, `trialEndsAt` on the wire   | `billing.routes.ts`                                     |
-| Every lifecycle event, schedules, orphan retry               | `apps/worker/src/stripe/stripe.processor.ts`            |
-| `TRIAL_ENDING_SOON`, `SUBSCRIPTION_PAYMENT_FAILED`           | notification-engine + `outbox.dispatcher.ts` `dispatchBillingNotice` |
-| Trial, downgrade and past-due states                         | `subscription-screen.tsx`, en + hu                      |
+| Piece                                                        | Where                                                                              |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `planForPrice`, `subscriptionEffect`, `nextTenantStatus`     | `packages/contracts/src/billing.ts` — pure, 20 tests                               |
+| Two links per plan, price IDs, trial length, orphan timeout  | `packages/config/src/schema.ts` — three new `superRefine`s                         |
+| `trialEndsAt`, `trialUsedAt`, `stripePriceId`, schedule cols | migration `…_subscription_lifecycle`                                               |
+| Trial vs no-trial link selection                             | `billing.service.ts` `requestPaymentLink`                                          |
+| `trialAvailable`, `pendingPlan`, `trialEndsAt` on the wire   | `billing.routes.ts`                                                                |
+| Every lifecycle event, schedules, orphan retry               | `apps/worker/src/stripe/stripe.processor.ts`                                       |
+| `TRIAL_ENDING_SOON`, `SUBSCRIPTION_PAYMENT_FAILED`           | notification-engine + `outbox.dispatcher.ts` `dispatchBillingNotice`               |
+| Trial, downgrade and past-due states                         | `subscription-screen.tsx`, en + hu                                                 |
 | 20 new tests                                                 | `billing.test.ts` (contracts), `stripe.processor.test.ts`, `billing.test.ts` (api) |
 
 ## 7.1 A bug the tests found, which the plan had missed

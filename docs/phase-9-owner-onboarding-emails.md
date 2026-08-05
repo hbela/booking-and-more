@@ -51,7 +51,7 @@ invitation was indistinguishable — in the database, in the dashboard, in any q
 write — from one who did. The distinguishing column existed and was null, which is not a signal anybody
 reads.
 
-That it was introduced *by* rule 4 is the interesting part. "A missing API key must degrade one feature,
+That it was introduced _by_ rule 4 is the interesting part. "A missing API key must degrade one feature,
 never crash boot" is right, and `createLoggingProvider` is the correct shape for it. The error was in
 `{ ok: true }`: degrading gracefully is not the same as claiming to have succeeded.
 
@@ -77,7 +77,7 @@ exposure — but when nothing was sent, the token in that column is the only cop
 The boot warning now says what it means, and names the restart:
 
 > `RESEND_API_KEY/EMAIL_FROM not configured — nothing will be delivered. Messages are written to this log
-> and their notifications recorded SKIPPED. Set both and restart the worker.`
+and their notifications recorded SKIPPED. Set both and restart the worker.`
 
 ## 2.3 What this does not fix
 
@@ -94,15 +94,15 @@ loud in the one place somebody will be looking.
 
 Two of the three emails already existed and had simply never been delivered:
 
-| Email                  | Type                   | Template               | Carries             |
-| ---------------------- | ---------------------- | ---------------------- | ------------------- |
-| Acceptance link        | `ORGANIZATION_CREATED` | `organization-created` | `acceptUrl`, expiry |
-| Payment link           | `SUBSCRIPTION_LINK`    | `subscription-link`    | `paymentUrl`        |
-| **Subscription live**  | —                      | —                      | **did not exist**   |
+| Email                 | Type                   | Template               | Carries             |
+| --------------------- | ---------------------- | ---------------------- | ------------------- |
+| Acceptance link       | `ORGANIZATION_CREATED` | `organization-created` | `acceptUrl`, expiry |
+| Payment link          | `SUBSCRIPTION_LINK`    | `subscription-link`    | `paymentUrl`        |
+| **Subscription live** | —                      | —                      | **did not exist**   |
 
 So the owner accepted an invitation, paid on Stripe's hosted page, and heard nothing from us again. **That
 is the one moment in onboarding where silence reads as failure**, because they have just handed over a card.
-Stripe sends its own receipt, but that confirms a *payment*; nothing confirmed that the thing they bought
+Stripe sends its own receipt, but that confirms a _payment_; nothing confirmed that the thing they bought
 was ready, and nothing pointed them at it.
 
 ## 3.2 Keyed on the subscription, not the event
@@ -143,15 +143,15 @@ is worse than saying nothing about dates, and a fabricated date is a commitment 
 
 # 4. What was built
 
-| Thing                                                        | Where                                             |
-| ------------------------------------------------------------ | ------------------------------------------------- |
-| `EmailProvider.delivers`, and both providers declaring it    | `apps/worker/src/email/email.provider.ts`         |
-| Sender records `SKIPPED` for a non-delivering provider       | `apps/worker/src/notifications/notification.sender.ts` |
-| `SUBSCRIPTION_CONFIRMED` enum value + migration              | `packages/db/prisma/schema.prisma`                |
-| Type, dedupe variant, template name                          | `packages/notification-engine/src/{types,dedupe,planning}.ts` |
-| `renderSubscriptionConfirmed`, hu and en                     | `packages/notification-engine/src/templates.ts`   |
-| `dispatchSubscriptionConfirmed`                              | `apps/worker/src/outbox/outbox.dispatcher.ts`     |
-| Emission on the transition into a live status                | `apps/worker/src/stripe/stripe.processor.ts`      |
+| Thing                                                     | Where                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| `EmailProvider.delivers`, and both providers declaring it | `apps/worker/src/email/email.provider.ts`                     |
+| Sender records `SKIPPED` for a non-delivering provider    | `apps/worker/src/notifications/notification.sender.ts`        |
+| `SUBSCRIPTION_CONFIRMED` enum value + migration           | `packages/db/prisma/schema.prisma`                            |
+| Type, dedupe variant, template name                       | `packages/notification-engine/src/{types,dedupe,planning}.ts` |
+| `renderSubscriptionConfirmed`, hu and en                  | `packages/notification-engine/src/templates.ts`               |
+| `dispatchSubscriptionConfirmed`                           | `apps/worker/src/outbox/outbox.dispatcher.ts`                 |
+| Emission on the transition into a live status             | `apps/worker/src/stripe/stripe.processor.ts`                  |
 
 Tests: the sender no longer records `SENT` for a non-delivering provider; the dedupe key collides across
 later events and separates across resubscription; the template names the charge date during a trial, calls

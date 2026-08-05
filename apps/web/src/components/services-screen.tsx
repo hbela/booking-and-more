@@ -117,7 +117,10 @@ export function ServicesScreen(): React.ReactElement {
                   const archived = service.archivedAt !== null;
 
                   return (
-                    <tr key={service.id} className="border-b border-slate-100 dark:border-slate-900">
+                    <tr
+                      key={service.id}
+                      className="border-b border-slate-100 dark:border-slate-900"
+                    >
                       <td className={`py-2 pr-4 ${archived ? "text-slate-500" : ""}`}>
                         {service.name}
                         <span className="block font-mono text-xs text-slate-500">
@@ -282,9 +285,7 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
 
         <ErrorText>{error}</ErrorText>
         {slugTaken ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            {t("slugTakenArchivedHint")}
-          </p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t("slugTakenArchivedHint")}</p>
         ) : null}
 
         <button type="submit" disabled={mutation.isPending} className={buttonClass}>
@@ -365,9 +366,7 @@ function EditServicePanel({
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium">{t("offeredBy")}</span>
           {detail.data === undefined ? null : detail.data.providers.length === 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              {t("noProvidersAssigned")}
-            </p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("noProvidersAssigned")}</p>
           ) : (
             <ul className="text-sm text-slate-600 dark:text-slate-400">
               {detail.data.providers.map((entry) => (

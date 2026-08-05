@@ -89,7 +89,10 @@ export interface ProviderRoutesOptions {
   appBaseUrl: string;
 }
 
-export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = async (app, options) => {
+export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = async (
+  app,
+  options,
+) => {
   const service = new ProviderService(app.prisma);
   const providers = service.repository;
   // Invitations are the membership module's business, including this one — see

@@ -37,7 +37,15 @@ interface ExceptionDraft {
 }
 
 function emptyDraft(): ExceptionDraft {
-  return { id: null, type: "UNAVAILABLE", startAt: "", endAt: "", locationId: "", serviceId: "", reason: "" };
+  return {
+    id: null,
+    type: "UNAVAILABLE",
+    startAt: "",
+    endAt: "",
+    locationId: "",
+    serviceId: "",
+    reason: "",
+  };
 }
 
 /**
@@ -243,9 +251,7 @@ export function AvailabilityExceptions({
           save.mutate();
         }}
       >
-        <h3 className="text-sm font-medium">
-          {draft.id === null ? t("add") : t("editException")}
-        </h3>
+        <h3 className="text-sm font-medium">{draft.id === null ? t("add") : t("editException")}</h3>
 
         <div className="flex flex-wrap items-end gap-3">
           <Field id="exception-type" label={t("type.label")}>

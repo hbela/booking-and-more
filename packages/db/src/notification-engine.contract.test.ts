@@ -23,9 +23,7 @@ import { NotificationChannel, NotificationStatus, NotificationType } from "./ind
 
 describe("notification enums", () => {
   it("declares the same types in the engine and the schema", () => {
-    expect(Object.values(NotificationTypes).sort()).toEqual(
-      Object.values(NotificationType).sort(),
-    );
+    expect(Object.values(NotificationTypes).sort()).toEqual(Object.values(NotificationType).sort());
   });
 
   it("declares the same channels in the engine and the schema", () => {

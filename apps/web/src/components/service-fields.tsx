@@ -49,14 +49,12 @@ export function serviceStateFrom(service?: Service): ServiceFormState {
     requiresApproval: service?.requiresApproval ?? false,
     minimumNoticeMinutes:
       service?.minimumNoticeMinutes == null ? "" : String(service.minimumNoticeMinutes),
-    maximumAdvanceDays: service?.maximumAdvanceDays == null ? "" : String(service.maximumAdvanceDays),
+    maximumAdvanceDays:
+      service?.maximumAdvanceDays == null ? "" : String(service.maximumAdvanceDays),
   };
 }
 
-export function serviceBodyFrom(
-  state: ServiceFormState,
-  mode: FormMode,
-): Record<string, unknown> {
+export function serviceBodyFrom(state: ServiceFormState, mode: FormMode): Record<string, unknown> {
   const price = state.price.trim();
 
   return {

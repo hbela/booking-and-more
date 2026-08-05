@@ -3,35 +3,37 @@
 # Next.js web image, using `output: "standalone"` (see apps/web/next.config.ts)
 # so the runtime stage carries only the traced server bundle.
 #
+# See docker/Dockerfile.api for why the whole workspace is copied rather than a
+# list of manifests.
+#
 # Build from the repository root:
-#   docker build -f docker/Dockerfile.web -t bam-web .
+#   docker build -f docker/Dockerfile.web -t bam-web \
+#     --build-arg NEXT_PUBLIC_API_BASE_URL=https://api.example.com .
 
 ARG NODE_VERSION=24-alpine
 
-# --- deps ---------------------------------------------------------------------
-FROM node:${NODE_VERSION} AS deps
+# --- build --------------------------------------------------------------------
+FROM node:${NODE_VERSION} AS build
 RUN corepack enable
 WORKDIR /app
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY packages/tsconfig/package.json ./packages/tsconfig/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY apps/web/package.json ./apps/web/
+ENV npm_config_store_dir=/pnpm/store
+
+COPY . .
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# --- build --------------------------------------------------------------------
-FROM deps AS build
-WORKDIR /app
-COPY . .
-
-# NEXT_PUBLIC_* values are inlined at build time, so they must be present here
-# rather than injected at run time.
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so they
+# must be present here rather than injected at run time. Changing the API's
+# public origin therefore needs a rebuild, not a restart — and an image built
+# with the wrong one produces a browser that calls the wrong host while the
+# server-side half looks perfectly healthy.
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 
+# @bam/web depends on @bam/contracts and @bam/availability-engine, neither of
+# which reaches Prisma, so no placeholder DATABASE_URL is needed here.
 RUN pnpm --filter @bam/web... build
 
 # --- runtime ------------------------------------------------------------------

@@ -530,7 +530,7 @@ interface Provider {
 > The implementation reversed this pointer in Epic 2 and it is not coming back:
 > `memberships.provider_id` carries it, with a unique index so at most one login can hold a diary. The
 > reasons are that a provider is a **diary** rather than a login — the front desk can keep a visiting
-> hygienist's schedule for somebody with no account — and that a *role* belongs to a membership, so the
+> hygienist's schedule for somebody with no account — and that a _role_ belongs to a membership, so the
 > thing that says "this person is the provider here" belongs beside the thing that says "this person is an
 > admin there". Pointing from the provider would also make a second organization's diary for the same person
 > ambiguous. See [phase-2-providers-services-locations.md](phase-2-providers-services-locations.md) §3.2 and

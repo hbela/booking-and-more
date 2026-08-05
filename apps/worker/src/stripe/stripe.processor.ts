@@ -696,7 +696,8 @@ async function findByStripeId(
   // Not bound yet. Bind it now if the subscription says whose it is, rather
   // than throwing and waiting for a sibling event that may already have been
   // processed.
-  const tenantId = object === undefined ? undefined : asString(asRecord(object["metadata"])?.["tenantId"]);
+  const tenantId =
+    object === undefined ? undefined : asString(asRecord(object["metadata"])?.["tenantId"]);
 
   if (tenantId !== undefined) {
     const claimed = await claimByTenantMetadata(tenantId, subscriptionId, options, select);
@@ -741,7 +742,12 @@ async function claimByTenantMetadata(
     // No row at all: the subscription event beat its checkout session here.
     // Plan is left to be resolved from the price by the caller.
     await options.prisma.subscription.create({
-      data: { tenantId, plan: "STARTER", status: "INCOMPLETE", stripeSubscriptionId: subscriptionId },
+      data: {
+        tenantId,
+        plan: "STARTER",
+        status: "INCOMPLETE",
+        stripeSubscriptionId: subscriptionId,
+      },
     });
   } else {
     await options.prisma.subscription.update({
@@ -837,7 +843,9 @@ function upcomingPhase(
     if (startsAt === undefined || startsAt.getTime() <= now) continue;
 
     const items = entry["items"];
-    const first = Array.isArray(items) ? (items[0] as Record<string, unknown> | undefined) : undefined;
+    const first = Array.isArray(items)
+      ? (items[0] as Record<string, unknown> | undefined)
+      : undefined;
 
     // On a schedule phase `price` is the ID itself, not an object — the one
     // place in the API where that differs from a subscription item.

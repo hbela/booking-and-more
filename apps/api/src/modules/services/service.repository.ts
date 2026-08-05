@@ -191,7 +191,6 @@ export class ServiceRepository {
       orderBy: { provider: { displayName: "asc" } },
     });
   }
-
 }
 
 export function serviceNotFound(): NotFoundError {

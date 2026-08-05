@@ -1,20 +1,16 @@
-
-
-
-
 For **booking-and-more**, I would attach the Stripe subscription to the tenant/organization rather than the individual user. That matches the reusable multi-tenant SaaS direction of the project. fileciteturn0file0
 
 ## Recommended subscription policy
 
 Use one simple, predictable policy:
 
-| Customer action | When it takes effect | Billing result | Access |
-|---|---|---|---|
-| Cancel during trial | End of trial | No charge | Until trial ends |
-| Cancel paid subscription | End of current billing period | No refund | Until period ends |
-| Standard → Premium | Immediately | Charge prorated difference immediately | Premium immediately |
-| Premium → Standard | Next billing period | No refund or credit now | Premium until period ends |
-| Immediate cancellation | Immediately, support-only | Optional prorated refund | Revoked immediately |
+| Customer action          | When it takes effect          | Billing result                         | Access                    |
+| ------------------------ | ----------------------------- | -------------------------------------- | ------------------------- |
+| Cancel during trial      | End of trial                  | No charge                              | Until trial ends          |
+| Cancel paid subscription | End of current billing period | No refund                              | Until period ends         |
+| Standard → Premium       | Immediately                   | Charge prorated difference immediately | Premium immediately       |
+| Premium → Standard       | Next billing period           | No refund or credit now                | Premium until period ends |
+| Immediate cancellation   | Immediately, support-only     | Optional prorated refund               | Revoked immediately       |
 
 This is easier for customers to understand and much easier to maintain than allowing every possible combination.
 
@@ -181,9 +177,7 @@ The exact TypeScript fields available depend on your installed `stripe` package 
 This should be the normal customer-facing cancellation.
 
 ```ts
-async function scheduleCancellation(
-  stripeSubscriptionId: string,
-): Promise<Stripe.Subscription> {
+async function scheduleCancellation(stripeSubscriptionId: string): Promise<Stripe.Subscription> {
   return stripe.subscriptions.update(stripeSubscriptionId, {
     cancel_at_period_end: true,
   });
@@ -193,9 +187,7 @@ async function scheduleCancellation(
 The subscription remains active until its current period ends. Stripe sends `customer.subscription.updated` when `cancel_at_period_end` changes, and later sends `customer.subscription.deleted` when the subscription actually ends. The customer can also reverse the scheduled cancellation before the period ends. citeturn511985search3turn644797search1
 
 ```ts
-async function undoCancellation(
-  stripeSubscriptionId: string,
-): Promise<Stripe.Subscription> {
+async function undoCancellation(stripeSubscriptionId: string): Promise<Stripe.Subscription> {
   return stripe.subscriptions.update(stripeSubscriptionId, {
     cancel_at_period_end: false,
   });
@@ -225,9 +217,7 @@ async function upgradeSubscription(
   stripeSubscriptionId: string,
   premiumPriceId: string,
 ): Promise<Stripe.Subscription> {
-  const subscription = await stripe.subscriptions.retrieve(
-    stripeSubscriptionId,
-  );
+  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
 
   const item = subscription.items.data[0];
 
@@ -330,9 +320,7 @@ type ImmediateCancellationRequest = {
   operationId: string;
 };
 
-async function cancelImmediatelyWithRefund(
-  input: ImmediateCancellationRequest,
-): Promise<void> {
+async function cancelImmediatelyWithRefund(input: ImmediateCancellationRequest): Promise<void> {
   // For flat-rate monthly subscriptions, cancel without creating an
   // additional Stripe customer credit because a cash refund follows.
   await stripe.subscriptions.cancel(
@@ -367,7 +355,7 @@ async function cancelImmediatelyWithRefund(
 Do not calculate the refund as simply:
 
 ```ts
-monthlyPrice / 30 * unusedDays
+(monthlyPrice / 30) * unusedDays;
 ```
 
 That can become incorrect when discounts, taxes, billing timestamps or different month lengths are involved. Stripe supports previewing subscription changes, and recommends using the same proration timestamp for the preview and final operation. citeturn511985search0turn511985search7
@@ -418,11 +406,7 @@ app.post(
     let event: Stripe.Event;
 
     try {
-      event = stripe.webhooks.constructEvent(
-        request.rawBody,
-        signature,
-        env.STRIPE_WEBHOOK_SECRET,
-      );
+      event = stripe.webhooks.constructEvent(request.rawBody, signature, env.STRIPE_WEBHOOK_SECRET);
     } catch {
       return reply.code(400).send({ error: "Invalid Stripe signature" });
     }

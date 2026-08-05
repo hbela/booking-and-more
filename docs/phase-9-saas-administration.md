@@ -52,27 +52,27 @@ is paid for, so something has to stop it being _used_ before it is paid for.
 
 Steps 1 and 2 of §1 work end to end. Step 3 onwards does not.
 
-| Step                                    | State                                       | Where                                                                               |
-| --------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `PENDING_SUBSCRIPTION`, `subscribe_by`  | **built**                                   | `schema.prisma`, migration `…_platform_administration_and_billing`                  |
-| `Subscription`, `stripe_events` tables  | **built**                                   | same migration — tables only, no code reads them                                    |
-| `requirePlatformAdmin`                  | **built**                                   | `authorization.plugin.ts`                                                           |
-| Provisioning, both modes                | **built**                                   | `platform.service.ts` `provision`                                                   |
-| Resend the owner's invitation           | **built**                                   | `platform.service.ts` `resendInvitation`                                            |
-| List / suspend / reactivate             | **built**                                   | `platform.routes.ts`                                                                |
-| The write gate refusing pending tenants | **built**                                   | `tenantAcceptsWrites`, asserted in `policy.test.ts`                                 |
-| The owner's invitation **email**        | **built, untested against a real provider** | `outbox.dispatcher.ts` `dispatchTenantEvent`, `organization-created` template       |
-| Platform-admin dashboard                | **built**                                   | `platform-screen.tsx`, `/platform`                                                  |
-| Accept-and-register, and the lookup     | **built**                                   | `membership.routes.ts`; [phase-9-owner-onboarding.md](phase-9-owner-onboarding.md)  |
-| The invitation landing page             | **built**                                   | `accept-invitation.tsx` — three arrivals, one screen                                |
-| `pnpm db:discard-organization`          | **built** (development only)                | `packages/db/scripts/discard-organization.ts`                                       |
-| The pending owner dashboard             | **built**                                   | `dashboard-shell.tsx` (gated nav), `dashboard.tsx` (`PendingPanel`)                 |
-| Subscribe, webhook, activation          | **built**                                   | `modules/billing/`, `apps/worker/src/stripe/` — a Payment Link, not Checkout (§5.1) |
-| The customer portal                     | **built, not yet walked against Stripe**    | `POST /v1/billing/portal`; [phase-9-customer-portal.md](phase-9-customer-portal.md) |
+| Step                                    | State                                       | Where                                                                                                        |
+| --------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `PENDING_SUBSCRIPTION`, `subscribe_by`  | **built**                                   | `schema.prisma`, migration `…_platform_administration_and_billing`                                           |
+| `Subscription`, `stripe_events` tables  | **built**                                   | same migration — tables only, no code reads them                                                             |
+| `requirePlatformAdmin`                  | **built**                                   | `authorization.plugin.ts`                                                                                    |
+| Provisioning, both modes                | **built**                                   | `platform.service.ts` `provision`                                                                            |
+| Resend the owner's invitation           | **built**                                   | `platform.service.ts` `resendInvitation`                                                                     |
+| List / suspend / reactivate             | **built**                                   | `platform.routes.ts`                                                                                         |
+| The write gate refusing pending tenants | **built**                                   | `tenantAcceptsWrites`, asserted in `policy.test.ts`                                                          |
+| The owner's invitation **email**        | **built, untested against a real provider** | `outbox.dispatcher.ts` `dispatchTenantEvent`, `organization-created` template                                |
+| Platform-admin dashboard                | **built**                                   | `platform-screen.tsx`, `/platform`                                                                           |
+| Accept-and-register, and the lookup     | **built**                                   | `membership.routes.ts`; [phase-9-owner-onboarding.md](phase-9-owner-onboarding.md)                           |
+| The invitation landing page             | **built**                                   | `accept-invitation.tsx` — three arrivals, one screen                                                         |
+| `pnpm db:discard-organization`          | **built** (development only)                | `packages/db/scripts/discard-organization.ts`                                                                |
+| The pending owner dashboard             | **built**                                   | `dashboard-shell.tsx` (gated nav), `dashboard.tsx` (`PendingPanel`)                                          |
+| Subscribe, webhook, activation          | **built**                                   | `modules/billing/`, `apps/worker/src/stripe/` — a Payment Link, not Checkout (§5.1)                          |
+| The customer portal                     | **built, not yet walked against Stripe**    | `POST /v1/billing/portal`; [phase-9-customer-portal.md](phase-9-customer-portal.md)                          |
 | Trial, plan changes, dunning            | **built, not yet walked against Stripe**    | [phase-9-subscription-lifecycle.md](phase-9-subscription-lifecycle.md) — 30-day trial, once per organization |
-| Manual activation (§5.1 D3)             | **not built**                               | still wanted: the permanent bank-transfer path                                      |
-| The expiry sweep                        | **not built**                               | nothing reads `subscribe_by`                                                        |
-| Removing self-serve `POST /v1/tenants`  | **not done**                                | §2.10 — still live, still called by `dashboard.tsx`                                 |
+| Manual activation (§5.1 D3)             | **not built**                               | still wanted: the permanent bank-transfer path                                                               |
+| The expiry sweep                        | **not built**                               | nothing reads `subscribe_by`                                                                                 |
+| Removing self-serve `POST /v1/tenants`  | **not done**                                | §2.10 — still live, still called by `dashboard.tsx`                                                          |
 
 Two details of the built path are worth stating because they are not obvious from the plan:
 

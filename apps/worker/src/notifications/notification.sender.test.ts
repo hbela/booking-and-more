@@ -404,9 +404,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
           serviceId: service.id,
           startAt: new Date("2026-09-10T08:00:00.000Z"),
           endAt: new Date("2026-09-10T08:30:00.000Z"),
-          ...(overrides.status === undefined
-            ? {}
-            : { status: overrides.status as "CONFIRMED" }),
+          ...(overrides.status === undefined ? {} : { status: overrides.status as "CONFIRMED" }),
           // The CHECK constraint refuses a cancelled booking that does not say
           // when — phase-4 §3.2.
           ...(cancelled ? { cancelledAt: new Date() } : {}),

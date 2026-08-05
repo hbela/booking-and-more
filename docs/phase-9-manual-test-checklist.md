@@ -42,13 +42,13 @@ stable because we own it.
 
 # 2. Preconditions
 
-| Thing                                                          | State                          | Note                                                                                   |
-| -------------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------- |
-| `pnpm dev`                                                     | running                        | 3 apps + a `tsc --watch` per library (11 tasks)                                          |
-| `stripe listen --forward-to localhost:3001/v1/webhooks/stripe` | running                        | **Without it nothing activates.** The `whsec_…` it prints must match `STRIPE_WEBHOOK_SECRET` |
-| Worker                                                         | running                        | Polls `stripe_events`; the webhook only records (phase-9 §2.9)                            |
-| Database                                                       | empty                          | Platform admin survives; there is no seed — provision through `/admin/platform`           |
-| Stripe **test** mode                                           | 5 canceled subs, none active   | Live mode is empty and must stay that way                                                 |
+| Thing                                                          | State                        | Note                                                                                         |
+| -------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `pnpm dev`                                                     | running                      | 3 apps + a `tsc --watch` per library (11 tasks)                                              |
+| `stripe listen --forward-to localhost:3001/v1/webhooks/stripe` | running                      | **Without it nothing activates.** The `whsec_…` it prints must match `STRIPE_WEBHOOK_SECRET` |
+| Worker                                                         | running                      | Polls `stripe_events`; the webhook only records (phase-9 §2.9)                               |
+| Database                                                       | empty                        | Platform admin survives; there is no seed — provision through `/admin/platform`              |
+| Stripe **test** mode                                           | 5 canceled subs, none active | Live mode is empty and must stay that way                                                    |
 
 **Configured:** `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_PROFESSIONAL`, `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET`, `REDIS_URL`.
@@ -59,7 +59,7 @@ stable because we own it.
 >
 > `RESEND_API_KEY` and `EMAIL_FROM` are both unset, which the config's `superRefine` treats as "email
 > disabled" rather than as an error. Every screen that says **"we have emailed you"** is telling the truth
-> about the *request* and not about delivery: an outbox row is written and nothing is sent (tech-impl §12).
+> about the _request_ and not about delivery: an outbox row is written and nothing is sent (tech-impl §12).
 >
 > **Do not wait for mail.** Take the link from the screen, and assert the outbox row instead.
 
@@ -80,10 +80,10 @@ Hungarian is the default locale on unprefixed URLs; English lives under `/en`.
       subscribe", Subscription column "None", owner marked "Has not accepted yet".
 - [ ] **A5** Provision again with the same slug → red form error `The slug "x" is already taken.`
 - [ ] **A6** Same domain, different slug → `An organization already exists for x.`
-- [ ] **A7** Owner email = the platform admin's own → 403 *"That user is a platform administrator and cannot
-      own an organization."* (rule 9, enforced in both directions).
+- [ ] **A7** Owner email = the platform admin's own → 403 _"That user is a platform administrator and cannot
+      own an organization."_ (rule 9, enforced in both directions).
 - [ ] **A8** "Resend invitation" → a fresh acceptance link replaces the box.
-- [ ] **A9** *Suspected pre-existing defect — confirm.* Suspend an organization, then Suspend again (or
+- [ ] **A9** _Suspected pre-existing defect — confirm._ Suspend an organization, then Suspend again (or
       Resend after the owner has accepted). The `setStatus` and `resend` mutations have **no `onError`
       handler**, so the 409 produces **no visible feedback at all**. Follow-up ticket, not a blocker.
 
@@ -94,7 +94,7 @@ Hungarian is the default locale on unprefixed URLs; English lives under `/en`.
 - [ ] **B2** The form has **only Name and Password** — no email field, because the address comes from the
       token.
 - [ ] **B3** A password under 12 characters is rejected.
-- [ ] **B4** Submit → `role="status"` "You have joined as OWNER" → click **Go to dashboard**. It does *not*
+- [ ] **B4** Submit → `role="status"` "You have joined as OWNER" → click **Go to dashboard**. It does _not_
       auto-redirect.
 - [ ] **B5** Reopen the same link → "This invitation link is not valid." The same copy covers used, expired,
       revoked and bogus — deliberate, so a probe learns nothing.
@@ -112,7 +112,7 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 - [ ] **C3** Panel: "Welcome to {organization}", three numbered steps with step 1 highlighted, and
       **"14 days left to subscribe."**
 - [ ] **C4** The "Subscribe" call to action goes to `/dashboard/subscription`.
-- [ ] **C5** *Known gap.* Type `/dashboard/providers` directly. The page loads — there is no route guard,
+- [ ] **C5** _Known gap._ Type `/dashboard/providers` directly. The page loads — there is no route guard,
       only client-side rendering — and the API 403s.
 - [ ] **C6** Provision an **Internal** organization: no countdown line at all, not "0 days".
 
@@ -133,7 +133,7 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 - [ ] **D5 — the one-link proof.** Reload the page (the `sent` state is client-only, so the form returns) and
       submit again. **The returned `paymentUrl` must be byte-identical**, Stripe must still show one link for
       this tenant, and there must still be exactly one row.
-      *This is the scenario that produced the incident: under the old code every click minted a new link.*
+      _This is the scenario that produced the incident: under the old code every click minted a new link._
 - [ ] **D6 — the race.** Open the screen in two tabs and submit both as close together as you can. Still one
       link, one row. The loser goes through the `P2002` path and deactivates the link it created — confirm no
       orphaned **active** link is left in Stripe.
@@ -145,9 +145,9 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 
 - [ ] **E1** Open the payment link. Pay with `4242 4242 4242 4242`, any future expiry, any CVC, any postcode.
 - [ ] **E2** **Reopen the exact same URL. Stripe must refuse it.**
-      ← *This is open question 1, and everything in §4 of the duplicate-prevention record is contingent on
+      ← _This is open question 1, and everything in §4 of the duplicate-prevention record is contingent on
       it. If a second checkout completes, the design is wrong and needs rewriting rather than patching —
-      stop the walk and report.*
+      stop the walk and report._
 - [ ] **E3** Note the copy on the refusal page. We set `inactive_message` pointing the owner back at their
       dashboard; whether Stripe renders it for a **restriction-exhausted** link, as opposed to a manually
       deactivated one, is **open question 2** and untested.
@@ -155,15 +155,15 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 - [ ] **E4a** Completing the payment **redirects back to `/dashboard/subscription`** rather than stopping on
       Stripe's own confirmation page (`after_completion`). For the English organization of §L the destination
       is `/en/dashboard/subscription`.
-- [ ] **E4b** *Known and accepted, not a defect.* The payment page itself follows the **browser's** language,
+- [ ] **E4b** _Known and accepted, not a defect._ The payment page itself follows the **browser's** language,
       not the organization's — `paymentLinks.create` has no `locale` parameter. Test it by changing your
       browser's preferred language, not by provisioning a different organization. See
       [phase-9-owner-language-and-return-paths.md](phase-9-owner-language-and-return-paths.md) §5.2.
-- [ ] **E4c** *Not a locale problem.* If the confirmation reads "a payment to **Stripe** will appear on your
+- [ ] **E4c** _Not a locale problem._ If the confirmation reads "a payment to **Stripe** will appear on your
       statement", the account's statement descriptor is unset (Dashboard → Settings → Business → Public
       details). It will read that way on real owners' bank statements (§5.3).
-- [ ] **E5** The subscription carries `metadata.tenantId`. *(All five pre-existing subscriptions had none —
-      this is new, and §4.3 depends on it.)*
+- [ ] **E5** The subscription carries `metadata.tenantId`. _(All five pre-existing subscriptions had none —
+      this is new, and §4.3 depends on it.)_
 
 ## F. Activation
 
@@ -175,12 +175,12 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
 - [ ] **F4** Subscription screen flips to "You are subscribed to Starter." + "Your free trial ends on
       {date}." + "Your trial is active — everything is unlocked."
 - [ ] **F5** All 7 nav tabs are live links and the hint line is gone.
-- [ ] **F6 — the post-payment guard.** Submit subscribe once more → 409 *"This organization already has a
-      subscription."*
+- [ ] **F6 — the post-payment guard.** Submit subscribe once more → 409 _"This organization already has a
+      subscription."_
 - [ ] **F7 — the guard that does not need the webhook.** Provision a **second** organization, subscribe,
-      **stop the worker**, complete checkout, then submit subscribe again. Expect 409 *"This organization has
-      already paid. Its subscription is being activated…"* with **zero** subscription rows in the database.
-      *This is §4.4: the refusal comes from `checkout.sessions.list`, not from a row we own.*
+      **stop the worker**, complete checkout, then submit subscribe again. Expect 409 _"This organization has
+      already paid. Its subscription is being activated…"_ with **zero** subscription rows in the database.
+      _This is §4.4: the refusal comes from `checkout.sessions.list`, not from a row we own._
 
 ## G. Ordering and duplicate resilience
 
@@ -206,10 +206,10 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
       the **English** organization using a **Hungarian** browser: that combination is the one that proves our
       value is winning rather than the browser's.
 - [ ] **H6** After cancelling in the portal the screen says **"Ends on {date}"**, not "Renews on".
-      *Read [phase-9-customer-portal.md](phase-9-customer-portal.md) §3 first — a portal cancellation may
+      _Read [phase-9-customer-portal.md](phase-9-customer-portal.md) §3 first — a portal cancellation may
       report `cancel_at` rather than `cancel_at_period_end`, and reading only the boolean fails silently and
       completely: the owner cancels, Stripe agrees, and our screen goes on saying "renews on" until the day
-      the organization is suspended without warning.*
+      the organization is suspended without warning._
 - [ ] **H7** On the Internal organization "Manage billing" is still shown — `portalAvailable` reflects only
       our config — but 409s with "This organization has no subscription to manage yet."
 
@@ -227,29 +227,29 @@ phase-9 §2.4 calls this "the single most important implementation detail in tha
       organization has already used its free trial, so billing starts straight away."**, the button must say
       **"Send me the payment link"**, and the created link must have **no** `trial_period_days`.
 
-      > **This one is genuinely unknown, so observe rather than assume.** F6's widened guard refuses on *any*
-      > non-null `stripeSubscriptionId`, and a cancelled subscription keeps its id — so the returning
-      > customer may be refused here instead. The automated tests pin down each behaviour separately and say
-      > nothing about which wins. Whatever happens, record it: if the guard refuses, resubscription has to go
-      > through the portal, and the copy above is unreachable and should be deleted.
+> **I6 is genuinely unknown, so observe rather than assume.** F6's widened guard refuses on _any_ non-null
+> `stripeSubscriptionId`, and a cancelled subscription keeps its id — so the returning customer may be
+> refused there instead. The automated tests pin down each behaviour separately and say nothing about which
+> wins. Whatever happens, record it: if the guard refuses, resubscription has to go through the portal, and
+> I6's expected copy is unreachable and should be deleted.
 
 ## J. Degradation and config
 
 - [ ] **J1** Unset `STRIPE_SECRET_KEY` and restart: "No plans are available right now.", no portal button,
       subscribe 503s — and nothing else in the app breaks (rule 4).
 - [ ] **J2** Unset `STRIPE_PRICE_STARTER` only: just Professional is offered.
-- [ ] **J3** *Suspected pre-existing defect — confirm.* With **only** Professional configured, the radio
+- [ ] **J3** _Suspected pre-existing defect — confirm._ With **only** Professional configured, the radio
       group renders one unchecked option while local state still defaults to `STARTER`
       ([subscription-screen.tsx:50](../apps/web/src/components/subscription-screen.tsx#L50)), so submitting
       posts `STARTER` → 404 "The STARTER plan is not available."
-- [ ] **J4** *Minor.* The error string is not cleared when the plan radio changes, only on submit.
+- [ ] **J4** _Minor._ The error string is not cleared when the plan radio changes, only on submit.
 
 ## K. Localization and accessibility
 
 - [ ] **K1** Walk the whole flow once on `/en`; spot-check Hungarian on the unprefixed URLs.
-- [ ] **K2** *Known gap.* Every API error (409 / 404 / 503) renders **in English regardless of locale** —
+- [ ] **K2** _Known gap._ Every API error (409 / 404 / 503) renders **in English regardless of locale** —
       the messages come from the server, which has no locale.
-- [ ] **K3** *Known gap.* Dates use `toLocaleDateString()` with no locale argument, so they follow the
+- [ ] **K3** _Known gap._ Dates use `toLocaleDateString()` with no locale argument, so they follow the
       **browser** locale rather than the app's.
 - [ ] **K4** Screen-reader pass on the pending dashboard: disabled nav items announce as disabled and read
       the gate reason.
@@ -265,7 +265,7 @@ So a link built with no locale at all is indistinguishable from a correct one un
 exists. Provision one and repeat the path.
 
 - [ ] **L1** Provision with **Language: English** (A2). The row is created with `default_language = 'en'`.
-- [ ] **L2** The **invitation email** arrives in English *and* its acceptance link is
+- [ ] **L2** The **invitation email** arrives in English _and_ its acceptance link is
       `/en/invitations/<token>`. Opening it shows the English landing page directly, with no locale redirect.
 - [ ] **L3** The **payment-link email** is English and its `billingUrl`-style links carry `/en`.
 - [ ] **L4** Subscribe → the emailed Stripe link works; after paying you land on
@@ -293,7 +293,7 @@ other check is a way that can silently not happen.
       you open **Show the link instead**; that disclosure is the escape hatch for the delivery-off case in
       §2 above, not the mechanism (§2.6).
 - [ ] **M4** The email arrives in the organization's language, names who invited them, says **no password is
-      coming**, and its link carries `/en` for an English organization. It must *not* offer to add services
+      coming**, and its link carries `/en` for an English organization. It must _not_ offer to add services
       or staff — a provider has no such screens (§2.8).
 - [ ] **M5** Open the link in a **private window**. The heading reads "Join {organization} as {provider}",
       naming the diary — which is how somebody notices they were sent the wrong person's link before
@@ -310,17 +310,17 @@ other check is a way that can silently not happen.
       the **first** link is now dead ("This invitation link is not valid.") while the second works (§2.5).
 - [ ] **M10** Correct the provider's email on the Edit panel, then invite again. It succeeds, and there is
       exactly one PENDING invitation for that provider — the old address's one was superseded too.
-- [ ] **M11 — the race.** Invite provider X. *Before* accepting, invite a second person as a plain PROVIDER,
+- [ ] **M11 — the race.** Invite provider X. _Before_ accepting, invite a second person as a plain PROVIDER,
       accept as them, and link them to X on the members list. Now accept the first link: expect a clear 409
       ("Someone else has already been given this provider's login"), **no** membership for the first person,
       and — check the database — the invitation still `PENDING`. Unlink the second person and the original
       link works again with no reissue (§2.7).
-- [ ] **M12** Archive a provider, then press Invite by URL: 404. Invite, *then* archive, *then* accept: 409
+- [ ] **M12** Archive a provider, then press Invite by URL: 404. Invite, _then_ archive, _then_ accept: 409
       naming the provider as no longer active, invitation still PENDING.
-- [ ] **M13** *Known gap, expected.* A provider created before 2026-08-04 may have no email address. Its
+- [ ] **M13** _Known gap, expected._ A provider created before 2026-08-04 may have no email address. Its
       Invite button is present but disabled, with the reason spelled out under the table rather than left to
       be guessed (§7.1).
-- [ ] **M14** *Side effect worth confirming.* Sign in as an **ASSISTANT**: their navigation is now Overview
+- [ ] **M14** _Side effect worth confirming._ Sign in as an **ASSISTANT**: their navigation is now Overview
       and Bookings only, having lost four items they could never act on. Outside this feature's scope and
       recorded in §2.9 rather than left to be discovered.
 - [ ] **M15 — the trap that was found by walking, not by testing (§2.11).** On **Overview → Invite
@@ -350,7 +350,7 @@ stripe trigger customer.subscription.trial_will_end
 **Test cards** — `4242 4242 4242 4242` succeeds · `4000 0000 0000 9995` is declined ·
 `4000 0000 0000 0341` attaches successfully and then fails on a later payment, which is what **I4** needs.
 
-**Reset between runs** — cancel the subscription in Stripe *first*, so `customer.subscription.deleted` has a
+**Reset between runs** — cancel the subscription in Stripe _first_, so `customer.subscription.deleted` has a
 tenant to belong to, then `pnpm db:discard-organization <slug> --yes`. The other order leaves an event
 naming a tenant that no longer exists.
 
@@ -362,11 +362,11 @@ naming a tenant that no longer exists.
 
 # 5. What ticking these boxes closes
 
-| Closes                                                            | By      |
-| ----------------------------------------------------------------- | ------- |
-| §6 tests 7–10 of the duplicate-prevention record                  | D3, E1–E5, F3 |
-| Open question 1 — does `completed_sessions.limit` hold?           | E2      |
-| Open question 2 — is `inactive_message` shown when exhausted?     | E3      |
+| Closes                                                        | By            |
+| ------------------------------------------------------------- | ------------- |
+| §6 tests 7–10 of the duplicate-prevention record              | D3, E1–E5, F3 |
+| Open question 1 — does `completed_sessions.limit` hold?       | E2            |
+| Open question 2 — is `inactive_message` shown when exhausted? | E3            |
 
 When the walk is done, update the duplicate-prevention record's version line, which currently reads
 "**§6's manual half not yet walked against Stripe**".

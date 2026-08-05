@@ -59,12 +59,12 @@ overload to reach for, the seeding functions are the only way to obtain rows, an
 disabled until every contributing query reports `isSuccess`. Being pure, both are unit-tested without a DOM —
 which is where the original defect would have been caught in a morning.
 
-| | Before | After |
-| --- | --- | --- |
-| Assignment body | `{ serviceId }` per ticked box | every field the GET returned |
-| Seeded from | `assigned.filter((r) => r.active)` | existence, with `active` edited separately |
-| Rendered | immediately, `defaultChecked` from a pending query | only once all four queries resolve |
-| Working-hours body | `{ weekday, startTime, endTime }` | all seven fields |
+|                    | Before                                             | After                                      |
+| ------------------ | -------------------------------------------------- | ------------------------------------------ |
+| Assignment body    | `{ serviceId }` per ticked box                     | every field the GET returned               |
+| Seeded from        | `assigned.filter((r) => r.active)`                 | existence, with `active` edited separately |
+| Rendered           | immediately, `defaultChecked` from a pending query | only once all four queries resolve         |
+| Working-hours body | `{ weekday, startTime, endTime }`                  | all seven fields                           |
 
 ## 2.1 Three defects, one shape change
 
@@ -81,7 +81,7 @@ evidence that the shape was the problem rather than any individual line.
 
 ### The empty set is not the empty state
 
-Worth its own note, because the first version of *this* slice reintroduced defect 2 in a quieter form. Both
+Worth its own note, because the first version of _this_ slice reintroduced defect 2 in a quieter form. Both
 whole-set editors seed from an effect, and both initialised their state to an empty container — `new Map()`
 for assignments, `{}` for the week. But an empty set is a **valid, meaningful value**: "offers nothing",
 "never working". It therefore cannot also stand for "not loaded yet", and there is a real paint between a
@@ -142,16 +142,16 @@ and is what lets §2.2's restore actually restore.
 PRD.md specifies this on both sides — §9.4, "the service may be assigned to … one or more locations", and
 §9.5, which lists "supported services" among a location's fields. technical-implementation.md §10 never
 modelled it: it defines `locations` (§10.7) and `provider_locations` (§10.8) and nothing joining services to
-locations. Epic 2 built what the technical spec said, and so nothing in the system could express *whitening
-is only done at the Buda surgery*. Slot search would happily offer a service at a site with no equipment for
+locations. Epic 2 built what the technical spec said, and so nothing in the system could express _whitening
+is only done at the Buda surgery_. Slot search would happily offer a service at a site with no equipment for
 it, because the only location constraint it knew was which sites the **provider** works at.
 
 Both links are real and neither replaces the other. A booking needs the intersection:
 
-| Constraint | Table | Question |
-| --- | --- | --- |
-| Dr. Kovács works at Buda only | `provider_locations` | where does this *person* work? |
-| Whitening is done at Buda and Pest | `service_locations` | where is this *procedure* available? |
+| Constraint                         | Table                | Question                             |
+| ---------------------------------- | -------------------- | ------------------------------------ |
+| Dr. Kovács works at Buda only      | `provider_locations` | where does this _person_ work?       |
+| Whitening is done at Buda and Pest | `service_locations`  | where is this _procedure_ available? |
 
 Migration `20260803114233_service_locations`. Written from the location side only
 (`PUT /v1/locations/:locationId/services`) and read back from the service side on
@@ -159,7 +159,7 @@ Migration `20260803114233_service_locations`. Written from the location side onl
 `provider_services`: two whole-set writers over one join table clobber each other with no version column to
 notice.
 
-### An empty set means *everywhere*
+### An empty set means _everywhere_
 
 The decision the whole thing turns on. A service with no rows is offered at **every** location, not at none.
 
@@ -184,7 +184,7 @@ browser's. An administrator in London closing a Budapest diary for 09:00 was sto
 it in as many words, and the reason is on the record: the engine's own predecessor assumed every DST
 transition was an hour and returned the wrong instant for Lord Howe Island's 30-minute shift while reporting
 it as `exact` (phase-3 §2.2.1). The engine also gives us something a hand-rolled conversion cannot — it says
-whether a reading was *skipped* or *ambiguous*, so the form warns before the user commits rather than
+whether a reading was _skipped_ or _ambiguous_, so the form warns before the user commits rather than
 silently snapping a closure an hour away from where they typed it.
 
 Sending wall-clock plus zone to the API and converting server-side was rejected: it would turn
@@ -200,18 +200,18 @@ asymmetry looks like an oversight to anyone who fixes one half without reading t
 ## 2.6 A provider is created with what they offer and where they are based
 
 The first owner to use these screens could not get past the provider form. Not because it was broken — a
-provider needs only a name — but because it asked for nine attributes and nothing about *what this person
-does*, and the answer to that lived behind an **Assign** button on a table row that does not exist until
+provider needs only a name — but because it asked for nine attributes and nothing about _what this person
+does_, and the answer to that lived behind an **Assign** button on a table row that does not exist until
 after you have pressed Create. The one control that mattered was unreachable at exactly the moment it
 mattered. §3.3 had already noted that the linking step was invisible and answered it with a line of text
 under the table; a hint is not a control.
 
 The create panel now carries both pickers. They are deliberately not the same shape:
 
-| | Control | Why |
-| --- | --- | --- |
-| Services | checkbox list, many | A provider offers a set. Without at least one they cannot be booked at all, so this is the form's real subject |
-| Location | select, exactly one, blank allowed | Where this provider is *based*. Not a set: the set is what they may work at, which is a later and different question |
+|          | Control                            | Why                                                                                                                  |
+| -------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Services | checkbox list, many                | A provider offers a set. Without at least one they cannot be booked at all, so this is the form's real subject       |
+| Location | select, exactly one, blank allowed | Where this provider is _based_. Not a set: the set is what they may work at, which is a later and different question |
 
 Assign keeps everything else — additional locations, per-provider duration and price, pausing an assignment.
 Those are answers about a provider who already exists.
@@ -232,7 +232,7 @@ exists and names Assign as the way to finish.
 
 **A location is one of the organization's sites and nothing more.** Whether a service is offered somewhere
 is not an independent fact to be maintained: it follows from whether a provider who offers that service
-works there, and *that* is stated by the provider when they set their availability — a `working_hours` row
+works there, and _that_ is stated by the provider when they set their availability — a `working_hours` row
 already names both a location and, through `provider_services`, what is on offer during it. The link was a
 second, weaker answer to a question something else already answers, and the two could disagree with nothing
 to reconcile them.
@@ -251,14 +251,14 @@ predicate in `availability.service.ts` is deleted rather than defaulted: there i
 Worth stating plainly, because it is the line the whole screen set is organised around and it was not
 written down before:
 
-| Decision | Whose | Where |
-| --- | --- | --- |
-| Which services exist, at what price, for how long | owner | Services |
-| Which sites the organization has | owner | Locations |
-| Who the providers are, what they offer, where they are based | owner | Providers |
+| Decision                                                       | Whose            | Where        |
+| -------------------------------------------------------------- | ---------------- | ------------ |
+| Which services exist, at what price, for how long              | owner            | Services     |
+| Which sites the organization has                               | owner            | Locations    |
+| Who the providers are, what they offer, where they are based   | owner            | Providers    |
 | **When each provider works, at which site, for which service** | **the provider** | Availability |
 
-Availability is not the owner's to fill in, which is why the owner's form stops at a *default* location. How
+Availability is not the owner's to fill in, which is why the owner's form stops at a _default_ location. How
 a provider might later delegate that — a receptionist managing a diary — is not built and not designed; it
 is named here only so the next person does not read the current absence as a decision.
 
@@ -266,13 +266,13 @@ is named here only so the next person does not read the current absence as a dec
 
 `email` was optional on a provider and is now required — on create, and not nullable on update, so it can be
 corrected but never cleared. `Provider.email` in the database stays `String?` (see §5.10); the constraint is
-at the API, which is what stops any *new* null appearing.
+at the API, which is what stops any _new_ null appearing.
 
 The reason it was optional is on the record and was not wrong: a provider is a **diary**, not a login. The
 front desk can keep a visiting hygienist's schedule without that person ever having an account, which is why
 `Membership.providerId` is nullable in both directions. None of that changed.
 
-What did change is what the address is *for*. It is not a credential and it signs nobody in. It is the only
+What did change is what the address is _for_. It is not a credential and it signs nobody in. It is the only
 route to the person behind the diary, and three things need one: the invitation that would give them a login,
 every notification about their own bookings (Epic 5), and the owner needing to reach them at all. A diary
 nobody can be told about is not a useful diary.
@@ -300,7 +300,7 @@ email is real.
 
 The dashboard nav had **Availability** as a seventh top-level item, beside Services, Locations and Providers.
 That framing is wrong in the same way §2.4 was: it presents a provider's working week as one more thing the
-organization configures, when it is the one part of this system that is *theirs*.
+organization configures, when it is the one part of this system that is _theirs_.
 
 - The top-level item is gone for administrators. Each provider's row now carries an **Availability** link
   (`?providerId=`), so an owner opens one named diary at a time rather than a screen that silently defaults
@@ -346,12 +346,12 @@ version column to notice. Read from both sides, write from one.
 
 ## 3.2 Pure modules, and why they are separate files
 
-| File | Holds | Tested for |
-| --- | --- | --- |
-| `apps/web/src/lib/assignments.ts` | seeding and body-building for both assignment sets | overrides and paused rows survive a save; unticking still removes |
-| `apps/web/src/lib/working-hours.ts` | the week, grouped and flattened | all seven fields round-trip; `24:00` survives; times are not converted |
-| `apps/web/src/lib/exception-time.ts` | `datetime-local` ↔ instant, in the provider's zone | Budapest spring-forward and fall-back; Lord Howe's 30-minute shift |
-| `apps/web/src/lib/catalogue-form.ts` | the create/patch asymmetry, `diffPatch`, zone list | blank omitted on create and null on patch; zero ≠ blank |
+| File                                 | Holds                                              | Tested for                                                             |
+| ------------------------------------ | -------------------------------------------------- | ---------------------------------------------------------------------- |
+| `apps/web/src/lib/assignments.ts`    | seeding and body-building for both assignment sets | overrides and paused rows survive a save; unticking still removes      |
+| `apps/web/src/lib/working-hours.ts`  | the week, grouped and flattened                    | all seven fields round-trip; `24:00` survives; times are not converted |
+| `apps/web/src/lib/exception-time.ts` | `datetime-local` ↔ instant, in the provider's zone | Budapest spring-forward and fall-back; Lord Howe's 30-minute shift     |
+| `apps/web/src/lib/catalogue-form.ts` | the create/patch asymmetry, `diffPatch`, zone list | blank omitted on create and null on patch; zero ≠ blank                |
 
 These are separate from the components because they are the parts that were wrong, and a component test would
 have needed jsdom, testing-library, a `QueryClientProvider` wrapper and an `apiFetch` mock before it could
@@ -375,12 +375,12 @@ alternative, and §5.4 records the residue.
 
 ## 3.3 Web
 
-| Screen | Now does |
-| --- | --- |
-| Providers | edit all nine previously unreachable fields; a required email (§2.8); services and a default location picked **at creation** (§2.6); a link to each provider's own diary (§2.9); assignments with per-service duration and price overrides; archived filter and restore |
-| Services | edit all eleven; slug, buffers, approval, booking window; "offered by", read-only; `SLUG_TAKEN` explained |
-| Locations | edit type, both address lines, country, timezone, coordinates; archived filter and restore |
-| Availability | working hours with location scope, validity dates, `24:00`; exceptions created **and edited**, scoped to a location or service, in the provider's zone, with a range filter |
+| Screen       | Now does                                                                                                                                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Providers    | edit all nine previously unreachable fields; a required email (§2.8); services and a default location picked **at creation** (§2.6); a link to each provider's own diary (§2.9); assignments with per-service duration and price overrides; archived filter and restore |
+| Services     | edit all eleven; slug, buffers, approval, booking window; "offered by", read-only; `SLUG_TAKEN` explained                                                                                                                                                               |
+| Locations    | edit type, both address lines, country, timezone, coordinates; archived filter and restore                                                                                                                                                                              |
+| Availability | working hours with location scope, validity dates, `24:00`; exceptions created **and edited**, scoped to a location or service, in the provider's zone, with a range filter                                                                                             |
 
 `availability-screen.tsx` split into itself plus `working-hours-editor.tsx` and `availability-exceptions.tsx`
 — three components that shared only a `providerId`. The catalogue screens stayed single-file, each gaining a
@@ -390,17 +390,17 @@ unreachable-field problem: create and edit were going to be different code, and 
 ### The order the catalogue has to be built in
 
 The nav listed Providers before Services, which is the order the epics were written in and the opposite of
-the order the work has to be done in. A provider is booked *for a service*: created first, they have nothing
+the order the work has to be done in. A provider is booked _for a service_: created first, they have nothing
 to offer, cannot appear on the booking page, and the screen gives no hint why. The catalogue items now run
 **Services → Locations → Providers → Availability**, which is the dependency order. Bookings stays first
 among the gated items, unchanged — the catalogue is configured once and the diary is read every day.
 
 The dependency is not symmetric, and the screens now say so rather than treating the two alike:
 
-| | Required? | What the screen says |
-| --- | --- | --- |
-| A service | **Yes.** Slot search needs an active `provider_services` row; without one the provider is unbookable | an amber notice on Providers, linking to Services |
-| A location | **No.** `locationId` is optional throughout slot search, so an online or telephone practice is bookable with none | a plain informational notice saying exactly that |
+|            | Required?                                                                                                         | What the screen says                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| A service  | **Yes.** Slot search needs an active `provider_services` row; without one the provider is unbookable              | an amber notice on Providers, linking to Services |
+| A location | **No.** `locationId` is optional throughout slot search, so an online or telephone practice is bookable with none | a plain informational notice saying exactly that  |
 
 Two further gaps closed at the same time, both found by an owner rather than by a test:
 
@@ -414,7 +414,7 @@ Two further gaps closed at the same time, both found by an owner rather than by 
 ### The linking step was still a second step — 2026-08-03
 
 Naming the row action under the table was not enough. An owner with one service created and no provider yet
-read "Add a provider", found no way on that form to say *what they provide*, and stopped — reporting the
+read "Add a provider", found no way on that form to say _what they provide_, and stopped — reporting the
 missing control rather than the missing provider. The row action cannot help before the row exists, which is
 exactly the moment the dependency matters.
 
@@ -445,7 +445,7 @@ is now a "to midnight" checkbox that sets the value and disables the input.
 There is no Dialog primitive here and there is not going to be one; editing is an inline `Panel` toggled by
 state. What that pattern loses is everything a dialog does about focus — before this slice, pressing "Assign"
 rendered a panel below the fold and left the caret on the button, so for a keyboard or screen-reader user
-*nothing observable happened*. `useEditPanel` in `dashboard-shell.tsx` gives the trigger `aria-expanded` and
+_nothing observable happened_. `useEditPanel` in `dashboard-shell.tsx` gives the trigger `aria-expanded` and
 `aria-controls`, focuses the panel on open, and returns focus to the trigger on close. All four screens get it
 uniformly.
 
@@ -461,21 +461,21 @@ made false.
 
 # 4. Safeguards worth naming
 
-| Risk | Safeguard | Test |
-| --- | --- | --- |
-| A whole-set body built from a partial read | builders take loaded rows as a required argument; Save disabled until `isSuccess` | "carries a per-provider duration and price through a save" |
-| A paused assignment read as an unticked one | `checked` seeded from existence, `active` edited separately | "keeps a paused assignment ticked, and paused" |
-| The guard turning `PUT` into append-only | unticking a live service still removes it, both sides | "omits an unassigned service, so unticking still removes it"; "still removes a live service dropped from the set" |
-| Archiving severing assignments | delete sweeps exclude archived counterparts, on all three join tables | "leaves an archived service's assignment alone when the set omits it"; "leaves an archived service's link alone when the set omits it" |
-| Removing `service_locations` making a named location mean nothing | a location narrows to where the provider actually works, and that is asserted both ways | "offers a service at a location nobody has said anything about"; "returns nothing at a location the provider does not work at" |
-| A provider created with nothing attached, again | the create form carries both pickers, and a failed link says the provider already exists | §6.2 step 1a (manual) |
-| A provider nobody can reach, or an address silently cleared | required on create, non-nullable on update | "refuses a provider with no email, and one that cannot be reached"; "refuses to clear a provider's email, while allowing a correction" |
-| An accidental archive blocking a name forever | restore, plus a hint on the `SLUG_TAKEN` error | "keeps the slug reserved while archived, and restore is how you get it back" |
-| Restore quietly republishing to customers | `active` stays false | "brings a service back inactive, not straight onto the booking page" |
-| A closure landing an hour from where it was typed | `resolveWallClock`, and a `role="status"` warning before submit | "reports a reading the clocks jumped over, and snaps forward" |
-| A DST assumption that only holds for whole hours | conversion goes through the engine | "handles a half-hour DST shift, not just a whole-hour one" |
-| `validFrom` sent as a Date landing a day out | date-only strings all the way to the wire | "round-trips every field the API returned" |
-| A price misread by two orders of magnitude | `fromMinorUnits` / `toMinorUnits`, never `/100` | "reads a blank box as inherit, not as zero" (and the HUF fixtures throughout) |
+| Risk                                                              | Safeguard                                                                                | Test                                                                                                                                   |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| A whole-set body built from a partial read                        | builders take loaded rows as a required argument; Save disabled until `isSuccess`        | "carries a per-provider duration and price through a save"                                                                             |
+| A paused assignment read as an unticked one                       | `checked` seeded from existence, `active` edited separately                              | "keeps a paused assignment ticked, and paused"                                                                                         |
+| The guard turning `PUT` into append-only                          | unticking a live service still removes it, both sides                                    | "omits an unassigned service, so unticking still removes it"; "still removes a live service dropped from the set"                      |
+| Archiving severing assignments                                    | delete sweeps exclude archived counterparts, on all three join tables                    | "leaves an archived service's assignment alone when the set omits it"; "leaves an archived service's link alone when the set omits it" |
+| Removing `service_locations` making a named location mean nothing | a location narrows to where the provider actually works, and that is asserted both ways  | "offers a service at a location nobody has said anything about"; "returns nothing at a location the provider does not work at"         |
+| A provider created with nothing attached, again                   | the create form carries both pickers, and a failed link says the provider already exists | §6.2 step 1a (manual)                                                                                                                  |
+| A provider nobody can reach, or an address silently cleared       | required on create, non-nullable on update                                               | "refuses a provider with no email, and one that cannot be reached"; "refuses to clear a provider's email, while allowing a correction" |
+| An accidental archive blocking a name forever                     | restore, plus a hint on the `SLUG_TAKEN` error                                           | "keeps the slug reserved while archived, and restore is how you get it back"                                                           |
+| Restore quietly republishing to customers                         | `active` stays false                                                                     | "brings a service back inactive, not straight onto the booking page"                                                                   |
+| A closure landing an hour from where it was typed                 | `resolveWallClock`, and a `role="status"` warning before submit                          | "reports a reading the clocks jumped over, and snaps forward"                                                                          |
+| A DST assumption that only holds for whole hours                  | conversion goes through the engine                                                       | "handles a half-hour DST shift, not just a whole-hour one"                                                                             |
+| `validFrom` sent as a Date landing a day out                      | date-only strings all the way to the wire                                                | "round-trips every field the API returned"                                                                                             |
+| A price misread by two orders of magnitude                        | `fromMinorUnits` / `toMinorUnits`, never `/100`                                          | "reads a blank box as inherit, not as zero" (and the HUF fixtures throughout)                                                          |
 
 ---
 
@@ -512,7 +512,7 @@ made false.
 9. **Delegating a provider's availability is neither built nor designed.** Availability is the provider's to
    set (§2.7); a receptionist or an owner managing someone else's diary on their behalf is a real requirement
    that has no model yet — the current API authorises by `PROVIDER_MANAGE` and membership, with no notion of
-   acting *for* another provider. Named so the absence reads as pending rather than decided.
+   acting _for_ another provider. Named so the absence reads as pending rather than decided.
 
 10. **`Provider.email` is still a nullable column.** Both write schemas require it (§2.8), so no new null can
     appear, but rows created before today may hold one and the response schema stays nullable to serialize
@@ -546,14 +546,14 @@ pnpm db:drift-check
 
 ## 6.1 Results — 2026-08-03
 
-| Suite | Result |
-| --- | --- |
-| `pnpm lint` | 19 tasks, all pass |
-| `pnpm check-types` | 19 tasks, all pass |
-| `apps/api` | 225 pass (was 209 — nine for restore and assignments, three for §6.1's tenant-resolution bug, two for §2.7's location question, two for §2.8's mandatory email; six §2.4 cases removed with the table) |
-| `apps/web` | 33 pass (was 0, `passWithNoTests`; three §2.4 cases removed with the table) |
-| `pnpm --filter @bam/web build` | compiles; 29 static pages |
-| `pnpm db:drift-check` | no drift — the committed migrations reproduce the schema |
+| Suite                          | Result                                                                                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm lint`                    | 19 tasks, all pass                                                                                                                                                                                     |
+| `pnpm check-types`             | 19 tasks, all pass                                                                                                                                                                                     |
+| `apps/api`                     | 225 pass (was 209 — nine for restore and assignments, three for §6.1's tenant-resolution bug, two for §2.7's location question, two for §2.8's mandatory email; six §2.4 cases removed with the table) |
+| `apps/web`                     | 33 pass (was 0, `passWithNoTests`; three §2.4 cases removed with the table)                                                                                                                            |
+| `pnpm --filter @bam/web build` | compiles; 29 static pages                                                                                                                                                                              |
+| `pnpm db:drift-check`          | no drift — the committed migrations reproduce the schema                                                                                                                                               |
 
 Message-key parity was checked directly rather than assumed: 385 keys in each locale, no key present in one
 file and absent from the other. next-intl throws on a miss, so an unequal pair is a crash on the screen that
@@ -567,7 +567,7 @@ linked to a provider. It read as a permissions problem, and it was not: the memb
 against a `TRIAL` tenant, exactly right.
 
 `Session.activeTenantId` is written by exactly two things: `POST /v1/tenants` and
-`POST /v1/tenants/:id/activate`. An owner who arrives by invitation — which is how *every* sales-led
+`POST /v1/tenants/:id/activate`. An owner who arrives by invitation — which is how _every_ sales-led
 subscriber arrives — passes through neither. And the dashboard's tenant switcher, the only caller of
 `activate`, renders only when there are two or more tenants to switch between. So a single-tenant invited
 owner had no path to setting it, ever.
@@ -604,10 +604,10 @@ gained `@bam/availability-engine`, libraries resolve to `dist/`, and a stale bui
 
 1. Create two services; assign both to a provider; set a custom duration on one; save. Reopen — the override
    is still there.
-1a. Create a provider with one of those services ticked on the create form itself. Assign shows it already
+   1a. Create a provider with one of those services ticked on the create form itself. Assign shows it already
    ticked, and a slot search returns times without a second visit to that panel. Repeat with none ticked —
    the provider is created and offers nothing, which is a valid state, not an error.
-2. Reopen and press Save *immediately*, before the lists paint. Nothing is unassigned.
+2. Reopen and press Save _immediately_, before the lists paint. Nothing is unassigned.
 3. Archive one service; save the provider's assignments again; restore the service. The provider still offers
    it.
 4. Create a service with the archived one's name → `SLUG_TAKEN` with the hint. Tick "Show archived", Restore,
@@ -616,18 +616,18 @@ gained `@bam/availability-engine`, libraries resolve to `dist/`, and a stale bui
    `150 Ft`.
 6. Edit a provider: languages, timezone, `onlineBookingEnabled` off, a minimum notice. Clear the notice and
    confirm it reads as inherited rather than zero. Clear the **email** and confirm the form refuses to save.
-6a. As an owner, confirm there is no Availability item in the nav, and that the link on a provider's row opens
-   *that* provider's diary (§2.9). Signed in as a member linked to a diary, confirm the nav item is back and
+   6a. As an owner, confirm there is no Availability item in the nav, and that the link on a provider's row opens
+   _that_ provider's diary (§2.9). Signed in as a member linked to a diary, confirm the nav item is back and
    opens their own.
 7. Scope a working-hours period to a second location; add one ending at midnight via the checkbox. Save,
    reload — location, validity window and `24:00` all survive.
-7a. Search for slots naming the provider's location — times come back. Search naming a *second* location the
+   7a. Search for slots naming the provider's location — times come back. Search naming a _second_ location the
    provider has no hours at — nothing, while the same search without a location still returns times. There is
    no service↔location link to configure any more (§2.7); if a "Services here" button is still on screen, the
    dev server is serving a stale build.
 8. Set the OS timezone to `America/New_York` and add an exception. The stored instant is right in the
    provider's zone, and the list renders it in the provider's zone. Then pick 02:30 on a spring-forward date
-   and confirm the warning appears *before* submit.
+   and confirm the warning appears _before_ submit.
 9. As a PROVIDER-role member linked to a diary: no picker, own diary only, and exception times still in the
    provider's zone.
 10. As an ASSISTANT: no Edit or Restore controls, and the endpoints still 403 when called directly.

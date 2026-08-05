@@ -267,8 +267,9 @@ is a no-op.
 
    > **Closed 2026-08-03** by [phase-2-3-owner-management.md](phase-2-3-owner-management.md) §3.3. Both are
    > now edited in a disclosure under each ticked service. Worth knowing: the checkbox UI did not merely fail
-   > to *set* them — because the `PUT` replaces a whole set and the body was built from ids alone, it deleted
+   > to _set_ them — because the `PUT` replaces a whole set and the body was built from ids alone, it deleted
    > any override on every save. See that record's §2.
+
 5. **Location `latitude`/`longitude` are stored and never used.** They are there for the map on the public
    booking page, which is Epic 6.
 6. **Public endpoint rate limits are per-instance** until Redis arrives in Epic 5 — the same gap Phase 1

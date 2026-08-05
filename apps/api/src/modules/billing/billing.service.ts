@@ -344,7 +344,10 @@ export class BillingService {
       // "up to an hour behind" caveat that disqualifies `subscriptions.search`
       // (§3.1). If they have paid, this says so whether or not a single Stripe
       // event has reached us.
-      if (existing.consumedAt !== null || (await input.links.hasCompletedCheckout(existing.stripePaymentLinkId))) {
+      if (
+        existing.consumedAt !== null ||
+        (await input.links.hasCompletedCheckout(existing.stripePaymentLinkId))
+      ) {
         // Record what we just learned, so the next request can answer for free
         // and so an operator reading the row is not misled by a null.
         if (existing.consumedAt === null) {

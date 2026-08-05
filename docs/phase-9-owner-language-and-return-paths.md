@@ -40,7 +40,7 @@ Two things followed from the same omission, and both were found while fixing it:
 **The emails were in the right language and pointed at the wrong page.** Every URL built server-side is
 `` `${appBaseUrl}/dashboard/subscription` ``, `` `${appBaseUrl}/invitations/${token}` `` and so on — with no
 locale segment. `next-intl` is configured `localePrefix: "as-needed"` with `defaultLocale: "hu"`, so an
-unprefixed path *is* the Hungarian URL. An English owner's English email linked them to a Hungarian screen.
+unprefixed path _is_ the Hungarian URL. An English owner's English email linked them to a Hungarian screen.
 
 **Stripe sent them back to the same place.** `portalReturnUrl` was `` `${env.APP_BASE_URL}/dashboard/subscription` ``,
 and the Payment Link had no `after_completion` at all — so paying ended on Stripe's own confirmation page
@@ -54,9 +54,9 @@ and the owner was never returned to the product they had just bought.
 next-intl's `as-needed` rule:
 
 ```ts
-buildAppUrl({ baseUrl, path: "/dashboard/subscription", locale: "en" })
+buildAppUrl({ baseUrl, path: "/dashboard/subscription", locale: "en" });
 //   → "http://localhost:3000/en/dashboard/subscription"
-buildAppUrl({ baseUrl, path: "/dashboard/subscription", locale: "hu" })
+buildAppUrl({ baseUrl, path: "/dashboard/subscription", locale: "hu" });
 //   → "http://localhost:3000/dashboard/subscription"
 ```
 
@@ -106,7 +106,7 @@ organization** ([phase-9-duplicate-subscription-prevention.md](phase-9-duplicate
 been no single correct destination to bake in, and this section could not exist.
 
 A redirect rather than a customised `hosted_confirmation`, because the subscription screen already knows how
-to render every state the owner can be in when they arrive, including *not activated yet*: activation is a
+to render every state the owner can be in when they arrive, including _not activated yet_: activation is a
 webhook, so a fast payer beats the event home. The screen polls; a static confirmation page would have to
 lie or say nothing.
 
@@ -134,14 +134,14 @@ the buyer's browser language and there is no supported override.
 
 Three options were considered:
 
-| Option | Verdict |
-| --- | --- |
-| Leave it to browser detection | **Chosen.** Correct for almost every real buyer, and zero surface area. |
-| Append `?locale=xx` to the link URL | Rejected. Undocumented, unsupported, and it would fail *silently* — the page would simply be in the wrong language again, with a line of code claiming otherwise. |
+| Option                                   | Verdict                                                                                                                                                                                                                                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Leave it to browser detection            | **Chosen.** Correct for almost every real buyer, and zero surface area.                                                                                                                                                                                                                   |
+| Append `?locale=xx` to the link URL      | Rejected. Undocumented, unsupported, and it would fail _silently_ — the page would simply be in the wrong language again, with a line of code claiming otherwise.                                                                                                                         |
 | Replace the link with a Checkout Session | Rejected. It reverses [phase-9-subscription-and-activation.md](phase-9-subscription-and-activation.md) §7 for a cosmetic gain: a Checkout Session expires in 24 hours and the subscribe window is 14 days, so it would need an expiry-and-reissue path built to buy a translated heading. |
 
 So the payment page follows the buyer's browser, and that is the documented behaviour rather than an
-outstanding defect. Note that this is also *usually the better answer*: the link is explicitly forwardable to
+outstanding defect. Note that this is also _usually the better answer_: the link is explicitly forwardable to
 whoever holds the company card, and that person's browser is better evidence of what they read than the
 organization's configured default.
 

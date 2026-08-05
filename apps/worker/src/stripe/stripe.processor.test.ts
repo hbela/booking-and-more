@@ -311,7 +311,9 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       await processStripeEventBatch(options());
 
       expect(
-        await prisma.outboxEvent.count({ where: { tenantId, eventType: "SUBSCRIPTION_CONFIRMED" } }),
+        await prisma.outboxEvent.count({
+          where: { tenantId, eventType: "SUBSCRIPTION_CONFIRMED" },
+        }),
       ).toBe(0);
     });
   });
@@ -495,9 +497,9 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
 
       await processStripeEventBatch(options());
 
-      expect((await prisma.subscription.findUnique({ where: { tenantId } }))?.cancelAtPeriodEnd).toBe(
-        true,
-      );
+      expect(
+        (await prisma.subscription.findUnique({ where: { tenantId } }))?.cancelAtPeriodEnd,
+      ).toBe(true);
     });
 
     it("mirrors a plan switched in the portal, from the price's metadata", async () => {
@@ -583,7 +585,12 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
     /** A subscription bound by checkout, awaiting its first status event. */
     const bind = async (subscriptionId: string) => {
       await prisma.subscription.create({
-        data: { tenantId, plan: "STARTER", status: "INCOMPLETE", stripeSubscriptionId: subscriptionId },
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "INCOMPLETE",
+          stripeSubscriptionId: subscriptionId,
+        },
       });
     };
 
@@ -778,7 +785,10 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
         id: scheduleId,
         subscription: subId,
         phases: [
-          { start_date: Math.floor(Date.now() / 1_000) - 60, items: [{ price: PRICE_PROFESSIONAL }] },
+          {
+            start_date: Math.floor(Date.now() / 1_000) - 60,
+            items: [{ price: PRICE_PROFESSIONAL }],
+          },
           { start_date: startsAt, items: [{ price: PRICE_STARTER }] },
         ],
       });

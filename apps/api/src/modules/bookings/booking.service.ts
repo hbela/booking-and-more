@@ -1084,12 +1084,8 @@ export class BookingService {
         aggregateId: args.bookingId,
         payload: {
           bookingId: args.bookingId,
-          ...(args.managementToken === undefined
-            ? {}
-            : { managementToken: args.managementToken }),
-          ...(args.previousStartAt === undefined
-            ? {}
-            : { previousStartAt: args.previousStartAt }),
+          ...(args.managementToken === undefined ? {} : { managementToken: args.managementToken }),
+          ...(args.previousStartAt === undefined ? {} : { previousStartAt: args.previousStartAt }),
         },
       },
     });

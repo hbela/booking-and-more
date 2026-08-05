@@ -4,12 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import {
-  apiFetch,
-  type AssignedService,
-  type Paginated,
-  type Provider,
-} from "@/lib/api-client";
+import { apiFetch, type AssignedService, type Paginated, type Provider } from "@/lib/api-client";
 import { AvailabilityExceptions } from "./availability-exceptions";
 import { WorkingHoursEditor } from "./working-hours-editor";
 import {

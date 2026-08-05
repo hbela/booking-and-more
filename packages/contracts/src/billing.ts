@@ -87,12 +87,7 @@ export function planForPrice(
 
 /** Our mirror of Stripe's status. Matches the `SubscriptionStatus` enum. */
 export type MirroredSubscriptionStatus =
-  | "ACTIVE"
-  | "PAST_DUE"
-  | "CANCELED"
-  | "INCOMPLETE"
-  | "TRIALING"
-  | "NOT_APPLICABLE";
+  "ACTIVE" | "PAST_DUE" | "CANCELED" | "INCOMPLETE" | "TRIALING" | "NOT_APPLICABLE";
 
 /**
  * Statuses that mean the organization *has* a subscription right now.
@@ -223,10 +218,7 @@ export function subscriptionEffect(stripeStatus: string): SubscriptionEffect {
  * CLOSED is likewise terminal here: reopening a closed prospect is a deliberate
  * platform-admin action (phase-9 §2.6.1), not something a webhook does.
  */
-export function nextTenantStatus(
-  current: string,
-  effect: TenantStatusEffect,
-): TenantStatusEffect {
+export function nextTenantStatus(current: string, effect: TenantStatusEffect): TenantStatusEffect {
   if (effect === null) return null;
 
   // Suspension always applies. A subscription that ended is a fact about the

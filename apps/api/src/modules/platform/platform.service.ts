@@ -311,9 +311,7 @@ export class PlatformService {
     }
 
     const next =
-      status === "SUSPENDED"
-        ? "SUSPENDED"
-        : restoredTenantStatus(existing.subscription?.status);
+      status === "SUSPENDED" ? "SUSPENDED" : restoredTenantStatus(existing.subscription?.status);
 
     await this.prisma.tenant.update({ where: { id: tenantId }, data: { status: next } });
 
@@ -437,7 +435,9 @@ function searchTerms(search: string) {
     { name: like },
     { slug: like },
     { domain: like },
-    { memberships: { some: { role: Roles.OWNER, user: { OR: [{ email: like }, { name: like }] } } } },
+    {
+      memberships: { some: { role: Roles.OWNER, user: { OR: [{ email: like }, { name: like }] } } },
+    },
     { invitations: { some: { role: Roles.OWNER, email: like } } },
   ];
 }

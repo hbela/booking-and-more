@@ -468,7 +468,11 @@ describe.skipIf(!databaseUrl)("provider onboarding", () => {
       // Written directly: the API has refused a null address since phase-2-3
       // §2.8, so this is the legacy row the column's nullability still allows.
       const legacy = await app.prisma.provider.create({
-        data: { tenantId: site.tenantId, displayName: "Visiting hygienist", timezone: "Europe/Budapest" },
+        data: {
+          tenantId: site.tenantId,
+          displayName: "Visiting hygienist",
+          timezone: "Europe/Budapest",
+        },
       });
 
       const response = await inviteProvider(site, legacy.id);

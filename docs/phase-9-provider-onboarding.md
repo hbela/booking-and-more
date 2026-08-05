@@ -50,14 +50,14 @@ fix is to make the second step impossible to omit, which means putting it inside
 
 - **Generic member invitations are still not emailed.** `POST /v1/members/invitations` continues to
   return the link once, for OWNER, ADMIN and ASSISTANT — it no longer accepts PROVIDER at all (§2.11).
-  Phase-1 §5.1 is therefore *partially* closed, and is deliberately left in that record rather than
+  Phase-1 §5.1 is therefore _partially_ closed, and is deliberately left in that record rather than
   deleted, so the remaining gap does not vanish with the fix.
 - **No new home screen.** A provider lands on `/dashboard/availability` — their diary — rather than on a
   purpose-built home with today's appointments. PRD §6.2's persona wants one; it is a separate piece of
   work and naming it here is all this record does about it.
 - **No delegation.** A receptionist managing somebody else's diary remains neither built nor designed
   (phase-2-3 §5.9). This work makes the provider's own access real; it does not add a notion of acting
-  *for* another provider.
+  _for_ another provider.
 - **No self-service password reset.** A provider who lets their invitation lapse needs a new one, which
   is the same row action pressed again.
 
@@ -70,7 +70,7 @@ fix is to make the second step impossible to omit, which means putting it inside
 The alternative was a `providerId` field on the existing generic invite panel. It was rejected because
 it asks the wrong question at the wrong time: the owner is looking at a list of people, and "which of
 these diaries does this email address belong to" is a lookup they have to perform in their head. Pressing
-**Invite** on Dr. Kovács's row cannot select the wrong diary, because the row *is* the selection.
+**Invite** on Dr. Kovács's row cannot select the wrong diary, because the row _is_ the selection.
 
 It also puts the action where the address already is. Phase-2-3 §2.8 made `email` mandatory on the
 provider form specifically because "the invitation that would give them a login" is addressed to it; the
@@ -83,10 +83,10 @@ writes `Membership.providerId` in the same transaction that burns the token.
 
 The two foreign keys pointing at `providers` now disagree about deletion, deliberately:
 
-| Row | On provider delete | Why |
-| --- | --- | --- |
-| `memberships.provider_id` | `SetNull` | A membership that loses its provider still carries a person's *access*. Nulling is the conservative act — archiving a diary must not delete somebody's login (phase-2 §3.2). |
-| `invitations.provider_id` | `Cascade` | An invitation that loses its provider is a promise nobody can keep. Nobody has accepted it, so nothing is lost by deleting it — whereas `SetNull` would silently downgrade a specific promise into a bare `PROVIDER` invitation granting a role over no diary, and tell nobody. |
+| Row                       | On provider delete | Why                                                                                                                                                                                                                                                                             |
+| ------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memberships.provider_id` | `SetNull`          | A membership that loses its provider still carries a person's _access_. Nulling is the conservative act — archiving a diary must not delete somebody's login (phase-2 §3.2).                                                                                                    |
+| `invitations.provider_id` | `Cascade`          | An invitation that loses its provider is a promise nobody can keep. Nobody has accepted it, so nothing is lost by deleting it — whereas `SetNull` would silently downgrade a specific promise into a bare `PROVIDER` invitation granting a role over no diary, and tell nobody. |
 
 `Restrict` would be worse than either: it would make the tenant-delete cascade fail, breaking
 `pnpm db:discard-organization`.
@@ -128,7 +128,7 @@ Hand-written, in its own migration, because Prisma cannot express `WHERE`.
 the address is always `provider.email`.
 
 This is phase-9-owner-onboarding §2.1's security property moved one layer up. That record protects the
-*acceptance* — the email is read from the invitation row, never the request, so a leaked token cannot be
+_acceptance_ — the email is read from the invitation row, never the request, so a leaked token cannot be
 redeemed at an address of the holder's choosing. The same argument applies to issuance: a route that
 accepted an address alongside a provider id would be a way to attach an arbitrary mailbox to a named
 diary, and the person doing it would already hold `member:manage`.
@@ -142,8 +142,8 @@ Pressing Invite a second time means "they never got it" — every time. So the r
 invitation matching **either** the address **or** the diary, and issues a fresh one. The newest link is
 the only one that works.
 
-Matching on both is not belt-and-braces. Correct a provider's email and re-invite, and the *new* address
-is free while the *old* address's live invitation still points at that diary — which
+Matching on both is not belt-and-braces. Correct a provider's email and re-invite, and the _new_ address
+is free while the _old_ address's live invitation still points at that diary — which
 `invitations_provider_pending_key` would then refuse, for a reason that appears nowhere on screen.
 
 The revoke happens **inside** the same transaction as the create. `MembershipService.invite` does it
@@ -185,21 +185,21 @@ from inside the transaction. That is caught and translated to a 409:
 
 > Someone else has already been given this provider's login. Ask the organization for a new invitation.
 
-Deliberately *not* the uniform "this invitation link is not valid" that covers missing, used and revoked
+Deliberately _not_ the uniform "this invitation link is not valid" that covers missing, used and revoked
 tokens. That uniformity is a security property — a probe must not learn which of those it hit — and it
-does not apply here: the token *was* valid, and the constraint that failed says nothing about it.
+does not apply here: the token _was_ valid, and the constraint that failed says nothing about it.
 
 **The invitation stays `PENDING`.** For free, because the `status: ACCEPTED` write rolls back with
 everything else — but it is the right outcome and worth stating: the invitee did nothing wrong, and an
 owner who unlinks the other member makes the existing link work again with no reissue. There is a test
-asserting `status === "PENDING"` after that 409 precisely because it is a property of *where* the write
+asserting `status === "PENDING"` after that 409 precisely because it is a property of _where_ the write
 sits, which a later change could quietly lose while keeping every other assertion green.
 
 One consequence, stated rather than fixed: on `accept-and-register` the Better Auth user row is created
 outside the transaction (phase-9-owner-onboarding §2.4), so a lost race leaves an account with no
 membership. The recovery is the one already documented there — re-opening the link takes the "account
 already exists" branch to sign-in and the ordinary `/accept`, which will keep returning the same 409
-until an owner unlinks. Accepting the membership *without* the link would be worse: `inviteProvider`
+until an owner unlinks. Accepting the membership _without_ the link would be worse: `inviteProvider`
 refuses an address that is already a member, so the degraded state would not be recoverable through the
 same button.
 
@@ -214,7 +214,7 @@ in `@bam/db` needs no edit — it goes red if either side is missed, which is th
 
 **The locale is the tenant's `defaultLanguage`, not the provider's `languages[]`.** That column means
 something else: the schema calls it the subtags "this provider can work in", read on every public
-provider list. It answers *can this dentist treat me in German?*, not *what do you read email in?* A
+provider list. It answers _can this dentist treat me in German?_, not _what do you read email in?_ A
 Hungarian dentist who also speaks German carries `["hu","de"]`; picking `[0]` is right by accident and
 picking anything else is wrong.
 
@@ -294,14 +294,14 @@ reached by the route this work left untouched.
 
 Two aggravating details, both mine. The owner had archived the only provider row, so the Providers tab was
 empty and there was no row to press **Invite** on — the good path was invisible at the moment it was
-wanted. And `inviteProvider`'s refusal for an address that is already a member reads *"Link their
-membership to this provider instead"*, pointing at a screen that did not exist. The same false signpost
+wanted. And `inviteProvider`'s refusal for an address that is already a member reads _"Link their
+membership to this provider instead"_, pointing at a screen that did not exist. The same false signpost
 this record corrected in phase-2-3 §2.8, written fresh.
 
 So:
 
 - **The route refuses `PROVIDER`**, with a message naming where it can be done. In the service, not by
-  narrowing `INVITABLE_ROLES` — that constant is still true, the role *is* grantable by invitation, just
+  narrowing `INVITABLE_ROLES` — that constant is still true, the role _is_ grantable by invitation, just
   by the route that knows which diary is meant.
 - **The dropdown offers OWNER, ADMIN and ASSISTANT**, with a notice linking to Providers.
 - **`PATCH /v1/members/:membershipId { role }` still allows it.** Promoting an existing member is a
@@ -343,24 +343,24 @@ GET  /v1/members/invitations                 now also returns providerId
 ```
 
 **`member:manage`, not `provider:manage`.** Rule 10 says ask for the permission that names what you are
-doing. The row this creates is an `Invitation` that grants a `Membership`; the provider is the *object*,
+doing. The row this creates is an `Invitation` that grants a `Membership`; the provider is the _object_,
 not the thing being changed. OWNER and ADMIN hold both today so nothing behaves differently — the point
 is that a future "may configure the catalogue but not hand out logins" role is expressible without
 editing this route.
 
-**No `Idempotency-Key`.** Rule 16 is scoped to writes a *customer* can retry. This is a staff write, and
+**No `Idempotency-Key`.** Rule 16 is scoped to writes a _customer_ can retry. This is a staff write, and
 §2.5's supersede makes a double-submit converge on one live invitation rather than two.
 
 **Failure modes**, each with its own message because each has a different fix:
 
-| Situation | Status | Decided by |
-| --- | --- | --- |
-| provider absent, other tenant, or archived | 404 `PROVIDER_NOT_FOUND` | `findByIdOrThrow` without `includeArchived` — the same answer either way (rule 5) |
-| `provider.email` null or blank | 422 `VALIDATION_FAILED`, `field: "email"` | legacy rows only; §7.1 |
-| that diary already has a login | 409 | pre-check, two messages: *already has a login* vs *another member holds this diary* |
-| that address is already a member | 409 | points at linking their membership instead |
-| a live invitation exists (either key) | **201** | superseded (§2.5) |
-| two invites race | 409 | P2002 on either partial index |
+| Situation                                  | Status                                    | Decided by                                                                          |
+| ------------------------------------------ | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| provider absent, other tenant, or archived | 404 `PROVIDER_NOT_FOUND`                  | `findByIdOrThrow` without `includeArchived` — the same answer either way (rule 5)   |
+| `provider.email` null or blank             | 422 `VALIDATION_FAILED`, `field: "email"` | legacy rows only; §7.1                                                              |
+| that diary already has a login             | 409                                       | pre-check, two messages: _already has a login_ vs _another member holds this diary_ |
+| that address is already a member           | 409                                       | points at linking their membership instead                                          |
+| a live invitation exists (either key)      | **201**                                   | superseded (§2.5)                                                                   |
+| two invites race                           | 409                                       | P2002 on either partial index                                                       |
 
 The service method is `MembershipService.inviteProvider`, **not** an optional `providerId` on `invite()`.
 `invite()` is a public route's contract, and an optional diary parameter there would be a second,
@@ -412,12 +412,12 @@ column is the only copy anyone has (phase-9-owner-onboarding-emails §2). Neithe
 
 # 5. Web
 
-| Piece | Where |
-| --- | --- |
-| Invite / Resend row action and its panel | `providers-screen.tsx` |
+| Piece                                        | Where                   |
+| -------------------------------------------- | ----------------------- |
+| Invite / Resend row action and its panel     | `providers-screen.tsx`  |
 | Provider landing (`/dashboard/availability`) | `accept-invitation.tsx` |
-| Permission-driven nav filtering | `dashboard-shell.tsx` |
-| `catalogue` and `invitation` copy, hu + en | `messages/{en,hu}.json` |
+| Permission-driven nav filtering              | `dashboard-shell.tsx`   |
+| `catalogue` and `invitation` copy, hu + en   | `messages/{en,hu}.json` |
 
 The panel is a third `useEditPanel`, alongside `edit` and `assignments`, so it inherits the focus wiring,
 the `aria-expanded`/`aria-controls` pairing and the scroll behaviour. There is no Dialog primitive on
@@ -442,29 +442,29 @@ pnpm lint && pnpm check-types && pnpm test
 
 ## 6.1 What was built
 
-| Piece | Where |
-| --- | --- |
-| `Invitation.providerId` + FK + index | migration `20260804114159_invitation_provider_id` |
-| One live invitation per diary | migration `20260804114223_invitation_provider_pending_unique` |
-| `MembershipService.inviteProvider` | `membership.service.ts` |
-| `claimInvitation` carrying the link, and the race translated | `membership.service.ts` |
-| `describeInvitation` naming the diary | `membership.service.ts` |
-| `POST /v1/providers/:providerId/invitation` | `provider.routes.ts` |
-| Role schemas lifted out, and the test that was promised | `membership.schemas.ts`, `membership.test.ts` |
-| `dispatchProviderEvent` | `outbox.dispatcher.ts` |
-| `renderProviderInvited`, hu + en | `templates.ts` |
-| Invite / Resend row action and panel | `providers-screen.tsx` |
-| The provider's landing, and the diary named on the form | `accept-invitation.tsx` |
-| Permission-driven navigation | `dashboard-shell.tsx` |
-| PROVIDER refused on the generic invite route (§2.11) | `membership.service.ts` |
-| Diary column and the link repair on the members table | `dashboard.tsx` |
-| 22 integration tests | `apps/api/src/provider-onboarding.test.ts` |
-| Dispatcher, sender and template tests | worker and engine suites |
+| Piece                                                        | Where                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------- |
+| `Invitation.providerId` + FK + index                         | migration `20260804114159_invitation_provider_id`             |
+| One live invitation per diary                                | migration `20260804114223_invitation_provider_pending_unique` |
+| `MembershipService.inviteProvider`                           | `membership.service.ts`                                       |
+| `claimInvitation` carrying the link, and the race translated | `membership.service.ts`                                       |
+| `describeInvitation` naming the diary                        | `membership.service.ts`                                       |
+| `POST /v1/providers/:providerId/invitation`                  | `provider.routes.ts`                                          |
+| Role schemas lifted out, and the test that was promised      | `membership.schemas.ts`, `membership.test.ts`                 |
+| `dispatchProviderEvent`                                      | `outbox.dispatcher.ts`                                        |
+| `renderProviderInvited`, hu + en                             | `templates.ts`                                                |
+| Invite / Resend row action and panel                         | `providers-screen.tsx`                                        |
+| The provider's landing, and the diary named on the form      | `accept-invitation.tsx`                                       |
+| Permission-driven navigation                                 | `dashboard-shell.tsx`                                         |
+| PROVIDER refused on the generic invite route (§2.11)         | `membership.service.ts`                                       |
+| Diary column and the link repair on the members table        | `dashboard.tsx`                                               |
+| 22 integration tests                                         | `apps/api/src/provider-onboarding.test.ts`                    |
+| Dispatcher, sender and template tests                        | worker and engine suites                                      |
 
 ## 6.2 Deviations from the plan
 
 - **Two migrations, not three.** The `PROVIDER_INVITED` enum value was meant to travel alone, because
-  `ALTER TYPE … ADD VALUE` cannot be *used* by a later statement in the same transaction. It landed with the
+  `ALTER TYPE … ADD VALUE` cannot be _used_ by a later statement in the same transaction. It landed with the
   column instead, which is safe — nothing in that migration uses the value — and splitting it after it had
   applied would have broken its checksum for no gain. The rule still holds for the next person: a migration
   that adds an enum value and then writes a row with it will fail.
@@ -483,13 +483,13 @@ pnpm lint && pnpm check-types && pnpm test
 
 ## 6.3 Results — 2026-08-04
 
-| Check | Result |
-| --- | --- |
-| `pnpm db:drift-check` | no drift; the committed migrations reproduce `schema.prisma` |
-| `apps/api` | 248 passed, 23 of them new (20 integration + 3 schema-parity) |
-| `apps/worker` | 62 passed, 9 of them new (5 dispatcher + 4 sender) |
-| `@bam/notification-engine` | 104 passed, 7 of them new |
-| `pnpm lint && pnpm check-types` | clean across all 19 tasks |
+| Check                           | Result                                                        |
+| ------------------------------- | ------------------------------------------------------------- |
+| `pnpm db:drift-check`           | no drift; the committed migrations reproduce `schema.prisma`  |
+| `apps/api`                      | 248 passed, 23 of them new (20 integration + 3 schema-parity) |
+| `apps/worker`                   | 62 passed, 9 of them new (5 dispatcher + 4 sender)            |
+| `@bam/notification-engine`      | 104 passed, 7 of them new                                     |
+| `pnpm lint && pnpm check-types` | clean across all 19 tasks                                     |
 
 Two things worth knowing about that run:
 

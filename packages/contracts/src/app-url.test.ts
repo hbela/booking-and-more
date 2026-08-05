@@ -44,15 +44,15 @@ describe("buildAppUrl", () => {
   });
 
   it("tolerates a trailing slash on the base and a missing one on the path", () => {
-    expect(buildAppUrl({ baseUrl: "http://localhost:3000/", path: "dashboard", locale: "en" })).toBe(
-      "http://localhost:3000/en/dashboard",
-    );
+    expect(
+      buildAppUrl({ baseUrl: "http://localhost:3000/", path: "dashboard", locale: "en" }),
+    ).toBe("http://localhost:3000/en/dashboard");
   });
 
   it("keeps query strings and fragments intact", () => {
-    expect(
-      buildAppUrl({ baseUrl: BASE, path: "/invitations/abc?from=email", locale: "en" }),
-    ).toBe("http://localhost:3000/en/invitations/abc?from=email");
+    expect(buildAppUrl({ baseUrl: BASE, path: "/invitations/abc?from=email", locale: "en" })).toBe(
+      "http://localhost:3000/en/invitations/abc?from=email",
+    );
   });
 });
 

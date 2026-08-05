@@ -1,0 +1,203 @@
+# Coolify deployment stack — Hetzner VPS. See
+# docs/phase-10-deployment-hetzner-coolify.md for the walkthrough this file is
+# the other half of.
+#
+# This is NOT docker/docker-compose.yml. That one publishes host ports and is
+# for local parity checks; this one publishes nothing, because Coolify's Traefik
+# reaches the containers over its own network and a published port would sit
+# outside the proxy — unrouted, untrusted and un-TLS'd, on the public IP of the
+# VPS.
+#
+# Set "Docker Compose Location" to /docker-compose.coolify.yml with the base
+# directory left at /, so `context: .` below is the repository root.
+#
+# `exclude_from_hc` on the migrate service is a Coolify extension, not Compose
+# syntax. `docker compose config` will reject this file locally for that one
+# key; that is expected, and docker/docker-compose.yml is what to use locally.
+
+name: booking-and-more
+
+# ---------------------------------------------------------------------------
+# The API and the worker take almost the same environment, and every one of
+# these variables has to be right in both places or a failure appears in only
+# half the system — the API sells a subscription the worker then cannot email
+# about. One anchor, so they cannot drift.
+#
+# Note the two styles below, which are not interchangeable:
+#
+#   - KEY=${KEY:?msg}   required; compose refuses to start and names the key
+#   - KEY               pass-through; set in the container ONLY if set here
+#
+# The bare form matters more than it looks. `@bam/config` treats optional keys
+# as "absent means feature off" (CLAUDE.md rule 4), and absent means *unset*:
+# every optional string is `z.string().min(1).optional()`, so an empty value is
+# not a disabled feature, it is a validation error that fails boot. Writing
+# `KEY=${KEY:-}` would set every unconfigured key to "" and break exactly the
+# degradation the schema is built around.
+# ---------------------------------------------------------------------------
+x-app-environment: &app-environment
+  - NODE_ENV=production
+  - LOG_LEVEL=${LOG_LEVEL:-info}
+
+  # Public origins. These are the app's identity, not decoration: APP_BASE_URL
+  # is the sole allowed CORS origin and the sole trusted origin for auth
+  # cookies, and both are what emailed links are built from via `buildAppUrl`.
+  # They must match the domains Coolify routes, exactly — scheme included, no
+  # trailing slash.
+  - APP_BASE_URL=${APP_BASE_URL:?set APP_BASE_URL to the web app's public https origin}
+  - API_BASE_URL=${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
+
+  - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
+  - REDIS_URL=redis://redis:6379
+
+  # Rotating this signs every live session out. Generate once, then leave alone:
+  #   openssl rand -base64 32
+  - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET, at least 32 characters}
+
+  # Optional, pass-through. Each group is all-or-nothing and the config schema
+  # says so at boot rather than at first use.
+  - GOOGLE_CLIENT_ID
+  - GOOGLE_CLIENT_SECRET
+  - RESEND_API_KEY
+  - EMAIL_FROM
+  - STRIPE_SECRET_KEY
+  - STRIPE_WEBHOOK_SECRET
+  - STRIPE_PRICE_STARTER
+  - STRIPE_PRICE_PROFESSIONAL
+  - SENTRY_DSN
+
+  # Tunables. Defaults live in packages/config/src/schema.ts; these are here so
+  # they can be changed without a code deploy.
+  - TRIAL_PERIOD_DAYS
+  - ONBOARDING_WINDOW_DAYS
+  - INVITATION_EXPIRY_HOURS
+  - BOOKING_REMINDER_LEAD_HOURS
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-booking_and_more}
+    # /var/lib/postgresql, NOT /var/lib/postgresql/data.
+    #
+    # The 18+ images store data in a major-version-specific subdirectory so that
+    # `pg_upgrade --link` does not have to cross a mount boundary, and they
+    # refuse to start — not warn, refuse — if the old path is a mount point.
+    # Mounted a level up, the data lands in /var/lib/postgresql/18/docker and an
+    # eventual 19 upgrade has both versions inside one volume.
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No ports. The database is reachable only from this stack's network; to get
+    # a psql prompt, open a terminal on this container from Coolify.
+    expose:
+      - "5432"
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # appendonly, because the queue holds scheduled reminders. Losing them on a
+    # restart is survivable — the notification sweep re-finds rows the queue no
+    # longer has (docs/phase-5-booking-notifications.md §2.5) — but it is a
+    # recovery path, not a plan.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    expose:
+      - "6379"
+
+  # -------------------------------------------------------------------------
+  # Schema, before anything that depends on it runs.
+  #
+  # Built from Dockerfile.api rather than an image of its own, so the migration
+  # applied is the one committed alongside the code that expects it — a separate
+  # image could be a different commit, which is precisely the drift CLAUDE.md
+  # rule 1 exists to prevent. It runs `prisma migrate deploy`, which only ever
+  # applies migration files that are already committed; it cannot invent one.
+  # -------------------------------------------------------------------------
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    restart: "no"
+    # Coolify treats a stopped container as unhealthy and would report a red
+    # stack after every successful deploy. This is the documented opt-out.
+    exclude_from_hc: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app/packages/db
+    command: ["./node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # A failed migration stops the deploy here rather than letting an API boot
+      # against a schema it does not match.
+      migrate:
+        condition: service_completed_successfully
+    environment: *app-environment
+    # Tells Coolify to route the domain you assign to this service at container
+    # port 3001. Set the value in Coolify's UI to the same host as API_BASE_URL.
+    expose:
+      - "3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # No domain and no exposed port: it dispatches the outbox and drains queues,
+    # and answers nothing.
+    environment: *app-environment
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+      args:
+        # Inlined into the client bundle at build time, so this needs a rebuild
+        # to change — a restart will not do it. It is the same value as
+        # API_BASE_URL and is separate only because Next.js requires the
+        # NEXT_PUBLIC_ prefix to expose it to the browser.
+        NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
+    restart: unless-stopped
+    # Not depends_on api: every call to the API is made by the browser
+    # (apps/web/src/lib/api-client.ts is a client module), so the web container
+    # never talks to it and can serve pages while the API is restarting.
+    environment:
+      - NODE_ENV=production
+    expose:
+      - "3000"
+
+volumes:
+  postgres-data:
+  redis-data:

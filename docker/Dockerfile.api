@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Fastify API image.
+# Fastify API image. Also the image the one-shot `migrate` service runs — see
+# docker-compose.coolify.yml and docs/phase-10-deployment-hetzner-coolify.md §3.
 #
 # Multi-stage, non-root, with a healthcheck. The predecessor project's images
 # were single-stage `COPY . .` running as root with no healthcheck, which meant
@@ -12,28 +13,45 @@
 
 ARG NODE_VERSION=24-alpine
 
-# --- deps ---------------------------------------------------------------------
-FROM node:${NODE_VERSION} AS deps
+# --- build --------------------------------------------------------------------
+FROM node:${NODE_VERSION} AS build
 RUN corepack enable
 WORKDIR /app
 
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY packages/tsconfig/package.json ./packages/tsconfig/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
-COPY packages/config/package.json ./packages/config/
-COPY packages/contracts/package.json ./packages/contracts/
-COPY packages/observability/package.json ./packages/observability/
-COPY packages/db/package.json ./packages/db/
-COPY apps/api/package.json ./apps/api/
+# pnpm's store lives where pnpm is told to put it, not where a cache mount
+# happens to be mounted. Without this the mount below sits at a path pnpm never
+# writes to, so every build re-downloaded the whole dependency graph while
+# appearing to be cached.
+ENV npm_config_store_dir=/pnpm/store
+
+# The whole workspace, rather than a hand-listed set of package.json files.
+#
+# The listed form went stale the moment packages/auth, /availability-engine,
+# /booking-engine and /notification-engine were added: `pnpm install
+# --frozen-lockfile` refuses a lockfile naming workspace projects that are not
+# on disk, so the image stopped building and nothing pointed at the missing
+# manifest. Copying everything costs the separate install layer — a source edit
+# now reinstalls — but the store mount makes that a relink rather than a
+# download, and it cannot go stale again. .dockerignore already keeps
+# node_modules, dist, .next and .env out.
+COPY . .
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-# --- build --------------------------------------------------------------------
-FROM deps AS build
-WORKDIR /app
-COPY . .
-RUN pnpm --filter @bam/api... build
+# `@bam/api...` is the app plus its workspace dependencies, which is what runs
+# `prisma generate` — the API cannot build or boot without the generated client.
+#
+# The placeholder DATABASE_URL is not a default and must never become one. There
+# is no database at image build time, and `prisma generate` does not want one —
+# it reads schema.prisma. But prisma.config.ts throws when DATABASE_URL is
+# unset, deliberately, because for a human at a terminal that is nearly always
+# the actual mistake. Satisfying it inline keeps that error useful where it is
+# useful and out of the way here; because it is set on this one command rather
+# than as an ENV, it cannot leak into the runtime stage and be mistaken for
+# configuration.
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/prisma_generate_does_not_connect \
+    pnpm --filter @bam/api... build
 
 # --- runtime ------------------------------------------------------------------
 FROM node:${NODE_VERSION} AS runtime
@@ -47,6 +65,11 @@ USER node
 
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+# The whole directory, because it carries packages/db/prisma/migrations and
+# packages/db/prisma.config.ts. That is what makes `prisma migrate deploy`
+# runnable from this image, and so lets the migration run in a container built
+# from the same commit as the code that expects the schema.
 COPY --from=build --chown=node:node /app/packages ./packages
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/package.json

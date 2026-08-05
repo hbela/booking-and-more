@@ -242,6 +242,7 @@ the exclusion constraint, correctly and confusingly.
    deliberately carries no link, which is §4's "a database leak handing over working links" safeguard
    winning an argument it would otherwise have lost by months (§2.2). The success screen's wording needs
    revisiting: a confirmation genuinely is on its way now.
+
 3. **`PENDING` bookings never expire on their own.** The status exists and the transition to `EXPIRED` is
    legal, but nothing runs to make it. Epic 5's worker is the natural owner.
 4. **The booking flow is one route, not six** — see §3.4. Deep links per step wait for Epic 6.
@@ -336,7 +337,7 @@ persistence at all, which was not the expectation when this line was written.
   visible only in the diary. `CALENDAR_DISCONNECTED` is the one type in the schema with no renderer, and it
   is the same neighbourhood.
 - **Six of the seven queues have no consumer**, but only three of those are gaps: `calendar-sync`,
-  `usage-aggregation` and `retention-cleanup` await their epics. `hold-expiration` is empty *by design* — a
+  `usage-aggregation` and `retention-cleanup` await their epics. `hold-expiration` is empty _by design_ — a
   hold expires by arithmetic and is swept inside the transaction that needs its slot
   ([holds.ts](../packages/booking-engine/src/holds.ts)) — and `booking-reminders` lost its job to the sweep.
 - **No test covers the whole chain.** The API asserts what the outbox carries, the dispatcher what the

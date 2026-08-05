@@ -57,8 +57,8 @@ This is the substantive change from §5.1's original decision, which said Stripe
 > **Half-reversed 2026-08-02** by
 > [phase-9-duplicate-subscription-prevention.md](phase-9-duplicate-subscription-prevention.md) §4. A Payment
 > Link is still right — the never-expires argument below stands, and is why Checkout is still not used. What
-> is wrong is "created once per plan and held in config": that made the link permanent, reusable *and shared
-> by every customer on the plan*, so nothing on our side could stop one organization paying twice. One
+> is wrong is "created once per plan and held in config": that made the link permanent, reusable _and shared
+> by every customer on the plan_, so nothing on our side could stop one organization paying twice. One
 > reached three live subscriptions. Links are now created per organization, with
 > `restrictions[completed_sessions][limit]=1`. The paragraph below about the cost being "plans configured in
 > the Stripe dashboard" is therefore also refunded.
@@ -224,7 +224,7 @@ cannot be verified. Still true, and the price IDs are paired the same way for th
 call — `webhooks.constructEvent` — because a Payment Link requires no API call to produce.
 
 The subscription screen offers only plans whose link is configured. A button leading to a blank Stripe page
-is worse than a plan that is not offered. Still the rule; it is a *price* that must be configured now.
+is worse than a plan that is not offered. Still the rule; it is a _price_ that must be configured now.
 
 ---
 
