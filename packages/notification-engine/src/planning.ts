@@ -128,6 +128,9 @@ const TEMPLATES: Record<NotificationType, string> = {
   // Written by the Stripe processor when a subscription first reports a live
   // status, not planned from a booking either.
   [NotificationTypes.SUBSCRIPTION_CONFIRMED]: "subscription-confirmed",
+  // Written by the outbox dispatcher when an owner invites a provider to set up
+  // their own login (phase-9-provider-onboarding §4). Not a booking event.
+  [NotificationTypes.PROVIDER_INVITED]: "provider-invited",
 };
 
 export function planNotifications(input: PlanNotificationsInput): NotificationPlanResult {

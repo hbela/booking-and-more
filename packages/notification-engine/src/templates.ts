@@ -605,9 +605,139 @@ export function renderPaymentFailed(locale: Locale, values: PaymentFailedValues)
   return { subject: subject(values.organizationName), html, text };
 }
 
+// --- Provider invited ------------------------------------------------------
+
+export interface ProviderInvitedValues {
+  organizationName: string;
+  /** The clinic's own name for this person — `Provider.displayName`. */
+  providerName: string;
+  /** Who pressed Invite. The caller falls back to the organization. */
+  invitedByName: string;
+  acceptUrl: string;
+  /** Formatted for the recipient's locale by the caller, not here. */
+  expiresAt: string;
+}
+
+interface ProviderInvitedCopy {
+  greeting: (provider: string) => string;
+  intro: (inviter: string, organization: string) => string;
+  /**
+   * What a provider gets, which is not what an owner gets. The organization
+   * email's "add your services, staff and opening hours" would promise exactly
+   * the three navigation items a PROVIDER does not have
+   * (phase-9-provider-onboarding §2.9).
+   */
+  whatYouGet: string;
+  action: string;
+  button: string;
+  fallback: string;
+  expiry: (when: string) => string;
+  /**
+   * Said out loud because a recipient expecting a password will otherwise write
+   * in asking where it is — and because a predecessor project emailed plaintext
+   * passwords, which is the practice this whole design exists to avoid.
+   */
+  noPassword: string;
+  /**
+   * New relative to the organization email, and earned: this address was typed
+   * by a clinic into a provider form, so a typo sends this to a stranger.
+   */
+  unexpected: string;
+  signoff: string;
+}
+
+const PROVIDER_INVITED_COPY: Record<
+  Locale,
+  { subject: (organization: string) => string; body: ProviderInvitedCopy }
+> = {
+  hu: {
+    // Names the organization, not the provider: the recipient *is* the provider.
+    subject: (organization) => `${organization} — állítsa be a belépését`,
+    body: {
+      greeting: (provider) => `Kedves ${provider}!`,
+      intro: (inviter, organization) =>
+        `${inviter} meghívta Önt a(z) ${organization} rendszerébe a Booking and More-on.`,
+      whatYouGet:
+        "Saját belépést kap: beállíthatja a munkaidejét, felvehet szabadságot és zárva tartást, és láthatja a saját foglalásait.",
+      action: "A belépéshez és a jelszava beállításához kattintson az alábbi gombra:",
+      button: "Belépés beállítása",
+      fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
+      expiry: (when) => `A link ${when}-ig érvényes.`,
+      noPassword: "Jelszót nem küldünk e-mailben — a linken saját jelszót állíthat be.",
+      unexpected:
+        "Ha nem számított erre a levélre, hagyja figyelmen kívül — a link magától lejár.",
+      signoff: "Üdvözlettel,\na Booking and More csapata",
+    },
+  },
+  en: {
+    subject: (organization) => `${organization} — set up your login`,
+    body: {
+      greeting: (provider) => `Dear ${provider},`,
+      intro: (inviter, organization) =>
+        `${inviter} has invited you to join ${organization} on Booking and More.`,
+      whatYouGet:
+        "You get your own login: set your working hours, add time off and closures, and see your own bookings.",
+      action: "Click below to sign in and choose your password:",
+      button: "Set up your login",
+      fallback: "If the button does not work, paste this address into your browser:",
+      expiry: (when) => `The link is valid until ${when}.`,
+      noPassword: "We never email passwords — the link lets you choose your own.",
+      unexpected: "If you were not expecting this, ignore it — the link expires on its own.",
+      signoff: "Kind regards,\nthe Booking and More team",
+    },
+  },
+};
+
+export function renderProviderInvited(
+  locale: Locale,
+  values: ProviderInvitedValues,
+): RenderedEmail {
+  const { subject, body } = PROVIDER_INVITED_COPY[locale];
+
+  const text = [
+    body.greeting(values.providerName),
+    "",
+    body.intro(values.invitedByName, values.organizationName),
+    body.whatYouGet,
+    "",
+    body.action,
+    values.acceptUrl,
+    "",
+    body.expiry(values.expiresAt),
+    body.noPassword,
+    "",
+    body.unexpected,
+    "",
+    body.signoff,
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(body.greeting(values.providerName))}</p>
+    <p>${escapeHtml(body.intro(values.invitedByName, values.organizationName))}</p>
+    <p>${escapeHtml(body.whatYouGet)}</p>
+    <p>${escapeHtml(body.action)}</p>
+    <p>
+      <a href="${escapeHtml(values.acceptUrl)}" style="${BUTTON_STYLE}">
+        ${escapeHtml(body.button)}
+      </a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.fallback)}<br />
+      <a href="${escapeHtml(values.acceptUrl)}">${escapeHtml(values.acceptUrl)}</a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.expiry(values.expiresAt))}<br />
+      ${escapeHtml(body.noPassword)}
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.unexpected)}</p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.signoff).replace(/\n/gu, "<br />")}</p>
+  `);
+
+  return { subject: subject(values.organizationName), html, text };
+}
+
 /** Which templates exist. A type absent here has no renderer and cannot be sent. */
 export const RENDERABLE_TYPES: readonly NotificationType[] = [
   NotificationTypes.ORGANIZATION_CREATED,
+  NotificationTypes.PROVIDER_INVITED,
   NotificationTypes.SUBSCRIPTION_LINK,
   NotificationTypes.SUBSCRIPTION_CONFIRMED,
   NotificationTypes.TRIAL_ENDING_SOON,

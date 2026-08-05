@@ -5,6 +5,7 @@ import {
   NotificationTypes,
   renderOrganizationCreated,
   renderPaymentFailed,
+  renderProviderInvited,
   renderSubscriptionConfirmed,
   renderSubscriptionLink,
   renderTrialEnding,
@@ -187,6 +188,8 @@ interface RenderableNotification {
   id: string;
   type: string;
   locale: string;
+  /** Greeting somebody by their own address beats greeting them by nothing. */
+  recipient: string;
   payload: unknown;
 }
 
@@ -212,6 +215,34 @@ function render(notification: RenderableNotification, logger: Logger): RenderedE
     return renderOrganizationCreated(locale, {
       organizationName: payload.organizationName,
       ownerName: payload.ownerName ?? payload.organizationName,
+      acceptUrl: payload.acceptUrl,
+      expiresAt: formatExpiry(payload.expiresAt ?? null, locale),
+    });
+  }
+
+  if (notification.type === NotificationTypes.PROVIDER_INVITED) {
+    const payload = notification.payload as {
+      organizationName?: string;
+      providerName?: string;
+      invitedByName?: string | null;
+      acceptUrl?: string;
+      expiresAt?: string | null;
+    } | null;
+
+    if (!payload?.acceptUrl || !payload.organizationName) {
+      logger.error(
+        { notificationId: notification.id },
+        "notification: provider invitation payload is missing; cannot render",
+      );
+      return undefined;
+    }
+
+    return renderProviderInvited(locale, {
+      organizationName: payload.organizationName,
+      providerName: payload.providerName ?? notification.recipient,
+      // Credit the organization when nobody's name was captured — a reissue
+      // stores none. Never left blank: "  has invited you" reads as a bug.
+      invitedByName: payload.invitedByName ?? payload.organizationName,
       acceptUrl: payload.acceptUrl,
       expiresAt: formatExpiry(payload.expiresAt ?? null, locale),
     });

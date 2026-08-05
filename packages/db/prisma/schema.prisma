@@ -319,6 +319,24 @@ model Invitation {
   email String         @db.Citext
   role  MembershipRole
 
+  /// The diary this invitation links its membership to, on acceptance.
+  ///
+  /// Nullable because most invitations name a role and nothing else. When it is
+  /// set, `claimInvitation` writes `Membership.providerId` in the *same*
+  /// transaction that burns the token — the two-screen dance (invite, then
+  /// PATCH the membership) is what this column exists to delete.
+  ///
+  /// `Cascade`, deliberately the opposite of the `SetNull` on Membership above.
+  /// A membership that loses its provider still carries a person's access, so
+  /// nulling is the conservative act there. An invitation that loses its
+  /// provider is a promise nobody can keep: silently downgrading it to a bare
+  /// PROVIDER invitation would grant a role over no diary and tell nobody.
+  /// `Restrict` would be worse than either — it would make the tenant-delete
+  /// cascade fail, breaking `db:discard-organization`.
+  /// docs/phase-9-provider-onboarding.md §2.2.
+  providerId String?   @map("provider_id")
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
   tokenHash String           @unique @map("token_hash")
   status    InvitationStatus @default(PENDING)
 
@@ -335,8 +353,12 @@ model Invitation {
   /// unique index in a follow-up custom migration — Prisma cannot express
   /// `WHERE status = 'PENDING'`, and a plain unique index would stop a revoked
   /// invitation from ever being reissued.
+  ///
+  /// A second such index, added later, does the same for `provider_id`: at most
+  /// one live invitation per diary (phase-9-provider-onboarding §2.3).
   @@index([tenantId, status])
   @@index([email])
+  @@index([providerId])
   @@map("invitations")
 }
 
@@ -473,6 +495,7 @@ model Provider {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships Membership[]
+  invitations Invitation[]
   services    ProviderService[]
   locations   ProviderLocation[]
 
@@ -1204,6 +1227,11 @@ enum NotificationType {
   /// onboarding where silence reads as failure, because they have just been
   /// charged. Appended, as above.
   SUBSCRIPTION_CONFIRMED
+
+  /// A provider invited to set up their own login, carrying the single-use link
+  /// that also links their membership to their diary
+  /// (phase-9-provider-onboarding §2.8). Appended, as above.
+  PROVIDER_INVITED
 
   @@map("notification_type")
 }

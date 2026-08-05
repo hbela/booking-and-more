@@ -158,10 +158,11 @@ export class PlatformService {
   async resendInvitation(
     tenantId: string,
     reissuedByUserId: string,
-  ): Promise<{ acceptEmail: string; invitationToken: string }> {
+  ): Promise<{ acceptEmail: string; invitationToken: string; defaultLanguage: string }> {
     const tenant = await this.prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { id: true, status: true, name: true },
+      // defaultLanguage so the caller can build a locale-prefixed accept URL.
+      select: { id: true, status: true, name: true, defaultLanguage: true },
     });
 
     if (!tenant) throw new NotFoundError("That organization does not exist.");
@@ -232,7 +233,11 @@ export class PlatformService {
       });
     });
 
-    return { acceptEmail: previous.email, invitationToken: token };
+    return {
+      acceptEmail: previous.email,
+      invitationToken: token,
+      defaultLanguage: tenant.defaultLanguage,
+    };
   }
 
   async list(filter: {

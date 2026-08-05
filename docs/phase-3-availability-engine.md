@@ -238,6 +238,12 @@ the catalogue is fully configured and nothing is bookable, which makes a fresh c
 6. **`datetime-local` in the dashboard uses the browser's zone**, not the provider's. Right for staff sitting
    at the clinic, wrong for an administrator in another country. The fix is a zone picker, and it belongs with
    the calendar view rather than a form.
+
+   > **Closed 2026-08-03** by [phase-2-3-owner-management.md](phase-2-3-owner-management.md) §2.5 — and it
+   > needed no zone picker and no calendar. The provider's own zone is the answer, and `apps/web` now converts
+   > through this package's `resolveWallClock`, which additionally warns the user when a reading was skipped
+   > or repeated by a transition. The list had the mirror bug (`toLocaleString`, the reader's zone) and was
+   > fixed with it.
 7. **No calendar view.** The availability screen is a form, not a week grid. Epic 6 brings the visual
    calendar.
 

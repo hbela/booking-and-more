@@ -118,6 +118,17 @@ export class ServiceCatalogService {
   }
 
   /**
+   * Undo an archive. Idempotent — restoring a live service returns it unchanged.
+   */
+  async restore(args: { tenantId: string; serviceId: string }): Promise<ServiceWithTranslations> {
+    // Without `includeArchived` this 404s on exactly the rows it serves.
+    const service = await this.services.findByIdOrThrow({ ...args, includeArchived: true });
+    if (service.archivedAt === null) return service;
+
+    return this.services.restore(args);
+  }
+
+  /**
    * Replace a service's translations. tech-impl §38.
    *
    * Whole-set replacement, like the provider assignments: the translation editor

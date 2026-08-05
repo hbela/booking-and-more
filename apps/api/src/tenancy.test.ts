@@ -160,6 +160,86 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
       expect(body.permissions).toEqual([]);
     });
 
+    it("reports an invited owner's permissions without an explicit tenant", async () => {
+      // The regression that hid an owner's own configuration screens from them.
+      //
+      // `activeTenantId` is written only by tenant creation and the explicit
+      // activate route. An owner who arrives by invitation passes through
+      // neither, and the dashboard's switcher — the only caller of activate —
+      // renders only with two or more tenants. So the session stayed null
+      // forever, `/v1/me` is fetched without the header, and it answered
+      // `permissions: []`: an owner who appeared to lack permission to add a
+      // service to their own clinic. A sole ACTIVE membership now answers it.
+      const alice = await signUp("sole-membership");
+      const tenantId = await createTenant(alice.cookie, `sole-${RUN}`, "Sole Clinic");
+
+      // Undo what tenant creation set, so this is the invited owner's situation.
+      await app.prisma.session.updateMany({
+        where: { userId: alice.id },
+        data: { activeTenantId: null },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/me",
+        headers: as(alice.cookie),
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.tenant?.id).toBe(tenantId);
+      expect(body.membership?.role).toBe("OWNER");
+      expect(body.permissions).toContain("service:manage");
+      expect(body.permissions).toContain("provider:manage");
+      expect(body.permissions).toContain("availability:manage:all");
+    });
+
+    it("stays ambiguous, rather than guessing, when there are two tenants", async () => {
+      // Two ACTIVE memberships and no active tenant is a question with no single
+      // right answer, so it is refused — which is also exactly when the
+      // dashboard's switcher appears and can settle it.
+      const bob = await signUp("two-memberships");
+      await createTenant(bob.cookie, `first-${RUN}`, "First");
+      await createTenant(bob.cookie, `second-${RUN}`, "Second");
+
+      await app.prisma.session.updateMany({
+        where: { userId: bob.id },
+        data: { activeTenantId: null },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/me",
+        headers: as(bob.cookie),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tenant).toBeNull();
+      expect(response.json().permissions).toEqual([]);
+    });
+
+    it("does not select a tenant the caller has only been invited to", async () => {
+      // An INVITED membership is not membership yet. Falling back to one would
+      // hand out a tenant the user has not joined.
+      const carol = await signUp("invited-only");
+      const owner = await signUp("invited-only-owner");
+      const tenantId = await createTenant(owner.cookie, `invited-${RUN}`, "Invited Clinic");
+
+      await app.prisma.membership.create({
+        data: { tenantId, userId: carol.id, role: "ASSISTANT", status: "INVITED" },
+      });
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/me",
+        headers: as(carol.cookie),
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().tenant).toBeNull();
+      expect(response.json().permissions).toEqual([]);
+    });
+
     it("cannot be tricked into granting platform admin at sign-up", async () => {
       // `isPlatformAdmin` is declared with `input: false`, so a crafted body
       // must not be able to set it. This is the privilege-escalation path worth
@@ -445,7 +525,7 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(alice.cookie, tenantId),
-        payload: { email: carol.email, role: "PROVIDER" },
+        payload: { email: carol.email, role: "ADMIN" },
       });
 
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
@@ -555,7 +635,7 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(alice.cookie, tenantId),
-        payload: { email: dave.email, role: "PROVIDER" },
+        payload: { email: dave.email, role: "ADMIN" },
       });
 
       const listed = await app.inject({
@@ -576,16 +656,25 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
 
   describe("role enforcement", () => {
     /** Build a tenant with an owner plus a member holding `role`. */
+    /**
+     * A tenant whose second member holds `role`.
+     *
+     * PROVIDER cannot be invited from this route — it carries no diary, so the
+     * membership it would create can do nothing (phase-9-provider-onboarding
+     * §2.11). Promoting an existing member is a different act and is still
+     * allowed, so that is how this fixture reaches it.
+     */
     async function tenantWith(role: string, label: string) {
       const owner = await signUp(`${label}-owner`);
       const member = await signUp(`${label}-member`);
       const tenantId = await createTenant(owner.cookie, `${label}-${RUN}`, label);
+      const invitedAs = role === "PROVIDER" ? "ADMIN" : role;
 
       const invited = await app.inject({
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(owner.cookie, tenantId),
-        payload: { email: member.email, role },
+        payload: { email: member.email, role: invitedAs },
       });
 
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
@@ -595,6 +684,19 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
         headers: as(member.cookie),
         payload: { token },
       });
+
+      if (invitedAs !== role) {
+        const membership = await app.prisma.membership.findFirst({
+          where: { tenantId, userId: member.id },
+        });
+        const promoted = await app.inject({
+          method: "PATCH",
+          url: `/v1/members/${membership!.id}`,
+          headers: as(owner.cookie, tenantId),
+          payload: { role },
+        });
+        expect(promoted.statusCode, promoted.body).toBe(200);
+      }
 
       return { owner, member, tenantId };
     }

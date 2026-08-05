@@ -86,6 +86,22 @@ export class ProviderService {
     return this.providers.archive(args);
   }
 
+  /**
+   * Undo an archive.
+   *
+   * Idempotent: restoring a provider that is not archived returns it unchanged,
+   * so a double submit converges rather than erroring. The route uses that to
+   * decide whether to write an audit event.
+   */
+  async restore(args: { tenantId: string; providerId: string }): Promise<Provider> {
+    // `includeArchived` is the whole point — without it this 404s on precisely
+    // the rows it exists to serve.
+    const provider = await this.providers.findByIdOrThrow({ ...args, includeArchived: true });
+    if (provider.archivedAt === null) return provider;
+
+    return this.providers.restore(args);
+  }
+
   // -------------------------------------------------------------------------
   // Assignments
   // -------------------------------------------------------------------------
@@ -119,8 +135,22 @@ export class ProviderService {
     await this.prisma.$transaction(async (tx) => {
       // Rows dropped from the set go away entirely: an assignment carries no
       // history worth keeping, unlike the service itself.
+      //
+      // Archived services are excluded from the sweep, because their absence
+      // from the submitted set is not a statement. The editor lists live
+      // services only, so an archived one *cannot* be ticked — and sending its
+      // id anyway is rejected by `assertServicesExist`. Without this predicate a
+      // caller had no correct move: omit it and the assignment is destroyed,
+      // include it and the request 404s. Everywhere else in this codebase an
+      // archived row simply does not participate; this makes assignments agree,
+      // and is what lets a restored service come back still assigned.
       await tx.providerService.deleteMany({
-        where: { tenantId, providerId, serviceId: { notIn: keptIds } },
+        where: {
+          tenantId,
+          providerId,
+          serviceId: { notIn: keptIds },
+          service: { archivedAt: null },
+        },
       });
 
       for (const entry of services) {
@@ -155,8 +185,15 @@ export class ProviderService {
     const keptIds = locations.map((entry) => entry.locationId);
 
     await this.prisma.$transaction(async (tx) => {
+      // Archived locations are left alone, for the reason spelled out in
+      // `setServices` above.
       await tx.providerLocation.deleteMany({
-        where: { tenantId, providerId, locationId: { notIn: keptIds } },
+        where: {
+          tenantId,
+          providerId,
+          locationId: { notIn: keptIds },
+          location: { archivedAt: null },
+        },
       });
 
       for (const entry of locations) {

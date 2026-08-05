@@ -273,6 +273,12 @@ export class AvailabilityService {
 
     if (input.locationId && !location) throw locationNotFound();
 
+    // Nothing further is asked about the service and the location. A location is
+    // one of the organization's sites and nothing more; whether a service is
+    // offered there is answered by whether a provider who offers it works there,
+    // which the working-hours scope below already decides. `service_locations`
+    // used to answer it a second time and was removed — see the phase record.
+
     // Providers who actually offer this service. An assignment that is inactive
     // at either end is not an offer.
     const assignments = await this.prisma.providerService.findMany({

@@ -118,6 +118,12 @@ export interface Member {
   id: string;
   role: string;
   status: string;
+  /**
+   * The diary this membership holds. Null on every non-provider member, and on
+   * a PROVIDER it is the difference between a working login and one whose every
+   * permission matches nothing — which is why the members table shows it.
+   */
+  providerId: string | null;
   joinedAt: string | null;
   user: { id: string; name: string; email: string };
 }
@@ -126,8 +132,20 @@ export interface Invitation {
   id: string;
   email: string;
   role: string;
+  /** The diary a PROVIDER invitation is for. Null for every other role. */
+  providerId: string | null;
   expiresAt: string;
   invitedBy: { name: string; email: string };
+}
+
+/** What `POST /v1/providers/:id/invitation` returns. Shown once — see §2.6. */
+export interface ProviderInvitation {
+  id: string;
+  email: string;
+  role: "PROVIDER";
+  providerId: string;
+  expiresAt: string;
+  acceptUrl: string;
 }
 
 // --- Catalogue (Epic 2) ----------------------------------------------------
@@ -142,7 +160,14 @@ export interface Provider {
   languages: string[];
   active: boolean;
   onlineBookingEnabled: boolean;
+  /** NULL means *inherit*, not zero — the engine takes the most restrictive
+   *  value that applies (tech-impl §13.3, `provider.schemas.ts` §4-13). Zero is
+   *  a real value meaning "bookable up to the last second". */
+  minimumNoticeMinutes: number | null;
+  maximumAdvanceDays: number | null;
   archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ServiceTranslation {
@@ -164,8 +189,24 @@ export interface Service {
   currency: string | null;
   active: boolean;
   requiresApproval: boolean;
+  /** NULL means *inherit* — see {@link Provider.minimumNoticeMinutes}. */
+  minimumNoticeMinutes: number | null;
+  maximumAdvanceDays: number | null;
   translations: ServiceTranslation[];
   archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * `GET /v1/services/:serviceId`, which carries the assignments the list does not.
+ *
+ * Read-only here: assignments are written from the provider side only, because a
+ * second whole-set writer over `provider_services` would clobber the first with
+ * no version column to notice.
+ */
+export interface ServiceDetail extends Service {
+  providers: { providerId: string; displayName: string; active: boolean }[];
 }
 
 export type LocationType = "PHYSICAL" | "ONLINE" | "HOME_VISIT" | "TELEPHONE";
@@ -175,19 +216,40 @@ export interface Location {
   name: string;
   type: LocationType;
   addressLine1: string | null;
+  addressLine2: string | null;
   city: string | null;
   postalCode: string | null;
   countryCode: string | null;
   timezone: string;
+  /** Stored but unread until the public map (phase-2 §5.5). */
+  latitude: number | null;
+  longitude: number | null;
   active: boolean;
   archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
+/**
+ * One row of `GET /v1/providers/:id/services`.
+ *
+ * Every field here has to survive a round trip through the assignment editor:
+ * the matching `PUT` replaces the whole set, so anything the editor fails to
+ * send back is deleted. See `buildProviderServicesBody` in `./assignments`.
+ */
 export interface AssignedService {
   serviceId: string;
   serviceName: string;
+  serviceSlug: string;
+  /** The *service's* liveness: `active && archivedAt === null`. */
   serviceActive: boolean;
+  /** Effective duration: `customDurationMinutes ?? service.durationMinutes`. */
   durationMinutes: number;
+  /** NULL means "use the service's own". */
+  customDurationMinutes: number | null;
+  /** Minor units in the *service's* currency — there is no currency column here. */
+  customPriceMinor: number | null;
+  /** The assignment's own flag, distinct from {@link serviceActive}. */
   active: boolean;
 }
 
@@ -195,6 +257,7 @@ export interface AssignedLocation {
   locationId: string;
   locationName: string;
   locationType: LocationType;
+  locationActive: boolean;
   active: boolean;
 }
 
@@ -213,6 +276,18 @@ export function formatMoney(minor: number, currency: string, locale: string): st
 /** The inverse: what the user typed into a price field, as minor units. */
 export function toMinorUnits(amount: number, currency: string): number {
   return Math.round(amount * 10 ** minorUnitDigits(currency));
+}
+
+/**
+ * Minor units back to what belongs in a price input.
+ *
+ * Needed by every edit form, and deliberately a function rather than a `/ 100`
+ * at the call site: 1500000 is 15 000 Ft but 15 000.00 €, and getting that
+ * wrong misprices a service by two orders of magnitude in exactly one currency —
+ * the pilot tenant's.
+ */
+export function fromMinorUnits(minor: number, currency: string): number {
+  return minor / 10 ** minorUnitDigits(currency);
 }
 
 /**

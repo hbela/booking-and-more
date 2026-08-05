@@ -51,8 +51,11 @@ export const TENANT_HEADER = "x-tenant-id";
  * Order of precedence:
  *   1. `X-Tenant-Id` header — explicit, and what the dashboard sends.
  *   2. The session's `activeTenantId` — convenience for a plain browser visit.
+ *   3. The caller's sole ACTIVE membership, if they have exactly one.
  *
- * Both are validated identically. Neither is trusted.
+ * The first two are validated identically, and neither is trusted. The third is
+ * not client input at all: it is the membership table answering a question that
+ * has only one possible answer.
  */
 const tenantContextPlugin: FastifyPluginAsync = async (app) => {
   app.decorateRequest("tenant", undefined);
@@ -145,21 +148,56 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
     done();
   });
 
-  /** Header first, then whatever tenant the session was last working in. */
+  /**
+   * Header first, then the session's last tenant, then the only one it could be.
+   *
+   * ## Why the third step exists
+   *
+   * `activeTenantId` is only ever written by `POST /v1/tenants` and
+   * `POST /v1/tenants/:id/activate`. An owner who arrives by invitation — which
+   * is how every sales-led subscriber arrives (phase-9 §1) — passes through
+   * neither, so their session carries a null. The dashboard's tenant switcher is
+   * the only thing that calls `activate`, and it renders only when there are two
+   * or more tenants to switch between. A single-tenant invited owner therefore
+   * had no path to setting it, ever.
+   *
+   * The visible symptom was not an error, which is what made it hard to see:
+   * `/v1/me` is fetched without the header, so it fell to this function,
+   * returned nothing, and the handler's catch reported `permissions: []`. The
+   * screens still rendered — the web app takes its tenant id from
+   * `GET /v1/tenants` when `/v1/me` has none — so lists loaded and every "New"
+   * button was hidden, as though an owner simply lacked permission to configure
+   * their own clinic.
+   *
+   * A sole ACTIVE membership is not a guess and not a client hint: it is the
+   * membership table answering a question with exactly one possible answer. With
+   * two or more the request stays ambiguous and is refused, which is correct —
+   * that is also precisely when the switcher appears and can resolve it.
+   */
   async function resolveTenantId(request: FastifyRequest): Promise<string | undefined> {
     const header = request.headers[TENANT_HEADER];
     if (typeof header === "string" && header.length > 0) return header;
 
-    const cookie = request.headers.cookie;
-    if (!cookie || !request.user) return undefined;
+    const user = request.user;
+    if (!user) return undefined;
 
     const session = await app.prisma.session.findFirst({
-      where: { userId: request.user.id, expiresAt: { gt: new Date() } },
+      where: { userId: user.id, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
       select: { activeTenantId: true },
     });
 
-    return session?.activeTenantId ?? undefined;
+    if (session?.activeTenantId) return session.activeTenantId;
+
+    // `take: 2` rather than `findMany` — the only thing worth knowing is whether
+    // the answer is unambiguous.
+    const memberships = await app.prisma.membership.findMany({
+      where: { userId: user.id, status: MembershipStatuses.ACTIVE },
+      select: { tenantId: true },
+      take: 2,
+    });
+
+    return memberships.length === 1 ? memberships[0]?.tenantId : undefined;
   }
 };
 

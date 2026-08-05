@@ -16,6 +16,11 @@ export const providerResponseSchema = z.object({
   id: idSchema,
   displayName: z.string(),
   description: z.string().nullable(),
+  /**
+   * Nullable on the way out although both write schemas require it: the column
+   * is still `String?`, so a provider created before it became mandatory reads
+   * back as null. Narrowing this would 500 on exactly those rows.
+   */
   email: z.string().nullable(),
   phone: z.string().nullable(),
   timezone: z.string(),
@@ -32,7 +37,16 @@ export const providerResponseSchema = z.object({
 export const createProviderBodySchema = z.object({
   displayName: z.string().min(2).max(160),
   description: z.string().max(4000).optional(),
-  email: z.email().optional(),
+  /**
+   * Required, and not nullable on update either.
+   *
+   * A provider is a diary, not a login (`Membership.providerId` is what links
+   * the two), so this address does not sign anybody in. It is how the person
+   * behind the diary is reachable at all — the invitation that would give them a
+   * login is addressed to it, and so is every notification about their own
+   * bookings. A provider with no address is a diary nobody can be told about.
+   */
+  email: z.email(),
   phone: z.string().max(40).optional(),
   /** Omitted means "the tenant's zone" — resolved server-side, never left NULL. */
   timezone: timezoneSchema.optional(),
@@ -52,7 +66,8 @@ export const updateProviderBodySchema = z
   .object({
     displayName: z.string().min(2).max(160),
     description: z.string().max(4000).nullable(),
-    email: z.email().nullable(),
+    /** Not nullable: see the create schema. It may be corrected, never cleared. */
+    email: z.email(),
     phone: z.string().max(40).nullable(),
     timezone: timezoneSchema,
     languages: z.array(languageSchema).max(8),

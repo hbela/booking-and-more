@@ -1,37 +1,21 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions, canChangeMemberRole, canRemoveMember } from "@bam/auth";
-import { ForbiddenError, NotFoundError, commonErrorResponses, idSchema } from "@bam/contracts";
+import {
+  ForbiddenError,
+  NotFoundError,
+  buildAppUrl,
+  commonErrorResponses,
+  idSchema,
+} from "@bam/contracts";
+import type { AuditEntry } from "../../plugins/audit.plugin.js";
 import { MembershipService } from "./membership.service.js";
-
-const roleSchema = z.enum(["OWNER", "ADMIN", "PROVIDER", "ASSISTANT", "CUSTOMER"]);
-/**
- * Roles grantable by invitation. Spelled out rather than derived from
- * INVITABLE_ROLES so Zod infers a literal union instead of `string` — the
- * derived version type-checked but let any string through the handler types.
- * Kept in step with @bam/auth by the test in membership.test.ts.
- */
-const invitableRoleSchema = z.enum(["OWNER", "ADMIN", "PROVIDER", "ASSISTANT"]);
-
-const memberResponseSchema = z.object({
-  id: idSchema,
-  role: roleSchema,
-  status: z.enum(["INVITED", "ACTIVE", "SUSPENDED"]),
-  providerId: z.string().nullable(),
-  joinedAt: z.iso.datetime({ offset: true }).nullable(),
-  createdAt: z.iso.datetime({ offset: true }),
-  user: z.object({ id: idSchema, name: z.string(), email: z.email() }),
-});
-
-const invitationResponseSchema = z.object({
-  id: idSchema,
-  email: z.email(),
-  role: roleSchema,
-  status: z.enum(["PENDING", "ACCEPTED", "REVOKED", "EXPIRED"]),
-  expiresAt: z.iso.datetime({ offset: true }),
-  createdAt: z.iso.datetime({ offset: true }),
-  invitedBy: z.object({ id: idSchema, name: z.string(), email: z.email() }),
-});
+import {
+  invitableRoleSchema,
+  invitationResponseSchema,
+  memberResponseSchema,
+  roleSchema,
+} from "./membership.schemas.js";
 
 export interface MembershipRoutesOptions {
   invitationExpiryHours: number;
@@ -239,7 +223,15 @@ export const membershipRoutes: FastifyPluginAsyncZod<MembershipRoutesOptions> = 
         email: request.body.email,
         role: request.body.role,
         expiresAt: result.expiresAt.toISOString(),
-        acceptUrl: `${options.appBaseUrl}/invitations/${result.token}`,
+        // Locale-prefixed. Concatenating this by hand is the defect
+        // phase-9-owner-language-and-return-paths §2 fixed everywhere else: an
+        // unprefixed path *is* the Hungarian URL, so an English organization's
+        // invitee was linked to a Hungarian screen.
+        acceptUrl: buildAppUrl({
+          baseUrl: options.appBaseUrl,
+          path: `/invitations/${result.token}`,
+          locale: tenant.defaultLanguage,
+        }),
       });
     },
   );
@@ -266,6 +258,7 @@ export const membershipRoutes: FastifyPluginAsyncZod<MembershipRoutesOptions> = 
           id: invitation.id,
           email: invitation.email,
           role: invitation.role,
+          providerId: invitation.providerId,
           status: invitation.status,
           expiresAt: invitation.expiresAt.toISOString(),
           createdAt: invitation.createdAt.toISOString(),
@@ -349,6 +342,8 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
         after: { role: result.membership.role, userId: user.id },
       });
 
+      auditProviderLink(request, result);
+
       return { tenantId: result.tenantId, role: result.membership.role };
     },
   );
@@ -376,6 +371,13 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
             organizationName: z.string(),
             email: z.email(),
             role: roleSchema,
+            /**
+             * The diary a PROVIDER invitation is for, so the page can say
+             * "join X as Dr. Kovács Anna" — which is how an invitee notices
+             * they were sent the wrong person's link before accepting it.
+             * Null for every other invitation.
+             */
+            providerName: z.string().nullable(),
             expiresAt: z.iso.datetime({ offset: true }),
             requiresRegistration: z.boolean(),
           }),
@@ -450,6 +452,8 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
         after: { role: result.membership.role, userId: result.userId },
       });
 
+      auditProviderLink(request, result);
+
       return reply.status(201).send({
         tenantId: result.tenantId,
         role: result.membership.role,
@@ -457,3 +461,29 @@ export const invitationAcceptRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 };
+
+/**
+ * A provider invitation links the diary as it is accepted, so record that it
+ * happened. docs/phase-9-provider-onboarding.md §2.7.
+ *
+ * Reuses `membership.provider_linked` — the same action `PATCH /v1/members/:id`
+ * emits — so "when did this membership get this diary" stays one grep rather
+ * than two. Which route did it is already in the acceptance entry beside this.
+ */
+function auditProviderLink(
+  request: { audit: (entry: AuditEntry) => void },
+  result: {
+    tenantId: string;
+    membership: { id: string; userId: string; providerId: string | null };
+  },
+): void {
+  if (result.membership.providerId === null) return;
+
+  request.audit({
+    action: "membership.provider_linked",
+    entityType: "Membership",
+    entityId: result.membership.id,
+    tenantId: result.tenantId,
+    after: { providerId: result.membership.providerId, userId: result.membership.userId },
+  });
+}

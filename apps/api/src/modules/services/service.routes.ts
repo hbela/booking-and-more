@@ -217,6 +217,51 @@ export const serviceRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
+  // --- Restore --------------------------------------------------------------
+  //
+  // Its own route rather than a PATCH field, matching the DELETE it undoes.
+  // Worth knowing when reading this: archiving a service reserves its slug
+  // permanently, because the unique index covers archived rows. Restore is
+  // therefore the *only* way to get that name back — which is why an accidental
+  // archive has to be undoable at all.
+  app.post(
+    "/:serviceId/restore",
+    {
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.SERVICE_MANAGE)],
+      schema: {
+        tags: ["services"],
+        summary: "Restore an archived service",
+        description:
+          "Clears archivedAt and leaves the service inactive, so it does not reappear on the public booking page until it is activated. Restoring a service that is not archived is a no-op.",
+        params: z.object({ serviceId: idSchema }),
+        response: { 200: serviceResponseSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const tenantId = request.tenant!.id;
+      const { serviceId } = request.params;
+
+      const before = await services.findByIdOrThrow({
+        tenantId,
+        serviceId,
+        includeArchived: true,
+      });
+      const restored = await catalog.restore({ tenantId, serviceId });
+
+      if (before.archivedAt !== null) {
+        request.audit({
+          action: "service.restored",
+          entityType: "Service",
+          entityId: serviceId,
+          before: toServiceResponse(before),
+          after: toServiceResponse(restored),
+        });
+      }
+
+      return toServiceResponse(restored);
+    },
+  );
+
   // --- Translations ---------------------------------------------------------
   app.put(
     "/:serviceId/translations",

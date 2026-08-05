@@ -1,5 +1,5 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { commonErrorResponses } from "@bam/contracts";
+import { buildAppUrl, commonErrorResponses } from "@bam/contracts";
 
 import { PlatformService } from "./platform.service.js";
 import {
@@ -94,7 +94,15 @@ export const platformRoutes: FastifyPluginAsyncZod<PlatformRoutesOptions> = asyn
 
       return reply.status(201).send({
         organization,
-        acceptUrl: `${options.appBaseUrl}/invitations/${result.invitationToken}`,
+        // Locale-prefixed, like every link we hand out
+        // (phase-9-owner-language-and-return-paths §2): an unprefixed path *is*
+        // the Hungarian URL, so this used to send an English owner to a
+        // Hungarian screen.
+        acceptUrl: buildAppUrl({
+          baseUrl: options.appBaseUrl,
+          path: `/invitations/${result.invitationToken}`,
+          locale: request.body.defaultLanguage,
+        }),
       });
     },
   );
@@ -128,7 +136,13 @@ export const platformRoutes: FastifyPluginAsyncZod<PlatformRoutesOptions> = asyn
         after: { ownerEmail: result.acceptEmail },
       });
 
-      return { acceptUrl: `${options.appBaseUrl}/invitations/${result.invitationToken}` };
+      return {
+        acceptUrl: buildAppUrl({
+          baseUrl: options.appBaseUrl,
+          path: `/invitations/${result.invitationToken}`,
+          locale: result.defaultLanguage,
+        }),
+      };
     },
   );
 

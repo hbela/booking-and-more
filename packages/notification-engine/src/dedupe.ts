@@ -90,6 +90,18 @@ export type DedupeInput =
       channel: NotificationChannel;
       eventId: string;
     }
+  /**
+   * Keyed on the outbox event for the same reason as ORGANIZATION_CREATED, which
+   * this is the staff-side sibling of: re-inviting a provider means "they never
+   * got it", so it emits another event and owes another email. Keying on the
+   * provider would send the first and swallow every resend — and a resend is
+   * the recovery path (docs/phase-9-provider-onboarding.md §2.5).
+   */
+  | {
+      type: typeof NotificationTypes.PROVIDER_INVITED;
+      channel: NotificationChannel;
+      eventId: string;
+    }
   | {
       /**
        * Keyed on the outbox event, not the tenant: an owner who clicks
@@ -192,6 +204,7 @@ function discriminatorFor(input: DedupeInput): string[] {
       return [input.integrationId, input.dayIso];
 
     case NotificationTypes.ORGANIZATION_CREATED:
+    case NotificationTypes.PROVIDER_INVITED:
     case NotificationTypes.SUBSCRIPTION_LINK:
     case NotificationTypes.TRIAL_ENDING_SOON:
     case NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED:

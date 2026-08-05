@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions } from "@bam/auth";
-import { commonErrorResponses, idSchema, paginatedSchema } from "@bam/contracts";
+import { buildAppUrl, commonErrorResponses, idSchema, paginatedSchema } from "@bam/contracts";
 // The Prisma join-table types are aliased: `ProviderService` is also the name of
 // this module's service class, and the domain gives us no better word for
 // either.
@@ -13,6 +13,7 @@ import type {
   Service,
 } from "@bam/db";
 import { pageOf } from "../../lib/pagination.js";
+import { MembershipService } from "../memberships/membership.service.js";
 import { ProviderService } from "./provider.service.js";
 import {
   createProviderBodySchema,
@@ -83,9 +84,18 @@ function toAssignedLocation(
  * every write additionally requires a writable tenant, so a suspended account
  * can still be read but not reconfigured.
  */
-export const providerRoutes: FastifyPluginAsyncZod = async (app) => {
+export interface ProviderRoutesOptions {
+  invitationExpiryHours: number;
+  appBaseUrl: string;
+}
+
+export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = async (app, options) => {
   const service = new ProviderService(app.prisma);
   const providers = service.repository;
+  // Invitations are the membership module's business, including this one — see
+  // the doc comment on `inviteProvider`. This route's own job is the rule-5
+  // lookup that proves the diary belongs to the caller's tenant.
+  const memberships = new MembershipService(app.prisma);
 
   // --- List -----------------------------------------------------------------
   app.get(
@@ -238,6 +248,140 @@ export const providerRoutes: FastifyPluginAsyncZod = async (app) => {
       });
 
       return reply.status(204).send(null);
+    },
+  );
+
+  // --- Restore --------------------------------------------------------------
+  //
+  // A route of its own rather than `archivedAt: null` on the PATCH body, for the
+  // same reason archiving is a DELETE (see provider.schemas.ts): it stays one
+  // auditable action instead of a field any edit form could toggle by accident
+  // while round-tripping what it read.
+  app.post(
+    "/:providerId/restore",
+    {
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.PROVIDER_MANAGE)],
+      schema: {
+        tags: ["providers"],
+        summary: "Restore an archived provider",
+        description:
+          "Clears archivedAt and leaves the provider inactive, so restoring never puts them back in front of customers in one step. Restoring a provider that is not archived is a no-op.",
+        params: z.object({ providerId: idSchema }),
+        // 200 rather than 204: the caller needs to see that `active` came back
+        // false, so it can offer the second, deliberate press.
+        response: { 200: providerResponseSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const tenantId = request.tenant!.id;
+      const { providerId } = request.params;
+
+      const before = await providers.findByIdOrThrow({
+        tenantId,
+        providerId,
+        includeArchived: true,
+      });
+      const restored = await service.restore({ tenantId, providerId });
+
+      // Nothing changed, so nothing is recorded — an audit trail of no-ops is
+      // noise that makes the real restore harder to find.
+      if (before.archivedAt !== null) {
+        request.audit({
+          action: "provider.restored",
+          entityType: "Provider",
+          entityId: providerId,
+          before: toProviderResponse(before),
+          after: toProviderResponse(restored),
+        });
+      }
+
+      return toProviderResponse(restored);
+    },
+  );
+
+  // --- Invite the person behind the diary ------------------------------------
+  //
+  // docs/phase-9-provider-onboarding.md. This is the whole of "give a provider
+  // a login": until it existed, doing so meant issuing a generic invitation on
+  // one screen and then linking the resulting membership to the diary on
+  // another — and the second screen was never built, so every PROVIDER
+  // membership held `:own` permissions that matched nothing.
+  app.post(
+    "/:providerId/invitation",
+    {
+      // MEMBER_MANAGE, not PROVIDER_MANAGE. The row this creates is an
+      // Invitation that grants a Membership; the provider is the *object*, not
+      // the thing being changed (rule 10). OWNER and ADMIN hold both today, so
+      // nothing behaves differently — the point is that a future "may configure
+      // the catalogue but not hand out logins" role needs no edit here.
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.MEMBER_MANAGE)],
+      // Same budget as POST /v1/members/invitations: the same act.
+      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
+      schema: {
+        tags: ["providers"],
+        summary: "Invite this provider to set up their own login",
+        description:
+          "Emails the address on the provider record a single-use link. Accepting it creates the account, grants PROVIDER, and links the membership to this diary in one transaction — there is no second step. Re-inviting supersedes any live invitation for this provider or this address, so the newest link is the only one that works. There is no body: the role is always PROVIDER and the address comes from the provider record, because a route that accepted one alongside a provider id would be a way to attach any mailbox to a named diary. Correct a wrong address with PATCH /v1/providers/:providerId first.",
+        params: z.object({ providerId: idSchema }),
+        response: {
+          201: z.object({
+            id: idSchema,
+            email: z.email(),
+            role: z.literal("PROVIDER"),
+            providerId: idSchema,
+            expiresAt: z.iso.datetime({ offset: true }),
+            /**
+             * Shown once, and still returned even though an email is now sent:
+             * the worker memoises its email provider at boot and one that
+             * cannot deliver writes SKIPPED rather than a fake SENT
+             * (phase-9-owner-onboarding-emails §2). Without this an owner in
+             * that state has no recovery path at all. The UI keeps it behind a
+             * disclosure so the email stays the affordance.
+             */
+            acceptUrl: z.url(),
+          }),
+          ...commonErrorResponses,
+        },
+      },
+    },
+    async (request, reply) => {
+      const tenant = request.tenant!;
+      const { providerId } = request.params;
+
+      // Deliberately without includeArchived: an archived provider is a 404
+      // here by construction, which is the same answer as "no such provider"
+      // and needs no second branch (rule 5).
+      const provider = await providers.findByIdOrThrow({ tenantId: tenant.id, providerId });
+
+      const result = await memberships.inviteProvider({
+        tenantId: tenant.id,
+        provider,
+        invitedByUserId: request.user!.id,
+        invitedByName: request.user!.name,
+        expiryHours: options.invitationExpiryHours,
+      });
+
+      // The same action a generic invitation records, so "who was invited into
+      // this tenant" stays one grep. The token is never audited or logged.
+      request.audit({
+        action: "membership.invited",
+        entityType: "Invitation",
+        entityId: result.invitationId,
+        after: { email: result.email, role: "PROVIDER", providerId },
+      });
+
+      return reply.status(201).send({
+        id: result.invitationId,
+        email: result.email,
+        role: "PROVIDER" as const,
+        providerId,
+        expiresAt: result.expiresAt.toISOString(),
+        acceptUrl: buildAppUrl({
+          baseUrl: options.appBaseUrl,
+          path: `/invitations/${result.token}`,
+          locale: tenant.defaultLanguage,
+        }),
+      });
     },
   );
 

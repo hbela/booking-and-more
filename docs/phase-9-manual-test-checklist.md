@@ -4,9 +4,9 @@ half and open questions 1 and 2 of
 
 # Phase 9 — Manual test checklist
 
-**Document version:** 1.0 — written 2026-08-02, **not yet walked**.
+**Document version:** 1.1 — written 2026-08-02, §M added 2026-08-04. **Not yet walked.**
 **Covers:** provisioning → invitation → the pending gate → subscribing → Stripe checkout → activation →
-the portal → the lifecycle → degradation → localization and accessibility.
+the portal → the lifecycle → degradation → localization and accessibility → giving a provider a login.
 **Read first:** [phase-9-duplicate-subscription-prevention.md](phase-9-duplicate-subscription-prevention.md)
 §2 and §4 — the design this walk exists to validate.
 
@@ -276,6 +276,63 @@ exists. Provision one and repeat the path.
 - [ ] **L7** Repeat L1 with Language left at **Hungarian** and confirm the links have **no** prefix. Both
       directions matter: a helper that prefixed unconditionally would pass L2–L6 and break every existing
       organization.
+
+## M. Provider onboarding — giving a provider a login
+
+[phase-9-provider-onboarding.md](phase-9-provider-onboarding.md). Needs an **ACTIVE** organization, so run
+this after F. Create a service first, then a provider — the screen refuses to be useful without one.
+
+The point of the whole section is **M6**: the membership must come out already linked to the diary. Every
+other check is a way that can silently not happen.
+
+- [ ] **M1** Providers → a provider row carries an **Invite** button beside Edit / Assign / Availability.
+      Signed in as an ASSISTANT, it is absent (it asks for `member:manage`, not `provider:manage`).
+- [ ] **M2** Press it. The panel names **the address on the provider record**, and there is no email field —
+      the address is not the caller's to choose (§2.4).
+- [ ] **M3** Submit → `role="status"` "Invitation sent to …". The acceptance link is **not** on screen until
+      you open **Show the link instead**; that disclosure is the escape hatch for the delivery-off case in
+      §2 above, not the mechanism (§2.6).
+- [ ] **M4** The email arrives in the organization's language, names who invited them, says **no password is
+      coming**, and its link carries `/en` for an English organization. It must *not* offer to add services
+      or staff — a provider has no such screens (§2.8).
+- [ ] **M5** Open the link in a **private window**. The heading reads "Join {organization} as {provider}",
+      naming the diary — which is how somebody notices they were sent the wrong person's link before
+      accepting it. Only Name and Password; under 12 characters is rejected.
+- [ ] **M6** Accept → the button reads **Set up my working hours** and lands on `/dashboard/availability`,
+      with **their own diary already selected and no provider picker**. ★ Confirm in the database that the
+      membership has `role = 'PROVIDER'` **and** a non-null `provider_id`. A null here is the entire bug this
+      work exists to remove, and every screen still looks fine.
+- [ ] **M7** Their navigation shows exactly **Overview, Bookings, Availability** — not Subscription, Services,
+      Locations or Providers (§2.9).
+- [ ] **M8** Set working hours and save. Then edit the URL to another provider's id: expect **403**, not a
+      rendered screen. The API decides, not the picker.
+- [ ] **M9** Back as the owner, the same row's button now reads **Resend invitation**. Press it, and confirm
+      the **first** link is now dead ("This invitation link is not valid.") while the second works (§2.5).
+- [ ] **M10** Correct the provider's email on the Edit panel, then invite again. It succeeds, and there is
+      exactly one PENDING invitation for that provider — the old address's one was superseded too.
+- [ ] **M11 — the race.** Invite provider X. *Before* accepting, invite a second person as a plain PROVIDER,
+      accept as them, and link them to X on the members list. Now accept the first link: expect a clear 409
+      ("Someone else has already been given this provider's login"), **no** membership for the first person,
+      and — check the database — the invitation still `PENDING`. Unlink the second person and the original
+      link works again with no reissue (§2.7).
+- [ ] **M12** Archive a provider, then press Invite by URL: 404. Invite, *then* archive, *then* accept: 409
+      naming the provider as no longer active, invitation still PENDING.
+- [ ] **M13** *Known gap, expected.* A provider created before 2026-08-04 may have no email address. Its
+      Invite button is present but disabled, with the reason spelled out under the table rather than left to
+      be guessed (§7.1).
+- [ ] **M14** *Side effect worth confirming.* Sign in as an **ASSISTANT**: their navigation is now Overview
+      and Bookings only, having lost four items they could never act on. Outside this feature's scope and
+      recorded in §2.9 rather than left to be discovered.
+- [ ] **M15 — the trap that was found by walking, not by testing (§2.11).** On **Overview → Invite
+      someone**, the role dropdown offers OWNER, ADMIN and ASSISTANT and **not PROVIDER**, with a notice
+      pointing at Providers. Then try it anyway with `curl` or the API docs: `POST /v1/members/invitations`
+      with `role: "PROVIDER"` must return **422**, naming the Providers screen. A membership created this
+      way can do nothing and says nothing about why, which is the whole reason §M exists.
+- [ ] **M16** The members table has a **Diary** column: the provider's name for a linked member, an em dash
+      for an owner or assistant, and — for a PROVIDER holding none — a select of unlinked providers.
+      Picking one links them; their own navigation gains **Availability** on their next load. This is the
+      repair for anyone stranded before M15 existed, and the reason the invite route's "already a member"
+      message is now true.
 
 ---
 

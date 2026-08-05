@@ -49,6 +49,7 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
   let tenantId: string;
   let bookingId: string;
   let customerId: string;
+  let providerId: string;
 
   const options = (registry: QueueRegistry) => ({
     prisma,
@@ -92,6 +93,7 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
       }),
     ]);
     customerId = customer.id;
+    providerId = provider.id;
 
     const booking = await prisma.booking.create({
       data: {
@@ -284,6 +286,122 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
 
       const settled = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
       expect(settled.status).toBe("PROCESSED");
+    });
+  });
+
+  describe("PROVIDER_INVITED", () => {
+    // Spelled out rather than `Record<string, unknown>`, which Prisma's JSON
+    // input type refuses — an index signature admits `undefined`, and the
+    // column cannot hold it.
+    const writeInvite = (payload: {
+      email?: string;
+      providerName?: string;
+      invitedByName?: string;
+      invitationToken?: string;
+      expiresAt?: string;
+    }) =>
+      prisma.outboxEvent.create({
+        data: {
+          tenantId,
+          eventType: "PROVIDER_INVITED",
+          // The branch that exists because `dispatchOne` otherwise routes every
+          // non-Booking aggregate into a debug-logged no-op.
+          aggregateType: "Provider",
+          aggregateId: providerId,
+          payload,
+        },
+      });
+
+    const invitePayload = {
+      email: "anna@example.test",
+      providerName: "Dr Teszt",
+      invitedByName: "Nagy Béla",
+      invitationToken: "tok_abc123",
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString(),
+    };
+
+    it("creates one email carrying a link the sender could not rebuild", async () => {
+      await writeInvite(invitePayload);
+      const { registry, notifications } = fakeQueues();
+
+      const summary = await dispatchOutboxBatch(options(registry));
+
+      expect(summary.notificationsCreated).toBe(1);
+
+      const [notification] = await prisma.notification.findMany({
+        where: { tenantId, type: "PROVIDER_INVITED" },
+      });
+      expect(notification).toMatchObject({
+        recipient: "anna@example.test",
+        template: "provider-invited",
+        // The organization's language, not the provider's `languages[]`.
+        locale: "hu",
+      });
+      // Only a hash of the token is stored, so this payload is the one copy.
+      expect(notification!.payload).toMatchObject({
+        acceptUrl: "http://localhost:3000/invitations/tok_abc123",
+        organizationName: "Dispatch Clinic",
+        providerName: "Dr Teszt",
+        invitedByName: "Nagy Béla",
+      });
+      expect(notifications.added).toHaveLength(1);
+    });
+
+    it("prefixes the link with the locale for an English organization", async () => {
+      // An unprefixed path *is* the Hungarian URL, so an English recipient used
+      // to be sent to a Hungarian screen.
+      await prisma.tenant.update({ where: { id: tenantId }, data: { defaultLanguage: "en" } });
+      await writeInvite(invitePayload);
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const [notification] = await prisma.notification.findMany({
+        where: { tenantId, type: "PROVIDER_INVITED" },
+      });
+      expect(notification!.locale).toBe("en");
+      expect(notification!.payload).toMatchObject({
+        acceptUrl: "http://localhost:3000/en/invitations/tok_abc123",
+      });
+    });
+
+    it("sends again for a resend, because a resend means the first did not arrive", async () => {
+      await writeInvite(invitePayload);
+      await writeInvite({ ...invitePayload, invitationToken: "tok_second" });
+
+      const summary = await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      // The dedupe key is the event id, not the provider — keying on the
+      // provider would swallow every resend, which is the recovery path.
+      expect(summary.notificationsCreated).toBe(2);
+    });
+
+    it("treats a cleared payload as already dispatched rather than a failure", async () => {
+      // markProcessed clears the payload to bound the token's exposure; a
+      // re-claim between the clear and the status write must be a no-op.
+      const event = await writeInvite({});
+
+      const summary = await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      expect(summary.notificationsCreated).toBe(0);
+      const settled = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+      expect(settled.status).toBe("PROCESSED");
+    });
+
+    it("still sends when the diary has been renamed away, falling back to the payload", async () => {
+      await writeInvite(invitePayload);
+      await prisma.provider.update({
+        where: { id: providerId },
+        data: { displayName: "Somebody Else" },
+      });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const [notification] = await prisma.notification.findMany({
+        where: { tenantId, type: "PROVIDER_INVITED" },
+      });
+      // The live row wins when it is there — the greeting should match what the
+      // organization calls this person today.
+      expect(notification!.payload).toMatchObject({ providerName: "Somebody Else" });
     });
   });
 

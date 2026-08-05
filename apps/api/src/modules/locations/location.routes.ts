@@ -182,4 +182,49 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
       return reply.status(204).send(null);
     },
   );
+
+  // --- Restore --------------------------------------------------------------
+  //
+  // Its own route rather than a PATCH field, matching the DELETE it undoes and
+  // the two sibling catalogues. Restoring leaves the location inactive: DELETE
+  // sets both flags, but "gone" and "off for now" are different questions
+  // (rule 11), and only the first is being answered here.
+  app.post(
+    "/:locationId/restore",
+    {
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.LOCATION_MANAGE)],
+      schema: {
+        tags: ["locations"],
+        summary: "Restore an archived location",
+        description:
+          "Clears archivedAt and leaves the location inactive. Restoring a location that is not archived is a no-op.",
+        params: z.object({ locationId: idSchema }),
+        response: { 200: locationResponseSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const tenantId = request.tenant!.id;
+      const { locationId } = request.params;
+
+      const before = await locations.findByIdOrThrow({
+        tenantId,
+        locationId,
+        includeArchived: true,
+      });
+      const restored = await service.restore({ tenantId, locationId });
+
+      // A no-op restore is not an audit event.
+      if (before.archivedAt !== null) {
+        request.audit({
+          action: "location.restored",
+          entityType: "Location",
+          entityId: locationId,
+          before: toLocationResponse(before),
+          after: toLocationResponse(restored),
+        });
+      }
+
+      return toLocationResponse(restored);
+    },
+  );
 };

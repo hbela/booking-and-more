@@ -89,4 +89,13 @@ export class LocationService {
   async archive(args: { tenantId: string; locationId: string }): Promise<Location> {
     return this.locations.archive(args);
   }
+
+  /** Undo an archive. Idempotent — restoring a live location returns it unchanged. */
+  async restore(args: { tenantId: string; locationId: string }): Promise<Location> {
+    // Without `includeArchived` this 404s on exactly the rows it serves.
+    const location = await this.locations.findByIdOrThrow({ ...args, includeArchived: true });
+    if (location.archivedAt === null) return location;
+
+    return this.locations.restore(args);
+  }
 }

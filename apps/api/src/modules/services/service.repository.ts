@@ -159,6 +159,27 @@ export class ServiceRepository {
     });
   }
 
+  /**
+   * Half the inverse of {@link archive}: `archivedAt` clears, `active` does not.
+   *
+   * Rule 11 — "gone" and "off for now" are different questions, and only the
+   * first is being answered here. Reactivating stays a separate press, so a
+   * restore cannot republish a service to the public booking page by itself.
+   *
+   * No slug check, deliberately. `@@unique([tenantId, slug])` has no
+   * `WHERE archived_at IS NULL` predicate, so an archived service keeps its slug
+   * reserved at the index level for as long as the row exists — nothing can have
+   * taken it while it was away. (If that index ever becomes partial, restore
+   * gains a failure mode and needs one.)
+   */
+  async restore(args: { tenantId: string; serviceId: string }): Promise<ServiceWithTranslations> {
+    return this.update({
+      tenantId: args.tenantId,
+      serviceId: args.serviceId,
+      data: { archivedAt: null },
+    });
+  }
+
   /** Providers offering this service, for the service detail screen. */
   async listProviders(args: {
     tenantId: string;
@@ -170,6 +191,7 @@ export class ServiceRepository {
       orderBy: { provider: { displayName: "asc" } },
     });
   }
+
 }
 
 export function serviceNotFound(): NotFoundError {

@@ -188,13 +188,23 @@ only; every action is authorised again server-side.
 1. **Invitations are not emailed.** The accept URL is returned once in the API response and shown once in the
    dashboard. Email delivery needs the notification worker, which is Epic 5. Flagged in the endpoint's own
    OpenAPI description rather than left implicit.
+
+   **Partially closed.** An *owner* invitation has been emailed since provisioning landed
+   (phase-9-saas-administration §1.4), and a *provider* invitation since 2026-08-04
+   ([phase-9-provider-onboarding.md](phase-9-provider-onboarding.md)). What is still true is the generic
+   `POST /v1/members/invitations` — inviting an admin or an assistant still means copying a link out of the
+   dashboard and pasting it into your own mail client. Kept as an open item rather than deleted, so the
+   remaining gap does not disappear along with the part that was fixed.
 2. **Email verification is off.** `requireEmailVerification: false` — until there is a way to deliver the
    mail, enabling it would lock every new account out. Turn on in Epic 5.
 3. **Rate limiting is per-instance.** In-process store until Redis arrives in Epic 5. `buildApp` takes an
    explicit `rateLimit` option so the integration suite can opt out without an `if (NODE_ENV === "test")`
    buried in the app.
-4. **`Membership.providerId` is never populated.** Epic 2 creates the `Provider` model and links it. The
-   `:own` permissions are inert until then, and tested to fail closed.
+4. ~~**`Membership.providerId` is never populated.**~~ **Closed by Epic 2**, which created the `Provider`
+   model and the foreign key, and by
+   [phase-9-provider-onboarding.md](phase-9-provider-onboarding.md), which made populating it the same act as
+   issuing the invitation rather than a second step on a screen that did not exist. The `:own` permissions
+   were inert and tested to fail closed until then.
 5. **Audit writes are best-effort**, by design — see §3.4.
 
 ---

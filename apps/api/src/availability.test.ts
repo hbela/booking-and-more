@@ -110,7 +110,10 @@ describe.skipIf(!databaseUrl)("availability", () => {
       return response.json().id as string;
     };
 
-    const providerId = await create("/v1/providers", { displayName: "Dr. Kovács Anna" });
+    const providerId = await create("/v1/providers", {
+      displayName: "Dr. Kovács Anna",
+      email: "anna@example.test",
+    });
     const serviceId = await create("/v1/services", {
       name: "Consultation",
       durationMinutes: 60,
@@ -499,11 +502,17 @@ describe.skipIf(!databaseUrl)("availability", () => {
       const site = await clinic(label);
       const member = await signUp(`${label}-provider`);
 
+      // Invited as an ADMIN and promoted, because PROVIDER cannot be invited
+      // from this route: it carries no diary, so the membership it creates can
+      // do nothing (phase-9-provider-onboarding §2.11). Promoting an existing
+      // member is a different act and still allowed. The route that invites a
+      // provider *with* their diary is POST /v1/providers/:id/invitation, and
+      // it has its own suite.
       const invited = await app.inject({
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(site.cookie, site.tenantId),
-        payload: { email: member.email, role: "PROVIDER" },
+        payload: { email: member.email, role: "ADMIN" },
       });
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
 
@@ -522,7 +531,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PATCH",
         url: `/v1/members/${membership!.id}`,
         headers: as(site.cookie, site.tenantId),
-        payload: { providerId: site.providerId },
+        payload: { role: "PROVIDER", providerId: site.providerId },
       });
       expect(linked.statusCode, linked.body).toBe(200);
 
@@ -549,7 +558,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(site.cookie, site.tenantId),
-        payload: { displayName: "Dr. Nagy Béla" },
+        payload: { displayName: "Dr. Nagy Béla", email: "bela@example.test" },
       });
       const otherProviderId = otherProvider.json().id as string;
 
@@ -574,7 +583,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(site.cookie, site.tenantId),
-        payload: { email: member.email, role: "PROVIDER" },
+        payload: { email: member.email, role: "ADMIN" },
       });
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
       await app.inject({
@@ -582,6 +591,19 @@ describe.skipIf(!databaseUrl)("availability", () => {
         url: "/v1/invitations/accept",
         headers: as(member.cookie),
         payload: { token },
+      });
+
+      // Promoted to PROVIDER and deliberately left unlinked — the state the
+      // generic invite route used to produce on its own, and which is now
+      // reachable only on purpose.
+      const membership = await app.prisma.membership.findFirst({
+        where: { tenantId: site.tenantId, userId: member.id },
+      });
+      await app.inject({
+        method: "PATCH",
+        url: `/v1/members/${membership!.id}`,
+        headers: as(site.cookie, site.tenantId),
+        payload: { role: "PROVIDER" },
       });
 
       const response = await app.inject({
@@ -613,7 +635,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(site.cookie, site.tenantId),
-        payload: { displayName: "Someone Else" },
+        payload: { displayName: "Someone Else", email: "someone@example.test" },
       });
 
       const theirs = await app.inject({
@@ -693,7 +715,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(site.cookie, site.tenantId),
-        payload: { displayName: "Dr. Nagy Béla" },
+        payload: { displayName: "Dr. Nagy Béla", email: "bela2@example.test" },
       });
       const secondId = second.json().id as string;
 
@@ -792,6 +814,45 @@ describe.skipIf(!databaseUrl)("availability", () => {
       });
 
       expect(response.statusCode).toBe(422);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Asking about one location
+  // -------------------------------------------------------------------------
+
+  describe("searching at a named location", () => {
+    // There was briefly a `service_locations` table answering "is this service
+    // offered here?" independently. It was removed: a location is one of the
+    // organization's sites, and whether a service is offered there follows from
+    // whether a provider who offers it works there. These two cases pin that
+    // down, because it is the rule the table used to override.
+
+    it("offers a service at a location nobody has said anything about", async () => {
+      const site = await clinic("loc-unrestricted");
+      await setHours(site, MONDAY_MORNING);
+
+      const slots = await searchSlots(site, { locationId: site.locationId });
+      expect(slots.length).toBeGreaterThan(0);
+    });
+
+    it("returns nothing at a location the provider does not work at", async () => {
+      const site = await clinic("loc-elsewhere");
+      await setHours(site, MONDAY_MORNING);
+
+      const elsewhere = await app.inject({
+        method: "POST",
+        url: "/v1/locations",
+        headers: as(site.cookie, site.tenantId),
+        payload: { name: "Annexe", type: "PHYSICAL", addressLine1: "Fő utca 2" },
+      });
+      const elsewhereId = elsewhere.json().id as string;
+
+      expect(await searchSlots(site, { locationId: elsewhereId })).toEqual([]);
+
+      // And asking without a location still finds them: the question is where,
+      // not whether.
+      expect((await searchSlots(site)).length).toBeGreaterThan(0);
     });
   });
 

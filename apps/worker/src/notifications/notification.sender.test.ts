@@ -271,4 +271,96 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
 
     expect(fake.sent[0]?.subject).toContain("készen áll");
   });
+
+  describe("PROVIDER_INVITED", () => {
+    const invitation = (overrides: Record<string, unknown> = {}) =>
+      createNotification({
+        type: "PROVIDER_INVITED",
+        template: "provider-invited",
+        recipient: "anna@example.test",
+        dedupeKey: `v1:PROVIDER_INVITED:EMAIL:${Math.random().toString(36).slice(2)}`,
+        payload: {
+          organizationName: "Wellness Kft",
+          providerName: "Dr. Kovács Anna",
+          invitedByName: "Nagy Béla",
+          acceptUrl: "http://localhost:3000/en/invitations/tok456",
+          expiresAt: new Date().toISOString(),
+        },
+        ...overrides,
+      });
+
+    it("sends the link and then wipes it", async () => {
+      const notification = await invitation();
+      const fake = provider({ ok: true, providerMessageId: "resend_prov" });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(fake),
+      );
+
+      expect(outcome).toBe("SENT");
+      expect(fake.sent[0]?.to).toBe("anna@example.test");
+      expect(fake.sent[0]?.html).toContain("http://localhost:3000/en/invitations/tok456");
+
+      const settled = await prisma.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      });
+      // The token's exposure is bounded to the moment it is needed.
+      expect(settled.payload).toEqual({});
+    });
+
+    it("greets the recipient by address when the payload names nobody", async () => {
+      const notification = await invitation({
+        payload: {
+          organizationName: "Wellness Kft",
+          acceptUrl: "http://localhost:3000/invitations/tok456",
+        },
+      });
+      const fake = provider({ ok: true, providerMessageId: "x" });
+
+      await sendNotification({ tenantId, notificationId: notification.id }, options(fake));
+
+      // Their own address beats their employer's name, and beats a blank.
+      expect(fake.sent[0]?.text).toContain("anna@example.test");
+      expect(fake.sent[0]?.text).toContain("Wellness Kft");
+    });
+
+    it("skips rather than sends an email with no link", async () => {
+      const notification = await invitation({ payload: { organizationName: "Wellness Kft" } });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(provider({ ok: true, providerMessageId: "z" })),
+      );
+
+      expect(outcome).toBe("SKIPPED");
+    });
+
+    it("keeps the payload when the provider cannot deliver", async () => {
+      // phase-9-owner-onboarding-emails §2: when nothing was sent, the token in
+      // that column is the only copy anyone has. Clearing it here would destroy
+      // the one route back to a stuck invitee.
+      const notification = await invitation();
+      const fake = provider({ ok: true, providerMessageId: "n/a" }, false);
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(fake),
+      );
+
+      // The provider *is* called — the logging one writes it to the log — and
+      // it accepts. What must not happen is the accept being recorded as SENT.
+      expect(outcome).toBe("SKIPPED");
+      expect(fake.sent).toHaveLength(1);
+
+      const settled = await prisma.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      });
+      expect(settled.status).toBe("SKIPPED");
+      expect(settled.providerMessageId).toBeNull();
+      expect(settled.payload).toMatchObject({
+        acceptUrl: "http://localhost:3000/en/invitations/tok456",
+      });
+    });
+  });
 });

@@ -14,5 +14,24 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    /**
+     * One file at a time, against the one shared test database.
+     *
+     * `dispatchOutboxBatch` claims across *every* tenant — it is a worker, not
+     * a request — so its assertions about how many rows it claimed are global
+     * by construction. The dispatcher suite empties the outbox in `beforeEach`
+     * to get exclusivity, which works only while nothing else is writing: run
+     * concurrently, `stripe.processor.test.ts` inserts its own outbox events
+     * mid-batch and the counts come out high.
+     *
+     * A latent race rather than a new one — it needed only a slower dispatcher
+     * file to surface, which docs/phase-9-provider-onboarding.md's tests
+     * supplied. Suffixing every id would not help; the claim is deliberately
+     * not scoped to a tenant, so the fix has to be that nobody else is writing.
+     *
+     * The API suite does not need this: its tests go through HTTP and assert on
+     * rows they can scope by tenant.
+     */
+    fileParallelism: false,
   },
 });

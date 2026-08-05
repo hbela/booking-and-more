@@ -25,6 +25,22 @@ export interface InviteResult {
 }
 
 /**
+ * Everything {@link MembershipService.inviteProvider} needs about the diary.
+ *
+ * A structural type rather than Prisma's `Provider`: the route has already
+ * resolved the row through `ProviderRepository.findByIdOrThrow`, which carries
+ * the `tenantId` rule 5 requires, and this method has no business re-reading it.
+ */
+export interface InviteProviderInput {
+  tenantId: string;
+  provider: { id: string; displayName: string; email: string | null; archivedAt: Date | null };
+  invitedByUserId: string;
+  /** Credited in the email. Null falls back to the organization's name. */
+  invitedByName: string | null;
+  expiryHours: number;
+}
+
+/**
  * Memberships and invitations.
  *
  * The two rules this class exists to enforce are "a tenant always has at least
@@ -171,6 +187,26 @@ export class MembershipService {
       });
     }
 
+    // PROVIDER *is* invitable — but not from here.
+    //
+    // This route has no diary to attach, so accepting produced a membership with
+    // `providerId` null: `availability:manage:own`, `booking:read:own` and
+    // `booking:manage:own`, every one of them matching nothing, and no error
+    // anywhere. The person has joined and can do nothing. That is precisely the
+    // defect docs/phase-9-provider-onboarding.md exists to remove, and leaving
+    // this path open left a second, worse way to reach it — on the landing tab,
+    // which is where somebody looking for "invite" looks first.
+    //
+    // Refused in the service rather than by narrowing INVITABLE_ROLES, because
+    // that constant is still telling the truth: the role is grantable by
+    // invitation, just by the route that knows which diary is meant.
+    if (input.role === Roles.PROVIDER) {
+      throw new ValidationError(
+        "Invite a provider from their row on the Providers screen, so the invitation carries their diary. Invited from here it would grant a role over no schedule, which can do nothing.",
+        { field: "role" },
+      );
+    }
+
     const email = input.email.toLowerCase();
 
     // Already a member: re-inviting would either be a no-op or silently change
@@ -188,30 +224,194 @@ export class MembershipService {
       );
     }
 
-    // Supersede any live invitation for this address, so the newest link is the
-    // only one that works and the partial unique index stays satisfied.
-    await this.prisma.invitation.updateMany({
-      where: { tenantId: input.tenantId, email, status: "PENDING" },
-      data: { status: "REVOKED" },
-    });
-
     // 32 bytes of CSPRNG output (tech-impl §34.4). Only the hash is persisted:
     // a database leak must not yield working invitation links.
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + input.expiryHours * 60 * 60 * 1000);
 
-    const invitation = await this.prisma.invitation.create({
-      data: {
-        tenantId: input.tenantId,
-        email,
-        role: input.role,
-        tokenHash: hashToken(token),
-        expiresAt,
-        invitedByUserId: input.invitedByUserId,
-      },
+    // One transaction, so the supersede and the replacement stand or fall
+    // together. Revoking first and creating afterwards — which is what this did
+    // until phase-9-provider-onboarding §3.1 — leaves the invitee's working link
+    // dead with no replacement if the create fails, and tells nobody.
+    const invitation = await this.prisma.$transaction(async (tx) => {
+      // Supersede any live invitation for this address, so the newest link is
+      // the only one that works and the partial unique index stays satisfied.
+      await tx.invitation.updateMany({
+        where: { tenantId: input.tenantId, email, status: "PENDING" },
+        data: { status: "REVOKED" },
+      });
+
+      return tx.invitation.create({
+        data: {
+          tenantId: input.tenantId,
+          email,
+          role: input.role,
+          tokenHash: hashToken(token),
+          expiresAt,
+          invitedByUserId: input.invitedByUserId,
+        },
+      });
     });
 
     return { invitationId: invitation.id, token, expiresAt };
+  }
+
+  /**
+   * Invite the person behind a provider diary to set up their own login.
+   * docs/phase-9-provider-onboarding.md §2.
+   *
+   * A named method rather than an optional `providerId` on {@link invite}:
+   * `invite` is `POST /v1/members/invitations`'s contract, and an optional diary
+   * parameter there would be a second, undocumented way to reach this feature
+   * that no screen uses and no test covers.
+   *
+   * What is here and not in `ProviderService`: the token, the hash, the
+   * supersede, the outbox event and the transaction that ties them together.
+   * Duplicating any of it is exactly how `findValidInvitation`'s own comment
+   * says these things drift apart.
+   *
+   * **The address comes from the provider record and nowhere else.** A caller
+   * that could supply one alongside a provider id would be able to attach an
+   * arbitrary mailbox to a named diary — phase-9-owner-onboarding §2.1's
+   * security property, moved one layer up to issuance (§2.4).
+   */
+  async inviteProvider(input: InviteProviderInput): Promise<InviteResult & { email: string }> {
+    const { tenantId, provider } = input;
+
+    // Belt and braces: the route resolves the provider without
+    // `includeArchived`, so an archived one is already a 404 there. Restated
+    // because this method writes the row, and a promise to a diary nobody can
+    // book is worth refusing wherever it can be refused.
+    if (provider.archivedAt !== null) {
+      throw new ConflictError(
+        ErrorCodes.VALIDATION_FAILED,
+        "That provider is archived. Restore them before inviting them.",
+      );
+    }
+
+    const email = provider.email?.trim().toLowerCase();
+
+    if (email === undefined || email === "") {
+      // Legacy rows only: both write schemas have required an address since
+      // phase-2-3 §2.8, but the column is still nullable (that record's §5.10).
+      throw new ValidationError(
+        "This provider has no email address. Add one to their record first.",
+        { field: "email" },
+      );
+    }
+
+    // Both pre-checks exist for the message, not the guarantee — the unique
+    // indexes are what hold under concurrency (rule 14). They are separate
+    // because each one has a different fix.
+    const holder = await this.prisma.membership.findFirst({
+      where: { providerId: provider.id },
+      select: { id: true, user: { select: { email: true } } },
+    });
+
+    if (holder) {
+      throw new ConflictError(
+        ErrorCodes.VALIDATION_FAILED,
+        holder.user.email.toLowerCase() === email
+          ? "That provider already has a login."
+          : "Another member already holds this provider's diary. Unlink them first.",
+        { field: "providerId" },
+      );
+    }
+
+    const existingMember = await this.prisma.membership.findFirst({
+      where: { tenantId, user: { email } },
+      select: { id: true },
+    });
+
+    if (existingMember) {
+      // In the organization already, just not linked to this diary. Point at
+      // the fix rather than restating the obstacle.
+      throw new ConflictError(
+        ErrorCodes.VALIDATION_FAILED,
+        `${email} is already a member of this organization. Link their membership to this provider instead.`,
+        { field: "email" },
+      );
+    }
+
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + input.expiryHours * 60 * 60 * 1000);
+
+    try {
+      const invitation = await this.prisma.$transaction(async (tx) => {
+        // Superseded, not refused: pressing Invite a second time means "they
+        // never got it" — every time (§2.5).
+        //
+        // Matched on the address *or* the diary, and both are needed. Correct a
+        // provider's email and re-invite, and the new address is free while the
+        // old address's live invitation still points at this diary — which
+        // invitations_provider_pending_key would then refuse, for a reason that
+        // appears nowhere on screen.
+        await tx.invitation.updateMany({
+          where: {
+            tenantId,
+            status: "PENDING",
+            OR: [{ email }, { providerId: provider.id }],
+          },
+          data: { status: "REVOKED" },
+        });
+
+        const created = await tx.invitation.create({
+          data: {
+            tenantId,
+            email,
+            role: Roles.PROVIDER,
+            providerId: provider.id,
+            tokenHash: hashToken(token),
+            expiresAt,
+            invitedByUserId: input.invitedByUserId,
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            tenantId,
+            eventType: "PROVIDER_INVITED",
+            // The provider, not the tenant. The worker's Tenant handlers read
+            // `aggregateId` for the tenant and this one must not — see the
+            // comment in `dispatchProviderEvent`.
+            aggregateType: "Provider",
+            aggregateId: provider.id,
+            // The raw token, because this is the only moment it exists: only
+            // the SHA-256 hash is stored (tech-impl §34.4), so the worker could
+            // not rebuild the link later. Exposure is bounded the way
+            // provisioning bounds it — `markProcessed` clears this payload on
+            // dispatch, and the sender clears the notification's on SENT.
+            payload: {
+              email,
+              providerName: provider.displayName,
+              // Read now rather than joined later: the person who pressed the
+              // button is who the email should credit, even if they leave next
+              // week. Their address is deliberately absent — the copy needs a
+              // name, and rule 6 says not to carry what is not needed.
+              invitedByName: input.invitedByName,
+              invitationToken: token,
+              expiresAt: expiresAt.toISOString(),
+            },
+          },
+        });
+
+        return created;
+      });
+
+      return { invitationId: invitation.id, token, expiresAt, email };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        // Lost a race with a concurrent invite. Either partial index lands
+        // here, and the message covers both because from the owner's side they
+        // are one fact: somebody just did this.
+        throw new ConflictError(
+          ErrorCodes.VALIDATION_FAILED,
+          "An invitation for this provider was just created. Refresh and check before sending another.",
+        );
+      }
+
+      throw error;
+    }
   }
 
   async listInvitations(tenantId: string) {
@@ -222,6 +422,7 @@ export class MembershipService {
         id: true,
         email: true,
         role: true,
+        providerId: true,
         status: true,
         expiresAt: true,
         createdAt: true,
@@ -305,10 +506,28 @@ export class MembershipService {
 
     if (!tenant) throw new NotFoundError("This invitation link is not valid.");
 
+    // Scoped by tenant even though the foreign key guarantees it — rule 5 is
+    // not conditional on the read being provably safe.
+    //
+    // Revealing the diary's name costs nothing that was not already spent: the
+    // lookup hands the organization and the invited address to whoever holds
+    // the token, and the email that carried it named the provider in its
+    // greeting. What it buys is that "Join X as Dr. Kovács Anna" is how an
+    // invitee notices the clinic sent them the wrong person's link *before*
+    // accepting, which is not something they can undo afterwards.
+    const provider =
+      invitation.providerId === null
+        ? null
+        : await this.prisma.provider.findFirst({
+            where: { id: invitation.providerId, tenantId: invitation.tenantId },
+            select: { displayName: true },
+          });
+
     return {
       organizationName: tenant.name,
       email: invitation.email,
       role: invitation.role,
+      providerName: provider?.displayName ?? null,
       expiresAt: invitation.expiresAt,
       // Drives which screen the page shows. False sends them to sign-in
       // instead of a form that would only refuse them.
@@ -402,34 +621,106 @@ export class MembershipService {
     return invitation;
   }
 
-  /** Grant the membership and burn the invitation, atomically. */
+  /**
+   * Grant the membership and burn the invitation, atomically.
+   *
+   * ## The provider link is made in here, and that placement is load-bearing
+   *
+   * docs/phase-9-provider-onboarding.md §2.7. Two properties fall out of it, and
+   * both are easy to lose in a refactor that tidies the transaction boundary.
+   *
+   * **The provider is re-read inside the transaction.** Between the email being
+   * sent and the link being clicked, the diary may have been archived. Linking
+   * to an archived provider produces a member with `:own` permissions over a row
+   * every query excludes — a role that does nothing, with no error anywhere.
+   *
+   * **The invitation stays PENDING when the diary was taken first.** The
+   * `status: ACCEPTED` write rolls back with everything else, so an owner who
+   * unlinks the other member makes the existing link work again with no
+   * reissue. The invitee did nothing wrong and should not need a new token.
+   */
   private async claimInvitation(
-    invitation: { id: string; tenantId: string; role: Role; invitedByUserId: string },
+    invitation: {
+      id: string;
+      tenantId: string;
+      role: Role;
+      invitedByUserId: string;
+      providerId: string | null;
+    },
     userId: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const membership = await tx.membership.upsert({
-        where: { tenantId_userId: { tenantId: invitation.tenantId, userId } },
-        // Already a member somehow — take the invited role rather than failing.
-        update: { role: invitation.role, status: "ACTIVE", joinedAt: new Date() },
-        create: {
-          tenantId: invitation.tenantId,
-          userId,
-          role: invitation.role,
-          status: "ACTIVE",
-          invitedByUserId: invitation.invitedByUserId,
-          joinedAt: new Date(),
-        },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        if (invitation.providerId !== null) {
+          const provider = await tx.provider.findFirst({
+            where: { id: invitation.providerId, tenantId: invitation.tenantId, archivedAt: null },
+            select: { id: true },
+          });
 
-      await tx.invitation.update({
-        where: { id: invitation.id },
-        data: { status: "ACCEPTED", acceptedAt: new Date() },
-      });
+          if (!provider) {
+            throw new ConflictError(
+              ErrorCodes.PROVIDER_NOT_FOUND,
+              "The provider this invitation was for is no longer active. Ask the organization to invite you again.",
+            );
+          }
+        }
 
-      return { membership, tenantId: invitation.tenantId };
-    });
+        const membership = await tx.membership.upsert({
+          where: { tenantId_userId: { tenantId: invitation.tenantId, userId } },
+          // Already a member somehow — take the invited role rather than failing.
+          update: {
+            role: invitation.role,
+            status: "ACTIVE",
+            joinedAt: new Date(),
+            // Only ever set, never cleared: a plain ADMIN invitation accepted by
+            // someone who already holds a diary must not silently unlink it.
+            ...(invitation.providerId === null ? {} : { providerId: invitation.providerId }),
+          },
+          create: {
+            tenantId: invitation.tenantId,
+            userId,
+            role: invitation.role,
+            status: "ACTIVE",
+            invitedByUserId: invitation.invitedByUserId,
+            joinedAt: new Date(),
+            providerId: invitation.providerId,
+          },
+        });
+
+        await tx.invitation.update({
+          where: { id: invitation.id },
+          data: { status: "ACCEPTED", acceptedAt: new Date() },
+        });
+
+        return { membership, tenantId: invitation.tenantId };
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        // memberships_provider_id_key, and it can only be that one: the
+        // invitations partial index is scoped `WHERE status = 'PENDING'`, so
+        // moving a row *out* of PENDING can never violate it.
+        //
+        // Deliberately not the uniform "this invitation link is not valid" that
+        // covers missing, used and revoked tokens. That uniformity is a security
+        // property — a probe must not learn which it hit — and it does not apply
+        // here: the token was valid, and the constraint that failed says nothing
+        // about it.
+        throw new ConflictError(
+          ErrorCodes.VALIDATION_FAILED,
+          "Someone else has already been given this provider's login. Ask the organization for a new invitation.",
+        );
+      }
+
+      throw error;
+    }
   }
+}
+
+/** Prisma's P2002 unique-constraint violation. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" && error !== null && (error as { code?: unknown }).code === "P2002"
+  );
 }
 
 /**

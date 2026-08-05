@@ -129,6 +129,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@bam/availability-engine':
+        specifier: workspace:*
+        version: link:../../packages/availability-engine
       '@bam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

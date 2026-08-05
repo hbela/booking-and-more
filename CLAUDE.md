@@ -46,7 +46,24 @@ unprefixed default. **`buildAppUrl` in `@bam/contracts` is now the only way to b
 screens**; its §5.2 records why the Stripe payment page's language is *not* settable and is not going to be ·
 [Phase 9 — manual test checklist](docs/phase-9-manual-test-checklist.md) (written, **not yet walked**). The
 one document to open before testing onboarding or billing by hand: preconditions, ~60 checks from
-provisioning to cancellation, and the Stripe-side assertions no automated test can make.
+provisioning to cancellation, and the Stripe-side assertions no automated test can make ·
+[Phase 9 — provider onboarding](docs/phase-9-provider-onboarding.md) (done bar its §6 manual walk). The
+Providers screen can now give a provider a login: one row action issues an invitation carrying the diary,
+emails it, and acceptance links the membership in the same transaction that burns the token. Closes
+phase-2-3 §5.11. **Read its §2.7 before touching `claimInvitation`** — the link is made *inside* the
+acceptance transaction, and the unique index that decides the race is also what leaves the invitation
+PENDING for a second try. Its §2.9 is why a `PROVIDER` now sees three navigation items rather than seven ·
+[Phases 2–3 — owner management](docs/phase-2-3-owner-management.md) (done bar its §6.2 manual walk). The
+catalogue and availability screens were create-only, and two of them destroyed data on every save. **Read its
+§2 before touching any whole-set `PUT`** — the rule is that such a body may only be built from a full read of
+that same set, and it is enforced structurally rather than remembered. Its **§2.7 removes
+`service_locations`**, the service↔location link §2.4 had added hours earlier: a location is one of the
+organization's sites and nothing more, and where a service is offered follows from where a provider who
+offers it works. Read §2.7 before re-reading PRD §9.4/§9.5, which still specify the link and are now a
+recorded deviation. §2.6 is the other half of the same decision — **who decides what**: the owner configures
+the catalogue and each provider's base location, and **availability belongs to the provider**. Also closes
+phase-2 §5.4 and phase-3 §5.6, adds `POST /v1/{providers,services,locations}/:id/restore`, and is why
+`apps/web` now depends on `@bam/availability-engine`.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

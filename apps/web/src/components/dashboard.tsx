@@ -4,11 +4,20 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-import { ApiError, apiFetch, type Invitation, type Member } from "@/lib/api-client";
+import {
+  ApiError,
+  apiFetch,
+  type Invitation,
+  type Member,
+  type Paginated,
+  type Provider,
+} from "@/lib/api-client";
 import {
   DashboardShell,
   ErrorText,
   Field,
+  Notice,
+  NoticeLink,
   Panel,
   Section,
   buttonClass,
@@ -50,6 +59,22 @@ export function Dashboard(): React.ReactElement {
       apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && canManageMembers,
   });
+
+  // Only to name a member's diary in the table, and to offer the unlinked ones
+  // when repairing a membership that has none. Archived providers are excluded
+  // because `linkProvider` refuses them anyway.
+  const providers = useQuery({
+    queryKey: ["providers", context.tenantId, false],
+    queryFn: () =>
+      apiFetch<Paginated<Provider>>("/v1/providers?limit=100", { tenantId: context.tenantId }),
+    enabled: Boolean(context.tenantId) && canManageMembers,
+  });
+
+  const takenProviderIds = new Set(
+    (members.data?.items ?? [])
+      .map((member) => member.providerId)
+      .filter((id): id is string => id !== null),
+  );
 
   // Almost always "not signed in" — send them to sign-in rather than showing a
   // dead dashboard. The redirect itself happens in an effect, not here.
@@ -96,8 +121,15 @@ export function Dashboard(): React.ReactElement {
                       <th scope="col" className="py-2 pr-4 font-medium">
                         {t("email")}
                       </th>
-                      <th scope="col" className="py-2 font-medium">
+                      <th scope="col" className="py-2 pr-4 font-medium">
                         {t("role")}
+                      </th>
+                      {/* Which diary a member holds, and the way to repair one
+                          that holds none. A PROVIDER with no diary looks
+                          entirely healthy in a name/email/role table while
+                          being unable to do anything at all. */}
+                      <th scope="col" className="py-2 font-medium">
+                        {t("diary")}
                       </th>
                     </tr>
                   </thead>
@@ -109,7 +141,16 @@ export function Dashboard(): React.ReactElement {
                       >
                         <td className="py-2 pr-4">{member.user.name}</td>
                         <td className="py-2 pr-4">{member.user.email}</td>
-                        <td className="py-2">{member.role}</td>
+                        <td className="py-2 pr-4">{member.role}</td>
+                        <td className="py-2">
+                          <MemberDiary
+                            member={member}
+                            providers={providers.data?.items ?? []}
+                            takenProviderIds={takenProviderIds}
+                            tenantId={context.tenantId}
+                            canManage={canManageMembers}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -294,6 +335,110 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
   );
 }
 
+/**
+ * Which diary a member holds, and the repair when they hold none.
+ *
+ * This exists because of a real trap. Until now the members table showed name,
+ * email and role, in which a `PROVIDER` whose membership names no diary looks
+ * completely healthy — while holding three `:own` permissions that match
+ * nothing, so they can do nothing and nothing says why.
+ *
+ * `PATCH /v1/members/:membershipId { providerId }` has existed since Epic 2 and
+ * no screen ever called it. Provider invitations now carry the diary from the
+ * start (docs/phase-9-provider-onboarding.md), so nothing *new* should reach
+ * this state — but memberships created before that, or by the generic invite
+ * panel while it still offered PROVIDER, are stranded without it.
+ */
+function MemberDiary({
+  member,
+  providers,
+  takenProviderIds,
+  tenantId,
+  canManage,
+}: {
+  member: Member;
+  providers: Provider[];
+  /** Diaries another member already holds — at most one login per diary. */
+  takenProviderIds: Set<string>;
+  tenantId: string | undefined;
+  canManage: boolean;
+}): React.ReactElement {
+  const t = useTranslations("dashboard");
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const link = useMutation({
+    mutationFn: (providerId: string) =>
+      apiFetch(`/v1/members/${member.id}`, {
+        method: "PATCH",
+        tenantId,
+        body: { providerId },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["members"] });
+      // Their own navigation gains the Availability item from `me`.
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (cause: unknown) => {
+      setError(cause instanceof ApiError ? cause.message : t("genericError"));
+    },
+  });
+
+  const linked = providers.find((provider) => provider.id === member.providerId);
+
+  if (member.providerId !== null) {
+    // Named rather than ticked: "which diary" is the useful answer, and a
+    // provider archived since linking would otherwise show as a blank cell.
+    return <span>{linked?.displayName ?? t("diaryArchived")}</span>;
+  }
+
+  // Only PROVIDER memberships need one. An owner or an assistant with no diary
+  // is the normal case and deserves no warning.
+  if (member.role !== "PROVIDER") {
+    return <span className="text-slate-400 dark:text-slate-600">—</span>;
+  }
+
+  // At most one login per diary, and archived diaries are refused by
+  // `linkProvider`. The unique index is what enforces the first; this only
+  // avoids offering a choice the server would reject.
+  const available = providers.filter(
+    (provider) => provider.archivedAt === null && !takenProviderIds.has(provider.id),
+  );
+
+  if (!canManage) {
+    return <span className="text-amber-700 dark:text-amber-500">{t("diaryMissing")}</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex items-center gap-2">
+        <span className="sr-only">{t("linkDiary")}</span>
+        <select
+          defaultValue=""
+          disabled={link.isPending}
+          onChange={(event) => {
+            if (event.target.value === "") return;
+            setError(null);
+            link.mutate(event.target.value);
+          }}
+          className={inputClass}
+        >
+          <option value="">{t("linkDiaryPrompt")}</option>
+          {available.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+      {available.length === 0 ? (
+        <span className="text-xs text-slate-500">{t("noDiaryToLink")}</span>
+      ) : null}
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 function InvitePanel({
   tenantId,
   invitations,
@@ -361,13 +506,25 @@ function InvitePanel({
             }}
             className={inputClass}
           >
-            {["OWNER", "ADMIN", "PROVIDER", "ASSISTANT"].map((value) => (
+            {/* PROVIDER is deliberately absent, and the API refuses it here
+                too. This panel has no diary to attach, so a provider invited
+                from it joins holding three `:own` permissions that match
+                nothing — able to sign in and do absolutely nothing, with no
+                error to explain it. Providers are invited from their own row,
+                where the diary is unambiguous. */}
+            {["OWNER", "ADMIN", "ASSISTANT"].map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
             ))}
           </select>
         </Field>
+
+        <Notice>
+          {t.rich("inviteProviderElsewhere", {
+            link: (chunks) => <NoticeLink href="/dashboard/providers">{chunks}</NoticeLink>,
+          })}
+        </Notice>
 
         <button
           type="submit"

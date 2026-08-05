@@ -288,7 +288,13 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // --- Catalogue (Epic 2) ---------------------------------------------------
   // Staff routes. Every one of them resolves a tenant from the X-Tenant-Id
   // header and an ACTIVE membership before doing anything.
-  await app.register(providerRoutes, { prefix: "/v1/providers" });
+  await app.register(providerRoutes, {
+    prefix: "/v1/providers",
+    // For POST /:providerId/invitation — the same two the membership routes
+    // take, because it issues the same kind of invitation.
+    invitationExpiryHours: env.INVITATION_EXPIRY_HOURS,
+    appBaseUrl: env.APP_BASE_URL,
+  });
   await app.register(serviceRoutes, { prefix: "/v1/services" });
   await app.register(locationRoutes, { prefix: "/v1/locations" });
 

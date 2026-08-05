@@ -94,6 +94,19 @@ export class LocationRepository {
       data: { archivedAt: new Date(), active: false },
     });
   }
+
+  /**
+   * Half the inverse of {@link archive}: `archivedAt` clears, `active` does not.
+   * "Gone" and "off for now" are different questions (CLAUDE.md rule 11), and
+   * only the first is answered here.
+   */
+  async restore(args: { tenantId: string; locationId: string }): Promise<Location> {
+    return this.update({
+      tenantId: args.tenantId,
+      locationId: args.locationId,
+      data: { archivedAt: null },
+    });
+  }
 }
 
 export function locationNotFound(): NotFoundError {

@@ -122,7 +122,9 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
       method: "POST",
       url: "/v1/providers",
       headers: as(cookie, tenantId),
-      payload,
+      // Email is required on a provider (phase-2-3 §2.8). Defaulted here so the
+      // cases below say only what they are actually about.
+      payload: { email: "provider@example.test", ...payload },
     });
 
     expect(response.statusCode, response.body).toBe(201);
@@ -254,6 +256,54 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
       expect(locations.json().items).toEqual([
         expect.objectContaining({ locationId: clinic.locationId, active: true }),
       ]);
+    });
+
+    it("refuses a provider with no email, and one that cannot be reached", async () => {
+      // A provider is a diary rather than a login, so this address signs nobody
+      // in — it is the only way to reach the person behind the diary, including
+      // with the invitation that would give them one (phase-2-3 §2.8).
+      const owner = await owned("provider-email");
+
+      const missing = await app.inject({
+        method: "POST",
+        url: "/v1/providers",
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { displayName: "No Address" },
+      });
+      expect(missing.statusCode, missing.body).toBe(422);
+
+      const malformed = await app.inject({
+        method: "POST",
+        url: "/v1/providers",
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { displayName: "Bad Address", email: "not-an-address" },
+      });
+      expect(malformed.statusCode, malformed.body).toBe(422);
+    });
+
+    it("refuses to clear a provider's email, while allowing a correction", async () => {
+      const owner = await owned("provider-email-patch");
+      const providerId = await createProvider(owner.cookie, owner.tenantId, {
+        displayName: "Reachable",
+        email: "first@example.test",
+      });
+
+      const cleared = await app.inject({
+        method: "PATCH",
+        url: `/v1/providers/${providerId}`,
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { email: null },
+      });
+      expect(cleared.statusCode, cleared.body).toBe(422);
+
+      const corrected = await app.inject({
+        method: "PATCH",
+        url: `/v1/providers/${providerId}`,
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { email: "second@example.test" },
+      });
+      expect(corrected.statusCode, corrected.body).toBe(200);
+      expect(corrected.json().email).toBe("second@example.test");
     });
 
     it("inherits the tenant's timezone rather than leaving it null", async () => {
@@ -456,6 +506,312 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Restoring an archive
+  // -------------------------------------------------------------------------
+
+  describe("restoring an archived row", () => {
+    it("brings a service back inactive, not straight onto the booking page", async () => {
+      const clinic = await configuredClinic("restore-service");
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/services/${clinic.serviceId}`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const restored = await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(restored.statusCode, restored.body).toBe(200);
+      // Both halves matter. `archivedAt` clearing is the restore; `active`
+      // staying false is what stops one click republishing to strangers.
+      expect(restored.json()).toMatchObject({ archivedAt: null, active: false });
+
+      const listed = await app.inject({
+        method: "GET",
+        url: "/v1/services",
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(listed.json().items).toHaveLength(1);
+    });
+
+    it("restores a provider and a location the same way", async () => {
+      const clinic = await configuredClinic("restore-others");
+
+      for (const [noun, id] of [
+        ["providers", clinic.providerId],
+        ["locations", clinic.locationId],
+      ] as const) {
+        await app.inject({
+          method: "DELETE",
+          url: `/v1/${noun}/${id}`,
+          headers: as(clinic.cookie, clinic.tenantId),
+        });
+
+        const restored = await app.inject({
+          method: "POST",
+          url: `/v1/${noun}/${id}/restore`,
+          headers: as(clinic.cookie, clinic.tenantId),
+        });
+
+        expect(restored.statusCode, restored.body).toBe(200);
+        expect(restored.json()).toMatchObject({ archivedAt: null, active: false });
+      }
+    });
+
+    it("is idempotent, and audits only the restore that changed something", async () => {
+      const clinic = await configuredClinic("restore-twice");
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/services/${clinic.serviceId}`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const first = await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+      const second = await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toMatchObject({ archivedAt: null, active: false });
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      // One event, not two: a no-op restore is noise that would bury the real one.
+      const entries = await app.prisma.auditLog.findMany({
+        where: {
+          tenantId: clinic.tenantId,
+          action: "service.restored",
+          entityId: clinic.serviceId,
+        },
+      });
+
+      expect(entries).toHaveLength(1);
+    });
+
+    it("keeps the slug reserved while archived, and restore is how you get it back", async () => {
+      const owner = await owned("restore-slug");
+
+      const serviceId = await createService(owner.cookie, owner.tenantId, {
+        name: "Teeth cleaning",
+        durationMinutes: 30,
+      });
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/services/${serviceId}`,
+        headers: as(owner.cookie, owner.tenantId),
+      });
+
+      // The unique index covers archived rows, so the name stays taken. This is
+      // precisely why an accidental archive has to be undoable at all.
+      const recreated = await app.inject({
+        method: "POST",
+        url: "/v1/services",
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { name: "Teeth cleaning", durationMinutes: 30 },
+      });
+
+      expect(recreated.statusCode).toBe(409);
+      expect(recreated.json().error.code).toBe(ErrorCodes.SLUG_TAKEN);
+
+      const restored = await app.inject({
+        method: "POST",
+        url: `/v1/services/${serviceId}/restore`,
+        headers: as(owner.cookie, owner.tenantId),
+      });
+
+      // Restore performs no slug check, and needs none — nothing could have
+      // taken it. The slug comes back unchanged.
+      expect(restored.statusCode, restored.body).toBe(200);
+      expect(restored.json().slug).toBe("teeth-cleaning");
+    });
+
+    it("refuses an assistant, another tenant's id, and a suspended tenant", async () => {
+      const clinic = await configuredClinic("restore-guards");
+      const stranger = await owned("restore-stranger");
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/services/${clinic.serviceId}`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      // Another tenant's service is a 404, not a 403 — the same answer as an id
+      // that never existed, so this cannot be used to enumerate ids.
+      const crossTenant = await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(stranger.cookie, stranger.tenantId),
+      });
+
+      expect(crossTenant.statusCode).toBe(404);
+      expect(crossTenant.json().error.code).toBe(ErrorCodes.SERVICE_NOT_FOUND);
+
+      await app.prisma.tenant.update({
+        where: { id: clinic.tenantId },
+        data: { status: "SUSPENDED" },
+      });
+
+      const suspended = await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(suspended.statusCode).toBe(403);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Assignments and archiving
+  // -------------------------------------------------------------------------
+
+  describe("assignments survive an archive", () => {
+    /**
+     * The regression this exists for.
+     *
+     * An archived service is not in the picker, so the dashboard cannot tick it
+     * — and sending its id anyway is a 404. Before the fix, the whole-set PUT
+     * read its absence as "unassign" and deleted the row, so archiving a service
+     * silently destroyed every provider's link to it on their next save, and
+     * restoring the service did not bring them back.
+     */
+    it("leaves an archived service's assignment alone when the set omits it", async () => {
+      const clinic = await configuredClinic("archived-assignment");
+
+      const keptId = await createService(clinic.cookie, clinic.tenantId, {
+        name: "Still offered",
+        durationMinutes: 20,
+      });
+
+      await assignServices(clinic.cookie, clinic.tenantId, clinic.providerId, [
+        { serviceId: clinic.serviceId },
+        { serviceId: keptId },
+      ]);
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/services/${clinic.serviceId}`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      // What the dashboard would send after the archive: the live services only.
+      const saved = await assignServices(clinic.cookie, clinic.tenantId, clinic.providerId, [
+        { serviceId: keptId },
+      ]);
+      expect(saved.statusCode, saved.body).toBe(200);
+
+      await app.inject({
+        method: "POST",
+        url: `/v1/services/${clinic.serviceId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const assignments = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${clinic.providerId}/services`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const ids = (assignments.json().items as { serviceId: string }[]).map(
+        (item) => item.serviceId,
+      );
+      expect(ids).toContain(clinic.serviceId);
+      expect(ids).toContain(keptId);
+    });
+
+    it("leaves an archived location's assignment alone too", async () => {
+      const clinic = await configuredClinic("archived-location-assignment");
+
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/locations/${clinic.locationId}`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const saved = await app.inject({
+        method: "PUT",
+        url: `/v1/providers/${clinic.providerId}/locations`,
+        headers: as(clinic.cookie, clinic.tenantId),
+        payload: { locations: [] },
+      });
+      expect(saved.statusCode, saved.body).toBe(200);
+
+      await app.inject({
+        method: "POST",
+        url: `/v1/locations/${clinic.locationId}/restore`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      const assignments = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${clinic.providerId}/locations`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(assignments.json().items).toEqual([
+        expect.objectContaining({ locationId: clinic.locationId }),
+      ]);
+    });
+
+    it("still removes a live service dropped from the set", async () => {
+      // The guard above must not turn the whole-set PUT into an append-only
+      // operation: unticking a live service has to keep working.
+      const clinic = await configuredClinic("assignment-removal");
+
+      const dropped = await assignServices(clinic.cookie, clinic.tenantId, clinic.providerId, []);
+      expect(dropped.statusCode, dropped.body).toBe(200);
+
+      const assignments = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${clinic.providerId}/services`,
+        headers: as(clinic.cookie, clinic.tenantId),
+      });
+
+      expect(assignments.json().items).toEqual([]);
+    });
+
+    it("round-trips a per-provider duration and price override", async () => {
+      // phase-2 §5.4: the API has always supported these; nothing set them.
+      const clinic = await configuredClinic("assignment-overrides");
+
+      const saved = await assignServices(clinic.cookie, clinic.tenantId, clinic.providerId, [
+        {
+          serviceId: clinic.serviceId,
+          customDurationMinutes: 60,
+          customPriceMinor: 2_000_000,
+          active: false,
+        },
+      ]);
+
+      expect(saved.statusCode, saved.body).toBe(200);
+      expect(saved.json().items).toEqual([
+        expect.objectContaining({
+          serviceId: clinic.serviceId,
+          customDurationMinutes: 60,
+          customPriceMinor: 2_000_000,
+          // The effective duration follows the override, not the service's 45.
+          durationMinutes: 60,
+          active: false,
+        }),
+      ]);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Provider ↔ membership link
   // -------------------------------------------------------------------------
 
@@ -513,7 +869,10 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(clinic.cookie, clinic.tenantId),
-        payload: { email: second.email, role: "PROVIDER" },
+        // ADMIN, because PROVIDER is not invitable from this route — it carries
+        // no diary. Irrelevant to what this test proves: the unique index is on
+        // `provider_id` alone, so any membership holding a diary blocks the next.
+        payload: { email: second.email, role: "ADMIN" },
       });
 
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
@@ -642,15 +1001,24 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
 
   describe("permissions", () => {
     /** A tenant with an owner plus one member holding `role`. */
+    /**
+     * A tenant whose second member holds `role`.
+     *
+     * PROVIDER is invited as an ADMIN and then promoted: it cannot be granted
+     * by this route, which carries no diary and would create a membership that
+     * can do nothing (phase-9-provider-onboarding §2.11). Changing an existing
+     * member's role is a different act and is still allowed.
+     */
     async function tenantWith(role: string, label: string) {
       const owner = await owned(label);
       const member = await signUp(`${label}-member`);
+      const invitedAs = role === "PROVIDER" ? "ADMIN" : role;
 
       const invited = await app.inject({
         method: "POST",
         url: "/v1/members/invitations",
         headers: as(owner.cookie, owner.tenantId),
-        payload: { email: member.email, role },
+        payload: { email: member.email, role: invitedAs },
       });
 
       const token = (invited.json().acceptUrl as string).split("/").pop()!;
@@ -660,6 +1028,19 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
         headers: as(member.cookie),
         payload: { token },
       });
+
+      if (invitedAs !== role) {
+        const membership = await app.prisma.membership.findFirst({
+          where: { tenantId: owner.tenantId, userId: member.id },
+        });
+        const promoted = await app.inject({
+          method: "PATCH",
+          url: `/v1/members/${membership!.id}`,
+          headers: as(owner.cookie, owner.tenantId),
+          payload: { role },
+        });
+        expect(promoted.statusCode, promoted.body).toBe(200);
+      }
 
       return { owner, member };
     }
@@ -681,7 +1062,7 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(member.cookie, owner.tenantId),
-        payload: { displayName: "Should not exist" },
+        payload: { displayName: "Should not exist", email: "nobody@example.test" },
       });
 
       expect(write.statusCode).toBe(403);
@@ -715,7 +1096,7 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(clinic.cookie, clinic.tenantId),
-        payload: { displayName: "While suspended" },
+        payload: { displayName: "While suspended", email: "nobody@example.test" },
       });
 
       expect(write.statusCode).toBe(403);

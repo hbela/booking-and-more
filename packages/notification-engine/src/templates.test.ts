@@ -4,6 +4,7 @@ import {
   escapeHtml,
   isRenderable,
   renderOrganizationCreated,
+  renderProviderInvited,
   renderSubscriptionConfirmed,
 } from "./templates.js";
 import { NotificationTypes } from "./types.js";
@@ -156,9 +157,83 @@ describe("renderSubscriptionConfirmed", () => {
   });
 });
 
+describe("renderProviderInvited", () => {
+  const invited = {
+    organizationName: "Wellness Kft",
+    providerName: "Dr. Kovács Anna",
+    invitedByName: "Nagy Béla",
+    acceptUrl: "http://localhost:3000/en/invitations/abc123",
+    expiresAt: "2026-08-11 10:00",
+  };
+
+  it.each(["hu", "en"] as const)("renders %s with a subject, html and text", (locale) => {
+    const email = renderProviderInvited(locale, invited);
+
+    // The subject names the organization, not the provider: the recipient *is*
+    // the provider, and their own name in the subject line reads as spam.
+    expect(email.subject).toContain("Wellness Kft");
+    expect(email.subject).not.toContain("Kovács");
+    expect(email.html).toContain(invited.acceptUrl);
+    expect(email.text).toContain(invited.acceptUrl);
+  });
+
+  it("greets the provider and credits whoever invited them", () => {
+    const email = renderProviderInvited("en", invited);
+
+    expect(email.text).toContain("Dr. Kovács Anna");
+    expect(email.text).toContain("Nagy Béla");
+  });
+
+  it("says no password is coming, in both parts", () => {
+    // The HTML too, not only the text: most recipients never see the text part,
+    // and this is the sentence that stops the "where is my password" support
+    // request. The predecessor emailed one, so it is not hypothetical.
+    const en = renderProviderInvited("en", invited);
+    expect(en.text.toLowerCase()).toContain("password");
+    expect(en.html.toLowerCase()).toContain("password");
+
+    const hu = renderProviderInvited("hu", invited);
+    expect(hu.text.toLowerCase()).toContain("jelsz");
+    expect(hu.html.toLowerCase()).toContain("jelsz");
+  });
+
+  it("always produces a text part", () => {
+    const email = renderProviderInvited("en", invited);
+
+    expect(email.text.length).toBeGreaterThan(50);
+    expect(email.text).not.toContain("<");
+  });
+
+  it("escapes an organization name a salesperson typed", () => {
+    const email = renderProviderInvited("en", {
+      ...invited,
+      organizationName: `Smith & Sons <script>alert(1)</script>`,
+    });
+
+    expect(email.html).not.toContain("<script>");
+    expect(email.html).toContain("&amp;");
+  });
+
+  it("differs by locale", () => {
+    expect(renderProviderInvited("hu", invited).subject).not.toBe(
+      renderProviderInvited("en", invited).subject,
+    );
+  });
+
+  it("does not promise the owner's screens", () => {
+    // The organization email says "add your services, staff and opening hours",
+    // which is exactly the three navigation items a PROVIDER does not have.
+    const email = renderProviderInvited("en", invited).text.toLowerCase();
+
+    expect(email).toContain("working hours");
+    expect(email).not.toContain("staff");
+  });
+});
+
 describe("isRenderable", () => {
   it("knows the templates that exist", () => {
     expect(isRenderable(NotificationTypes.ORGANIZATION_CREATED)).toBe(true);
+    expect(isRenderable(NotificationTypes.PROVIDER_INVITED)).toBe(true);
   });
 
   it("refuses a type with no template rather than sending an empty email", () => {

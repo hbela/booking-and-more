@@ -145,6 +145,7 @@ describe.skipIf(!databaseUrl)("bookings", () => {
 
     const providerId = await create("/v1/providers", {
       displayName: "Dr. Kovács Anna",
+      email: "anna@example.test",
       timezone: "UTC",
     });
     const serviceId = await create("/v1/services", {
@@ -861,7 +862,7 @@ describe.skipIf(!databaseUrl)("bookings", () => {
         method: "POST",
         url: "/v1/providers",
         headers: as(site.owner.cookie, site.tenantId),
-        payload: { displayName: "Dr. Béla", timezone: "UTC" },
+        payload: { displayName: "Dr. Béla", email: "bela@example.test", timezone: "UTC" },
       });
       const secondProviderId = second.json().id as string;
 

@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bam/availability-engine": "workspace:*",
     "@bam/contracts": "workspace:*",
     "@tanstack/react-query": "^5.101.4",
     "better-auth": "^1.6.25",

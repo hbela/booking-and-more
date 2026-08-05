@@ -11,6 +11,13 @@ interface InvitationDetails {
   organizationName: string;
   email: string;
   role: string;
+  /**
+   * The diary a PROVIDER invitation is for; null otherwise. Named on the
+   * heading so an invitee notices they were sent the wrong person's link
+   * *before* accepting it, which is not something they can undo afterwards
+   * (docs/phase-9-provider-onboarding.md §2.6 of the API record).
+   */
+  providerName: string | null;
   expiresAt: string;
   requiresRegistration: boolean;
 }
@@ -109,9 +116,14 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 px-6">
       <h1 className="text-2xl font-semibold">
-        {state.kind === "register"
-          ? t("joinTitle", { organization: state.details.organizationName })
-          : t("title")}
+        {state.kind !== "register"
+          ? t("title")
+          : state.details.providerName === null
+            ? t("joinTitle", { organization: state.details.organizationName })
+            : t("joinTitleAsProvider", {
+                organization: state.details.organizationName,
+                provider: state.details.providerName,
+              })}
       </h1>
 
       {state.kind === "checking" || state.kind === "accepting" ? <p>{t("working")}</p> : null}
@@ -154,11 +166,20 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
           <button
             type="button"
             onClick={() => {
-              router.push("/dashboard");
+              // A provider goes to their own diary, not to the members table.
+              // Availability is the one part of this system that is theirs
+              // (phase-2-3 §2.7) and the thing the email just asked them to
+              // fill in. Everybody else lands where they always did.
+              //
+              // Still a press rather than an auto-redirect: RegisterForm calls
+              // router.refresh() first precisely because the session cookie
+              // arrives on a response the cached session does not know about,
+              // and navigating on its behalf re-opens that race.
+              router.push(state.role === "PROVIDER" ? "/dashboard/availability" : "/dashboard");
             }}
             className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white"
           >
-            {t("goToDashboard")}
+            {state.role === "PROVIDER" ? t("goToAvailability") : t("goToDashboard")}
           </button>
         </>
       ) : null}

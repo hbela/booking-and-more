@@ -122,6 +122,24 @@ export class ProviderRepository {
     });
   }
 
+  /**
+   * The inverse of {@link archive} — but only half of it.
+   *
+   * `active` is deliberately left false. Archiving answers "is this gone?" and
+   * deactivating answers "is this off right now?", and those are two different
+   * questions (CLAUDE.md rule 11). Restoring both would put the provider back in
+   * front of customers in one click, because every public query filters on
+   * `active && archivedAt === null` — so reactivating stays a separate,
+   * deliberate press.
+   */
+  async restore(args: { tenantId: string; providerId: string }): Promise<Provider> {
+    return this.update({
+      tenantId: args.tenantId,
+      providerId: args.providerId,
+      data: { archivedAt: null },
+    });
+  }
+
   /** Services this provider offers, with the underlying service for display. */
   async listServices(args: {
     tenantId: string;

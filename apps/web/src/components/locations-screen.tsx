@@ -1,39 +1,40 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { ApiError, apiFetch, type Location, type Paginated } from "@/lib/api-client";
+import { diffPatch } from "@/lib/catalogue-form";
 import {
-  ApiError,
-  apiFetch,
-  type Location,
-  type LocationType,
-  type Paginated,
-} from "@/lib/api-client";
+  LocationFields,
+  locationBodyFrom,
+  locationStateFrom,
+  type LocationFormState,
+} from "./location-fields";
 import {
   DashboardShell,
   ErrorText,
-  Field,
   Panel,
+  RowButton,
   Section,
   buttonClass,
-  inputClass,
+  secondaryButtonClass,
   useDashboardContext,
+  useEditPanel,
   useSignInRedirect,
+  type EditPanel,
 } from "./dashboard-shell";
-
-const TYPES: LocationType[] = ["PHYSICAL", "ONLINE", "HOME_VISIT", "TELEPHONE"];
 
 /**
  * One-line address for the list.
  *
- * Postcode and city join with a space rather than a comma — "1134 Budapest" is
- * one place, not two fields — while the street stays a separate clause. An
+ * Postcode and city join with a space rather than a comma â€” "1134 Budapest" is
+ * one place, not two fields â€” while the street stays a separate clause. An
  * em dash when there is nothing to show, so the column never looks broken.
  */
 function formatAddress(location: Location): string {
   const settlement = [location.postalCode, location.city].filter(Boolean).join(" ");
-  return [location.addressLine1, settlement].filter(Boolean).join(", ") || "—";
+  return [location.addressLine1, settlement].filter(Boolean).join(", ") || "â€”";
 }
 
 export function LocationsScreen(): React.ReactElement {
@@ -42,14 +43,22 @@ export function LocationsScreen(): React.ReactElement {
   useSignInRedirect(!context.isPending && !context.me);
   const queryClient = useQueryClient();
 
+  const edit = useEditPanel("location");
+  const [showArchived, setShowArchived] = useState(false);
+
   const canManage = context.can("location:manage");
 
   const locations = useQuery({
-    queryKey: ["locations", context.tenantId],
+    queryKey: ["locations", context.tenantId, showArchived],
     queryFn: () =>
-      apiFetch<Paginated<Location>>("/v1/locations?limit=100", { tenantId: context.tenantId }),
+      apiFetch<Paginated<Location>>(
+        `/v1/locations?limit=100${showArchived ? "&includeArchived=true" : ""}`,
+        { tenantId: context.tenantId },
+      ),
     enabled: Boolean(context.tenantId),
   });
+
+  const editing = locations.data?.items.find((location) => location.id === edit.openId);
 
   // A signed-out visitor is redirected from an effect, not from render.
   if (context.isPending || !context.me) {
@@ -59,6 +68,17 @@ export function LocationsScreen(): React.ReactElement {
   return (
     <DashboardShell context={context}>
       <Section title={t("locations")}>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(event) => {
+              setShowArchived(event.target.checked);
+            }}
+          />
+          <span>{t("showArchived")}</span>
+        </label>
+
         {locations.data?.items.length === 0 ? (
           <p className="text-sm text-slate-600 dark:text-slate-400">{t("noLocations")}</p>
         ) : (
@@ -84,73 +104,97 @@ export function LocationsScreen(): React.ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {locations.data?.items.map((location) => (
-                  <tr key={location.id} className="border-b border-slate-100 dark:border-slate-900">
-                    <td className="py-2 pr-4">{location.name}</td>
-                    <td className="py-2 pr-4">{t(`locationType.${location.type}`)}</td>
-                    <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
-                      {formatAddress(location)}
-                    </td>
-                    <td className="py-2 pr-4">{location.active ? t("active") : t("inactive")}</td>
-                    <td className="py-2">
-                      {canManage ? (
-                        <div className="flex flex-wrap gap-2">
+                {locations.data?.items.map((location) => {
+                  const archived = location.archivedAt !== null;
+
+                  return (
+                    <tr
+                      key={location.id}
+                      className="border-b border-slate-100 dark:border-slate-900"
+                    >
+                      <td className={`py-2 pr-4 ${archived ? "text-slate-500" : ""}`}>
+                        {location.name}
+                      </td>
+                      <td className="py-2 pr-4">{t(`locationType.${location.type}`)}</td>
+                      <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                        {formatAddress(location)}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {archived ? t("archived") : location.active ? t("active") : t("inactive")}
+                      </td>
+                      <td className="py-2">
+                        {!canManage ? null : archived ? (
                           <RowButton
                             onClick={() => {
-                              void apiFetch(`/v1/locations/${location.id}`, {
-                                method: "PATCH",
-                                tenantId: context.tenantId,
-                                body: { active: !location.active },
-                              }).then(() => {
-                                void queryClient.invalidateQueries({ queryKey: ["locations"] });
-                              });
-                            }}
-                          >
-                            {location.active ? t("deactivate") : t("activate")}
-                          </RowButton>
-                          <RowButton
-                            onClick={() => {
-                              void apiFetch(`/v1/locations/${location.id}`, {
-                                method: "DELETE",
+                              void apiFetch(`/v1/locations/${location.id}/restore`, {
+                                method: "POST",
                                 tenantId: context.tenantId,
                               }).then(() => {
                                 void queryClient.invalidateQueries({ queryKey: ["locations"] });
                               });
                             }}
                           >
-                            {t("archive")}
+                            {t("restore")}
                           </RowButton>
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
+                        ) : (
+                          <div className="flex flex-wrap gap-2">
+                            <RowButton
+                              onClick={() => {
+                                edit.toggle(location.id);
+                              }}
+                              {...edit.triggerProps(location.id)}
+                            >
+                              {t("edit")}
+                            </RowButton>
+                            <RowButton
+                              onClick={() => {
+                                void apiFetch(`/v1/locations/${location.id}`, {
+                                  method: "PATCH",
+                                  tenantId: context.tenantId,
+                                  body: { active: !location.active },
+                                }).then(() => {
+                                  void queryClient.invalidateQueries({ queryKey: ["locations"] });
+                                });
+                              }}
+                            >
+                              {location.active ? t("deactivate") : t("activate")}
+                            </RowButton>
+                            <RowButton
+                              onClick={() => {
+                                void apiFetch(`/v1/locations/${location.id}`, {
+                                  method: "DELETE",
+                                  tenantId: context.tenantId,
+                                }).then(() => {
+                                  void queryClient.invalidateQueries({ queryKey: ["locations"] });
+                                });
+                              }}
+                            >
+                              {t("archive")}
+                            </RowButton>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </Section>
 
+      {editing && context.tenantId ? (
+        <EditLocationPanel
+          key={editing.id}
+          tenantId={context.tenantId}
+          location={editing}
+          panelProps={edit.panelProps}
+          onClose={edit.close}
+        />
+      ) : null}
+
       {canManage && context.tenantId ? <CreateLocationPanel tenantId={context.tenantId} /> : null}
     </DashboardShell>
-  );
-}
-
-function RowButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -158,35 +202,18 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
   const t = useTranslations("catalogue");
   const queryClient = useQueryClient();
 
-  const [name, setName] = useState("");
-  const [type, setType] = useState<LocationType>("PHYSICAL");
-  const [addressLine1, setAddressLine1] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [city, setCity] = useState("");
+  const [state, setState] = useState<LocationFormState>(() => locationStateFrom());
   const [error, setError] = useState<string | null>(null);
-
-  // The API enforces this too; the form mirrors it so the requirement is visible
-  // before the request rather than after it.
-  const needsAddress = type === "PHYSICAL";
 
   const mutation = useMutation({
     mutationFn: () =>
       apiFetch<Location>("/v1/locations", {
         method: "POST",
         tenantId,
-        body: {
-          name,
-          type,
-          ...(addressLine1 === "" ? {} : { addressLine1 }),
-          ...(postalCode === "" ? {} : { postalCode }),
-          ...(city === "" ? {} : { city }),
-        },
+        body: locationBodyFrom(state, "create"),
       }),
     onSuccess: () => {
-      setName("");
-      setAddressLine1("");
-      setPostalCode("");
-      setCity("");
+      setState(locationStateFrom());
       void queryClient.invalidateQueries({ queryKey: ["locations"] });
     },
     onError: (cause: unknown) => {
@@ -204,86 +231,87 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
           mutation.mutate();
         }}
       >
-        <Field id="location-name" label={t("name")}>
-          <input
-            id="location-name"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
-            required
-            minLength={2}
-            className={inputClass}
-          />
-        </Field>
-
-        <Field id="location-type" label={t("type")}>
-          <select
-            id="location-type"
-            value={type}
-            onChange={(event) => {
-              setType(event.target.value as LocationType);
-            }}
-            className={inputClass}
-          >
-            {TYPES.map((value) => (
-              <option key={value} value={value}>
-                {t(`locationType.${value}`)}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        {needsAddress ? (
-          <>
-            <Field id="location-address" label={t("address")}>
-              <input
-                id="location-address"
-                value={addressLine1}
-                onChange={(event) => {
-                  setAddressLine1(event.target.value);
-                }}
-                required
-                className={inputClass}
-              />
-            </Field>
-
-            {/* Postcode before city: that is the order a Hungarian address is
-                written and read ("1134 Budapest"), and the pilot tenant is
-                Hungarian. Worth revisiting per country in Epic 9. */}
-            <div className="flex flex-wrap gap-3">
-              <Field id="location-postal-code" label={t("postalCode")}>
-                <input
-                  id="location-postal-code"
-                  value={postalCode}
-                  onChange={(event) => {
-                    setPostalCode(event.target.value);
-                  }}
-                  inputMode="numeric"
-                  maxLength={20}
-                  className={`${inputClass} w-32`}
-                />
-              </Field>
-
-              <Field id="location-city" label={t("city")}>
-                <input
-                  id="location-city"
-                  value={city}
-                  onChange={(event) => {
-                    setCity(event.target.value);
-                  }}
-                  className={inputClass}
-                />
-              </Field>
-            </div>
-          </>
-        ) : null}
+        <LocationFields
+          state={state}
+          idPrefix="new-location"
+          onChange={(patch) => {
+            setState((current) => ({ ...current, ...patch }));
+          }}
+        />
 
         <ErrorText>{error}</ErrorText>
 
         <button type="submit" disabled={mutation.isPending} className={buttonClass}>
           {t("create")}
         </button>
+      </form>
+    </Panel>
+  );
+}
+
+/** Editing a location. Sends a diff — see {@link diffPatch}. */
+function EditLocationPanel({
+  tenantId,
+  location,
+  panelProps,
+  onClose,
+}: {
+  tenantId: string;
+  location: Location;
+  panelProps: EditPanel["panelProps"];
+  onClose: () => void;
+}): React.ReactElement {
+  const t = useTranslations("catalogue");
+  const queryClient = useQueryClient();
+
+  const original = locationStateFrom(location);
+  const [state, setState] = useState<LocationFormState>(original);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = useMutation({
+    mutationFn: () =>
+      apiFetch<Location>(`/v1/locations/${location.id}`, {
+        method: "PATCH",
+        tenantId,
+        body: diffPatch(locationBodyFrom(original, "patch"), locationBodyFrom(state, "patch")),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["locations"] });
+      onClose();
+    },
+    onError: (cause: unknown) => {
+      setError(cause instanceof ApiError ? cause.message : t("genericError"));
+    },
+  });
+
+  return (
+    <Panel title={t("editLocation")} {...panelProps}>
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setError(null);
+          save.mutate();
+        }}
+      >
+        <LocationFields
+          state={state}
+          idPrefix={`edit-location-${location.id}`}
+          onChange={(patch) => {
+            setState((current) => ({ ...current, ...patch }));
+          }}
+        />
+
+        <ErrorText>{error}</ErrorText>
+
+        <div className="flex gap-3">
+          <button type="submit" disabled={save.isPending} className={buttonClass}>
+            {t("saveChanges")}
+          </button>
+          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+            {t("cancel")}
+          </button>
+        </div>
       </form>
     </Panel>
   );

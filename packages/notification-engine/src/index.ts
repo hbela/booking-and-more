@@ -54,6 +54,7 @@ export {
   RENDERABLE_TYPES,
   renderOrganizationCreated,
   renderPaymentFailed,
+  renderProviderInvited,
   renderSubscriptionConfirmed,
   renderSubscriptionLink,
   renderTrialEnding,
@@ -61,6 +62,7 @@ export {
 export type {
   OrganizationCreatedValues,
   PaymentFailedValues,
+  ProviderInvitedValues,
   RenderedEmail,
   SubscriptionConfirmedValues,
   SubscriptionLinkValues,
