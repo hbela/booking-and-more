@@ -29,8 +29,14 @@ export default defineConfig({
      * supplied. Suffixing every id would not help; the claim is deliberately
      * not scoped to a tenant, so the fix has to be that nobody else is writing.
      *
-     * The API suite does not need this: its tests go through HTTP and assert on
-     * rows they can scope by tenant.
+     * `fileParallelism` is only half of it, and the half that was missing cost
+     * a red CI: it orders files *within this package*, and `@bam/worker#test`
+     * is a turbo task that ran concurrently with `@bam/api#test`. The wipe
+     * above does not care which package wrote a row, so it deleted outbox
+     * events the API's booking tests had just written and were about to assert
+     * on — intermittently, and only where the two happened to overlap. The
+     * other half of the exclusivity is the `@bam/worker#test` ordering in
+     * turbo.json; neither works without the other.
      */
     fileParallelism: false,
   },
