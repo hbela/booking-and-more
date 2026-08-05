@@ -163,10 +163,16 @@ describe.skipIf(!databaseUrl)("owner onboarding", () => {
     });
 
     it("gives the same answer for an unknown token as for a revoked one", async () => {
-      const { token } = await provisionFor("look-revoked");
+      const { token, tenantId } = await provisionFor("look-revoked");
 
+      // Scoped to this tenant, for the same reason the user lookup two tests
+      // down is scoped to one address: the suites share a database and vitest
+      // runs their files in parallel. Unscoped, this revoked every PENDING
+      // invitation in it — including one another file had just provisioned and
+      // was about to accept, which failed there as an unexplained 404 from
+      // `accept-and-register` on a token that had been valid moments earlier.
       await app.prisma.invitation.updateMany({
-        where: { status: "PENDING" },
+        where: { tenantId, status: "PENDING" },
         data: { status: "REVOKED" },
       });
 
