@@ -10,6 +10,15 @@
 
 export const NotificationTypes = {
   BOOKING_CONFIRMATION: "BOOKING_CONFIRMATION",
+  /**
+   * A booking for a service with `requiresApproval`: received, not yet accepted.
+   *
+   * Its own type rather than a second `BOOKING_CONFIRMATION` template, because
+   * that type's dedupe key is one-per-booking-forever and the acceptance email
+   * that follows would collide with the request email and be swallowed
+   * (docs/phase-5-booking-notifications.md §2.4).
+   */
+  BOOKING_REQUESTED: "BOOKING_REQUESTED",
   BOOKING_UPDATED: "BOOKING_UPDATED",
   BOOKING_CANCELLED: "BOOKING_CANCELLED",
   BOOKING_REMINDER: "BOOKING_REMINDER",

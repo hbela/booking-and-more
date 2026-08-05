@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkStillOwed,
   OutboxEventTypes,
   planNotifications,
   SkipReasons,
@@ -274,5 +275,96 @@ describe("planNotifications", () => {
         second.plans.map((entry) => entry.dedupeKey),
       );
     });
+  });
+});
+
+describe("BOOKING_REQUESTED", () => {
+  it("plans the request email and nothing else", () => {
+    const result = plan({ eventType: OutboxEventTypes.BOOKING_REQUESTED, facts: facts({ bookingStatus: "PENDING" }) });
+
+    expect(result.recognised).toBe(true);
+    expect(result.plans.map((entry) => entry.type)).toEqual([NotificationTypes.BOOKING_REQUESTED]);
+  });
+
+  it("plans no reminder", () => {
+    // A request is not an appointment yet. Reminding somebody about a booking
+    // nobody has accepted is worse than silence — the reminder is planned by
+    // the BOOKING_CONFIRMED event acceptance writes
+    // (docs/phase-5-booking-notifications.md §2.4).
+    const result = plan({ eventType: OutboxEventTypes.BOOKING_REQUESTED, facts: facts({ bookingStatus: "PENDING" }) });
+
+    expect(result.plans.map((entry) => entry.type)).not.toContain(
+      NotificationTypes.BOOKING_REMINDER,
+    );
+  });
+
+  it("keys separately from the confirmation that follows it", () => {
+    // Sharing BOOKING_CONFIRMATION's one-per-booking key would send the request
+    // and silently swallow the acceptance.
+    const requested = plan({
+      eventType: OutboxEventTypes.BOOKING_REQUESTED,
+      facts: facts({ bookingStatus: "PENDING" }),
+    });
+    const confirmed = plan({ eventType: OutboxEventTypes.BOOKING_CONFIRMED });
+
+    expect(requested.plans[0]?.dedupeKey).not.toBe(confirmed.plans[0]?.dedupeKey);
+  });
+
+  it("still skips a booking with no way to reach the customer", () => {
+    const result = plan({
+      eventType: OutboxEventTypes.BOOKING_REQUESTED,
+      facts: facts({ bookingStatus: "PENDING", recipientEmail: null }),
+    });
+
+    expect(result.plans).toHaveLength(0);
+    expect(result.skipped[0]?.reason).toBe(SkipReasons.NO_RECIPIENT);
+  });
+});
+
+describe("checkStillOwed", () => {
+  const forwardLooking = [
+    NotificationTypes.BOOKING_CONFIRMATION,
+    NotificationTypes.BOOKING_REQUESTED,
+    NotificationTypes.BOOKING_UPDATED,
+    NotificationTypes.BOOKING_REMINDER,
+  ] as const;
+
+  it.each(forwardLooking)("owes %s while the booking is live", (type) => {
+    expect(checkStillOwed({ type, bookingStatus: "CONFIRMED" })).toEqual({ owed: true });
+    expect(checkStillOwed({ type, bookingStatus: "PENDING" })).toEqual({ owed: true });
+  });
+
+  it.each(forwardLooking)("stops owing %s once the booking is cancelled", (type) => {
+    // The case the whole function exists for: a reminder is planned when the
+    // booking is made and sent a day before the appointment, and a booking
+    // cancelled overnight owes nobody a reminder.
+    expect(checkStillOwed({ type, bookingStatus: "CANCELLED" })).toEqual({
+      owed: false,
+      reason: SkipReasons.BOOKING_NOT_LIVE,
+    });
+  });
+
+  it("owes a cancellation notice only for a cancelled booking", () => {
+    expect(
+      checkStillOwed({ type: NotificationTypes.BOOKING_CANCELLED, bookingStatus: "CANCELLED" }),
+    ).toEqual({ owed: true });
+
+    // Rebooked or reinstated: telling the customer it was cancelled is worse
+    // than saying nothing.
+    expect(
+      checkStillOwed({ type: NotificationTypes.BOOKING_CANCELLED, bookingStatus: "CONFIRMED" }),
+    ).toEqual({ owed: false, reason: SkipReasons.BOOKING_NOT_CANCELLED });
+  });
+
+  it("agrees with planNotifications about what live means", () => {
+    // Both read LIVE_BOOKING_STATUSES. If they ever disagree, a message is
+    // planned that can never be sent, or sent that should never have been.
+    const planned = plan({ facts: facts({ bookingStatus: "COMPLETED" }) });
+
+    expect(planned.plans).toHaveLength(0);
+    expect(
+      checkStillOwed({ type: NotificationTypes.BOOKING_CONFIRMATION, bookingStatus: "COMPLETED" })
+        .owed,
+    ).toBe(false);
   });
 });

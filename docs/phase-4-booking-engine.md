@@ -234,6 +234,14 @@ the exclusion constraint, correctly and confusingly.
 2. **Nothing is emailed.** The outbox accumulates `BOOKING_CONFIRMED`, `BOOKING_REQUESTED`,
    `BOOKING_RESCHEDULED` and `BOOKING_CANCELLED` rows and no worker reads them until Epic 5. The success
    screen says so rather than implying a confirmation is on its way.
+
+   **Closed on 2026-08-05** by [phase-5-booking-notifications.md](phase-5-booking-notifications.md). Two
+   things there change assumptions made here. The management token now travels in the outbox payload for
+   the length of one dispatch, because §3.3's "stored only as a hash" left the worker unable to build a
+   link to the manage page — read its §2.1 before adding a link to any other email. And the reminder
+   deliberately carries no link, which is §4's "a database leak handing over working links" safeguard
+   winning an argument it would otherwise have lost by months (§2.2). The success screen's wording needs
+   revisiting: a confirmation genuinely is on its way now.
 3. **`PENDING` bookings never expire on their own.** The status exists and the transition to `EXPIRED` is
    legal, but nothing runs to make it. Epic 5's worker is the natural owner.
 4. **The booking flow is one route, not six** — see §3.4. Deep links per step wait for Epic 6.
@@ -289,6 +297,51 @@ tests.
 
 # 7. Next
 
+> **Done — 2026-08-05**, in three parts: [phase-5 — notifications](phase-5-notifications.md) (queues, the
+> outbox poller, the dispatcher), Epic 9 (the email provider, built early because onboarding needed it first),
+> and [phase-5 — booking notifications](phase-5-booking-notifications.md) (the five booking templates and the
+> sweep). The paragraph below is what was predicted here; it is kept rather than replaced because the
+> difference is worth recording.
+
 Epic 5 — notifications: BullMQ, Redis, the outbox worker, and the email provider. It is the first thing that
 genuinely needs Redis, which is why it was deferred from Epic 0. The rows it will consume are already being
 written.
+
+**All four pieces exist.** What the list misses is the design, because it names the transport and not the
+shape. Three things carry the weight and none of them are in that sentence:
+
+- **the `notifications` row** — a second durable record between the outbox and the queue. That row is the
+  commitment; the BullMQ job is only a prompt to act on it;
+- **the dedupe key**, and the unique index on `(tenant_id, dedupe_key)` that makes at-least-once delivery
+  safe without a single `SELECT`-before-`INSERT`;
+- **the sweep**, which did not exist as a concept when this was written and is the only reason a reminder
+  more than 15 minutes out ever fires.
+
+**And the Redis claim is backwards.** Epic 5 did not turn out to need Redis in the sense meant here. The
+design deliberately keeps nothing durable in it: lose the instance and every notification row is still
+`PENDING`, and the next sweep re-enqueues it. What needed Redis was punctuality to the second — and the sweep
+degrades even that to a minute rather than to a lost message. It is safe to run on a Redis with no
+persistence at all, which was not the expectation when this line was written.
+
+**What Epic 5 did not deliver**, and what is therefore still open:
+
+- **Distributed rate limiting.** [app.ts](../apps/api/src/app.ts) still carries the comment "Epic 5 swaps in
+  Redis so limits hold across instances". It did not. Limits remain per-instance, which makes them
+  decorative the moment there are two API processes — the one item here that is a regression against a
+  written intention rather than an unbuilt feature.
+- **Dead-lettering is a ceiling, not a queue.** A `FAILED` row preserves the evidence and surfaces it
+  nowhere.
+- **`SMS` and `PUSH`** are in the channel enum and in `NotificationChannels`; neither has a provider.
+- **Nothing notifies staff.** All seven templates write to a customer or an owner; a booking arriving is
+  visible only in the diary. `CALENDAR_DISCONNECTED` is the one type in the schema with no renderer, and it
+  is the same neighbourhood.
+- **Six of the seven queues have no consumer**, but only three of those are gaps: `calendar-sync`,
+  `usage-aggregation` and `retention-cleanup` await their epics. `hold-expiration` is empty *by design* — a
+  hold expires by arithmetic and is swept inside the transaction that needs its slot
+  ([holds.ts](../packages/booking-engine/src/holds.ts)) — and `booking-reminders` lost its job to the sweep.
+- **No test covers the whole chain.** The API asserts what the outbox carries, the dispatcher what the
+  notification row holds, the sender what renders from it; nothing runs all three against one booking. That
+  is why phase-5-booking-notifications §5.2's manual walk is load-bearing, **and it has not been walked.**
+
+Next after that is Epic 6 — calendar synchronisation, which is what `calendar-sync` and
+`CALENDAR_DISCONNECTED` are waiting for.

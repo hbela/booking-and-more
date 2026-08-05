@@ -19,8 +19,8 @@ import {
   ErrorText,
   Field,
   Section,
-  buttonClass,
   inputClass,
+  secondaryButtonClass,
   useDashboardContext,
   useSignInRedirect,
 } from "./dashboard-shell";
@@ -296,6 +296,22 @@ function StatusBadge({ status }: { status: BookingStatus }): React.ReactElement 
   );
 }
 
+/**
+ * A quiet action on a booking card.
+ *
+ * Built from {@link secondaryButtonClass}, **not** from `buttonClass` with
+ * overrides bolted on. That is what this used to do, and it rendered an
+ * invisible button: `buttonClass` carries `bg-brand-600 text-white`, and
+ * appending `bg-transparent text-slate-900` does not override them — Tailwind
+ * resolves conflicting utilities by their order in the generated stylesheet,
+ * not by their order in the `class` attribute. There `text-white` happens to
+ * come after `text-slate-900` while `bg-transparent` comes after
+ * `bg-brand-600`, so the button ended up white-on-transparent: a label nobody
+ * could read, above a one-click, irreversible "Complete".
+ *
+ * The rule this encodes: compose a variant from a base that sets no conflicting
+ * property, never from one that does.
+ */
 function ActionButton({
   onClick,
   label,
@@ -310,7 +326,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${buttonClass} self-auto border border-slate-300 bg-transparent text-slate-900 dark:border-slate-700 dark:text-slate-100`}
+      className={`${secondaryButtonClass} font-medium disabled:opacity-60`}
     >
       {label}
     </button>

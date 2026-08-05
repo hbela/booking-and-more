@@ -987,4 +987,114 @@ describe.skipIf(!databaseUrl)("bookings", () => {
       expect(reopen.json().error.code).toBe(ErrorCodes.BOOKING_NOT_MODIFIABLE);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // What the outbox owes the customer
+  // -------------------------------------------------------------------------
+
+  describe("what the outbox carries", () => {
+    const outboxFor = (tenantId: string) =>
+      app.prisma.outboxEvent.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "asc" },
+      });
+
+    it("carries the management token on the event that created the booking", async () => {
+      // The one exception to ids-only. Only the SHA-256 hash is stored, so the
+      // worker could not otherwise build a link to the manage page
+      // (docs/phase-5-booking-notifications.md §2.1).
+      const site = await clinic("token-outbox");
+      const slots = await publicSlots(site);
+      const held = await takeHold(site, slots[0]!);
+      const booked = await confirm(site, held.json().id as string);
+
+      const [event] = await outboxFor(site.tenantId);
+      expect((event?.payload as { managementToken?: string }).managementToken).toBe(
+        booked.json().managementToken,
+      );
+    });
+
+    it("carries no token on a reschedule, only the time the booking left", async () => {
+      // A staff reschedule has no raw token at all, so the updated email points
+      // at the link the customer already holds rather than minting a second.
+      const site = await clinic("reschedule-outbox");
+      const slots = await publicSlots(site);
+      const held = await takeHold(site, slots[0]!);
+      await confirm(site, held.json().id as string);
+
+      const booking = await app.prisma.booking.findFirstOrThrow({
+        where: { tenantId: site.tenantId },
+      });
+
+      const moved = await app.inject({
+        method: "POST",
+        url: `/v1/bookings/${booking.id}/reschedule/confirm`,
+        headers: { ...as(site.owner.cookie, site.tenantId), "idempotency-key": `res-${RUN}` },
+        payload: { newStartAt: slots[2] },
+      });
+      expect(moved.statusCode, moved.body).toBe(200);
+
+      const rescheduled = (await outboxFor(site.tenantId)).find(
+        (event) => event.eventType === "BOOKING_RESCHEDULED",
+      );
+      const payload = rescheduled?.payload as {
+        managementToken?: string;
+        previousStartAt?: string;
+      };
+
+      expect(payload.managementToken).toBeUndefined();
+      expect(payload.previousStartAt).toBe(booking.startAt.toISOString());
+    });
+
+    it("tells the customer when staff accept their request", async () => {
+      // Until this existed, accepting a PENDING booking wrote an audit row and
+      // nothing else: the customer was told we had their request and then never
+      // told it was accepted.
+      const site = await clinic("accepted", { requiresApproval: true });
+      const slots = await publicSlots(site);
+      const held = await takeHold(site, slots[0]!);
+      await confirm(site, held.json().id as string);
+
+      const booking = await app.prisma.booking.findFirstOrThrow({
+        where: { tenantId: site.tenantId },
+      });
+
+      const accepted = await app.inject({
+        method: "PATCH",
+        url: `/v1/bookings/${booking.id}`,
+        headers: as(site.owner.cookie, site.tenantId),
+        payload: { status: "CONFIRMED" },
+      });
+      expect(accepted.statusCode, accepted.body).toBe(200);
+
+      const events = await outboxFor(site.tenantId);
+      expect(events.map((event) => event.eventType)).toEqual([
+        "BOOKING_REQUESTED",
+        "BOOKING_CONFIRMED",
+      ]);
+    });
+
+    it("writes no event for the statuses that only record what happened", async () => {
+      // COMPLETED and NO_SHOW are the clinic's own bookkeeping. Emailing a
+      // customer to say they turned up is not a message anybody owes.
+      const site = await clinic("no-event");
+      const slots = await publicSlots(site);
+      const held = await takeHold(site, slots[0]!);
+      await confirm(site, held.json().id as string);
+
+      const booking = await app.prisma.booking.findFirstOrThrow({
+        where: { tenantId: site.tenantId },
+      });
+
+      await app.inject({
+        method: "PATCH",
+        url: `/v1/bookings/${booking.id}`,
+        headers: as(site.owner.cookie, site.tenantId),
+        payload: { status: "COMPLETED" },
+      });
+
+      const events = await outboxFor(site.tenantId);
+      expect(events.map((event) => event.eventType)).toEqual(["BOOKING_CONFIRMED"]);
+    });
+  });
 });

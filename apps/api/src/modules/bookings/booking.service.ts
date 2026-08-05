@@ -362,6 +362,9 @@ export class BookingService {
         tenantId,
         eventType: status === BookingStatuses.PENDING ? "BOOKING_REQUESTED" : "BOOKING_CONFIRMED",
         bookingId: booking.id,
+        // The customer's first email is the one that carries their manage link,
+        // and this is the only moment the raw token exists.
+        managementToken: management.token,
       });
 
       return { bookingId: booking.id, managementToken: management.token };
@@ -484,6 +487,9 @@ export class BookingService {
           tenantId,
           eventType: "BOOKING_CONFIRMED",
           bookingId: booking.id,
+          // A booking taken at the desk earns the same emailed link as one taken
+          // on the web — the customer still has to be able to cancel it.
+          managementToken: management.token,
         });
 
         return { bookingId: booking.id, managementToken: management.token };
@@ -607,7 +613,15 @@ export class BookingService {
           after: { startAt: span.appointment.startAt, endAt: span.appointment.endAt },
         });
 
-        await this.writeOutbox(tx, { tenantId, eventType: "BOOKING_RESCHEDULED", bookingId });
+        await this.writeOutbox(tx, {
+          tenantId,
+          eventType: "BOOKING_RESCHEDULED",
+          bookingId,
+          // Where it used to be. The only fact in the "your appointment has
+          // moved" email that cannot be re-read from the booking, because the
+          // booking has already moved by the time the worker looks.
+          previousStartAt: preview.booking.startAt.toISOString(),
+        });
       });
     } catch (error) {
       if (isSlotConflict(error)) throw slotTaken();
@@ -731,6 +745,22 @@ export class BookingService {
         before: { status: current.status },
         after: { status: input.status ?? current.status },
       });
+
+      // Accepting a request is the moment the customer has been waiting for, and
+      // until now it emitted nothing: they were told we had their request and
+      // then never told it was accepted. No token rides along — the raw one
+      // existed only when the booking was made — so the confirmation email falls
+      // back to pointing at the link they already hold
+      // (docs/phase-5-booking-notifications.md §2.1).
+      //
+      // Nothing else here earns an event. COMPLETED and NO_SHOW record what
+      // happened on the day, and cancellation has its own path.
+      if (
+        current.status === BookingStatuses.PENDING &&
+        input.status === BookingStatuses.CONFIRMED
+      ) {
+        await this.writeOutbox(tx, { tenantId, eventType: "BOOKING_CONFIRMED", bookingId });
+      }
     });
 
     return this.repository.findByIdOrThrow({ tenantId, bookingId });
@@ -1024,10 +1054,27 @@ export class BookingService {
    * that waits on a queue fails when the queue is down. The worker turns these
    * rows into jobs once it exists (Epic 5); until then they accumulate, which
    * is the correct behaviour rather than a gap.
+   *
+   * **Ids only, with one exception.** The worker re-reads the booking when the
+   * job runs, so an email sent from a retried job reflects the booking as it is
+   * now rather than as it was when the event was written. The exception is the
+   * management token: it is 32 random bytes stored only as a SHA-256 hash
+   * (phase-4 §3.3), so it exists in plaintext for the length of this one request
+   * and the worker could not otherwise build a link to the manage page. It rides
+   * here exactly as an invitation token does, and `markProcessed` clears the
+   * payload once the notification row holds the finished URL
+   * (docs/phase-5-booking-notifications.md §2.1).
    */
   private async writeOutbox(
     db: Db,
-    args: { tenantId: string; eventType: string; bookingId: string },
+    args: {
+      tenantId: string;
+      eventType: string;
+      bookingId: string;
+      managementToken?: string | undefined;
+      /** ISO-8601. Only on a reschedule, where the old time is already gone. */
+      previousStartAt?: string | undefined;
+    },
   ): Promise<void> {
     await db.outboxEvent.create({
       data: {
@@ -1035,10 +1082,15 @@ export class BookingService {
         eventType: args.eventType,
         aggregateType: "Booking",
         aggregateId: args.bookingId,
-        // Ids only. The worker re-reads the booking when it runs, so an email
-        // sent from a retried job reflects the booking as it is now rather than
-        // as it was when the event was written.
-        payload: { bookingId: args.bookingId },
+        payload: {
+          bookingId: args.bookingId,
+          ...(args.managementToken === undefined
+            ? {}
+            : { managementToken: args.managementToken }),
+          ...(args.previousStartAt === undefined
+            ? {}
+            : { previousStartAt: args.previousStartAt }),
+        },
       },
     });
   }

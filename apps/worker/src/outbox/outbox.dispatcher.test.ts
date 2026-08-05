@@ -192,6 +192,149 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
     });
   });
 
+  /**
+   * The three facts a booking email cannot re-read for itself.
+   * docs/phase-5-booking-notifications.md §2.1 and §2.2.
+   */
+  describe("what the payload carries", () => {
+    const writeEventWith = (eventType: string, payload: Record<string, unknown>) =>
+      prisma.outboxEvent.create({
+        data: {
+          tenantId,
+          eventType,
+          aggregateType: "Booking",
+          aggregateId: bookingId,
+          payload: { bookingId, ...payload },
+        },
+      });
+
+    it("turns the management token into a manage link", async () => {
+      await writeEventWith("BOOKING_CONFIRMED", { managementToken: "tok_secret" });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const confirmation = (await notificationsFor()).find(
+        (row) => row.type === "BOOKING_CONFIRMATION",
+      );
+
+      // Built through `buildAppUrl`, which leaves Hungarian unprefixed because
+      // it is the default locale — the assertion below is the whole point of
+      // going through it rather than concatenating a path by hand.
+      expect(confirmation?.locale).toBe("hu");
+      expect((confirmation?.payload as { manageUrl?: string }).manageUrl).toBe(
+        "http://localhost:3000/booking/manage/tok_secret",
+      );
+    });
+
+    it("prefixes the link when the customer does not read the default language", async () => {
+      // The customer's language, not the tenant's: a link that ignores it lands
+      // them on the Hungarian page (phase-9-owner-language-and-return-paths §2).
+      await prisma.customer.update({
+        where: { id: customerId },
+        data: { preferredLanguage: "en" },
+      });
+      await writeEventWith("BOOKING_CONFIRMED", { managementToken: "tok_en" });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const confirmation = (await notificationsFor()).find(
+        (row) => row.type === "BOOKING_CONFIRMATION",
+      );
+
+      expect(confirmation?.locale).toBe("en");
+      expect((confirmation?.payload as { manageUrl?: string }).manageUrl).toBe(
+        "http://localhost:3000/en/booking/manage/tok_en",
+      );
+    });
+
+    it("puts no token in the reminder, whatever the event carried", async () => {
+      // The reminder row is written now and sent days later, so a URL in it
+      // would leave a working credential in the database for that whole period
+      // — the exposure phase-4 §4's hash-only safeguard exists to prevent.
+      await writeEventWith("BOOKING_CONFIRMED", { managementToken: "tok_secret" });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const reminder = (await notificationsFor()).find((row) => row.type === "BOOKING_REMINDER");
+      expect(JSON.stringify(reminder?.payload ?? {})).not.toContain("tok_secret");
+    });
+
+    it("gives an accepted request no manage link rather than a broken one", async () => {
+      // Staff acceptance writes BOOKING_CONFIRMED with no token — the raw one
+      // existed only when the booking was made.
+      await writeEvent("BOOKING_CONFIRMED");
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const confirmation = (await notificationsFor()).find(
+        (row) => row.type === "BOOKING_CONFIRMATION",
+      );
+      expect((confirmation?.payload as { manageUrl?: string } | null)?.manageUrl).toBeUndefined();
+    });
+
+    it("carries the old time on a reschedule, because the booking has already moved", async () => {
+      await writeEventWith("BOOKING_RESCHEDULED", {
+        previousStartAt: "2026-09-01T07:00:00.000Z",
+      });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const updated = (await notificationsFor()).find((row) => row.type === "BOOKING_UPDATED");
+      expect((updated?.payload as { previousStartAt?: string }).previousStartAt).toBe(
+        "2026-09-01T07:00:00.000Z",
+      );
+    });
+
+    it("offers the public booking page on a cancellation", async () => {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "CANCELLED", cancelledAt: new Date() },
+      });
+      await writeEvent("BOOKING_CANCELLED");
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const cancelled = (await notificationsFor()).find((row) => row.type === "BOOKING_CANCELLED");
+      // A slug, not a secret — so unlike the manage link it can be rebuilt at
+      // any time, and offering it is the difference between a dead end and a
+      // rebooking.
+      expect((cancelled?.payload as { bookingUrl?: string }).bookingUrl).toContain("/book");
+    });
+
+    it("clears the token from the outbox row once it has been dispatched", async () => {
+      const event = await writeEventWith("BOOKING_CONFIRMED", { managementToken: "tok_secret" });
+
+      await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      const settled = await prisma.outboxEvent.findUniqueOrThrow({ where: { id: event.id } });
+      expect(settled.payload).toEqual({});
+    });
+  });
+
+  describe("BOOKING_REQUESTED", () => {
+    it("plans the request email and no reminder", async () => {
+      // A request is not an appointment yet; the reminder is planned by the
+      // BOOKING_CONFIRMED event staff acceptance writes.
+      await prisma.booking.update({ where: { id: bookingId }, data: { status: "PENDING" } });
+      await prisma.outboxEvent.create({
+        data: {
+          tenantId,
+          eventType: "BOOKING_REQUESTED",
+          aggregateType: "Booking",
+          aggregateId: bookingId,
+          payload: { bookingId, managementToken: "tok_req" },
+        },
+      });
+
+      const summary = await dispatchOutboxBatch(options(fakeQueues().registry));
+
+      expect(summary.notificationsCreated).toBe(1);
+      const rows = await notificationsFor();
+      expect(rows.map((row) => row.type)).toEqual(["BOOKING_REQUESTED"]);
+      expect((rows[0]?.payload as { manageUrl?: string }).manageUrl).toContain("tok_req");
+    });
+  });
+
   describe("duplicate suppression", () => {
     it("sends nothing extra when the same event is dispatched twice", async () => {
       // Epic 5's third exit criterion. Two identical events — the API wrote

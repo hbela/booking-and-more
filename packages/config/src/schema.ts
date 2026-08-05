@@ -161,6 +161,16 @@ const baseEnvSchema = z.object({
    */
   OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
+  /**
+   * How often the notification sweep looks for rows the queue does not have.
+   *
+   * Slower than the outbox poll on purpose. This is the catch-up path for two
+   * things that are not urgent to the second — a reminder crossing the
+   * dispatcher's 15-minute queue horizon, and a Redis that lost every job in it
+   * (docs/phase-5-booking-notifications.md §2.5).
+   */
+  NOTIFICATION_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+
   /** Unset is valid — Sentry is simply not initialised. */
   SENTRY_DSN: z.url().optional(),
 

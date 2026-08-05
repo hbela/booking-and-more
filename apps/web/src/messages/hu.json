@@ -328,7 +328,7 @@
     "awaitingApproval": "A rendelő hamarosan visszaigazolja az időpontot.",
     "manageHint": "Itt módosíthatja vagy mondhatja le:",
     "manageLink": "foglalás kezelése",
-    "noEmailYet": "Mentse el ezt a linket — a visszaigazoló e-mailek még nincsenek bekapcsolva.",
+    "confirmationEmail": "A visszaigazolást e-mailben küldjük. Mentse el ezt a linket is — online csak ezen keresztül módosíthat vagy mondhat le.",
     "slotTaken": "Valaki épp lefoglalta ezt az időpontot. Íme a még szabad időpontok.",
     "holdExpired": "A fenntartás lejárt. Kérjük, válasszon újra időpontot."
   },

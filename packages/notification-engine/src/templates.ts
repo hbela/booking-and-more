@@ -734,8 +734,504 @@ export function renderProviderInvited(
   return { subject: subject(values.organizationName), html, text };
 }
 
+// --- Bookings --------------------------------------------------------------
+
+/**
+ * What every booking email says about the appointment itself.
+ *
+ * All five templates print the same block, because a customer scanning any of
+ * them is looking for the same six facts. Every value arrives already formatted
+ * and localized — the times in the appointment's own zone, the price through
+ * `Intl` — for the reason the whole file follows: this package has no runtime
+ * dependencies and no opinion about zones.
+ */
+export interface BookingValues {
+  /** The clinic. Booking emails are signed by them, not by the platform. */
+  organizationName: string;
+  /** `customer_name_snapshot` — what the customer was called when they booked. */
+  customerName: string;
+  serviceName: string;
+  providerName: string;
+  /** Date and time, formatted for the recipient in the appointment's zone. */
+  when: string;
+  locationName: string | null;
+  locationAddress: string | null;
+  /** Formatted with its currency, or null when the booking records no price. */
+  price: string | null;
+  /** The short human reference — what a customer reads out on the phone. */
+  reference: string;
+}
+
+interface DetailLabels {
+  when: string;
+  service: string;
+  provider: string;
+  place: string;
+  price: string;
+  reference: string;
+}
+
+const DETAIL_LABELS: Record<Locale, DetailLabels> = {
+  hu: {
+    when: "Időpont",
+    service: "Szolgáltatás",
+    provider: "Kolléga",
+    place: "Helyszín",
+    price: "Ár",
+    reference: "Azonosító",
+  },
+  en: {
+    when: "When",
+    service: "Service",
+    provider: "With",
+    place: "Where",
+    price: "Price",
+    reference: "Reference",
+  },
+};
+
+/** `[label, value]` for everything the booking actually has. */
+function detailPairs(locale: Locale, values: BookingValues): [string, string][] {
+  const labels = DETAIL_LABELS[locale];
+
+  const place = [values.locationName, values.locationAddress]
+    .filter((part): part is string => part !== null && part !== "")
+    .join(", ");
+
+  return [
+    [labels.when, values.when],
+    [labels.service, values.serviceName],
+    [labels.provider, values.providerName],
+    // A single-location clinic may name no location on the booking at all, and
+    // an empty "Where:" line reads as missing information rather than as a
+    // clinic with one address.
+    ...(place === "" ? [] : ([[labels.place, place]] as [string, string][])),
+    ...(values.price === null ? [] : ([[labels.price, values.price]] as [string, string][])),
+    [labels.reference, values.reference],
+  ];
+}
+
+function detailsText(locale: Locale, values: BookingValues): string[] {
+  return detailPairs(locale, values).map(([label, value]) => `${label}: ${value}`);
+}
+
+function detailsHtml(locale: Locale, values: BookingValues): string {
+  const rows = detailPairs(locale, values)
+    .map(
+      ([label, value]) =>
+        `<tr><td style="${DETAIL_LABEL_STYLE}">${escapeHtml(label)}</td><td style="${DETAIL_VALUE_STYLE}">${escapeHtml(value)}</td></tr>`,
+    )
+    .join("");
+
+  // The one table in the file, and it earns it: label/value pairs are what a
+  // table is for, and every email client aligns one correctly. `layout()`'s
+  // "table-free" note is about layout scaffolding, not about tabular data.
+  return `<table role="presentation" style="${DETAIL_TABLE_STYLE}"><tbody>${rows}</tbody></table>`;
+}
+
+const DETAIL_TABLE_STYLE =
+  "border-collapse:collapse;margin:16px 0;background:#f8fafc;border-radius:6px;width:100%";
+const DETAIL_LABEL_STYLE = "padding:8px 12px;color:#64748b;font-size:14px;vertical-align:top";
+const DETAIL_VALUE_STYLE = "padding:8px 12px;font-weight:600;vertical-align:top";
+
+interface BookingCopy {
+  greeting: (customer: string) => string;
+  /** Signed by the clinic; the customer has no relationship with the platform. */
+  signoff: (organization: string) => string;
+  fallback: string;
+}
+
+const BOOKING_COMMON: Record<Locale, BookingCopy> = {
+  hu: {
+    greeting: (customer) => `Kedves ${customer}!`,
+    signoff: (organization) => `Üdvözlettel,\n${organization}`,
+    fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
+  },
+  en: {
+    greeting: (customer) => `Dear ${customer},`,
+    signoff: (organization) => `Kind regards,\n${organization}`,
+    fallback: "If the button does not work, paste this address into your browser:",
+  },
+};
+
+/**
+ * The shape every booking email shares: greeting, a sentence, the details, then
+ * whatever that particular message adds.
+ *
+ * Assembled once so the five templates differ only where they mean to. `lines`
+ * are paragraphs after the details block; `action` is the optional button.
+ */
+function bookingEmail(
+  locale: Locale,
+  values: BookingValues,
+  parts: {
+    subject: string;
+    intro: string;
+    lines: string[];
+    action?: { label: string; url: string; lead: string } | undefined;
+    muted: string[];
+  },
+): RenderedEmail {
+  const common = BOOKING_COMMON[locale];
+
+  const text = [
+    common.greeting(values.customerName),
+    "",
+    parts.intro,
+    "",
+    ...detailsText(locale, values),
+    "",
+    ...(parts.lines.length === 0 ? [] : [...parts.lines, ""]),
+    ...(parts.action === undefined ? [] : [parts.action.lead, parts.action.url, ""]),
+    ...(parts.muted.length === 0 ? [] : [...parts.muted, ""]),
+    common.signoff(values.organizationName),
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(common.greeting(values.customerName))}</p>
+    <p>${escapeHtml(parts.intro)}</p>
+    ${detailsHtml(locale, values)}
+    ${parts.lines.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n")}
+    ${
+      parts.action === undefined
+        ? ""
+        : `<p>${escapeHtml(parts.action.lead)}</p>
+    <p>
+      <a href="${escapeHtml(parts.action.url)}" style="${BUTTON_STYLE}">
+        ${escapeHtml(parts.action.label)}
+      </a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(common.fallback)}<br />
+      <a href="${escapeHtml(parts.action.url)}">${escapeHtml(parts.action.url)}</a>
+    </p>`
+    }
+    ${parts.muted.map((line) => `<p style="${MUTED_STYLE}">${escapeHtml(line)}</p>`).join("\n")}
+    <p style="${MUTED_STYLE}">${escapeHtml(common.signoff(values.organizationName)).replace(/\n/gu, "<br />")}</p>
+  `);
+
+  return { subject: parts.subject, html, text };
+}
+
+// --- Booking requested -----------------------------------------------------
+
+export interface BookingRequestedValues extends BookingValues {
+  /**
+   * Normally present — this email is minted where the raw token still exists —
+   * but nullable so a payload that somehow lacks one produces an email without a
+   * button rather than no email at all.
+   */
+  manageUrl: string | null;
+}
+
+const REQUESTED_COPY: Record<
+  Locale,
+  {
+    subject: (organization: string) => string;
+    intro: (organization: string) => string;
+    notYet: string;
+    lead: string;
+    button: string;
+    change: string;
+  }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — foglalási kérelmét megkaptuk`,
+    intro: (organization) => `Köszönjük! A(z) ${organization} megkapta a foglalási kérelmét.`,
+    // The whole reason this template exists: a "thank you" that does not say
+    // this would be read as a confirmation, and the customer would turn up.
+    notYet:
+      "Ez még nem végleges foglalás — kollégáink visszaigazolják, és arról külön e-mailt küldünk.",
+    lead: "A kérelmét itt tekintheti meg vagy vonhatja vissza:",
+    button: "Foglalás megtekintése",
+    change: "Őrizze meg ezt a levelet: a fenti link az egyetlen módja, hogy online kezelje.",
+  },
+  en: {
+    subject: (organization) => `${organization} — we have your booking request`,
+    intro: (organization) => `Thank you. ${organization} has received your booking request.`,
+    notYet:
+      "This is not a confirmed appointment yet — we will check it and email you again once it is accepted.",
+    lead: "You can view or withdraw your request here:",
+    button: "View your request",
+    change: "Keep this email: the link above is the only way to manage it online.",
+  },
+};
+
+/**
+ * A booking for a service with `requiresApproval`.
+ *
+ * `notYet` is the load-bearing line. Every other email in this section confirms
+ * something; this one deliberately does not, and a customer who reads it as a
+ * confirmation turns up to an appointment nobody accepted.
+ */
+export function renderBookingRequested(
+  locale: Locale,
+  values: BookingRequestedValues,
+): RenderedEmail {
+  const copy = REQUESTED_COPY[locale];
+
+  return bookingEmail(locale, values, {
+    subject: copy.subject(values.organizationName),
+    intro: copy.intro(values.organizationName),
+    lines: [copy.notYet],
+    ...(values.manageUrl === null
+      ? {}
+      : { action: { label: copy.button, url: values.manageUrl, lead: copy.lead } }),
+    // "Keep this email" only means something when the email has the link in it.
+    muted: values.manageUrl === null ? [] : [copy.change],
+  });
+}
+
+// --- Booking confirmation --------------------------------------------------
+
+export interface BookingConfirmationValues extends BookingValues {
+  /**
+   * Null when staff accepted a pending request: the raw token existed only at
+   * the moment the booking was made, and the customer already holds it from the
+   * requested email (docs/phase-5-booking-notifications.md §2.1).
+   */
+  manageUrl: string | null;
+  /** `Tenant.cancellationPolicy` — free text, printed as written, or null. */
+  cancellationPolicy: string | null;
+}
+
+const CONFIRMATION_COPY: Record<
+  Locale,
+  {
+    subject: (organization: string) => string;
+    intro: (organization: string) => string;
+    lead: string;
+    button: string;
+    useOriginal: string;
+    late: string;
+  }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — foglalása visszaigazolva`,
+    intro: (organization) => `Foglalását a(z) ${organization} visszaigazolta. Várjuk Önt!`,
+    lead: "Időpontját itt módosíthatja vagy mondhatja le:",
+    button: "Foglalás kezelése",
+    useOriginal:
+      "Módosításhoz vagy lemondáshoz használja a foglaláskor kapott levélben lévő linket, vagy hívjon minket.",
+    late: "Kérjük, jelezze időben, ha nem tud jönni — így másnak tudjuk adni az időpontot.",
+  },
+  en: {
+    subject: (organization) => `${organization} — your appointment is confirmed`,
+    intro: (organization) => `${organization} has confirmed your appointment. We look forward to it.`,
+    lead: "You can change or cancel it here:",
+    button: "Manage your booking",
+    useOriginal:
+      "To change or cancel, use the link in the email you received when you booked, or call us.",
+    late: "Please let us know in good time if you cannot make it, so we can offer the slot to someone else.",
+  },
+};
+
+/**
+ * The appointment is on.
+ *
+ * The button is present or absent depending on where this was triggered from,
+ * and the copy changes with it rather than leaving a dead end: a straight-through
+ * booking carries its token here, while an accepted request does not, and the
+ * customer already holds a working link from the requested email.
+ */
+export function renderBookingConfirmation(
+  locale: Locale,
+  values: BookingConfirmationValues,
+): RenderedEmail {
+  const copy = CONFIRMATION_COPY[locale];
+
+  return bookingEmail(locale, values, {
+    subject: copy.subject(values.organizationName),
+    intro: copy.intro(values.organizationName),
+    lines: [],
+    ...(values.manageUrl === null
+      ? {}
+      : { action: { label: copy.button, url: values.manageUrl, lead: copy.lead } }),
+    muted: [
+      ...(values.manageUrl === null ? [copy.useOriginal] : []),
+      copy.late,
+      // Printed as the clinic wrote it. Nothing here interprets it — it is free
+      // text, and phase-4 §5.1 is why no number is derived from it.
+      ...(values.cancellationPolicy === null || values.cancellationPolicy === ""
+        ? []
+        : [values.cancellationPolicy]),
+    ],
+  });
+}
+
+// --- Booking rescheduled ---------------------------------------------------
+
+export interface BookingUpdatedValues extends BookingValues {
+  /**
+   * Where the appointment used to be, formatted like `when` — or null when the
+   * event did not record it. The line is dropped rather than guessed at: the
+   * details block already names the appointment by reference.
+   */
+  previousWhen: string | null;
+}
+
+const UPDATED_COPY: Record<
+  Locale,
+  {
+    subject: (organization: string) => string;
+    intro: (organization: string) => string;
+    moved: (from: string) => string;
+    stillWorks: string;
+  }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — foglalása új időpontra került`,
+    intro: (organization) => `A(z) ${organization} foglalását áthelyeztük. Az új időpont:`,
+    moved: (from) => `Korábbi időpont: ${from}.`,
+    stillWorks:
+      "A foglaláskor kapott link továbbra is érvényes — azon módosíthat vagy mondhat le. Ha nem találja, hívjon minket.",
+  },
+  en: {
+    subject: (organization) => `${organization} — your appointment has moved`,
+    intro: (organization) => `Your appointment with ${organization} has been moved. It is now:`,
+    moved: (from) => `It was previously ${from}.`,
+    stillWorks:
+      "The link from your booking email still works — use it to change or cancel. If you cannot find it, call us.",
+  },
+};
+
+/**
+ * The appointment moved.
+ *
+ * No button, deliberately. A public reschedule was authenticated by the token
+ * and could carry it; a staff reschedule has no token at all, and an email whose
+ * button appears only when the *customer* moved the booking is an inconsistency
+ * no recipient could account for (§2.1). The link they already hold still works.
+ */
+export function renderBookingUpdated(locale: Locale, values: BookingUpdatedValues): RenderedEmail {
+  const copy = UPDATED_COPY[locale];
+
+  return bookingEmail(locale, values, {
+    subject: copy.subject(values.organizationName),
+    intro: copy.intro(values.organizationName),
+    lines: values.previousWhen === null ? [] : [copy.moved(values.previousWhen)],
+    muted: [copy.stillWorks],
+  });
+}
+
+// --- Booking cancelled -----------------------------------------------------
+
+export interface BookingCancelledValues extends BookingValues {
+  /** The clinic's public booking page — not a secret, so always safe to carry. */
+  bookingUrl: string | null;
+}
+
+const CANCELLED_COPY: Record<
+  Locale,
+  {
+    subject: (organization: string) => string;
+    intro: (organization: string) => string;
+    gone: string;
+    lead: string;
+    button: string;
+  }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — foglalása lemondva`,
+    intro: (organization) => `A(z) ${organization} alábbi foglalását lemondtuk.`,
+    gone: "Erre az időpontra már nem várjuk. Ha tévedés történt, kérjük, hívjon minket.",
+    lead: "Új időpontot bármikor foglalhat:",
+    button: "Új időpont foglalása",
+  },
+  en: {
+    subject: (organization) => `${organization} — your appointment is cancelled`,
+    intro: (organization) => `The following appointment with ${organization} has been cancelled.`,
+    gone: "We are no longer expecting you at this time. If this is a mistake, please call us.",
+    lead: "You can book a new appointment whenever you like:",
+    button: "Book another time",
+  },
+};
+
+/**
+ * The appointment is off.
+ *
+ * The only link here is the public booking page, which is not a credential — so
+ * unlike the manage link it can be built from the tenant's slug at any time,
+ * and offering it is the difference between a dead end and a rebooking.
+ */
+export function renderBookingCancelled(
+  locale: Locale,
+  values: BookingCancelledValues,
+): RenderedEmail {
+  const copy = CANCELLED_COPY[locale];
+
+  return bookingEmail(locale, values, {
+    subject: copy.subject(values.organizationName),
+    intro: copy.intro(values.organizationName),
+    lines: [copy.gone],
+    ...(values.bookingUrl === null
+      ? {}
+      : { action: { label: copy.button, url: values.bookingUrl, lead: copy.lead } }),
+    muted: [],
+  });
+}
+
+// --- Booking reminder ------------------------------------------------------
+
+export type BookingReminderValues = BookingValues;
+
+const REMINDER_COPY: Record<
+  Locale,
+  {
+    subject: (organization: string) => string;
+    intro: (organization: string) => string;
+    change: string;
+    thanks: string;
+  }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — emlékeztető a közelgő időpontjáról`,
+    intro: (organization) => `Emlékeztetjük a(z) ${organization} közelgő időpontjára:`,
+    // No link, and it points at where to find one instead. The reminder row is
+    // written when the booking is made and sent days later, so a manage URL
+    // here would sit in the database for that whole period (§2.2).
+    change:
+      "Ha módosítana vagy lemondaná, használja a foglaláskor kapott levélben lévő linket, vagy hívjon minket.",
+    thanks: "Ha nem tud jönni, kérjük, jelezze — így másnak tudjuk adni az időpontot.",
+  },
+  en: {
+    subject: (organization) => `${organization} — a reminder about your appointment`,
+    intro: (organization) => `A reminder about your upcoming appointment with ${organization}:`,
+    change:
+      "To change or cancel, use the link in the email you received when you booked, or call us.",
+    thanks: "If you cannot make it, please let us know so we can offer the slot to someone else.",
+  },
+};
+
+/**
+ * The appointment is soon.
+ *
+ * Deliberately linkless. Its row is written when the booking is made and sends
+ * `BOOKING_REMINDER_LEAD_HOURS` before the appointment, so a manage URL in the
+ * payload would leave working credentials in the database for the whole booking
+ * horizon — the exposure phase-4 §4's "only the SHA-256 hash is stored"
+ * safeguard exists to prevent. Recorded in §2.2 as a deliberate trade.
+ */
+export function renderBookingReminder(
+  locale: Locale,
+  values: BookingReminderValues,
+): RenderedEmail {
+  const copy = REMINDER_COPY[locale];
+
+  return bookingEmail(locale, values, {
+    subject: copy.subject(values.organizationName),
+    intro: copy.intro(values.organizationName),
+    lines: [],
+    muted: [copy.change, copy.thanks],
+  });
+}
+
 /** Which templates exist. A type absent here has no renderer and cannot be sent. */
 export const RENDERABLE_TYPES: readonly NotificationType[] = [
+  NotificationTypes.BOOKING_REQUESTED,
+  NotificationTypes.BOOKING_CONFIRMATION,
+  NotificationTypes.BOOKING_UPDATED,
+  NotificationTypes.BOOKING_CANCELLED,
+  NotificationTypes.BOOKING_REMINDER,
   NotificationTypes.ORGANIZATION_CREATED,
   NotificationTypes.PROVIDER_INVITED,
   NotificationTypes.SUBSCRIPTION_LINK,

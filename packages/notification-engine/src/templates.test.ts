@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   escapeHtml,
   isRenderable,
+  renderBookingCancelled,
+  renderBookingConfirmation,
+  renderBookingReminder,
+  renderBookingRequested,
+  renderBookingUpdated,
   renderOrganizationCreated,
   renderProviderInvited,
   renderSubscriptionConfirmed,
@@ -234,9 +239,209 @@ describe("isRenderable", () => {
   it("knows the templates that exist", () => {
     expect(isRenderable(NotificationTypes.ORGANIZATION_CREATED)).toBe(true);
     expect(isRenderable(NotificationTypes.PROVIDER_INVITED)).toBe(true);
+    expect(isRenderable(NotificationTypes.BOOKING_CONFIRMATION)).toBe(true);
+    expect(isRenderable(NotificationTypes.BOOKING_REQUESTED)).toBe(true);
+    expect(isRenderable(NotificationTypes.BOOKING_REMINDER)).toBe(true);
   });
 
   it("refuses a type with no template rather than sending an empty email", () => {
-    expect(isRenderable(NotificationTypes.BOOKING_CONFIRMATION)).toBe(false);
+    // The last one left: staff-facing, and it arrives with Google Calendar.
+    expect(isRenderable(NotificationTypes.CALENDAR_DISCONNECTED)).toBe(false);
+  });
+});
+
+// --- Bookings --------------------------------------------------------------
+
+const booking = {
+  organizationName: "Napfény Fogászat",
+  customerName: "Nagy Béla",
+  serviceName: "Fogtisztítás",
+  providerName: "Dr. Kiss Anna",
+  when: "2026. augusztus 12., szerda 10:00",
+  locationName: "Belváros",
+  locationAddress: "Fő utca 1., Budapest",
+  price: "15 000 Ft",
+  reference: "BK-4C7A",
+};
+
+const MANAGE_URL = "http://localhost:3000/en/booking/manage/tok123";
+
+describe("booking emails", () => {
+  it.each(["hu", "en"] as const)("render %s with the appointment's own facts", (locale) => {
+    const email = renderBookingConfirmation(locale, {
+      ...booking,
+      manageUrl: MANAGE_URL,
+      cancellationPolicy: null,
+    });
+
+    for (const part of [email.text, email.html]) {
+      expect(part).toContain("Dr. Kiss Anna");
+      expect(part).toContain("Fogtisztítás");
+      expect(part).toContain("BK-4C7A");
+      expect(part).toContain("15 000 Ft");
+    }
+  });
+
+  it("always produces a text part with no markup in it", () => {
+    const email = renderBookingReminder("hu", booking);
+
+    expect(email.text.length).toBeGreaterThan(50);
+    expect(email.text).not.toContain("<");
+  });
+
+  it("differs by locale", () => {
+    const hu = renderBookingCancelled("hu", { ...booking, bookingUrl: null });
+    const en = renderBookingCancelled("en", { ...booking, bookingUrl: null });
+
+    expect(hu.subject).not.toBe(en.subject);
+    expect(hu.text).not.toBe(en.text);
+  });
+
+  it("escapes a clinic whose name is markup", () => {
+    // "Smith & Sons" is a broken email long before anyone tries anything
+    // malicious, and a booking's values come from forms typed by customers.
+    const email = renderBookingReminder("en", {
+      ...booking,
+      organizationName: "Smith & Sons",
+      customerName: "<script>alert(1)</script>",
+    });
+
+    expect(email.html).toContain("Smith &amp; Sons");
+    expect(email.html).not.toContain("<script>");
+    expect(email.text).toContain("Smith & Sons");
+  });
+
+  it("drops the place line when the booking names no location", () => {
+    // A single-site clinic records neither, and an empty "Where:" reads as
+    // missing information rather than as a clinic with one address.
+    const email = renderBookingReminder("en", {
+      ...booking,
+      locationName: null,
+      locationAddress: null,
+    });
+
+    expect(email.text).not.toContain("Where");
+    expect(email.text).toContain("With");
+  });
+
+  it("drops the price line when the booking records no price", () => {
+    const email = renderBookingReminder("en", { ...booking, price: null });
+
+    expect(email.text).not.toContain("Price");
+  });
+});
+
+describe("renderBookingRequested", () => {
+  it("says out loud that this is not a confirmation yet", () => {
+    // The whole reason the template exists. A customer who reads it as a
+    // confirmation turns up to an appointment nobody accepted.
+    const en = renderBookingRequested("en", { ...booking, manageUrl: MANAGE_URL });
+    const hu = renderBookingRequested("hu", { ...booking, manageUrl: MANAGE_URL });
+
+    expect(en.text.toLowerCase()).toContain("not a confirmed appointment yet");
+    expect(hu.text).toContain("még nem végleges");
+  });
+
+  it("carries the manage link in both parts", () => {
+    const email = renderBookingRequested("en", { ...booking, manageUrl: MANAGE_URL });
+
+    expect(email.text).toContain(MANAGE_URL);
+    expect(email.html).toContain(MANAGE_URL);
+  });
+});
+
+describe("renderBookingConfirmation", () => {
+  it("offers the manage link when the event carried a token", () => {
+    const email = renderBookingConfirmation("en", {
+      ...booking,
+      manageUrl: MANAGE_URL,
+      cancellationPolicy: null,
+    });
+
+    expect(email.text).toContain(MANAGE_URL);
+    expect(email.text).not.toContain("the email you received when you booked");
+  });
+
+  it("points at the earlier email instead when staff accepted a request", () => {
+    // No raw token exists on that path, and a button that links nowhere is
+    // worse than a sentence saying where the link is.
+    const email = renderBookingConfirmation("en", {
+      ...booking,
+      manageUrl: null,
+      cancellationPolicy: null,
+    });
+
+    expect(email.text).not.toContain("http");
+    expect(email.text).toContain("the email you received when you booked");
+  });
+
+  it("prints the cancellation policy as the clinic wrote it", () => {
+    // Free text, and nothing derives a number of minutes from it — phase-4 §5.1.
+    const email = renderBookingConfirmation("hu", {
+      ...booking,
+      manageUrl: MANAGE_URL,
+      cancellationPolicy: "24 órán belüli lemondás esetén a díj 50%-át felszámítjuk.",
+    });
+
+    expect(email.text).toContain("24 órán belüli lemondás");
+  });
+});
+
+describe("renderBookingUpdated", () => {
+  it("names where the appointment used to be", () => {
+    const email = renderBookingUpdated("en", {
+      ...booking,
+      previousWhen: "Tuesday 11 August 2026 at 09:00",
+    });
+
+    expect(email.text).toContain("Tuesday 11 August 2026 at 09:00");
+  });
+
+  it("drops that line rather than guessing when the event did not record it", () => {
+    const email = renderBookingUpdated("en", { ...booking, previousWhen: null });
+
+    expect(email.text).not.toContain("previously");
+    // Still identifiable: the details block names the booking by reference.
+    expect(email.text).toContain("BK-4C7A");
+  });
+
+  it("carries no link of its own", () => {
+    // A staff reschedule has no token, so a button here would appear only when
+    // the customer moved the booking — an inconsistency nobody could account
+    // for (docs/phase-5-booking-notifications.md §2.1).
+    const email = renderBookingUpdated("en", { ...booking, previousWhen: null });
+
+    expect(email.text).not.toContain("http");
+    expect(email.text).toContain("still works");
+  });
+});
+
+describe("renderBookingCancelled", () => {
+  it("offers the public booking page, which is not a credential", () => {
+    const email = renderBookingCancelled("en", {
+      ...booking,
+      bookingUrl: "http://localhost:3000/en/napfeny/book",
+    });
+
+    expect(email.text).toContain("http://localhost:3000/en/napfeny/book");
+  });
+});
+
+describe("renderBookingReminder", () => {
+  it("carries no link at all", () => {
+    // Its row is written when the booking is made and sent days later, so a
+    // manage URL would sit in the database for the whole booking horizon —
+    // the exposure phase-4 §4's hash-only safeguard exists to prevent (§2.2).
+    const email = renderBookingReminder("en", booking);
+
+    expect(email.text).not.toContain("http");
+    expect(email.html).not.toContain("href");
+  });
+
+  it("says where the customer can find one", () => {
+    expect(renderBookingReminder("en", booking).text).toContain(
+      "the email you received when you booked",
+    );
+    expect(renderBookingReminder("hu", booking).text).toContain("foglaláskor kapott levélben");
   });
 });

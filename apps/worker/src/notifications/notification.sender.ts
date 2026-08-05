@@ -1,15 +1,23 @@
 import type { PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
+  checkStillOwed,
   decideRetry,
   NotificationTypes,
+  renderBookingCancelled,
+  renderBookingConfirmation,
+  renderBookingReminder,
+  renderBookingRequested,
+  renderBookingUpdated,
   renderOrganizationCreated,
   renderPaymentFailed,
   renderProviderInvited,
   renderSubscriptionConfirmed,
   renderSubscriptionLink,
   renderTrialEnding,
+  type BookingValues,
   type Locale,
+  type NotificationType,
   type RenderedEmail,
 } from "@bam/notification-engine";
 
@@ -59,17 +67,20 @@ export async function sendNotification(
 
   if (!notification) return "NOT_CLAIMED";
 
-  const email = render(notification, options.logger);
+  const built = await build(notification, options);
 
-  if (email === undefined) {
-    // No template, or values missing. Neither is fixable by trying again, and
-    // SKIPPED rather than FAILED keeps the dead-letter queue meaningful.
+  if ("skipped" in built) {
+    // No template, values missing, or a booking that has moved on. None is
+    // fixable by trying again, and SKIPPED rather than FAILED keeps the
+    // dead-letter queue meaningful.
     await options.prisma.notification.update({
       where: { id: notification.id },
-      data: { status: "SKIPPED", lastError: "no renderable template or payload" },
+      data: { status: "SKIPPED", lastError: built.skipped },
     });
     return "SKIPPED";
   }
+
+  const email = built.email;
 
   const result = await options.provider.send({
     to: notification.recipient,
@@ -191,6 +202,197 @@ interface RenderableNotification {
   /** Greeting somebody by their own address beats greeting them by nothing. */
   recipient: string;
   payload: unknown;
+}
+
+interface BookingNotificationRow extends RenderableNotification {
+  tenantId: string;
+  bookingId: string | null;
+}
+
+type BuildResult = { email: RenderedEmail } | { skipped: string };
+
+/**
+ * Which types are about a booking, and therefore go through the path that
+ * re-reads one.
+ */
+const BOOKING_TYPES = new Set<string>([
+  NotificationTypes.BOOKING_REQUESTED,
+  NotificationTypes.BOOKING_CONFIRMATION,
+  NotificationTypes.BOOKING_UPDATED,
+  NotificationTypes.BOOKING_CANCELLED,
+  NotificationTypes.BOOKING_REMINDER,
+]);
+
+async function build(
+  notification: BookingNotificationRow,
+  options: SendNotificationOptions,
+): Promise<BuildResult> {
+  if (BOOKING_TYPES.has(notification.type)) {
+    return buildBookingEmail(notification, options);
+  }
+
+  const email = render(notification, options.logger);
+  return email === undefined ? { skipped: "no renderable template or payload" } : { email };
+}
+
+/**
+ * A booking email, rendered from the booking as it is now.
+ *
+ * Everything the onboarding emails carry in their payload, this reads instead —
+ * the appointment, who it is with, where, what it costs. The payload holds only
+ * what cannot be re-derived: a link built from a token that is no longer stored,
+ * and the time an appointment used to be at
+ * (docs/phase-5-booking-notifications.md §2.1, §2.3).
+ *
+ * That matters most for the reminder. It was planned when the booking was made
+ * and runs a day before the appointment, so `checkStillOwed` is asked first:
+ * a booking cancelled overnight owes nobody a reminder, and sending one is worse
+ * than sending nothing.
+ */
+async function buildBookingEmail(
+  notification: BookingNotificationRow,
+  options: SendNotificationOptions,
+): Promise<BuildResult> {
+  if (notification.bookingId === null) {
+    return { skipped: "booking notification with no booking" };
+  }
+
+  // Scoped by tenant like every read (rule 5), even though the notification row
+  // and the booking are both already tenant-owned.
+  const booking = await options.prisma.booking.findFirst({
+    where: { id: notification.bookingId, tenantId: notification.tenantId },
+    select: {
+      status: true,
+      reference: true,
+      startAt: true,
+      customerNameSnapshot: true,
+      serviceNameSnapshot: true,
+      priceMinorSnapshot: true,
+      currencySnapshot: true,
+      provider: { select: { displayName: true, timezone: true } },
+      location: {
+        select: { name: true, addressLine1: true, city: true, timezone: true },
+      },
+      tenant: { select: { name: true, cancellationPolicy: true, defaultTimezone: true } },
+    },
+  });
+
+  if (booking === null) {
+    // Nothing to send and nothing to retry — a booking that has gone never comes
+    // back, so this is SKIPPED rather than a failure worth an attempt budget.
+    return { skipped: "booking no longer exists" };
+  }
+
+  const owed = checkStillOwed({
+    type: notification.type as NotificationType,
+    bookingStatus: booking.status,
+  });
+
+  if (!owed.owed) return { skipped: `no longer owed: ${owed.reason}` };
+
+  const locale: Locale = notification.locale === "en" ? "en" : "hu";
+
+  // The appointment's own zone, resolved the way the availability engine
+  // resolves it: the location if the booking names one — a chain can have a
+  // branch across a border — then the provider, then the tenant's default
+  // (tech-impl §13.4). Never the recipient's, which we do not know.
+  const timeZone =
+    booking.location?.timezone ?? booking.provider.timezone ?? booking.tenant.defaultTimezone;
+
+  const payload = notification.payload as {
+    manageUrl?: string;
+    bookingUrl?: string;
+    previousStartAt?: string;
+  } | null;
+
+  const values: BookingValues = {
+    organizationName: booking.tenant.name,
+    // The snapshots, not the current catalogue rows: a booking records what the
+    // customer was told (rule 15), and an email about it must say the same.
+    customerName: booking.customerNameSnapshot,
+    serviceName: booking.serviceNameSnapshot,
+    providerName: booking.provider.displayName,
+    when: formatInstant(booking.startAt, locale, timeZone),
+    locationName: booking.location?.name ?? null,
+    locationAddress: addressOf(booking.location),
+    price: formatMoney(booking.priceMinorSnapshot, booking.currencySnapshot, locale),
+    reference: booking.reference,
+  };
+
+  switch (notification.type) {
+    case NotificationTypes.BOOKING_REQUESTED:
+      return {
+        email: renderBookingRequested(locale, { ...values, manageUrl: payload?.manageUrl ?? null }),
+      };
+
+    case NotificationTypes.BOOKING_CONFIRMATION:
+      return {
+        email: renderBookingConfirmation(locale, {
+          ...values,
+          manageUrl: payload?.manageUrl ?? null,
+          cancellationPolicy: booking.tenant.cancellationPolicy,
+        }),
+      };
+
+    case NotificationTypes.BOOKING_UPDATED:
+      return {
+        email: renderBookingUpdated(locale, {
+          ...values,
+          previousWhen:
+            payload?.previousStartAt === undefined
+              ? null
+              : formatInstant(new Date(payload.previousStartAt), locale, timeZone),
+        }),
+      };
+
+    case NotificationTypes.BOOKING_CANCELLED:
+      return {
+        email: renderBookingCancelled(locale, {
+          ...values,
+          bookingUrl: payload?.bookingUrl ?? null,
+        }),
+      };
+
+    default:
+      return { email: renderBookingReminder(locale, values) };
+  }
+}
+
+/** Street and town, or nothing. A clinic with one site may record neither. */
+function addressOf(
+  location: { addressLine1: string | null; city: string | null } | null,
+): string | null {
+  if (location === null) return null;
+
+  const parts = [location.addressLine1, location.city].filter(
+    (part): part is string => part !== null && part !== "",
+  );
+
+  return parts.length === 0 ? null : parts.join(", ");
+}
+
+/**
+ * A date and time a person can read, in the appointment's zone.
+ *
+ * `dateStyle: "full"` rather than "long" on purpose: it includes the weekday,
+ * and "Thursday" is what a customer actually checks an appointment against.
+ */
+function formatInstant(instant: Date, locale: Locale, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-GB", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone,
+    }).format(instant);
+  } catch {
+    // An unrecognised IANA zone throws. Falling back to UTC keeps the email
+    // sendable and wrong by a known amount, which beats not sending it.
+    return new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-GB", {
+      dateStyle: "full",
+      timeStyle: "short",
+      timeZone: "UTC",
+    }).format(instant);
+  }
 }
 
 function render(notification: RenderableNotification, logger: Logger): RenderedEmail | undefined {
@@ -355,8 +557,9 @@ function render(notification: RenderableNotification, logger: Logger): RenderedE
     });
   }
 
-  // Booking templates arrive in Epic 5 part 2's remaining work. Until then the
-  // rows are written and left PENDING rather than half-sent.
+  // Booking types never reach here — `build` sends them down the path that
+  // re-reads the booking. What is left is a type in the schema with no renderer,
+  // which is `CALENDAR_DISCONNECTED` until Epic 6.
   logger.warn(
     { notificationId: notification.id, type: notification.type },
     "notification: no template for this type yet",

@@ -234,10 +234,10 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     });
 
     it("skips rather than fails when there is no template", async () => {
-      // A booking confirmation has no renderer yet. That is a gap, not a
-      // delivery failure, and must not fill the dead-letter queue.
+      // A calendar disconnection has no renderer until Epic 6. That is a gap,
+      // not a delivery failure, and must not fill the dead-letter queue.
       const notification = await createNotification({
-        type: "BOOKING_CONFIRMATION",
+        type: "CALENDAR_DISCONNECTED",
         payload: {},
       });
       const fake = provider({ ok: true, providerMessageId: "z" });
@@ -361,6 +361,199 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
       expect(settled.payload).toMatchObject({
         acceptUrl: "http://localhost:3000/en/invitations/tok456",
       });
+    });
+  });
+
+  /**
+   * The booking emails, which take the other path through the sender.
+   *
+   * Everything an onboarding email carries in its payload, these re-read from
+   * the booking — so the interesting assertions are about a booking that has
+   * changed since the notification row was written
+   * (docs/phase-5-booking-notifications.md §2.3).
+   */
+  describe("booking emails", () => {
+    const MANAGE_URL = "http://localhost:3000/en/booking/manage/tok789";
+
+    async function bookingFixture(overrides: { status?: string; language?: string } = {}) {
+      const unique = Math.random().toString(36).slice(2, 8);
+
+      const provider_ = await prisma.provider.create({
+        data: { tenantId, displayName: "Dr. Kiss Anna", timezone: "Europe/Budapest" },
+      });
+      const service = await prisma.service.create({
+        data: { tenantId, slug: `cleaning-${unique}`, name: "Fogtisztítás", durationMinutes: 30 },
+      });
+      const customer = await prisma.customer.create({
+        data: {
+          tenantId,
+          fullName: "Nagy Béla",
+          email: `patient-${unique}@example.test`,
+          preferredLanguage: overrides.language ?? "en",
+        },
+      });
+
+      const cancelled = overrides.status === "CANCELLED";
+
+      return prisma.booking.create({
+        data: {
+          tenantId,
+          reference: `BK-${unique.toUpperCase()}`,
+          customerId: customer.id,
+          providerId: provider_.id,
+          serviceId: service.id,
+          startAt: new Date("2026-09-10T08:00:00.000Z"),
+          endAt: new Date("2026-09-10T08:30:00.000Z"),
+          ...(overrides.status === undefined
+            ? {}
+            : { status: overrides.status as "CONFIRMED" }),
+          // The CHECK constraint refuses a cancelled booking that does not say
+          // when — phase-4 §3.2.
+          ...(cancelled ? { cancelledAt: new Date() } : {}),
+          customerNameSnapshot: "Nagy Béla",
+          customerEmailSnapshot: `patient-${unique}@example.test`,
+          serviceNameSnapshot: "Fogtisztítás",
+          priceMinorSnapshot: 15_000,
+          currencySnapshot: "HUF",
+        },
+      });
+    }
+
+    const bookingNotification = (bookingId: string, overrides: Record<string, unknown> = {}) =>
+      createNotification({
+        type: "BOOKING_CONFIRMATION",
+        template: "booking-confirmation",
+        recipient: "patient@example.test",
+        bookingId,
+        dedupeKey: `v1:BOOKING:EMAIL:${Math.random().toString(36).slice(2)}`,
+        payload: { manageUrl: MANAGE_URL },
+        ...overrides,
+      });
+
+    it("renders from the booking rather than from the payload", async () => {
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id);
+      const fake = provider({ ok: true, providerMessageId: "bkg" });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(fake),
+      );
+
+      expect(outcome).toBe("SENT");
+      expect(fake.sent[0]?.text).toContain("Dr. Kiss Anna");
+      expect(fake.sent[0]?.text).toContain("Fogtisztítás");
+      expect(fake.sent[0]?.text).toContain(booking.reference);
+      expect(fake.sent[0]?.html).toContain(MANAGE_URL);
+    });
+
+    it("formats the appointment in the clinic's zone, not the server's", async () => {
+      // 08:00 UTC in September is 10:00 in Budapest. A customer reading UTC
+      // turns up two hours early, which is the bug this asserts against.
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id);
+      const fake = provider({ ok: true, providerMessageId: "tz" });
+
+      await sendNotification({ tenantId, notificationId: notification.id }, options(fake));
+
+      expect(fake.sent[0]?.text).toContain("10:00");
+    });
+
+    it("clears the manage link once the email is away", async () => {
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id);
+
+      await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(provider({ ok: true, providerMessageId: "clear" })),
+      );
+
+      const settled = await prisma.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      });
+      expect(JSON.stringify(settled.payload)).not.toContain("tok789");
+    });
+
+    it("skips a reminder for a booking cancelled since it was planned", async () => {
+      // The case the send-time re-check exists for. The row was written when the
+      // booking was made; a great deal can happen in the day before it sends.
+      const booking = await bookingFixture({ status: "CANCELLED" });
+      const notification = await bookingNotification(booking.id, {
+        type: "BOOKING_REMINDER",
+        template: "booking-reminder",
+        payload: {},
+      });
+      const fake = provider({ ok: true, providerMessageId: "never" });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(fake),
+      );
+
+      expect(outcome).toBe("SKIPPED");
+      expect(fake.sent).toHaveLength(0);
+
+      const settled = await prisma.notification.findUniqueOrThrow({
+        where: { id: notification.id },
+      });
+      // SKIPPED, not FAILED: retrying cannot make a cancelled booking live.
+      expect(settled.status).toBe("SKIPPED");
+      expect(settled.lastError).toContain("BOOKING_NOT_LIVE");
+    });
+
+    it("skips a cancellation notice for a booking that is not cancelled", async () => {
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id, {
+        type: "BOOKING_CANCELLED",
+        template: "booking-cancelled",
+        payload: {},
+      });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(provider({ ok: true, providerMessageId: "no" })),
+      );
+
+      expect(outcome).toBe("SKIPPED");
+    });
+
+    it("skips when the booking has gone rather than burning the attempt budget", async () => {
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id);
+      await prisma.booking.delete({ where: { id: booking.id } });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(provider({ ok: true, providerMessageId: "gone" })),
+      );
+
+      expect(outcome).toBe("SKIPPED");
+    });
+
+    it("renders in the notification's locale", async () => {
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id, { locale: "hu" });
+      const fake = provider({ ok: true, providerMessageId: "hu" });
+
+      await sendNotification({ tenantId, notificationId: notification.id }, options(fake));
+
+      expect(fake.sent[0]?.subject).toContain("visszaigazolva");
+    });
+
+    it("sends a confirmation with no button when staff accepted the request", async () => {
+      // That path holds no raw token, so the template points back at the email
+      // the customer already has rather than at a link that does not exist.
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id, { payload: {} });
+      const fake = provider({ ok: true, providerMessageId: "accepted" });
+
+      const outcome = await sendNotification(
+        { tenantId, notificationId: notification.id },
+        options(fake),
+      );
+
+      expect(outcome).toBe("SENT");
+      expect(fake.sent[0]?.text).toContain("the email you received when you booked");
     });
   });
 });

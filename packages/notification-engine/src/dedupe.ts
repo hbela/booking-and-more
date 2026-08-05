@@ -39,6 +39,18 @@ export type DedupeInput =
       bookingId: string;
     }
   /**
+   * One request email per booking, forever — the same grain as a confirmation,
+   * and deliberately a *different key*. A request and the acceptance that
+   * follows it are two messages about one booking, so sharing
+   * BOOKING_CONFIRMATION's key would send the first and silently swallow the
+   * second (docs/phase-5-booking-notifications.md §2.4).
+   */
+  | {
+      type: typeof NotificationTypes.BOOKING_REQUESTED;
+      channel: NotificationChannel;
+      bookingId: string;
+    }
+  /**
    * Keyed on the booking's optimistic-locking counter, which every write bumps.
    * A booking rescheduled twice owes the customer two emails, and they differ
    * only by version — without it the second is silently dropped, which is the
@@ -187,6 +199,7 @@ export function buildDedupeKey(input: DedupeInput): string {
 function discriminatorFor(input: DedupeInput): string[] {
   switch (input.type) {
     case NotificationTypes.BOOKING_CONFIRMATION:
+    case NotificationTypes.BOOKING_REQUESTED:
     case NotificationTypes.BOOKING_CANCELLED:
       return [input.bookingId];
 

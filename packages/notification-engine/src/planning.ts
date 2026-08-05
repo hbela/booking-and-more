@@ -27,6 +27,8 @@ import {
 /** Event types written by the API. Unrecognised values are ignored, not errors. */
 export const OutboxEventTypes = {
   BOOKING_CONFIRMED: "BOOKING_CONFIRMED",
+  /** A service with `requiresApproval` — booked, awaiting staff acceptance. */
+  BOOKING_REQUESTED: "BOOKING_REQUESTED",
   BOOKING_RESCHEDULED: "BOOKING_RESCHEDULED",
   BOOKING_CANCELLED: "BOOKING_CANCELLED",
 } as const;
@@ -111,6 +113,7 @@ export interface PlanNotificationsInput {
 
 const TEMPLATES: Record<NotificationType, string> = {
   [NotificationTypes.BOOKING_CONFIRMATION]: "booking-confirmation",
+  [NotificationTypes.BOOKING_REQUESTED]: "booking-requested",
   [NotificationTypes.BOOKING_UPDATED]: "booking-updated",
   [NotificationTypes.BOOKING_CANCELLED]: "booking-cancelled",
   [NotificationTypes.BOOKING_REMINDER]: "booking-reminder",
@@ -146,6 +149,14 @@ export function planNotifications(input: PlanNotificationsInput): NotificationPl
         planReminder(input, channel),
       );
 
+    case OutboxEventTypes.BOOKING_REQUESTED:
+      // No reminder. A request is not an appointment yet — reminding somebody
+      // about a booking nobody has accepted is worse than silence — so the
+      // reminder is planned by the BOOKING_CONFIRMED event acceptance writes.
+      // Its key is `{ bookingId, startAtIso }`, so a booking that goes straight
+      // through and one accepted later both end up with exactly one.
+      return planImmediate(NotificationTypes.BOOKING_REQUESTED, input, channel);
+
     case OutboxEventTypes.BOOKING_RESCHEDULED:
       // The reminder is re-planned because its dedupe key includes the new
       // start time, so this produces a genuinely new row rather than colliding
@@ -163,8 +174,39 @@ export function planNotifications(input: PlanNotificationsInput): NotificationPl
   }
 }
 
+/** The three that go out the moment the event is dispatched. */
+type ImmediateType =
+  | typeof NotificationTypes.BOOKING_CONFIRMATION
+  | typeof NotificationTypes.BOOKING_REQUESTED
+  | typeof NotificationTypes.BOOKING_UPDATED;
+
+/**
+ * A `switch` rather than a ternary so each branch narrows `type` to a single
+ * literal. `buildDedupeKey` takes a discriminated union, and a call site holding
+ * `A | B` cannot satisfy it even when every member would.
+ */
+function immediateDedupeKey(
+  type: ImmediateType,
+  channel: NotificationChannel,
+  facts: BookingNotificationFacts,
+): string {
+  switch (type) {
+    case NotificationTypes.BOOKING_UPDATED:
+      return buildDedupeKey({
+        type,
+        channel,
+        bookingId: facts.bookingId,
+        bookingVersion: facts.bookingVersion,
+      });
+    case NotificationTypes.BOOKING_REQUESTED:
+      return buildDedupeKey({ type, channel, bookingId: facts.bookingId });
+    case NotificationTypes.BOOKING_CONFIRMATION:
+      return buildDedupeKey({ type, channel, bookingId: facts.bookingId });
+  }
+}
+
 function planImmediate(
-  type: typeof NotificationTypes.BOOKING_CONFIRMATION | typeof NotificationTypes.BOOKING_UPDATED,
+  type: ImmediateType,
   input: PlanNotificationsInput,
   channel: NotificationChannel,
 ): NotificationPlanResult {
@@ -177,15 +219,7 @@ function planImmediate(
   const recipient = usableRecipient(facts);
   if (recipient === undefined) return skip(type, SkipReasons.NO_RECIPIENT);
 
-  const dedupeKey =
-    type === NotificationTypes.BOOKING_CONFIRMATION
-      ? buildDedupeKey({ type, channel, bookingId: facts.bookingId })
-      : buildDedupeKey({
-          type,
-          channel,
-          bookingId: facts.bookingId,
-          bookingVersion: facts.bookingVersion,
-        });
+  const dedupeKey = immediateDedupeKey(type, channel, facts);
 
   return {
     recognised: true,
@@ -293,6 +327,38 @@ function planCancellation(
       },
     ],
   };
+}
+
+/**
+ * Does the booking still owe this message?
+ *
+ * Planning happens when the event is dispatched; sending happens later, and for
+ * a reminder "later" is up to a booking window away. A confirmation redelivered
+ * after a cancellation, or a reminder for an appointment cancelled overnight,
+ * must not go out — so the sender asks this immediately before rendering, with
+ * the booking's status as it is *now*
+ * (docs/phase-5-booking-notifications.md §2.3).
+ *
+ * It is here rather than in the worker because it and {@link planNotifications}
+ * have to agree about what "live" means, and they agree by reading the same
+ * `LIVE_BOOKING_STATUSES`. A `false` is a `SKIPPED` notification, never a
+ * `FAILED` one: retrying cannot make a cancelled booking live again.
+ */
+export function checkStillOwed(args: {
+  type: NotificationType;
+  bookingStatus: string;
+}): { owed: true } | { owed: false; reason: SkipReason } {
+  const live = LIVE_BOOKING_STATUSES.has(args.bookingStatus);
+
+  if (args.type === NotificationTypes.BOOKING_CANCELLED) {
+    // The mirror image: a cancellation notice for a booking that is not
+    // cancelled — rebooked, reinstated — is worse than silence.
+    return args.bookingStatus === "CANCELLED"
+      ? { owed: true }
+      : { owed: false, reason: SkipReasons.BOOKING_NOT_CANCELLED };
+  }
+
+  return live ? { owed: true } : { owed: false, reason: SkipReasons.BOOKING_NOT_LIVE };
 }
 
 /**

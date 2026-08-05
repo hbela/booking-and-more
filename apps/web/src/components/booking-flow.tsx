@@ -392,9 +392,11 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
               {t("manageLink")}
             </a>
           </p>
-          {/* No email yet: the notification worker is Epic 5. Saying so beats a
-              success screen that implies a confirmation is on its way. */}
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("noEmailYet")}</p>
+          {/* A confirmation genuinely is on its way now
+              (docs/phase-5-booking-notifications.md). The link is still worth
+              saving: it is the customer's only route to changing the booking
+              online, and the reminder deliberately does not repeat it (§2.2). */}
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t("confirmationEmail")}</p>
         </Section>
       ) : null}
     </main>

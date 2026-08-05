@@ -8,8 +8,14 @@ Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md) ·
 [Phase 3 — availability engine](docs/phase-3-availability-engine.md) ·
 [Phase 4 — booking engine](docs/phase-4-booking-engine.md) ·
-[Phase 5 — notifications](docs/phase-5-notifications.md) (part 1 of 3 done: outbox dispatch, queues, the
-notification record; email delivery is part 2, reminders and the sweep part 3) ·
+[Phase 5 — notifications](docs/phase-5-notifications.md) (part 1 of 3: outbox dispatch, queues, the
+notification record. Email delivery was built early by Epic 9; the booking half of parts 2 and 3 is the
+record below) ·
+[Phase 5 — booking notifications](docs/phase-5-booking-notifications.md) (the five booking emails, and the
+sweep that makes a reminder fire; done). It closes phase-4 §5.2 and phase-5 §5.1/§5.2. **Read its §2.1
+before putting a link in any email**: the management token is stored only as a hash, so it travels in the
+outbox payload and reaches exactly two of the five templates — and §2.2 records why the reminder is
+deliberately not one of them ·
 [Phase 9 — SaaS administration](docs/phase-9-saas-administration.md) (part plan, part record: provisioning,
 the owner's invitation and its email are built; Stripe, the pending owner dashboard and the expiry sweep are
 not — its §1.2 is the authority on which is which) ·

@@ -227,3 +227,39 @@ describe("utcDayOf", () => {
     expect(() => utcDayOf("nope")).toThrow(/parseable ISO-8601/u);
   });
 });
+
+describe("BOOKING_REQUESTED", () => {
+  it("is one email per booking, forever", () => {
+    const key = buildDedupeKey({
+      type: NotificationTypes.BOOKING_REQUESTED,
+      channel: "EMAIL",
+      bookingId: "bkg_1",
+    });
+
+    expect(
+      buildDedupeKey({
+        type: NotificationTypes.BOOKING_REQUESTED,
+        channel: "EMAIL",
+        bookingId: "bkg_1",
+      }),
+    ).toBe(key);
+  });
+
+  it("does not collide with the confirmation that follows it", () => {
+    // The reason it is its own type. Sharing BOOKING_CONFIRMATION's key would
+    // send "we have your request" and silently swallow "you are booked"
+    // (docs/phase-5-booking-notifications.md §2.4).
+    const requested = buildDedupeKey({
+      type: NotificationTypes.BOOKING_REQUESTED,
+      channel: "EMAIL",
+      bookingId: "bkg_1",
+    });
+    const confirmed = buildDedupeKey({
+      type: NotificationTypes.BOOKING_CONFIRMATION,
+      channel: "EMAIL",
+      bookingId: "bkg_1",
+    });
+
+    expect(requested).not.toBe(confirmed);
+  });
+});

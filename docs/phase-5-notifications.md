@@ -211,12 +211,19 @@ development and test databases should be re-seeded rather than trusted.
 
    **Overtaken by Epic 9**, which needed email before this phase's part 2 arrived and therefore built the
    consumer, the provider abstraction and the first five templates. Six as of 2026-08-04:
-   `PROVIDER_INVITED` joined them in [phase-9-provider-onboarding.md](phase-9-provider-onboarding.md). The
-   booking templates this phase was scoped around are still the ones missing — `RENDERABLE_TYPES` in
-   `templates.ts` is the list of what exists, and a type absent from it is skipped rather than sent empty.
+   `PROVIDER_INVITED` joined them in [phase-9-provider-onboarding.md](phase-9-provider-onboarding.md).
+
+   **Closed on 2026-08-05** by [phase-5-booking-notifications.md](phase-5-booking-notifications.md), which
+   added the five booking templates this phase was scoped around, plus a seventh type
+   (`BOOKING_REQUESTED`) the outbox had been writing events for with nothing to map them to.
+   `RENDERABLE_TYPES` in `templates.ts` remains the list of what exists; `CALENDAR_DISCONNECTED` is the
+   only type left without a renderer.
 2. **Reminders are planned but not delivered.** `planNotifications` schedules them and the rows are written;
    the sweep that picks up anything past the 15-minute queue horizon arrives in part 3, so a reminder more
    than 15 minutes out currently sits as a row and nothing acts on it.
+
+   **Closed on 2026-08-05** — `notification.sweeper.ts`, and see that record's §2.5 for why it takes no
+   claim of its own.
 3. **Testcontainers still not adopted** — see §1.
 4. **`docker/docker-compose.yml`'s redis service uses `expose`, not `ports`.** Reachable inside the compose
    network only, so it is not usable from apps running natively on the host until a `6379:6379` mapping is

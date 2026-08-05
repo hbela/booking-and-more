@@ -160,12 +160,12 @@ async function dispatchOne(
     return { created: 0, duplicate: 0 };
   }
 
-  const facts = await loadBookingFacts(options.prisma, {
+  const loaded = await loadBookingFacts(options.prisma, {
     tenantId: event.tenantId,
     bookingId: event.aggregateId,
   });
 
-  if (facts === undefined) {
+  if (loaded === undefined) {
     // The booking is gone. Nothing to send and nothing to retry — a missing
     // aggregate never becomes present again, so retrying would burn the
     // attempt budget to reach the same conclusion five times.
@@ -175,6 +175,8 @@ async function dispatchOne(
     );
     return { created: 0, duplicate: 0 };
   }
+
+  const { facts, tenantSlug } = loaded;
 
   const plan = planNotifications({
     eventType: event.eventType,
@@ -198,11 +200,27 @@ async function dispatchOne(
     );
   }
 
+  // The raw management token, present only on the event the booking was created
+  // by. Everything else about the booking is re-read above; this cannot be,
+  // because only its SHA-256 hash is stored (phase-4 §3.3).
+  const bookingPayload = event.payload as {
+    managementToken?: string;
+    previousStartAt?: string;
+  } | null;
+
   let created = 0;
   let duplicate = 0;
 
   for (const notification of plan.plans) {
-    const persisted = await persistNotification(options.prisma, event.tenantId, notification);
+    const persisted = await persistNotification(options.prisma, event.tenantId, {
+      ...notification,
+      ...bookingPayloadFor(notification, {
+        managementToken: bookingPayload?.managementToken,
+        previousStartAtIso: bookingPayload?.previousStartAt,
+        tenantSlug,
+        appBaseUrl: options.appBaseUrl,
+      }),
+    });
 
     if (persisted === undefined) {
       duplicate += 1;
@@ -218,6 +236,77 @@ async function dispatchOne(
   }
 
   return { created, duplicate };
+}
+
+/**
+ * The little a booking email cannot re-derive at send time.
+ *
+ * Everything else is read from the booking when the job runs (§2.3). Three
+ * things cannot be, and the rules are asymmetric enough to be worth stating in
+ * one place — docs/phase-5-booking-notifications.md §2.1 and §2.2:
+ *
+ *   - a **manage** link needs the raw token, which exists only on the event that
+ *     created the booking, so only the first email the customer receives can
+ *     carry one;
+ *   - a **reminder** deliberately gets none, because its row is written now and
+ *     sent days later, and the URL would sit in `notifications.payload` for that
+ *     whole period;
+ *   - a **cancellation** offers the public booking page, which is not a
+ *     credential and can be rebuilt from the slug at any time;
+ *   - a **reschedule** carries where the appointment used to be, because by the
+ *     time the worker reads the booking it has already moved.
+ *
+ * Locale comes from the plan, not the tenant: the notification's language was
+ * resolved from the customer first, and a link that ignores that lands a
+ * Hungarian-speaking customer on the English page (phase-9 §2).
+ */
+function bookingPayloadFor(
+  plan: NotificationPlan,
+  context: {
+    managementToken: string | undefined;
+    previousStartAtIso: string | undefined;
+    tenantSlug: string;
+    appBaseUrl: string;
+  },
+): { payload?: Record<string, unknown> } {
+  if (
+    plan.type === NotificationTypes.BOOKING_CONFIRMATION ||
+    plan.type === NotificationTypes.BOOKING_REQUESTED
+  ) {
+    // Absent when staff accepted a pending request: that event carries no token,
+    // and the confirmation template drops its button rather than linking nowhere.
+    if (context.managementToken === undefined) return {};
+
+    return {
+      payload: {
+        manageUrl: buildAppUrl({
+          baseUrl: context.appBaseUrl,
+          path: `/booking/manage/${context.managementToken}`,
+          locale: plan.locale,
+        }),
+      },
+    };
+  }
+
+  if (plan.type === NotificationTypes.BOOKING_UPDATED) {
+    return context.previousStartAtIso === undefined
+      ? {}
+      : { payload: { previousStartAt: context.previousStartAtIso } };
+  }
+
+  if (plan.type === NotificationTypes.BOOKING_CANCELLED) {
+    return {
+      payload: {
+        bookingUrl: buildAppUrl({
+          baseUrl: context.appBaseUrl,
+          path: `/${context.tenantSlug}/book`,
+          locale: plan.locale,
+        }),
+      },
+    };
+  }
+
+  return {};
 }
 
 /**
@@ -875,7 +964,7 @@ async function settleFailure(
 async function loadBookingFacts(
   prisma: PrismaClient,
   args: { tenantId: string; bookingId: string },
-): Promise<BookingNotificationFacts | undefined> {
+): Promise<{ facts: BookingNotificationFacts; tenantSlug: string } | undefined> {
   const booking = await prisma.booking.findFirst({
     where: { id: args.bookingId, tenantId: args.tenantId },
     select: {
@@ -886,22 +975,27 @@ async function loadBookingFacts(
       customerId: true,
       customerEmailSnapshot: true,
       customer: { select: { preferredLanguage: true } },
-      tenant: { select: { defaultLanguage: true } },
+      // `slug` is not a planning fact — it builds the "book another time" link
+      // on a cancellation — so it travels beside the facts rather than in them.
+      tenant: { select: { defaultLanguage: true, slug: true } },
     },
   });
 
   if (booking === null) return undefined;
 
   return {
-    bookingId: booking.id,
-    bookingVersion: booking.version,
-    bookingStatus: booking.status,
-    startAtIso: booking.startAt.toISOString(),
-    customerId: booking.customerId,
-    // The snapshot, not the customer's current address: rule 15, and the
-    // reason a confirmation goes where the customer was told it would.
-    recipientEmail: booking.customerEmailSnapshot,
-    customerLanguage: booking.customer.preferredLanguage,
-    tenantLanguage: booking.tenant.defaultLanguage,
+    tenantSlug: booking.tenant.slug,
+    facts: {
+      bookingId: booking.id,
+      bookingVersion: booking.version,
+      bookingStatus: booking.status,
+      startAtIso: booking.startAt.toISOString(),
+      customerId: booking.customerId,
+      // The snapshot, not the customer's current address: rule 15, and the
+      // reason a confirmation goes where the customer was told it would.
+      recipientEmail: booking.customerEmailSnapshot,
+      customerLanguage: booking.customer.preferredLanguage,
+      tenantLanguage: booking.tenant.defaultLanguage,
+    },
   };
 }

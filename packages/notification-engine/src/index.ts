@@ -37,7 +37,7 @@ export type { DedupeInput } from "./dedupe.js";
 export { normalizeLocale, resolveLocale } from "./locale.js";
 export type { LocaleCandidates } from "./locale.js";
 
-export { OutboxEventTypes, planNotifications, SkipReasons } from "./planning.js";
+export { checkStillOwed, OutboxEventTypes, planNotifications, SkipReasons } from "./planning.js";
 export type {
   BookingNotificationFacts,
   NotificationPlan,
@@ -52,6 +52,11 @@ export {
   escapeHtml,
   isRenderable,
   RENDERABLE_TYPES,
+  renderBookingCancelled,
+  renderBookingConfirmation,
+  renderBookingReminder,
+  renderBookingRequested,
+  renderBookingUpdated,
   renderOrganizationCreated,
   renderPaymentFailed,
   renderProviderInvited,
@@ -60,6 +65,12 @@ export {
   renderTrialEnding,
 } from "./templates.js";
 export type {
+  BookingCancelledValues,
+  BookingConfirmationValues,
+  BookingReminderValues,
+  BookingRequestedValues,
+  BookingUpdatedValues,
+  BookingValues,
   OrganizationCreatedValues,
   PaymentFailedValues,
   ProviderInvitedValues,

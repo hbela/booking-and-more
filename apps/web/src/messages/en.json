@@ -328,7 +328,7 @@
     "awaitingApproval": "The clinic will confirm this appointment shortly.",
     "manageHint": "Change or cancel it here:",
     "manageLink": "manage your booking",
-    "noEmailYet": "Save this link — confirmation emails are not switched on yet.",
+    "confirmationEmail": "A confirmation is on its way. Save this link too — it is the only way to change or cancel online.",
     "slotTaken": "Somebody just took that time. Here are the times still free.",
     "holdExpired": "Your reservation ran out. Please pick a time again."
   },

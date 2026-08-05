@@ -9,6 +9,10 @@ import { checkEvictionPolicy, closeRedis, getRedis, waitForReady } from "./redis
 import { startOutboxPoller, type OutboxPoller } from "./outbox/outbox.poller.js";
 import { getEmailProvider } from "./email/email.provider.js";
 import { createNotificationWorker } from "./notifications/notification.worker.js";
+import {
+  startNotificationSweeper,
+  type NotificationSweeper,
+} from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
 
 /**
@@ -17,11 +21,12 @@ import { startStripePoller } from "./stripe/stripe.poller.js";
  * tech-impl §5.3 — hold expiration, reminders, email delivery, calendar
  * synchronisation, outbox dispatch, usage aggregation, retention cleanup.
  *
- * Epic 5, part 1 delivers the outbox dispatcher: the queues from §26 are
- * registered, and `outbox_events` rows are turned into `notifications` rows and
- * jobs. Nothing sends yet — the consumer of the `notifications` queue arrives
- * in part 2 — so the observable result of running this is that outbox rows
- * stop accumulating and notification rows appear in their place, PENDING.
+ * Three things run here, and they are deliberately separate. The **outbox
+ * poller** turns `outbox_events` into `notifications` rows and jobs. The
+ * **notification worker** consumes those jobs and sends. The **sweep** picks up
+ * rows the queue never had — reminders past the dispatcher's 15-minute horizon,
+ * and anything a Redis restart lost (docs/phase-5-booking-notifications.md
+ * §2.5). Only the first two existed before booking reminders needed sending.
  *
  * Without REDIS_URL the process still starts, reports that it has nothing to
  * attach to, and stays alive. That remains deliberate; the alternatives are
@@ -50,6 +55,7 @@ const HEARTBEAT_MS = 60_000;
 interface RunningQueues {
   queues: QueueRegistry;
   poller: OutboxPoller;
+  sweeper: NotificationSweeper;
   notifications: Worker;
 }
 
@@ -96,16 +102,28 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
     maxAttempts: env.OUTBOX_MAX_ATTEMPTS,
   });
 
+  // The catch-up path for everything the dispatcher did not queue: reminders
+  // past its 15-minute horizon, and anything a Redis restart lost. Without it a
+  // reminder is a row nothing ever looks at again.
+  const sweeper = startNotificationSweeper({
+    prisma,
+    queues,
+    logger: log,
+    batchSize: env.OUTBOX_BATCH_SIZE,
+    intervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
+  });
+
   log.info(
     {
       queues: Object.keys(queues),
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
+      sweepIntervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
       emailProvider: provider.name,
     },
-    "worker: queues registered, outbox dispatcher and notification sender running",
+    "worker: queues registered, outbox dispatcher, sweep and notification sender running",
   );
 
-  return { queues, poller, notifications };
+  return { queues, poller, sweeper, notifications };
 }
 
 async function main(): Promise<void> {
@@ -176,6 +194,7 @@ async function main(): Promise<void> {
         // drop the connections underneath them.
         if (running !== undefined) {
           await running.poller.stop();
+          await running.sweeper.stop();
           // Close the consumer before the queues: it must be allowed to finish
           // the job it is holding, and a job that finishes after its queue is
           // gone cannot record its own outcome.

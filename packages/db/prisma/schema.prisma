@@ -1233,6 +1233,13 @@ enum NotificationType {
   /// (phase-9-provider-onboarding §2.8). Appended, as above.
   PROVIDER_INVITED
 
+  /// A booking for a service with `requiresApproval`: received, not yet
+  /// accepted. Its own type rather than a second BOOKING_CONFIRMATION template,
+  /// because that type's dedupe key is one-per-booking-forever and the
+  /// acceptance email that follows would collide with the request email and be
+  /// swallowed (docs/phase-5-booking-notifications.md §2.4). Appended, as above.
+  BOOKING_REQUESTED
+
   @@map("notification_type")
 }
 
