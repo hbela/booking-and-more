@@ -424,12 +424,30 @@ The compose file declares two magic variables, and they are what create the rout
 | `web`   | `SERVICE_FQDN_WEB_3000` | `app.example.com` |
 | `api`   | `SERVICE_FQDN_API_3001` | `api.example.com` |
 
-Coolify generates a value for each on first deploy — something like `web-<uuid>.your-wildcard-domain` — and
-shows both as editable fields. **Edit them to your own hostnames.** `worker`, `postgres`, `redis` and
-`migrate` get none: the worker answers nothing, and the datastores must not be reachable from outside.
+Coolify generates a value for each on first deploy — something like `web-<uuid>.your-wildcard-domain`.
+`worker`, `postgres`, `redis` and `migrate` get none: the worker answers nothing, and the datastores must
+not be reachable from outside.
 
-Enter the FQDN as a **hostname**, no scheme — that is what the variable is for. The `*_BASE_URL` pair are
-full origins and **do** need `https://`.
+### Do not look for these in the Environment Variables screen
+
+They appear there, with values, and **they are not editable** — by design, and the one Coolify behaviour
+this document previously got backwards:
+
+> All generated variables are displayed in Coolify's UI for environment variables and can be edited there
+> (except FQDN and URL).
+
+**The domain is a property of the service, not of a variable.** Open the resource's service list, find
+`api` and `web`, and set each one's **Domains** field. The magic variable is derived from that; it is an
+output, not an input.
+
+You will also see `SERVICE_FQDN_API` and `SERVICE_FQDN_WEB` — created automatically alongside the
+port-suffixed pair, defaulting to port 80. Nothing in this stack reads them, which is fortunate: Coolify has
+long-standing bugs where the generic variables do not update when a service's domain changes while the
+port-suffixed ones do ([#8912](https://github.com/coollabsio/coolify/issues/8912),
+[#3881](https://github.com/coollabsio/coolify/issues/3881),
+[#6124](https://github.com/coollabsio/coolify/issues/6124)). Declaring only the port-suffixed form is
+deliberate, and worth keeping that way — a stale FQDN nobody reads is harmless, and one that something
+does read is a routing bug that survives a redeploy.
 
 **Each domain and its `*_BASE_URL` have to agree exactly** — scheme included, no trailing slash. This is the
 failure mode most likely to cost you an afternoon, because the symptoms do not point at it: the API's CORS
