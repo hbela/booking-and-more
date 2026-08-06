@@ -27,6 +27,68 @@ describe("loadEnv", () => {
     expect(load().REDIS_URL).toBeUndefined();
   });
 
+  /**
+   * The eleven problems that stopped the first Hetzner deployment from booting
+   * an API container, reproduced verbatim.
+   *
+   * Coolify imports every variable named in the compose file into its own
+   * environment manager and writes each into the env file it runs compose
+   * with, so a key nobody filled in arrives as "" rather than absent. Before
+   * `dropEmptyValues`, each of these was a boot failure over a feature the
+   * operator had deliberately not configured (rule 4), and the numeric ones
+   * were the least obvious: `Number("")` is 0, so a blank line beat a default
+   * two lines away in the schema with "expected number to be >0".
+   *
+   * docs/phase-10-deployment-hetzner-coolify.md §2.6.
+   */
+  it("treats an empty value as not configured, the way a deployment platform sends it", () => {
+    const env = load({
+      GOOGLE_CLIENT_ID: "",
+      GOOGLE_CLIENT_SECRET: "",
+      INVITATION_EXPIRY_HOURS: "",
+      BOOKING_REMINDER_LEAD_HOURS: "",
+      ONBOARDING_WINDOW_DAYS: "",
+      STRIPE_SECRET_KEY: "",
+      STRIPE_WEBHOOK_SECRET: "",
+      STRIPE_PRICE_STARTER: "",
+      STRIPE_PRICE_PROFESSIONAL: "",
+      TRIAL_PERIOD_DAYS: "",
+      SENTRY_DSN: "",
+      REDIS_URL: "",
+      RESEND_API_KEY: "",
+      EMAIL_FROM: "",
+    });
+
+    // Optional means off, not broken.
+    expect(env.STRIPE_SECRET_KEY).toBeUndefined();
+    expect(env.SENTRY_DSN).toBeUndefined();
+    expect(env.REDIS_URL).toBeUndefined();
+    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+
+    // Defaults survive a blank line, which is the half that read as absurd:
+    // the schema carries 168 and 30 and reported them as too small.
+    expect(env.INVITATION_EXPIRY_HOURS).toBe(168);
+    expect(env.TRIAL_PERIOD_DAYS).toBe(30);
+    expect(env.ONBOARDING_WINDOW_DAYS).toBe(14);
+    expect(env.BOOKING_REMINDER_LEAD_HOURS).toBe(24);
+  });
+
+  it("still refuses a half-configured pair when only one side is blank", () => {
+    // Blank-as-absent must not weaken the paired-key checks: an API key with
+    // no sender is still the failure those exist to catch.
+    expect(() => load({ RESEND_API_KEY: "re_live_key", EMAIL_FROM: "" })).toThrow(
+      EnvValidationError,
+    );
+    expect(() => load({ STRIPE_SECRET_KEY: "sk_live_key", STRIPE_WEBHOOK_SECRET: "" })).toThrow(
+      EnvValidationError,
+    );
+  });
+
+  it("still requires a required variable that arrives blank", () => {
+    // The other direction: blank must not become a way to skip DATABASE_URL.
+    expect(() => load({ DATABASE_URL: "" })).toThrow(EnvValidationError);
+  });
+
   it("names the missing variable when DATABASE_URL is absent", () => {
     let thrown: unknown;
     try {

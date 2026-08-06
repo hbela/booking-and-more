@@ -23,17 +23,27 @@ name: booking-and-more
 # half the system — the API sells a subscription the worker then cannot email
 # about. One anchor, so they cannot drift.
 #
-# Note the two styles below, which are not interchangeable:
+# Note the two styles below:
 #
 #   - KEY=${KEY:?msg}   required; compose refuses to start and names the key
-#   - KEY               pass-through; set in the container ONLY if set here
+#   - KEY               pass-through, for anything optional
 #
-# The bare form matters more than it looks. `@bam/config` treats optional keys
-# as "absent means feature off" (CLAUDE.md rule 4), and absent means *unset*:
-# every optional string is `z.string().min(1).optional()`, so an empty value is
-# not a disabled feature, it is a validation error that fails boot. Writing
-# `KEY=${KEY:-}` would set every unconfigured key to "" and break exactly the
-# degradation the schema is built around.
+# The bare form was chosen because plain `docker compose` omits an unset
+# pass-through key entirely rather than setting it to "", which is the
+# difference between a feature switched off and a boot failure: every optional
+# string is `z.string().min(1).optional()`, and `.optional()` admits undefined,
+# not "".
+#
+# That reasoning was right about the schema and wrong about the platform, and
+# the first deployment proved it. Coolify imports every variable named here
+# into its own environment manager and writes each into the env file it runs
+# compose with, so the keys nobody filled in arrived set and empty anyway and
+# the API refused to boot over eleven features the operator had deliberately
+# not configured. The guarantee therefore does not live in this file and
+# cannot: `@bam/config` now drops empty values before validating, so blank and
+# absent mean the same thing wherever the environment came from
+# (docs/phase-10-deployment-hetzner-coolify.md §2.6). The bare form is kept
+# because it is still the more honest description of intent.
 # ---------------------------------------------------------------------------
 x-app-environment: &app-environment
   - NODE_ENV=production

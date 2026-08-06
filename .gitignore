@@ -49,3 +49,8 @@ __pycache__/
 
 # Sentry
 .sentryclirc
+
+# Deploy and build logs pasted in for debugging. These routinely contain the
+# full build environment — API keys, the auth secret, database passwords — so
+# they must never be committable by an absent-minded `git add .`.
+docs/tmp/

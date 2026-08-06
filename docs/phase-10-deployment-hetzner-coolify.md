@@ -133,6 +133,45 @@ RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/prisma_generate_does_no
     pnpm --filter @bam/api... build
 ```
 
+## 2.6 A blank variable is not an unset one — and the platform decides which you get ★
+
+Found on the first real deployment, which is exactly the class §9.1 warned would still be out there.
+
+The API would not boot. It reported **eleven** problems, and every one of them was a feature the operator
+had deliberately not configured:
+
+```
+Invalid environment configuration (11 problems):
+  - GOOGLE_CLIENT_ID: Too small: expected string to have >=1 characters
+  - STRIPE_SECRET_KEY: Too small: expected string to have >=1 characters
+  - TRIAL_PERIOD_DAYS: Too small: expected number to be >0
+  - SENTRY_DSN: Invalid URL
+  …
+```
+
+`TRIAL_PERIOD_DAYS` is the one to look at twice. The schema carries `.default(30)`. A default cannot be
+"too small" — unless the key is present, because `z.coerce.number()` on `""` yields **0**, and a default
+only applies to an absent key. Every one of the eleven was a variable that arrived **set and empty**.
+
+This file's own compose comment had reasoned the problem through and reached a fix that does not survive
+contact with a deployment platform. Optional keys were written as bare pass-through entries
+(`- STRIPE_SECRET_KEY`, with no `=`), because plain `docker compose` omits an unset pass-through key from
+the container rather than setting it to `""`. That is true, and verifiable with `docker compose config`,
+and it is not what happens here: **Coolify imports every variable named anywhere in the compose file into
+its own environment manager**, then writes them all into the env file it runs compose with. A key nobody
+filled in comes back as `KEY=`.
+
+So the guarantee cannot live in the compose file, because the compose file is not the last thing to touch
+the environment. `@bam/config` now drops empty values before validating, which makes blank and absent the
+same thing no matter where the environment came from — a `.env` line left blank, a Coolify field left
+empty, a CI secret that did not resolve. Both directions are pinned by tests: a required variable that
+arrives blank still fails, and a half-configured pair (`RESEND_API_KEY` set, `EMAIL_FROM` blank) is still
+the boot error it was designed to be.
+
+The general shape, and the reason this sits beside §2.3: **a rule enforced in one layer is only enforced
+until something else rewrites that layer's input.** Rule 4 says a missing key degrades one feature and
+never takes the process down. That is a property of the config schema, so it belongs in the config schema.
+
 ---
 
 # 3. The topology
@@ -293,15 +332,22 @@ Strongly wanted, all optional to the schema:
 | `SENTRY_DSN`                | Optional, alone                                           |
 | `LOG_LEVEL`                 | Defaults to `info`                                        |
 
-### Two traps in this table
+### Three traps in this table
 
-**Never set a variable to an empty value to mean "off".** Every optional key in
-`packages/config/src/schema.ts` is `z.string().min(1).optional()`, and `optional()` admits `undefined`, not
-`""`. An empty `RESEND_API_KEY` is not email switched off — it is a validation failure that stops the
-process from booting, and it drags `EMAIL_FROM` down with it through the paired-key check. **Delete the
-row; do not blank it.** The compose file is written to match: optional keys are pass-through entries
-(`- RESEND_API_KEY`, no `=`), so an unset variable is genuinely absent inside the container rather than
-present and empty.
+**Both base URLs need their scheme.** `https://api.example.com`, never `api.example.com`. This is what
+broke the first deployment: a bare hostname in `API_BASE_URL` reaches the web build as
+`NEXT_PUBLIC_API_BASE_URL`, Better Auth's client is constructed at module scope, and Next prerenders
+`/[locale]/(auth)/sign-in` — so `new URL("api.example.com")` throws during the build, and the whole image
+fails on a page nobody was thinking about. `APP_BASE_URL` fails later and more quietly: it is the sole CORS
+origin and the sole trusted origin for auth cookies, so a bad one leaves an app that builds, deploys and
+serves pages while every browser request is refused. Check both for a typo before deploying — and note
+that `apI` and `api` look identical at a glance in most terminals.
+
+**Leaving a variable blank is fine.** It used to be the opposite, and the note here used to say so. Blank
+now means "not configured", identically to deleting the row, because `@bam/config` strips empty values
+before validating (§2.6). That is what makes it safe to leave Coolify's auto-imported fields empty — which
+matters, because Coolify creates a field for every variable named in the compose file whether you wanted
+one or not.
 
 **`BETTER_AUTH_SECRET` is write-once.** Rotating it invalidates every live session at once — every signed-in
 owner, provider and admin is logged out. Generate it, put it somewhere you will still have in a year, and do

@@ -8,6 +8,39 @@ import { z } from "zod";
  * there is also declared here.
  */
 
+/**
+ * An empty environment variable means the variable is not configured.
+ *
+ * Every optional key below is `.optional()`, which admits `undefined` and not
+ * `""`, and every defaulted key only reaches its default when the key is
+ * absent. That distinction is invisible from a `.env` file, where leaving a
+ * line out and leaving it blank look like the same act — and it is not
+ * available at all on a deployment platform. Coolify imports every variable
+ * named anywhere in the compose file into its own environment manager and
+ * writes each one into the env file it runs `docker compose` with, so a key
+ * nobody filled in arrives set and empty rather than absent.
+ *
+ * The result was an API that would not boot, reporting eleven problems of
+ * which every single one was a feature the operator had deliberately not
+ * configured: `STRIPE_SECRET_KEY: Too small` for a deployment not selling
+ * anything yet, and `TRIAL_PERIOD_DAYS: expected number to be >0` for a
+ * default the schema was carrying two lines away. That is the exact opposite
+ * of CLAUDE.md rule 4 — a missing key must degrade one feature, never take
+ * the process down.
+ *
+ * Stripping here rather than per-field keeps it a property of the environment
+ * as a whole: a key added later cannot forget to opt in.
+ */
+function dropEmptyValues(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input;
+
+  return Object.fromEntries(
+    Object.entries(input as Record<string, unknown>).filter(
+      ([, value]) => !(typeof value === "string" && value.trim() === ""),
+    ),
+  );
+}
+
 const portSchema = z.coerce.number().int().min(1).max(65_535);
 
 /** A `postgresql://` URL. Prisma Accelerate URLs are rejected on purpose. */
@@ -183,7 +216,7 @@ const baseEnvSchema = z.object({
     .transform((value) => value === "true"),
 });
 
-export const envSchema = baseEnvSchema.superRefine((env, ctx) => {
+const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
   // Half-configured OAuth is worse than none: Better Auth would register the
   // provider and every sign-in attempt would fail at Google with an opaque
   // error. Catch it at boot instead.
@@ -245,5 +278,11 @@ export const envSchema = baseEnvSchema.superRefine((env, ctx) => {
     }
   }
 });
+
+/**
+ * Blank-as-absent runs before validation, so `.optional()` and `.default()`
+ * see what the operator meant rather than what the platform serialised.
+ */
+export const envSchema = z.preprocess(dropEmptyValues, refinedEnvSchema);
 
 export type Env = z.infer<typeof envSchema>;
