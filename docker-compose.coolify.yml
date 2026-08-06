@@ -23,65 +23,54 @@ name: booking-and-more
 # half the system — the API sells a subscription the worker then cannot email
 # about. One anchor, so they cannot drift.
 #
-# Note the two styles below:
+# Mapping form rather than the list form this used to have, because `api` needs
+# one variable of its own (SERVICE_FQDN_API_3001) alongside the shared set, and
+# YAML can merge two mappings but cannot concatenate two sequences.
 #
-#   - KEY=${KEY:?msg}   required; compose refuses to start and names the key
-#   - KEY               pass-through, for anything optional
-#
-# The bare form was chosen because plain `docker compose` omits an unset
-# pass-through key entirely rather than setting it to "", which is the
-# difference between a feature switched off and a boot failure: every optional
-# string is `z.string().min(1).optional()`, and `.optional()` admits undefined,
-# not "".
-#
-# That reasoning was right about the schema and wrong about the platform, and
-# the first deployment proved it. Coolify imports every variable named here
-# into its own environment manager and writes each into the env file it runs
-# compose with, so the keys nobody filled in arrived set and empty anyway and
-# the API refused to boot over eleven features the operator had deliberately
-# not configured. The guarantee therefore does not live in this file and
-# cannot: `@bam/config` now drops empty values before validating, so blank and
-# absent mean the same thing wherever the environment came from
-# (docs/phase-10-deployment-hetzner-coolify.md §2.6). The bare form is kept
-# because it is still the more honest description of intent.
+# The list form existed to express "unset" precisely: plain `docker compose`
+# omits a bare pass-through key rather than setting it to "". That distinction
+# no longer has to be carried here — `@bam/config` drops empty values before
+# validating (§2.6), so `${KEY:-}` and an absent key mean the same thing to
+# every process in this stack. That is what makes mapping form safe now.
 # ---------------------------------------------------------------------------
 x-app-environment: &app-environment
-  - NODE_ENV=production
-  - LOG_LEVEL=${LOG_LEVEL:-info}
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
 
   # Public origins. These are the app's identity, not decoration: APP_BASE_URL
   # is the sole allowed CORS origin and the sole trusted origin for auth
   # cookies, and both are what emailed links are built from via `buildAppUrl`.
   # They must match the domains Coolify routes, exactly — scheme included, no
-  # trailing slash.
-  - APP_BASE_URL=${APP_BASE_URL:?set APP_BASE_URL to the web app's public https origin}
-  - API_BASE_URL=${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
+  # trailing slash. A bare hostname fails the web build outright (§2.7).
+  APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL to the web app's public https origin}
+  API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
 
-  - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
-  - REDIS_URL=redis://redis:6379
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
+  REDIS_URL: redis://redis:6379
 
   # Rotating this signs every live session out. Generate once, then leave alone:
   #   openssl rand -base64 32
-  - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET, at least 32 characters}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET, at least 32 characters}
 
-  # Optional, pass-through. Each group is all-or-nothing and the config schema
-  # says so at boot rather than at first use.
-  - GOOGLE_CLIENT_ID
-  - GOOGLE_CLIENT_SECRET
-  - RESEND_API_KEY
-  - EMAIL_FROM
-  - STRIPE_SECRET_KEY
-  - STRIPE_WEBHOOK_SECRET
-  - STRIPE_PRICE_STARTER
-  - STRIPE_PRICE_PROFESSIONAL
-  - SENTRY_DSN
+  # Optional. Each group is all-or-nothing and the config schema says so at
+  # boot rather than at first use. Leaving any of them blank is the supported
+  # way to say "not configured".
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  STRIPE_PRICE_STARTER: ${STRIPE_PRICE_STARTER:-}
+  STRIPE_PRICE_PROFESSIONAL: ${STRIPE_PRICE_PROFESSIONAL:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
 
   # Tunables. Defaults live in packages/config/src/schema.ts; these are here so
   # they can be changed without a code deploy.
-  - TRIAL_PERIOD_DAYS
-  - ONBOARDING_WINDOW_DAYS
-  - INVITATION_EXPIRY_HOURS
-  - BOOKING_REMINDER_LEAD_HOURS
+  TRIAL_PERIOD_DAYS: ${TRIAL_PERIOD_DAYS:-}
+  ONBOARDING_WINDOW_DAYS: ${ONBOARDING_WINDOW_DAYS:-}
+  INVITATION_EXPIRY_HOURS: ${INVITATION_EXPIRY_HOURS:-}
+  BOOKING_REMINDER_LEAD_HOURS: ${BOOKING_REMINDER_LEAD_HOURS:-}
 
 services:
   postgres:
@@ -167,9 +156,22 @@ services:
       # against a schema it does not match.
       migrate:
         condition: service_completed_successfully
-    environment: *app-environment
-    # Tells Coolify to route the domain you assign to this service at container
-    # port 3001. Set the value in Coolify's UI to the same host as API_BASE_URL.
+    environment:
+      <<: *app-environment
+      # This is what gives the API a domain, and without it there is no route.
+      #
+      # Coolify's magic variables: seeing SERVICE_FQDN_<SERVICE>_<PORT> named
+      # here, it generates an FQDN, exposes it as an editable field on the
+      # resource, and writes the Traefik labels that terminate TLS and forward
+      # to container port 3001. `expose` alone does none of that — it is a note
+      # to a human. The first deployment had every container healthy and
+      # nothing reachable for exactly this reason: no FQDN anywhere in the
+      # stack, so no router, an empty Links dropdown and a refused connection
+      # (§2.8).
+      #
+      # Edit the generated value in Coolify to your own host, and make it agree
+      # with API_BASE_URL exactly.
+      SERVICE_FQDN_API_3001: ${SERVICE_FQDN_API_3001:-}
     expose:
       - "3001"
 
@@ -204,7 +206,13 @@ services:
     # (apps/web/src/lib/api-client.ts is a client module), so the web container
     # never talks to it and can serve pages while the API is restarting.
     environment:
-      - NODE_ENV=production
+      NODE_ENV: production
+      # As on the API above: this is what earns the web app a domain and a
+      # Traefik route to container port 3000. Edit the generated value in
+      # Coolify to your own host, and make it agree with APP_BASE_URL exactly —
+      # a mismatch here is a CORS rejection on every browser request, and the
+      # API is the only thing that can see it.
+      SERVICE_FQDN_WEB_3000: ${SERVICE_FQDN_WEB_3000:-}
     expose:
       - "3000"
 

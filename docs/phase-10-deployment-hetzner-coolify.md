@@ -1,9 +1,11 @@
 # Phase 10 — Deployment to a Hetzner VPS with Coolify
 
-**Document version:** 1.0 — written 2026-08-05.
-**Status:** the images, the stack and the migration path are **built and verified locally**; the walk on a
-real Hetzner VPS is **not yet done**. §2 is a record of what was already broken and is now fixed; §4–§8 are
-the guide; §9 is honest about what is still unproven.
+**Document version:** 1.1 — written 2026-08-05, §2.6–§2.8 added 2026-08-06 from the first real deployment.
+**Status:** **partly walked.** The images, the stack and the migration path are built and verified locally,
+and a first deployment to a real Hetzner VPS reached healthy containers. It took three attempts, and each
+failure is recorded: §2.6 the API refusing to boot over empty variables, §2.7 a base URL without its
+scheme, §2.8 a healthy stack with no route to it. Nothing has yet been exercised end to end **through** the
+proxy, so §6's checklist is still unrun. §9 is honest about what remains.
 **Read first:** [phase-0-technical-foundation.md](phase-0-technical-foundation.md) §4, which is where the
 Docker files came from and why they were written before anything could run them.
 
@@ -27,8 +29,12 @@ multi-stage builds were right, the non-root users and healthchecks were right.
 
 But nothing had ever run them. **All three images failed to build, and the database container could not
 start at all.** Four separate defects, none of which a reviewer would catch by reading, and all of which
-would have been discovered under time pressure on the day of the first deploy. §2 records them, because
-three of the four are the kind that come back.
+would have been discovered under time pressure on the day of the first deploy. §2.1–§2.5 record them.
+
+Writing this document found those five. **Deploying for real found three more** — §2.6, §2.7 and §2.8 —
+and they are the more interesting half, because each one lived in the gap between something verified
+locally and something a platform does to it. A stack that builds, boots and passes every healthcheck on a
+laptop can still serve nobody, and the only way to learn which of those gaps exist is to go through them.
 
 ---
 
@@ -171,6 +177,62 @@ the boot error it was designed to be.
 The general shape, and the reason this sits beside §2.3: **a rule enforced in one layer is only enforced
 until something else rewrites that layer's input.** Rule 4 says a missing key degrades one feature and
 never takes the process down. That is a property of the config schema, so it belongs in the config schema.
+
+## 2.7 A base URL without its scheme fails the web build, on a page nobody was thinking about
+
+`API_BASE_URL` was set to `apI.tanarock.hu` — no scheme, and a capital `I` that is invisible in most
+terminals. The image would not build:
+
+```
+Error occurred prerendering page "/hu/sign-in"
+[BetterAuthError]: Invalid base URL: apI.tanarock.hu
+  code: 'ERR_INVALID_URL', input: 'apI.tanarock.hu'
+```
+
+The value reaches the web build as `NEXT_PUBLIC_API_BASE_URL`, Better Auth's client is constructed at
+module scope in `apps/web/src/lib/auth-client.ts`, and Next prerenders `/[locale]/(auth)/sign-in`. So
+`new URL()` runs at **build** time on a value that is only ever _used_ in a browser.
+
+`@bam/config` would have caught it — `z.url()` rejects both `apI.tanarock.hu` and `app.tanarock.hu`. But
+**`apps/web` does not use `@bam/config`**. It reads `process.env["NEXT_PUBLIC_API_BASE_URL"]` directly in
+four places, each with `?? "http://localhost:3001"`. Rule 3 says the environment is parsed once at the
+edge; the web app has no edge.
+
+That fallback is the worse half, and it is still there. A malformed URL at least fails loudly. An
+**absent** one does not fail at all: `${API_BASE_URL:?…}` only checks non-empty, so the build succeeds and
+deploys a site whose browser calls `http://localhost:3001` — green everywhere, broken for every visitor,
+with nothing naming the cause. Open, and recorded in §9.7.
+
+## 2.8 Healthy containers, and nothing reachable ★
+
+Every container up and healthy, Coolify's Links dropdown empty, and the browser answering
+`ERR_CONNECTION_REFUSED`.
+
+The compose file named no domain anywhere. It used `expose:` — which publishes nothing and routes nothing;
+it is documentation for a human — and §5.5 of this document told the operator to type the domains into
+Coolify's UI instead. That is one instruction away from a stack that builds, boots, passes every
+healthcheck and serves no one.
+
+**`SERVICE_FQDN_<SERVICE>_<PORT>` is the mechanism.** Named in a service's `environment`, Coolify generates
+an FQDN, surfaces it as an editable field on the resource, and writes the Traefik labels that terminate TLS
+and forward to that container port. Absent, there is no router at all. `api` and `web` now declare
+`SERVICE_FQDN_API_3001` and `SERVICE_FQDN_WEB_3000`; `worker` deliberately declares none, because it
+answers nothing and must not be routable.
+
+Read the symptom carefully, because the two failures are different and look similar:
+
+| Symptom                  | Meaning                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `ERR_CONNECTION_REFUSED` | Nothing is listening on 443 — proxy down, or the port is firewalled     |
+| `404` from Traefik       | Proxy is up and has no route for that hostname — an FQDN/domain problem |
+
+A refused connection is therefore **not** by itself proof of the missing-FQDN bug: check that Coolify's
+proxy is running (Servers → Proxy) and that the firewall admits 80 and 443, before concluding anything
+about routing. Both had to be right here, and only one of them was in this document.
+
+This is also why the environment anchor is a mapping rather than a list: `api` needs one variable the
+others must not have, and YAML merges mappings but cannot concatenate sequences. §2.6's fix is what made
+that safe, since mapping form cannot express "absent" and no longer has to.
 
 ---
 
@@ -355,14 +417,27 @@ not regenerate it as part of debugging something else.
 
 ## 5.5 Domains
 
-On the `web` service, set the domain to `https://app.example.com` with container port **3000**. On the
-`api` service, `https://api.example.com`, port **3001**. `worker`, `postgres`, `redis` and `migrate` get no
-domain — the worker answers nothing and the datastores must not be reachable from outside.
+The compose file declares two magic variables, and they are what create the routes (§2.8):
 
-**The domain and the corresponding `*_BASE_URL` have to agree exactly** — scheme included, no trailing
-slash. This is the failure mode most likely to cost you an afternoon, because the symptoms do not point at
-it: the API's CORS allow-list is literally `[env.APP_BASE_URL]` (`apps/api/src/app.ts`), so a mismatch makes
-every browser request fail on preflight while `curl` against the same API is perfectly healthy.
+| Service | Variable                | Becomes           |
+| ------- | ----------------------- | ----------------- |
+| `web`   | `SERVICE_FQDN_WEB_3000` | `app.example.com` |
+| `api`   | `SERVICE_FQDN_API_3001` | `api.example.com` |
+
+Coolify generates a value for each on first deploy — something like `web-<uuid>.your-wildcard-domain` — and
+shows both as editable fields. **Edit them to your own hostnames.** `worker`, `postgres`, `redis` and
+`migrate` get none: the worker answers nothing, and the datastores must not be reachable from outside.
+
+Enter the FQDN as a **hostname**, no scheme — that is what the variable is for. The `*_BASE_URL` pair are
+full origins and **do** need `https://`.
+
+**Each domain and its `*_BASE_URL` have to agree exactly** — scheme included, no trailing slash. This is the
+failure mode most likely to cost you an afternoon, because the symptoms do not point at it: the API's CORS
+allow-list is literally `[env.APP_BASE_URL]` (`apps/api/src/app.ts`), so a mismatch makes every browser
+request fail on preflight while `curl` against the same API is perfectly healthy.
+
+If the Links dropdown is empty after a deploy, no FQDN resolved — go back to §2.8 rather than looking at the
+application, which will be running perfectly and answering no one.
 
 ## 5.6 Deploy
 
@@ -485,13 +560,17 @@ would roll back to and whether it can read the schema it would find.
 
 # 9. What is not done
 
-**9.1 This has not been walked on a real VPS.** Everything in §2 through §3 was verified by building and
-running the full stack with Docker Compose on the development machine — all three images build, `migrate`
-exits 0, `api` and `worker` report healthy, `/health/ready` reports both PostgreSQL and Redis `ok`, and the
-web container serves a rendered page. What that does **not** cover is anything Coolify-specific: the
-`exclude_from_hc` key, domain assignment, Traefik's certificates, and the environment editor's handling of
-pass-through variables. Expect §5 to need small corrections on the first real run, and correct this document
-when it does.
+**9.1 Nothing has been verified through the proxy.** The first deployment got as far as every container
+running and healthy on a real VPS, which settles the build, the migration gate, the healthchecks and
+`exclude_from_hc`. It settles nothing beyond that: **no request has ever reached this application over its
+own domain.** Traefik's certificate issuance, the cross-subdomain session cookie of §4.2, and every one of
+§6's eight checks are unrun. The one that matters most is check 7 — sign in, reload, still signed in —
+because it is the only thing that proves the `SameSite=None` cookie configuration works between two real
+hosts, and its failure mode looks like an application bug rather than a DNS one.
+
+The previous version of this note listed "domain assignment" as unverified. It was, and it was also
+wrong — §5.5 told the operator to set domains in a UI field instead of declaring `SERVICE_FQDN_*`, which is
+§2.8. A gap named as unverified is not the same as a gap left safe.
 
 **9.2 No backup is configured.** §8.3 is instructions, not a thing that has been done.
 
@@ -508,3 +587,9 @@ wiring; only the API and worker do. Harmless, and confusing at exactly the wrong
 **9.6 Rate limiting is per-instance.** `@fastify/rate-limit` uses an in-process store
 (`apps/api/src/app.ts`). With one API container that is the same thing as a global limit; it stops being
 true the moment there are two.
+
+**9.7 `apps/web` still reads its environment unvalidated, with a localhost fallback.** Four call sites do
+`process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001"`, bypassing `@bam/config` entirely
+(§2.7). A malformed value fails the build with an error that names Better Auth rather than the variable; an
+absent one does not fail at all, and ships a site whose browser calls localhost. The fix is one module that
+parses it with a clear message and no production fallback, with the four sites importing that. Not done.
