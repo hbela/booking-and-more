@@ -1,0 +1,225 @@
+<!doctype html>
+<!--
+  A FICTITIOUS CUSTOMER'S WEBSITE. Not product code, and not a real business.
+
+  Why this exists
+  ---------------
+  A real customer never starts at our booking page. They start on their own
+  site and follow a link. Every test we had began one step later than reality,
+  which meant the most ordinary path into the product — the only one an actual
+  end customer takes — was the one nothing exercised.
+
+  This is that missing step: the page a clinic already has, with the link they
+  would paste into it.
+
+  What it is deliberately testing
+  -------------------------------
+    * the booking URL contract, `/{slug}/book`, exactly as a customer embeds it
+    * the bare-slug redirect, `/{slug}` -> `/{slug}/book` (the "poster" form)
+    * locale routing: Hungarian is unprefixed, English is `/en/...`
+      (localePrefix: "as-needed" in apps/web/src/i18n/routing.ts)
+
+  Its relationship to the tenant record
+  -------------------------------------
+  This host, mycustomer.appointer.hu, is what goes in the organization's
+  `domain` field. That field is identity, not routing: it records which
+  business this is, and is never used to resolve a tenant or build a URL. The
+  booking page lives at app.booking.appointer.hu/mycustomer/book because
+  `slug` is the address. See docs/phase-10-deployment-hetzner-coolify.md.
+
+  Rules for editing
+  -----------------
+  One self-contained file. No build step, no CDN, no external assets, no
+  JavaScript — so what is served is what is in the repository, and a broken
+  demo can never be a broken script. Links are same-tab on purpose:
+  target="_blank" hides the redirect chain from the address bar, and the
+  redirect chain is one of the things under test.
+-->
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- A fake business on a real, publicly reachable domain. Keep this. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Mycustomer Szalon — demó oldal</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f766e'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='17' font-weight='700' fill='%23fff' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --ink: #0f172a;
+        --muted: #475569;
+        --line: #e2e8f0;
+        --brand: #0f766e;
+        --paper: #ffffff;
+        --wash: #f8fafc;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #e2e8f0;
+          --muted: #94a3b8;
+          --line: #1e293b;
+          --brand: #2dd4bf;
+          --paper: #0b1220;
+          --wash: #111a2b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--wash);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        line-height: 1.6;
+      }
+      .banner {
+        background: #b45309;
+        color: #fff;
+        padding: 0.6rem 1rem;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 0.9rem;
+        padding: 1.75rem;
+      }
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.9rem;
+        letter-spacing: -0.02em;
+      }
+      .tagline {
+        margin: 0 0 1.25rem;
+        color: var(--muted);
+      }
+      .address {
+        margin: 0 0 1.75rem;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .cta {
+        display: inline-block;
+        background: var(--brand);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 650;
+        padding: 0.85rem 1.6rem;
+        border-radius: 0.6rem;
+      }
+      .cta:hover {
+        filter: brightness(1.08);
+      }
+      .alt {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+      }
+      .alt a {
+        color: var(--brand);
+      }
+      .tests {
+        margin-top: 2.5rem;
+        border-top: 1px solid var(--line);
+        padding-top: 1.5rem;
+      }
+      .tests h2 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        margin: 0 0 1rem;
+      }
+      .tests ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .tests li {
+        margin-bottom: 1rem;
+      }
+      .tests a {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.85rem;
+        color: var(--brand);
+        word-break: break-all;
+      }
+      .expect {
+        display: block;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      footer {
+        margin-top: 2.5rem;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="banner">
+      Fiktív bemutató oldal — a <strong>Booking and More</strong> tesztjéhez. Ez nem valódi vállalkozás,
+      és nem fogad valódi foglalásokat.
+    </div>
+
+    <main>
+      <div class="card">
+        <h1>Mycustomer Szalon</h1>
+        <p class="tagline">Fodrászat és kozmetika Budapest szívében.</p>
+        <p class="address">1051 Budapest, Példa utca 1. — kitalált cím</p>
+
+        <a class="cta" href="https://app.booking.appointer.hu/mycustomer/book">Időpontfoglalás</a>
+
+        <p class="alt">
+          <a href="https://app.booking.appointer.hu/en/mycustomer/book">Book an appointment in English</a>
+        </p>
+      </div>
+
+      <section class="tests">
+        <h2>Mit tesztel ez az oldal</h2>
+        <ul>
+          <li>
+            <a href="https://app.booking.appointer.hu/mycustomer/book"
+              >app.booking.appointer.hu/mycustomer/book</a
+            >
+            <span class="expect"
+              >A foglalási űrlap, magyarul. Az URL-ben nincs <code>/hu</code> előtag.</span
+            >
+          </li>
+          <li>
+            <a href="https://app.booking.appointer.hu/en/mycustomer/book"
+              >app.booking.appointer.hu/en/mycustomer/book</a
+            >
+            <span class="expect">Ugyanaz angolul, <code>/en</code> előtaggal.</span>
+          </li>
+          <li>
+            <a href="https://app.booking.appointer.hu/mycustomer">app.booking.appointer.hu/mycustomer</a>
+            <span class="expect"
+              >Csak a slug — a plakátra való rövid alak. Átirányít a <code>/mycustomer/book</code>
+              címre.</span
+            >
+          </li>
+          <li>
+            <a href="https://app.booking.appointer.hu/en/mycustomer"
+              >app.booking.appointer.hu/en/mycustomer</a
+            >
+            <span class="expect">Átirányít az <code>/en/mycustomer/book</code> címre.</span>
+          </li>
+        </ul>
+      </section>
+
+      <footer>
+        A szervezet <code>domain</code> mezője ehhez az oldalhoz tartozik:
+        <code>mycustomer.appointer.hu</code>. A foglalási oldal címét viszont a <code>slug</code> adja.
+      </footer>
+    </main>
+  </body>
+</html>

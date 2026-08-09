@@ -65,6 +65,24 @@ stable because we own it.
 
 Hungarian is the default locale on unprefixed URLs; English lives under `/en`.
 
+## 2.1 Start from the customer's own website, not from ours
+
+`demo/customer-site/` is a fictitious business's homepage — **Mycustomer Szalon**, deployed separately at
+`https://mycustomer.appointer.hu` — carrying the booking link exactly as a real clinic would embed it.
+
+It exists because every step below used to begin at our own URL, and no real end customer ever does. They
+arrive from the clinic's site. Starting there costs nothing and covers the one path that was never walked:
+the link itself, the bare-slug redirect a clinic puts on a poster, and whether the locale prefix survives
+a cross-origin navigation.
+
+The organization it points at is provisioned with slug `mycustomer` and domain `mycustomer.appointer.hu`,
+so the record and the site agree. Note which field does what: the `domain` is identity and routes nothing;
+the booking page is reachable at `/mycustomer/book` because **`slug` is the address**
+(docs/phase-10-deployment-hetzner-coolify.md).
+
+Both identifiers are permanent — no update path, and `db:discard-organization` refuses to run under
+`NODE_ENV=production`. **Never walk this checklist with a real prospect's slug or domain.**
+
 ---
 
 # 3. The checklist

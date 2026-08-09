@@ -30,6 +30,18 @@ coverage
 !.env.example
 *.log
 docs
+
+# The fictitious customer website (demo/customer-site). Excluded for build-cache
+# correctness, not image size — the runtime stages copy explicit paths, so it
+# never reached a shipped image anyway. But all three product Dockerfiles do
+# `COPY . .`, so without this a typo fix in a page no product build reads would
+# invalidate that layer and force three full reinstall-and-rebuild cycles.
+#
+# This cannot break the demo's own build: it is deployed with its own directory
+# as the build context, and Docker reads .dockerignore from the root of the
+# context.
+demo
+
 .vscode
 .idea
 packages/db/src/generated
