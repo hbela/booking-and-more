@@ -43,6 +43,33 @@ function dropEmptyValues(input: unknown): unknown {
 
 const portSchema = z.coerce.number().int().min(1).max(65_535);
 
+/**
+ * A connection string has to survive being parsed as a URL.
+ *
+ * Both DATABASE_URL and REDIS_URL are assembled in the compose files by
+ * interpolating a generated password into userinfo, and a password containing
+ * `/` silently produces a different URL rather than an invalid one — the
+ * authority ends at the first `/`, so `postgresql://u:ab/cd@postgres:5432/db`
+ * has host `u:ab` and path `/cd@postgres:5432/db`. `openssl rand -base64`,
+ * which is what this project's deployment guide recommended until the incident
+ * in phase-10 §2.9, emits `/` roughly a quarter of the time at 24 bytes.
+ *
+ * Node's WHATWG parser is the right oracle for both consumers: ioredis uses it
+ * directly, and Prisma's Rust parser implements the same specification. So
+ * anything rejected here would have failed later anyway — as a connection error
+ * naming a host nobody typed, at first use, in the worker's logs.
+ *
+ * Generate these with `openssl rand -hex 32`.
+ */
+function parsesAsUrl(value: string): boolean {
+  return URL.canParse(value);
+}
+
+const URL_SAFE_PASSWORD_HINT =
+  "could not be parsed as a URL. The usual cause is an unescaped character in the password — `/` in " +
+  "particular ends the authority, so the rest of the string is read as a path. Generate passwords with " +
+  "`openssl rand -hex 32` rather than `openssl rand -base64`.";
+
 /** A `postgresql://` URL. Prisma Accelerate URLs are rejected on purpose. */
 const postgresUrlSchema = z
   .string()
@@ -52,7 +79,8 @@ const postgresUrlSchema = z
       "must be a postgres:// or postgresql:// URL. Prisma Accelerate (prisma+postgres://) is not used " +
       "in this project — the DATABASE_URL/DIRECT_URL split caused repeated production incidents in the " +
       "predecessor project.",
-  });
+  })
+  .refine(parsesAsUrl, { message: URL_SAFE_PASSWORD_HINT });
 
 const baseEnvSchema = z.object({
   // --- Core -----------------------------------------------------------------
@@ -99,8 +127,19 @@ const baseEnvSchema = z.object({
    * `rediss://` passes this check too — the prefix test is deliberately loose
    * enough to accept TLS, which any hosted Redis should be using, because job
    * payloads reference bookings and their recipients.
+   *
+   * The credential belongs *in this URL* and there is deliberately no
+   * `REDIS_PASSWORD` here to pair with it. The compose files do own a variable
+   * by that name — it is what `--requirepass` and this URL are both built from
+   * — but it stops at the compose layer. Two env vars carrying one secret is a
+   * question about which of them wins, asked at the worst moment; ioredis takes
+   * a URL, so the URL is the single source of truth.
    */
-  REDIS_URL: z.string().startsWith("redis").optional(),
+  REDIS_URL: z
+    .string()
+    .startsWith("redis")
+    .refine(parsesAsUrl, { message: URL_SAFE_PASSWORD_HINT })
+    .optional(),
 
   /**
    * Resend. Optional per CLAUDE.md rule 4: absent, notifications are recorded

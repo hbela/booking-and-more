@@ -123,6 +123,46 @@ describe("loadEnv", () => {
     ).toThrowError(/Accelerate/);
   });
 
+  /**
+   * A password containing `/` does not make a connection string invalid — it
+   * makes it a *different* string. `postgresql://postgres:ab/cd@host:5432/db`
+   * parses cleanly to host `postgres:ab`, and the first symptom is a connection
+   * error naming a host nobody typed.
+   *
+   * Which is not hypothetical: docs/phase-10-deployment-hetzner-coolify.md §5.4
+   * told the operator to generate POSTGRES_PASSWORD with `openssl rand -base64
+   * 24`, whose alphabet includes `/`. The password rotation that followed the
+   * §2.9 exposure is exactly when you would draw one and least want to debug it.
+   */
+  describe("credentials embedded in connection strings", () => {
+    it("rejects a DATABASE_URL whose password broke the authority", () => {
+      expect(() =>
+        load({ DATABASE_URL: "postgresql://postgres:ab/cd@localhost:5432/booking_and_more" }),
+      ).toThrowError(/openssl rand -hex/);
+    });
+
+    it("rejects a REDIS_URL whose password broke the authority", () => {
+      expect(() => load({ REDIS_URL: "redis://default:aa+bb/cc@localhost:6379" })).toThrowError(
+        /openssl rand -hex/,
+      );
+    });
+
+    it("accepts hex passwords, and percent-encoded ones", () => {
+      const env = load({
+        DATABASE_URL: "postgresql://postgres:6f2b9c@localhost:5432/booking_and_more",
+        REDIS_URL: "redis://default:ab%2Fcd@localhost:6379",
+      });
+
+      expect(env.REDIS_URL).toBe("redis://default:ab%2Fcd@localhost:6379");
+    });
+
+    it("still accepts a Redis URL with no credentials at all", () => {
+      expect(load({ REDIS_URL: "redis://localhost:6379" }).REDIS_URL).toBe(
+        "redis://localhost:6379",
+      );
+    });
+  });
+
   it("coerces numeric strings", () => {
     expect(load({ PORT: "8080" }).PORT).toBe(8080);
   });

@@ -45,8 +45,15 @@ x-app-environment: &app-environment
   APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL to the web app's public https origin}
   API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
 
+  # Both of these embed a password into a URL, so both passwords must be
+  # URL-safe. Generate them with `openssl rand -hex 32`, NOT `-base64`: base64's
+  # alphabet includes `/`, and a `/` in the userinfo ends the authority as far
+  # as every URL parser is concerned, so `postgresql://u:ab/cd@postgres:5432/db`
+  # parses as host `u:ab`. @bam/config rejects both at boot for exactly this
+  # (packages/config/src/schema.ts), rather than letting it surface as a
+  # connection error naming a host nobody typed. See §2.9.
   DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
-  REDIS_URL: redis://redis:6379
+  REDIS_URL: redis://default:${REDIS_PASSWORD:?set REDIS_PASSWORD, and see §2.9 before choosing one}@redis:6379
 
   # Rotating this signs every live session out. Generate once, then leave alone:
   #   openssl rand -base64 32
@@ -106,11 +113,38 @@ services:
     # restart is survivable — the notification sweep re-finds rows the queue no
     # longer has (docs/phase-5-booking-notifications.md §2.5) — but it is a
     # recovery path, not a plan.
-    command: ["redis-server", "--appendonly", "yes"]
+    #
+    # requirepass, because "reachable only from the internal network" is an
+    # assumption about the host, and on 2026-08-04 that assumption was wrong
+    # about the database (§2.9). An unauthenticated Redis that becomes reachable
+    # is worse than an exposed Postgres: no password to fail, and CONFIG SET is
+    # a documented path from read access to code execution on the box.
+    #
+    # The password lands in the container's argv, so anyone who can read `ps` on
+    # the host can read it — which is a description of root, who could read the
+    # env file anyway. Not worth a config file and a bind mount to avoid.
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?set REDIS_PASSWORD, and see §2.9 before choosing one}",
+      ]
     volumes:
       - redis-data:/data
+    # Only for the healthcheck below — nothing in the image reads this name.
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # A bare `redis-cli ping` answers NOAUTH once requirepass is set, and
+      # redis-cli exits 0 having printed an error — so the container would look
+      # healthy while every real client was rejected. `grep -q PONG` is what
+      # makes the check test the thing it claims to.
+      #
+      # `$$` is escaped for Compose so the container's shell expands it, keeping
+      # the password out of the rendered healthcheck string.
+      test: ["CMD-SHELL", 'redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 10s
       timeout: 5s
       retries: 10

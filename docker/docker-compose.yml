@@ -10,6 +10,9 @@
 name: booking-and-more
 
 services:
+  # POSTGRES_PASSWORD and REDIS_PASSWORD are both embedded into URLs below, so
+  # both must be URL-safe: `openssl rand -hex 32`, never `-base64`. See
+  # docker-compose.coolify.yml and phase-10 §2.9.
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
@@ -36,11 +39,23 @@ services:
     # by setting REDIS_URL, with no compose change required.
     image: redis:8-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    # Password-protected here too, so the parity check exercises the same
+    # connection string shape production uses. See docker-compose.coolify.yml
+    # for why the healthcheck greps rather than trusting redis-cli's exit code.
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?set REDIS_PASSWORD}",
+      ]
     volumes:
       - redis-data:/data
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", 'redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -63,7 +78,7 @@ services:
       API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # REDIS_URL: redis://redis:6379
+      # REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
     ports:
       - "3001:3001"
 
@@ -82,7 +97,7 @@ services:
       API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # REDIS_URL: redis://redis:6379
+      # REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
 
   web:
     build:

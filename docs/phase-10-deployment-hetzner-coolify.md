@@ -1,11 +1,16 @@
 # Phase 10 — Deployment to a Hetzner VPS with Coolify
 
-**Document version:** 1.1 — written 2026-08-05, §2.6–§2.8 added 2026-08-06 from the first real deployment.
+**Document version:** 1.2 — written 2026-08-05, §2.6–§2.8 added 2026-08-06 from the first real deployment,
+§2.9 added 2026-08-07 from a CERT-Bund exposure report.
 **Status:** **partly walked.** The images, the stack and the migration path are built and verified locally,
 and a first deployment to a real Hetzner VPS reached healthy containers. It took three attempts, and each
 failure is recorded: §2.6 the API refusing to boot over empty variables, §2.7 a base URL without its
 scheme, §2.8 a healthy stack with no route to it. Nothing has yet been exercised end to end **through** the
 proxy, so §6's checklist is still unrun. §9 is honest about what remains.
+**Read §2.9 before touching the server's network configuration**, and before generating any password that
+ends up inside a connection string. A PostgreSQL port was open to the internet for at least a day; the
+security posture that permitted it is now §5.2's gate rather than one of its sentences, and the reason
+`ufw deny` would not have helped is the part to carry to the next host.
 **Read first:** [phase-0-technical-foundation.md](phase-0-technical-foundation.md) §4, which is where the
 Docker files came from and why they were written before anything could run them.
 
@@ -234,6 +239,110 @@ This is also why the environment anchor is a mapping rather than a list: `api` n
 others must not have, and YAML merges mappings but cannot concatenate sequences. §2.6's fix is what made
 that safe, since mapping form cannot express "absent" and no longer has to.
 
+## 2.9 PostgreSQL was reachable from the internet ★
+
+On **2026-08-04 04:02:52 UTC** CERT-Bund's scanner completed a TCP connection to port **5432** on the VPS's
+public IP. Hetzner forwarded the report on 2026-08-05. It asserts reachability and nothing more: no claim of
+authentication, no claim of compromise.
+
+**It was not this repository.** [`docker-compose.coolify.yml`](../docker-compose.coolify.yml) publishes no
+host ports — `expose:` only, for the reasons in §3 — and even the local-parity file leaves Postgres
+unpublished. Whatever bound 5432 to `0.0.0.0` was created on the server, outside the compose file. In
+descending order of likelihood:
+
+1. A Coolify **standalone PostgreSQL resource**, created through New Resource → Database, with "Make it
+   publicly available" enabled. Coolify then assigns a public port, defaulting to 5432. This is the usual
+   source of this exact report on a Coolify box.
+2. A `ports:` entry added in Coolify's compose editor, or `docker/docker-compose.yml` deployed by mistake.
+3. A host-installed PostgreSQL with `listen_addresses = '*'`.
+
+Determine which before assuming it is fixed:
+
+```bash
+ss -lntp | grep -E ':(5432|6379|8000)'          # what is bound, and by what
+docker ps --format '{{.Names}}\t{{.Ports}}'     # which container publishes
+iptables -t nat -S DOCKER | grep -E '5432|6379' # Docker's own DNAT rules
+systemctl status postgresql                     # a host-installed one?
+```
+
+and from somewhere else entirely: `nmap -Pn -p 22,80,443,5432,6379,8000 <vps-ip>`.
+
+### The lesson: UFW does not stop a published container port
+
+This is the part worth carrying to every future host. Docker installs its port publishing as DNAT rules in
+the `nat` PREROUTING chain and accepts the forwarded traffic in `FORWARD`. Neither chain is where UFW puts
+its rules. **`ufw deny 5432` on a Docker host is a rule that reads correctly, appears in `ufw status`, and
+does nothing at all** — the packet is translated and forwarded before UFW's `INPUT` chain is consulted.
+
+There are two controls that actually hold, and only one of them is simple:
+
+- **A Hetzner Cloud Firewall.** It runs on Hetzner's network, in front of the instance's NIC. Nothing
+  running on the host — Docker included — can punch through it. This is why §5.2 now treats it as a gate
+  rather than a suggestion.
+- `iptables -I DOCKER-USER ...`. Correct, and one flushed chain or one `docker` package upgrade away from
+  being gone. Fine as a second layer, wrong as the only one.
+
+### Was it a breach?
+
+Probably not, and the reasoning is worth writing down rather than assuming. `postgres:18-alpine` with
+`POSTGRES_PASSWORD` set and `POSTGRES_HOST_AUTH_METHOD` unset configures `scram-sha-256` for host
+connections, so a randomly generated password is not reachable by online guessing.
+
+Confirm rather than assume. Failed authentication is logged at FATAL by default, so the attempts are in the
+container log even though nothing else about connections is:
+
+```bash
+docker logs <postgres-container> 2>&1 | grep -ci 'password authentication failed'
+```
+
+`log_connections` is off by default, which means there is no positive record of a _successful_ foreign
+login. Turn it on — that gap is the reason this question cannot be answered cleanly, and it will be asked
+again. This database holds tenant customers' names, addresses, phone numbers and appointment histories:
+under GDPR Art. 33 a confirmed unauthorised access is a 72-hour notification to the supervisory authority.
+Exposure alone is not a reportable breach. "We did not look" is not a finding.
+
+### Rotating the password, and the trap in it
+
+Setting `POSTGRES_PASSWORD` to a new value in Coolify **does not change the password**. The image runs
+`initdb` only against an empty volume; on an existing one the variable is read and ignored, and the old
+credential stays live while the environment editor displays the new one. Both halves, in this order:
+
+```bash
+# terminal on the postgres container
+psql -U postgres -c "ALTER USER postgres PASSWORD 'new-value';"
+```
+
+then update `POSTGRES_PASSWORD` in Coolify and redeploy so `DATABASE_URL` agrees. Reversed, the API cannot
+connect between the two steps.
+
+**Generate it with `openssl rand -hex 32`, not `openssl rand -base64`.** §5.4 recommended base64 until this
+incident and that was a latent bug: base64's alphabet contains `/`, the password is interpolated into
+`DATABASE_URL`, and a `/` in userinfo ends the authority. `postgresql://postgres:ab/cd@postgres:5432/db` is
+not rejected by anything — it parses cleanly, to host `postgres:ab` with path `/cd@postgres:5432/db`. The
+first symptom is a connection failure naming a host nobody typed, during a credential rotation, which is
+the worst moment available to meet it. `@bam/config` now rejects an unparseable `DATABASE_URL` or
+`REDIS_URL` at boot with that explanation (`packages/config/src/schema.ts`).
+
+### Redis now has a password
+
+Closes what §9.4 recorded as acceptable. It said Redis was safe because it was reachable only from the
+stack's internal network — the same class of assumption about the host that this incident falsified about
+Postgres. An unauthenticated Redis that becomes reachable is the worse of the two: there is no password to
+fail, and `CONFIG SET` is a documented path from connection to code execution on the box.
+
+`REDIS_PASSWORD` is now required by both compose files, and is used twice: `--requirepass` on the server,
+and the credential in the `REDIS_URL` the API and worker receive. It stops at the compose layer —
+`@bam/config` deliberately has no `REDIS_PASSWORD`, because two variables carrying one secret is a question
+about which wins, asked during an incident.
+
+One trap came with it. A bare `redis-cli ping` answers `NOAUTH` once `requirepass` is set, **and exits 0**,
+so the healthcheck would have gone on passing while every real client was rejected — and `depends_on:
+service_healthy` would have started the API against a Redis it could not use. The check greps for `PONG`
+for that reason.
+
+Note also that BSI reports only what it scans for. 6379 not appearing in the report is not evidence that
+6379 was closed.
+
 ---
 
 # 3. The topology
@@ -351,10 +460,44 @@ curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash
 It prints a URL like `http://<vps-ip>:8000`. Open it and create the admin account **immediately** — until
 you do, anyone who finds the IP can.
 
-## 5.2 Lock down the dashboard
+## 5.2 Lock down the network ★
 
-In Coolify, set an FQDN for the Coolify instance itself (Settings → Instance) so it is served over TLS, then
-close port 8000 at the firewall. Hetzner Cloud Firewall: allow 22, 80 and 443 inbound, nothing else.
+This used to be two sentences at the end of the Coolify install step, and read as tidying-up. It is not:
+§2.9 is what happens when it is left until later. Do it now, before there is anything on the machine worth
+reaching.
+
+**Create the Hetzner Cloud Firewall first**, in the Hetzner console, on the server resource. Inbound: allow
+**22, 80 and 443**. Nothing else. Not 5432, not 6379, not 8000. Outbound: leave open.
+
+Do this in the Hetzner console and not on the host, because **a host firewall does not control Docker.**
+`ufw deny 5432` is accepted, appears in `ufw status`, and has no effect on a published container port —
+Docker's DNAT and FORWARD rules are consulted before UFW's INPUT chain ever is. The Cloud Firewall runs in
+front of the instance's NIC, where nothing on the host can reach around it. §2.9 has the detail.
+
+Then, still before deploying:
+
+- Set an FQDN for the Coolify instance itself (Settings → Instance) so the dashboard is served over TLS
+  rather than on `:8000`. The firewall above has already closed 8000, so do this from the console or over
+  SSH port-forwarding if you locked yourself out.
+- SSH: keys only. `PasswordAuthentication no` and `PermitRootLogin prohibit-password` in
+  `/etc/ssh/sshd_config`.
+- `unattended-upgrades`, for security updates at least.
+
+**Never enable "Make it publicly available" on a Coolify database resource.** It is one toggle, it binds
+the datastore to the public IP, and it is the most likely cause of §2.9.
+
+For a `psql` prompt, §8.2 — a terminal on the container, no port involved. If you want a GUI client on your
+laptop, the answer is an SSH tunnel and not an open port, but note that a tunnel needs something listening
+on the host to forward _to_, and this stack deliberately publishes nothing. Bind to loopback explicitly:
+
+```yaml
+ports:
+  - "127.0.0.1:5432:5432" # the interface prefix is the whole point
+```
+
+then `ssh -L 5432:127.0.0.1:5432 root@<vps-ip>`, arriving over 22. Docker honours the interface prefix, so
+this is genuinely unreachable from outside — but **`"5432:5432"` without it is exactly the mistake**, and
+the two differ by nine characters. Prefer §8.2.
 
 ## 5.3 Create the resource
 
@@ -378,7 +521,8 @@ Compose names the missing one rather than failing obscurely:
 | -------------------- | ------------------------------------------------- |
 | `APP_BASE_URL`       | `https://app.example.com`                         |
 | `API_BASE_URL`       | `https://api.example.com`                         |
-| `POSTGRES_PASSWORD`  | `openssl rand -base64 24`                         |
+| `POSTGRES_PASSWORD`  | `openssl rand -hex 32` — **hex, not base64**      |
+| `REDIS_PASSWORD`     | `openssl rand -hex 32` — **hex, not base64**      |
 | `BETTER_AUTH_SECRET` | `openssl rand -base64 32` — see the warning below |
 
 Strongly wanted, all optional to the schema:
@@ -394,7 +538,7 @@ Strongly wanted, all optional to the schema:
 | `SENTRY_DSN`                | Optional, alone                                           |
 | `LOG_LEVEL`                 | Defaults to `info`                                        |
 
-### Three traps in this table
+### Four traps in this table
 
 **Both base URLs need their scheme.** `https://api.example.com`, never `api.example.com`. This is what
 broke the first deployment: a bare hostname in `API_BASE_URL` reaches the web build as
@@ -414,6 +558,16 @@ one or not.
 **`BETTER_AUTH_SECRET` is write-once.** Rotating it invalidates every live session at once — every signed-in
 owner, provider and admin is logged out. Generate it, put it somewhere you will still have in a year, and do
 not regenerate it as part of debugging something else.
+
+**The two datastore passwords must be hex, and `BETTER_AUTH_SECRET` need not be.** The difference is where
+they end up: `POSTGRES_PASSWORD` and `REDIS_PASSWORD` are interpolated into `DATABASE_URL` and `REDIS_URL`,
+and base64 contains `/`, which ends the authority in a URL and silently yields a different host rather than
+an error. This table said `-base64 24` for `POSTGRES_PASSWORD` until §2.9; `@bam/config` now catches it at
+boot, but generate the right thing and never meet it. `BETTER_AUTH_SECRET` goes into no URL, so base64 is
+fine there.
+
+Also note that changing `POSTGRES_PASSWORD` on an existing deployment **does not change the database's
+password** — `initdb` runs only on an empty volume. §2.9 has the two-step rotation.
 
 ## 5.5 Domains
 
@@ -596,8 +750,19 @@ wrong — §5.5 told the operator to set domains in a UI field instead of declar
 `prisma migrate deploy` and the platform-admin script runnable from the API image — deliberate, and worth
 the size for now. A `pnpm prune --prod` in the runtime stage would need a different answer for both.
 
-**9.4 Redis has no password.** It is reachable only from the stack's internal network and is not exposed. If
-this VPS ever runs a second, untrusted stack, that stops being sufficient.
+**9.4 ~~Redis has no password.~~** Done — §2.9. The note used to justify it as "reachable only from the
+stack's internal network", which is the same assumption about the host that §2.9 falsified about Postgres.
+
+**9.8 The source of the §2.9 exposure is not confirmed, and the firewall walk is unverified.** The report
+establishes that 5432 answered; nothing here establishes what bound it, because the diagnosis has to be run
+on the server. Until §5.2's Hetzner Cloud Firewall exists and `nmap` from off-host shows only 22/80/443,
+this is open. The new `REDIS_PASSWORD` path is also unwalked: the compose changes are reviewed, not
+deployed, and the healthcheck rewrite is precisely the kind of thing that is fine in review and wrong in
+practice.
+
+**9.9 `log_connections` is off, so a successful foreign login leaves no record.** §2.9 could only be
+answered as "probably not" for this reason. Turning it on is one `ALTER SYSTEM` and a reload; it has not
+been done, and it is the difference between answering this question and estimating it next time.
 
 **9.5 `NEXT_PUBLIC_SENTRY_DSN` is in `.env.example` and is read by nothing.** The web app has no Sentry
 wiring; only the API and worker do. Harmless, and confusing at exactly the wrong moment.

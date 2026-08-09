@@ -79,7 +79,13 @@ believed outputs already existed, emitted almost nothing, and exited 0. A Docker
 tree; CI checks out clean, which is why CI never saw it. §2.4 is the other one that bites: `postgres:18`
 **refuses to start** if the volume is mounted at `/var/lib/postgresql/data` rather than one level up. Adds
 `docker-compose.coolify.yml` at the root — the Coolify file publishes no host ports, and
-`docker/docker-compose.yml` remains the local-parity one that does.
+`docker/docker-compose.yml` remains the local-parity one that does. **§2.9 is the one to read before
+touching the server's network or generating any password**: CERT-Bund found PostgreSQL open to the internet
+on 2026-08-04, from something created on the server rather than from either compose file. Two rules come out
+of it — **`ufw deny` does not close a published container port** (Docker's DNAT runs before UFW's INPUT
+chain, so the control has to be the Hetzner Cloud Firewall), and **a password that goes into a connection
+string must be `openssl rand -hex`, never `-base64`**, because a `/` ends the URL's authority and yields a
+different host rather than an error. Redis now has a `requirepass`.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead
