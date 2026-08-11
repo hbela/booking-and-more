@@ -70,16 +70,6 @@ recorded deviation. §2.6 is the other half of the same decision — **who decid
 the catalogue and each provider's base location, and **availability belongs to the provider**. Also closes
 phase-2 §5.4 and phase-3 §5.6, adds `POST /v1/{providers,services,locations}/:id/restore`, and is why
 `apps/web` now depends on `@bam/availability-engine`. ·
-[Phase 7 — chat booking](docs/phase-7-chat-booking.md) and
-[Phase 8 — push-to-talk voice](docs/phase-8-push-to-talk-voice.md) (**in progress**; the customer half of
-PRD goal #2). One conversation, two transports: voice is `audio → transcript` followed by the same message
-endpoint chat uses, so there is no second state machine to keep in step. **Read phase-7 §2 before adding any
-conversational route** — tech-impl §18's `/v1/voice/*` is overruled by rule 12 and the surface lives under
-`/v1/public/conversations`. Its §5 is why a pending action is a table rather than a field on the session:
-a generic "yes" must never confirm an unknown, expired or already-used action, and that is four questions
-best asked of an index. §9 is the one to read before adding anything that costs money per request — the
-quota gate is called _before_ the paid call and its aggregate is incremented in the same transaction as the
-event, for the same reason rule 14 forbids a `SELECT` before an `INSERT` ·
 [Phase 10 — deployment to Hetzner with Coolify](docs/phase-10-deployment-hetzner-coolify.md) (the guide is
 written and the stack is verified locally; the walk on a real VPS is not done — its §9.1 says exactly what
 that leaves unproven). Phase 0's Docker files had never been run: all three images failed to build and the
@@ -100,6 +90,16 @@ different host rather than an error. Redis now has a `requirepass`.
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead
 of the booking templates Epic 5 part 2 was scoped around.
+
+**Phases 7 and 8 are withdrawn.** Chat booking and push-to-talk voice were built and then reverted on
+2026-08-11, one day after they landed — the classic booking form is the customer path, and the assistant was
+a second way to reach the same hold. Their records survive as
+[Phase 7 — chat booking (withdrawn)](docs/phase-7-chat-booking.md) and
+[Phase 8 — push-to-talk voice (withdrawn)](docs/phase-8-push-to-talk-voice.md), each opening with what was
+removed and what to reinstate first if the decision is ever revisited. **Nothing in either is in the codebase
+now**: no `@bam/ai`, no `@bam/conversation-engine`, no `/v1/public/conversations`, and no conversation or
+usage tables — `20260811120000_remove_conversations_and_usage_metering` drops them. Read the records before
+reopening the idea, and treat tech-impl §18–§21 and PRD goal #2 as specified-but-not-built.
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -231,13 +231,6 @@ packages/booking-engine  Pure booking decisions: spans, hold lifecycle, state ma
                          The transaction is the API's; the database owns the race.
 packages/notification-engine  Pure notification decisions: what an outbox event owes, dedupe keys,
                          locale resolution, retry classification. Sending lives in the worker.
-packages/conversation-engine  Pure conversational decisions: the booking state machine, pending-action
-                         lifecycle, the deterministic natural-language date resolver, reply templates.
-                         Depends only on @bam/availability-engine, for rule 13's timezone arithmetic.
-packages/ai       The only package that talks to a model. Interfaces (TranscriptionProvider,
-                  IntentInterpreter, ResponseComposer), their OpenAI implementations, and scripted
-                  fakes so every conversational path is testable without a network or a bill.
-                  Never imports Fastify, Prisma or Redis.
 packages/config   Zod-validated env.
 packages/contracts Shared Zod schemas, error codes, API envelope types.
 packages/db       Prisma schema, migrations, client singleton.

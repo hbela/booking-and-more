@@ -1,7 +1,35 @@
+> **WITHDRAWN — 2026-08-11.** Everything below was built, and then reverted the next day. Read this banner
+> before you read the record: none of the code it describes is in the repository.
+>
+> **Why.** The classic booking form works, and the assistant was a second way to reach the same hold. That is
+> the cost the record itself flagged in §2 and §9 — two journeys to keep in step, a per-request bill, and a
+> model in the middle of the one flow that has to work every time — and it was judged not worth paying for a
+> customer path the form already serves.
+>
+> **What went.** `git revert` of `a6b754e` removed `packages/ai`, `packages/conversation-engine`,
+> `/v1/public/conversations`, the chat panel and push-to-talk button, the worker's conversation sweeper, the
+> `OPENAI_*` / `CONVERSATION_*` / `PENDING_ACTION_TTL_SECONDS` / `VOICE_MAX_UPLOAD_BYTES` /
+> `VOICE_TRANSCRIPT_RETENTION_DAYS` config, and the conversational error codes.
+> `20260811120000_remove_conversations_and_usage_metering` dropped the six tables and eight enums. Two things
+> deliberately stayed, because they predate this epic: `VOICE_MAX_DURATION_SECONDS` and
+> `VOICE_AUDIO_RETENTION_ENABLED` in `@bam/config`, and the `PENDING_ACTION_*` / `CONFIRMATION_REQUIRED` /
+> `USAGE_QUOTA_EXCEEDED` error codes.
+>
+> **If it is ever revisited.** The two pure packages are the part worth reinstating first — the state machine,
+> the pending-action lifecycle and the deterministic date resolver had tests and no dependencies on a model or
+> a network, so they can be lifted out of `a6b754e` unchanged. §5 is still the argument for why a pending
+> action is a table rather than a field, and §9's ordering rule — the quota gate before the paid call, its
+> aggregate incremented in the same transaction as the event — is the one to re-read before anything in this
+> product costs money per request again. What should *not* be reinstated as-written is the assumption in §2
+> that the panel lives inside `BookingFlow`: that is what coupled the assistant to the form's hold.
+>
+> tech-impl §18–§24 and PRD goal #2 still specify this feature. They are now a recorded deviation:
+> specified, built once, and not shipped.
+
 This is the plan and execution record for Epic 7 — letting a customer find and book an appointment by
 typing, through the same booking engine the form already uses.
 
-# Phase 7 — Chat booking
+# Phase 7 — Chat booking (withdrawn)
 
 ## Implementation Record
 

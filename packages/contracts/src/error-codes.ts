@@ -56,25 +56,8 @@ export const ErrorCodes = {
   // --- Conversational (Epics 7-8) ------------------------------------------
   PENDING_ACTION_NOT_FOUND: "PENDING_ACTION_NOT_FOUND",
   PENDING_ACTION_EXPIRED: "PENDING_ACTION_EXPIRED",
-  /** Already confirmed or cancelled. A second "yes" must not book twice. */
-  PENDING_ACTION_ALREADY_USED: "PENDING_ACTION_ALREADY_USED",
   CONFIRMATION_REQUIRED: "CONFIRMATION_REQUIRED",
   USAGE_QUOTA_EXCEEDED: "USAGE_QUOTA_EXCEEDED",
-  /** Unknown id, wrong token, expired session, another tenant's conversation —
-   *  all of them. The endpoint must not be an oracle for which ids are real. */
-  CONVERSATION_NOT_FOUND: "CONVERSATION_NOT_FOUND",
-  /** No AI provider is configured. One feature degrades; forms still book. */
-  CONVERSATION_UNAVAILABLE: "CONVERSATION_UNAVAILABLE",
-  /** PRD §11's max-turns control. The form is still there. */
-  CONVERSATION_TURN_LIMIT_REACHED: "CONVERSATION_TURN_LIMIT_REACHED",
-  /** The upload is not audio we accept, or claims to be and is not. */
-  AUDIO_FORMAT_UNSUPPORTED: "AUDIO_FORMAT_UNSUPPORTED",
-  /** Longer than VOICE_MAX_DURATION_SECONDS, or larger than the byte cap. */
-  AUDIO_TOO_LARGE: "AUDIO_TOO_LARGE",
-  /** The provider was reached and did not produce a transcript. */
-  TRANSCRIPTION_FAILED: "TRANSCRIPTION_FAILED",
-  /** The model answered and the envelope failed validation (tech-impl §21). */
-  INTERPRETATION_FAILED: "INTERPRETATION_FAILED",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

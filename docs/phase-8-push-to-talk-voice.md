@@ -1,7 +1,23 @@
+> **WITHDRAWN — 2026-08-11.** Built and reverted the next day, together with Epic 7 —
+> [phase-7-chat-booking.md](phase-7-chat-booking.md)'s banner carries the reasoning and the full list of what
+> was removed. Voice went for a reason of its own on top of that one: it is one transport over Epic 7's
+> conversation, so with the conversation gone there is nothing underneath it to be a transport for.
+>
+> **What went from this slice specifically.** The multipart audio route and its validation,
+> `OpenAITranscriptionProvider`, `voice_interactions`, `PushToTalkButton`, and the worker sweep that deleted
+> audio and expired transcripts. `@fastify/multipart` came out of `apps/api` with it — worth knowing, because
+> it was the only multipart consumer in the codebase and any future upload will have to add it back.
+>
+> **If it is ever revisited.** §4's reasoning about the sweeper stands on its own and is the useful part: an
+> abandoned conversation holds a slot nobody else can take, and Redis being down must not extend a hold past
+> its five minutes. The open question the record flagged — Hungarian transcription quality, and whether the
+> configurable model was enough of an answer — was never actually tested against real speech, so it remains
+> open rather than answered.
+
 This is the plan and execution record for Epic 8 — the customer half: pressing a button, speaking, and
 getting a booking, over the conversation Epic 7 already built.
 
-# Phase 8 — Push-to-talk voice
+# Phase 8 — Push-to-talk voice (withdrawn)
 
 ## Implementation Record
 

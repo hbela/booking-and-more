@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -14,7 +14,6 @@ import {
   type PublicBookingCreated,
   type Slot,
 } from "@/lib/api-client";
-import { ConversationPanel } from "./conversation-panel";
 import { LocaleSwitcher } from "./locale-switcher";
 
 /**
@@ -33,20 +32,6 @@ import { LocaleSwitcher } from "./locale-switcher";
  * The URL still carries the tenant, so a clinic's booking page is linkable.
  * Restoring deep links per step is Epic 6's problem, when the calendar view
  * arrives and there is something worth linking to.
- *
- * ## The assistant sits inside it
- *
- * tech-impl §28 puts the conversational interface in the normal booking flow
- * rather than on a page of its own, and the single-route decision above is what
- * makes that cheap: `<ConversationPanel>` narrows the same `serviceId`,
- * `providerId` and `day` this component already holds, so a customer can ask
- * for a time and then tap a different one. Two parallel booking journeys, each
- * owning a hold, is exactly what one route was chosen to avoid — and it is what
- * a separate `/chat` page would have produced.
- *
- * The form is never conditional on the assistant (PRD §12.4): with no API key,
- * no allowance left, no microphone or no JavaScript-friendly browser, every
- * step below still books.
  */
 
 type Step = "service" | "provider" | "time" | "details" | "success";
@@ -113,13 +98,6 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
   const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
   const [hold, setHold] = useState<Hold | null>(null);
   const [booking, setBooking] = useState<PublicBookingCreated | null>(null);
-  /**
-   * A booking the assistant made. Only its reference — the management token is
-   * returned once, to whoever confirmed, and the conversation's confirmation
-   * goes out by email like every other one
-   * (docs/phase-5-booking-notifications.md §2.1).
-   */
-  const [conversationBooking, setConversationBooking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const tenant = useQuery({
@@ -172,39 +150,26 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
   const holdRef = useRef<Hold | null>(null);
   holdRef.current = hold;
 
-  /**
-   * Give back whatever this component is holding.
-   *
-   * Shared by the unload handler and by the assistant booking something: in both
-   * cases the reservation this side owns has stopped being wanted, and waiting
-   * out its five minutes leaves the diary short for no reason.
-   */
-  const releaseHold = useCallback((): void => {
-    const current = holdRef.current;
-    if (!current) return;
-
-    holdRef.current = null;
-    setHold(null);
-
-    const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
-    void fetch(
-      `${base}/v1/public/tenants/${tenantSlug}/holds/${current.id}?sessionId=${encodeURIComponent(sessionId)}`,
-      { method: "DELETE", credentials: "include", keepalive: true },
-    ).catch(() => {
-      // Nothing useful to do: the page may be going away and the hold expires
-      // by itself.
-    });
-  }, [sessionId, tenantSlug]);
-
   useEffect(() => {
-    // `keepalive` rather than a plain fetch: a request issued during `pagehide`
-    // is cancelled when the document goes away, which is precisely the case this
-    // needs to survive.
-    window.addEventListener("pagehide", releaseHold);
+    function release(): void {
+      const current = holdRef.current;
+      if (!current) return;
+
+      const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+      void fetch(
+        `${base}/v1/public/tenants/${tenantSlug}/holds/${current.id}?sessionId=${encodeURIComponent(sessionId)}`,
+        { method: "DELETE", credentials: "include", keepalive: true },
+      ).catch(() => {
+        // Nothing useful to do: the page is going away and the hold expires
+        // by itself.
+      });
+    }
+
+    window.addEventListener("pagehide", release);
     return () => {
-      window.removeEventListener("pagehide", releaseHold);
+      window.removeEventListener("pagehide", release);
     };
-  }, [releaseHold]);
+  }, [tenantSlug, sessionId]);
 
   const takeHold = useMutation({
     mutationFn: (slot: Slot) =>
@@ -281,27 +246,6 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
             so the tenant's default stops being reapplied. */}
         <LocaleSwitcher label={t("language")} />
       </header>
-
-      <ConversationPanel
-        tenantSlug={tenantSlug}
-        onNarrow={(handoff) => {
-          // Follow the conversation with the form, so switching between talking
-          // and tapping is not a restart.
-          if (handoff.serviceId !== undefined) setServiceId(handoff.serviceId);
-          if (handoff.providerId !== undefined) setProviderId(handoff.providerId);
-          if (handoff.day !== undefined) setDay(handoff.day);
-          if (step === "service" || step === "provider") setStep("time");
-        }}
-        onBooked={(reference) => {
-          // The conversation took its own hold, keyed to the conversation id.
-          // Whatever this component was holding is now a second reservation
-          // nobody wants; release it rather than leaving the diary short for
-          // five minutes.
-          void releaseHold();
-          setConversationBooking(reference);
-          setStep("success");
-        }}
-      />
 
       <Steps current={step} />
 
@@ -461,18 +405,6 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
               (docs/phase-5-booking-notifications.md). The link is still worth
               saving: it is the customer's only route to changing the booking
               online, and the reminder deliberately does not repeat it (§2.2). */}
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("confirmationEmail")}</p>
-        </Section>
-      ) : null}
-
-      {step === "success" && booking === null && conversationBooking !== null ? (
-        <Section title={t("booked")}>
-          <dl className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
-            <Row label={t("reference")} value={conversationBooking} />
-          </dl>
-          {/* No management link here on purpose: the token is returned once, and
-              the assistant's confirmation email carries it exactly as the form's
-              does (docs/phase-5-booking-notifications.md §2.1). */}
           <p className="text-sm text-slate-600 dark:text-slate-400">{t("confirmationEmail")}</p>
         </Section>
       ) : null}

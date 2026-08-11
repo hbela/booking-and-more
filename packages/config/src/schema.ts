@@ -253,48 +253,6 @@ const baseEnvSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((value) => value === "true"),
-
-  // --- Conversational booking (tech-impl §42) ------------------------------
-  /**
-   * Unset is valid and is the supported default: chat and voice report
-   * themselves unavailable, and forms book exactly as before (rule 4,
-   * docs/phase-7-chat-booking.md §10). Nothing else in the product reads it.
-   */
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  /**
-   * Both models are configurable because the cheapest adequate one changes
-   * faster than a release does, and because Hungarian transcription quality is
-   * the open question docs/phase-8-push-to-talk-voice.md flags — swapping the
-   * model must not be a code change.
-   */
-  OPENAI_TRANSCRIPTION_MODEL: z.string().min(1).default("gpt-4o-mini-transcribe"),
-  OPENAI_INTERPRETATION_MODEL: z.string().min(1).default("gpt-4o-mini"),
-
-  /**
-   * How long a conversation stays usable without a turn. Short on purpose: a
-   * session holds a token, may hold a slot, and costs money to continue.
-   */
-  CONVERSATION_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(30),
-  /**
-   * PRD §11's max-conversation-turns control — the ceiling on what one stranger
-   * can spend before the panel folds away and the form takes over.
-   */
-  CONVERSATION_MAX_TURNS: z.coerce.number().int().positive().default(40),
-  /**
-   * How long a pending action may sit unconfirmed. Deliberately shorter than
-   * the hold it accompanies (`BOOKING_HOLD_DURATION_SECONDS`), so an action can
-   * never outlive the reservation it was previewing.
-   */
-  PENDING_ACTION_TTL_SECONDS: z.coerce.number().int().positive().default(240),
-  /**
-   * The size cap on an audio upload (tech-impl §34.3). The API's 1 MiB
-   * `bodyLimit` does not apply to multipart parts, so this is the check that
-   * counts. 30 seconds of Opus is well under 500 KB; the headroom is for
-   * browsers that hand us WAV.
-   */
-  VOICE_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5_000_000),
-  /** tech-impl §35. The row survives; the transcript does not. */
-  VOICE_TRANSCRIPT_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 });
 
 const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {

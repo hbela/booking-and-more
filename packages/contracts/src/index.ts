@@ -5,6 +5,4 @@ export * from "./common.js";
 export * from "./health.js";
 export * from "./domain.js";
 export * from "./billing.js";
-export * from "./usage.js";
-export * from "./conversation.js";
 export * from "./app-url.js";
