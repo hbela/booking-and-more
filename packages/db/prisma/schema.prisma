@@ -129,6 +129,13 @@ model Tenant {
   subscription         Subscription?
   checkoutLink         SubscriptionCheckoutLink?
 
+  conversationSessions ConversationSession[]
+  conversationMessages ConversationMessage[]
+  pendingActions       ConversationPendingAction[]
+  voiceInteractions    VoiceInteraction[]
+  usageEvents          UsageEvent[]
+  usageAggregates      UsageAggregate[]
+
   @@index([status])
   /// The expiry sweep's query: prospect organizations past their deadline.
   @@index([status, subscribeBy])
@@ -946,6 +953,7 @@ model Customer {
   holds         BookingHold[]
   bookings      Booking[]
   notifications Notification[]
+  conversations ConversationSession[]
 
   @@index([tenantId, normalizedEmail])
   @@index([tenantId, normalizedPhone])
@@ -1050,8 +1058,9 @@ model BookingHold {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  reservation CapacityReservation?
-  bookings    Booking[]
+  reservation   CapacityReservation?
+  bookings      Booking[]
+  conversations ConversationSession[]
 
   @@index([tenantId, providerId, startAt])
   @@index([tenantId, sessionId])
@@ -1128,6 +1137,7 @@ model Booking {
 
   reservation   CapacityReservation?
   notifications Notification[]
+  conversations ConversationSession[]
 
   @@unique([tenantId, reference])
   @@index([tenantId, providerId, startAt])
@@ -1296,7 +1306,7 @@ model Notification {
   /// template is not a migration.
   template String
   /// BCP-47, resolved from the customer then the tenant.
-  locale String
+  locale   String
 
   status NotificationStatus @default(PENDING)
 
@@ -1550,4 +1560,341 @@ model StripeEvent {
 
   @@index([processedAt])
   @@map("stripe_events")
+}
+
+// ===========================================================================
+// Conversations â€” docs/phase-7-chat-booking.md, docs/phase-8-push-to-talk-voice.md
+// ===========================================================================
+
+/// How a turn reaches us. The conversation itself is identical in all three;
+/// this records the transport so usage can be attributed and so the UI knows
+/// whether to speak the reply.
+///
+/// REALTIME_VOICE is declared and unreachable: PRD Â§23 excludes speech-to-speech
+/// from the MVP. It is here because appending to a PostgreSQL enum is cheap and
+/// inserting into one is not (see TenantStatus).
+enum ConversationChannel {
+  CHAT
+  VOICE
+  REALTIME_VOICE
+
+  @@map("conversation_channel")
+}
+
+enum ConversationStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+
+  @@map("conversation_status")
+}
+
+/// Who is talking. Only CUSTOMER is reachable in Epics 7-8; provider voice
+/// commands (PRD Â§31) are goal #1 and a later slice.
+enum ConversationRole {
+  CUSTOMER
+  PROVIDER
+
+  @@map("conversation_role")
+}
+
+enum MessageSender {
+  CUSTOMER
+  ASSISTANT
+  SYSTEM
+
+  @@map("message_sender")
+}
+
+enum MessageType {
+  TEXT
+  /// Text that arrived as a transcript. The content is still text; this records
+  /// that a microphone produced it, which matters for PRD Â§22.3's fallback rate.
+  VOICE
+  /// A card, a slot list, a confirmation â€” rendered from structured_content_json.
+  STRUCTURED
+
+  @@map("message_type")
+}
+
+enum PendingActionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+
+  @@map("pending_action_status")
+}
+
+enum InterpretationStatus {
+  /// Transcribed but not yet interpreted â€” the customer is reviewing it.
+  PENDING
+  SUCCEEDED
+  /// The model answered but the envelope or its parameters failed validation.
+  REJECTED
+  FAILED
+
+  @@map("interpretation_status")
+}
+
+/// tech-impl Â§10.17.
+///
+/// The authoritative store of a conversation's booking state. PRD Â§9.15: the
+/// language model must not be the sole storage location for it â€” a model asked
+/// to remember a serviceId will eventually invent one.
+model ConversationSession {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Set once the customer's details are collected, not before.
+  customerId String?   @map("customer_id")
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  /// Reserved for the provider-side conversation. Better Auth's user id.
+  userId String? @map("user_id")
+
+  role    ConversationRole    @default(CUSTOMER)
+  channel ConversationChannel @default(CHAT)
+
+  /// BCP-47 subtag the customer is talking in. Seeds the interpretation prompt
+  /// (tech-impl Â§38) and picks the message catalog the templates resolve against.
+  locale   String
+  /// IANA zone. Every date expression is resolved against this, never against
+  /// the server's clock.
+  timezone String
+
+  status ConversationStatus @default(ACTIVE)
+
+  /// One of @bam/conversation-engine's CustomerBookingState values (tech-impl
+  /// Â§22). A string rather than an enum: the machine is owned by a pure package
+  /// and adding a state there should not need a migration.
+  machineState String @map("machine_state")
+
+  /// Collected fields â€” service, provider, date range, the selected slot. Shaped
+  /// by the engine, opaque to the database.
+  stateJson Json @default("{}") @map("state_json")
+
+  /// SHA-256 of the 32 random bytes handed to the client once at creation. The
+  /// same construction as a booking's management token, for the same reason: a
+  /// database dump must not be a set of live credentials.
+  tokenHash String @unique @map("token_hash")
+
+  /// PRD Â§11's max-conversation-turns control. Counts customer turns only.
+  turnCount Int @default(0) @map("turn_count")
+
+  /// The hold this conversation is carrying, if it has taken one. SetNull rather
+  /// than Cascade: a released hold must not delete the conversation that made it.
+  holdId String?      @map("hold_id")
+  hold   BookingHold? @relation(fields: [holdId], references: [id], onDelete: SetNull)
+
+  /// Set when the conversation produced a booking. The conversation is then
+  /// COMPLETED and nothing further executes against it.
+  bookingId String?  @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  lastActivityAt DateTime @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  messages       ConversationMessage[]
+  pendingActions ConversationPendingAction[]
+  voice          VoiceInteraction[]
+
+  @@index([tenantId, status])
+  /// The expiry sweep's query.
+  @@index([status, expiresAt])
+  @@map("conversation_sessions")
+}
+
+/// tech-impl Â§10.18. The transcript of the conversation, replayed by
+/// GET /v1/public/conversations/:id so a page refresh does not lose it.
+model ConversationMessage {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  sessionId String              @map("session_id")
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sender      MessageSender
+  messageType MessageType   @default(TEXT)
+
+  /// For an assistant turn this is a message *key* from the engine's templates,
+  /// not a rendered sentence (tech-impl Â§20) â€” localisation stays in the
+  /// next-intl catalogs and the API never composes prose.
+  content String
+
+  /// Template parameters, slot lists, confirmation-card contents.
+  structuredContentJson Json? @map("structured_content_json")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([sessionId, createdAt])
+  @@map("conversation_messages")
+}
+
+/// tech-impl Â§22.1.
+///
+/// A table rather than a field on state_json, because of the sentence that
+/// follows Â§22.1 in the spec: a generic "yes" must never confirm an unknown or
+/// expired action. Making that true means proving four things at once â€” this
+/// action exists, it belongs to *this* session, it has not expired, it has not
+/// already been used â€” and a row with a status and an index answers all four.
+/// A JSON blob makes them four application-code questions, and the fourth is the
+/// one that gets forgotten and turns a double-tap into a double booking.
+model ConversationPendingAction {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  sessionId String              @map("session_id")
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  /// One of the confirm tools (tech-impl Â§23.3). Never a read tool: those
+  /// execute immediately and have nothing to confirm.
+  toolName String @map("tool_name")
+
+  /// Validated arguments, ready to execute. Already through the intent-specific
+  /// parameter schema (tech-impl Â§21) â€” the model's raw output never lands here.
+  argumentsJson Json @map("arguments_json")
+
+  /// What the customer was shown: absolute date and time, service, provider,
+  /// price. What they agreed to, in the words they agreed to it in.
+  previewJson Json @map("preview_json")
+
+  status PendingActionStatus @default(PENDING)
+
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([sessionId, status])
+  @@index([status, expiresAt])
+  @@map("conversation_pending_actions")
+}
+
+/// tech-impl Â§10.19. One row per recording, whether or not it was interpreted.
+///
+/// The row outlives its transcript: the sweep nulls transcript after 30 days
+/// (tech-impl Â§35) but keeps the duration and cost, because deleting those would
+/// make a month's spend unreconcilable.
+model VoiceInteraction {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  sessionId String              @map("session_id")
+  session   ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  audioDurationMs Int @map("audio_duration_ms")
+
+  transcriptionProvider String @map("transcription_provider")
+  transcriptionModel    String @map("transcription_model")
+
+  /// Nulled by the retention sweep. Redacted from every log by
+  /// @bam/observability â€” the field name is already in the denylist.
+  transcript String?
+
+  detectedLanguage String? @map("detected_language")
+
+  interpretationStatus InterpretationStatus @default(PENDING) @map("interpretation_status")
+
+  /// The intent the envelope resolved to, once it has. NULL while PENDING.
+  intent String?
+
+  estimatedCostMinor Int @default(0) @map("estimated_cost_minor")
+
+  /// Always false while VOICE_AUDIO_RETENTION_ENABLED is off â€” the buffer goes
+  /// straight to the provider and is dropped. The column exists so that turning
+  /// retention on is a change to one branch rather than a migration.
+  audioRetained Boolean @default(false) @map("audio_retained")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([tenantId, createdAt])
+  /// The retention sweep's query: rows still holding a transcript, oldest first.
+  @@index([createdAt])
+  @@map("voice_interactions")
+}
+
+// ===========================================================================
+// Usage metering â€” tech-impl Â§37, PRD Â§11
+// ===========================================================================
+
+enum UsageCategory {
+  VOICE_TRANSCRIPTION
+  AI_INPUT_TOKENS
+  AI_OUTPUT_TOKENS
+  TTS_CHARACTERS
+  REALTIME_AUDIO_SECONDS
+  EMAIL_SENT
+  BOOKING_CREATED
+
+  @@map("usage_category")
+}
+
+/// tech-impl Â§37. One row per metered call â€” the audit trail behind an invoice
+/// line, and behind a "why did this tenant cost so much" question.
+model UsageEvent {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  category UsageCategory
+
+  /// Seconds, tokens, characters, or 1 for a countable event. Integer because
+  /// every unit here is countable; a fractional second is rounded up at the call
+  /// site, in the tenant's favour and never in ours.
+  quantity Int
+  unit     String
+
+  provider String?
+  model    String?
+
+  estimatedCostMinor Int @default(0) @map("estimated_cost_minor")
+
+  metadataJson Json? @map("metadata_json")
+
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  @@index([tenantId, category, occurredAt])
+  @@map("usage_events")
+}
+
+/// The number the quota gate reads.
+///
+/// Incremented in the same transaction as its event, by an atomic increment on
+/// an upserted row â€” never by a rollup job. The next request's gate reads this
+/// row, and a job-based aggregate is a ceiling that is always one interval
+/// behind: the same class of mistake as checking availability with a SELECT
+/// before the INSERT (rule 14).
+model UsageAggregate {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Calendar month, YYYY-MM, in UTC. A string rather than a date range because
+  /// it is only ever compared for equality, and because the period a quota
+  /// resets on is a billing concept rather than an instant.
+  period String
+
+  category UsageCategory
+
+  quantity           Int @default(0)
+  estimatedCostMinor Int @default(0) @map("estimated_cost_minor")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, period, category])
+  @@map("usage_aggregates")
 }

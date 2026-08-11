@@ -14,6 +14,10 @@ import {
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
+import {
+  startConversationSweeper,
+  type ConversationSweeper,
+} from "./conversations/conversation.sweeper.js";
 
 /**
  * Background worker.
@@ -161,6 +165,18 @@ async function main(): Promise<void> {
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
   });
 
+  // Also PostgreSQL-only, and started for the same reason: an abandoned
+  // conversation is holding a slot nobody else can take, and a hold outliving
+  // its five minutes because the tab was closed is not something Redis being
+  // down should extend (docs/phase-8-push-to-talk-voice.md §4).
+  const conversations: ConversationSweeper = startConversationSweeper({
+    prisma,
+    logger: log,
+    intervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
+    batchSize: env.OUTBOX_BATCH_SIZE,
+    transcriptRetentionDays: env.VOICE_TRANSCRIPT_RETENTION_DAYS,
+  });
+
   const heartbeat = setInterval(() => {
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
   }, HEARTBEAT_MS);
@@ -189,6 +205,7 @@ async function main(): Promise<void> {
     void (async () => {
       try {
         await stripeEvents.stop();
+        await conversations.stop();
 
         // Order matters: stop claiming work, then let the queues close, then
         // drop the connections underneath them.

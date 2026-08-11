@@ -46,6 +46,13 @@ import { availabilityRoutes } from "./modules/availability/availability.routes.j
 import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
+import { publicConversationRoutes } from "./modules/public/conversation.routes.js";
+import {
+  OpenAIIntentInterpreter,
+  TemplateResponseComposer,
+  OpenAITranscriptionProvider,
+  type AiProviders,
+} from "@bam/ai";
 
 export const API_VERSION = "0.1.0";
 
@@ -89,6 +96,17 @@ export interface BuildAppOptions {
    * composition root, for the same reason `rateLimit` is.
    */
   paymentLinkClient?: PaymentLinkClient;
+  /**
+   * Test seam: the transcription and interpretation providers.
+   *
+   * Same reasoning as `paymentLinkClient`. Every conversational path runs a
+   * model call, and a suite that reached OpenAI would be slow, non-deterministic
+   * and billed. `@bam/ai`'s `fakeProviders()` is scripted, so a test asserts
+   * what the *conversation* did with an envelope rather than whether a model
+   * produced a good one — which is the part that has bugs and the only part a
+   * test can hold still.
+   */
+  aiProviders?: AiProviders;
 }
 
 /**
@@ -157,6 +175,9 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
       "Idempotency-Key",
       "X-Request-Id",
       TENANT_HEADER,
+      // The conversation's session token. A credential in a header rather than
+      // a path, so it stays out of proxy logs and browser history.
+      "X-Conversation-Token",
     ],
     exposedHeaders: ["X-Request-Id"],
   });
@@ -317,5 +338,44 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // schemas are declared separately from the staff ones (CLAUDE.md rule 12).
   await app.register(publicBookingRoutes, { prefix: "/v1/public" });
 
+  // Chat and push-to-talk. Registered unconditionally, unlike the Stripe webhook
+  // above: with no OPENAI_API_KEY the routes exist and answer
+  // CONVERSATION_UNAVAILABLE, which is what lets the booking page ask once and
+  // hide the affordance rather than guess from a 404 (rule 4,
+  // docs/phase-7-chat-booking.md §10).
+  await app.register(publicConversationRoutes, {
+    prefix: "/v1/public",
+    providers: options.aiProviders ?? openAiProviders(env),
+    conversation: {
+      sessionTtlMinutes: env.CONVERSATION_SESSION_TTL_MINUTES,
+      maxTurns: env.CONVERSATION_MAX_TURNS,
+      pendingActionTtlSeconds: env.PENDING_ACTION_TTL_SECONDS,
+    },
+    audio: {
+      maxBytes: env.VOICE_MAX_UPLOAD_BYTES,
+      maxDurationSeconds: env.VOICE_MAX_DURATION_SECONDS,
+    },
+  });
+
   return app;
+}
+
+/**
+ * The real providers, constructed but not connected.
+ *
+ * `getOpenAI` runs on first use, not here, so an API with no key boots normally
+ * and fails only on the two routes that cannot work (CLAUDE.md rule 4).
+ */
+function openAiProviders(env: Env): AiProviders {
+  const config = {
+    apiKey: env.OPENAI_API_KEY,
+    transcriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    interpretationModel: env.OPENAI_INTERPRETATION_MODEL,
+  };
+
+  return {
+    transcription: new OpenAITranscriptionProvider(config),
+    interpreter: new OpenAIIntentInterpreter(config),
+    composer: new TemplateResponseComposer(),
+  };
 }
