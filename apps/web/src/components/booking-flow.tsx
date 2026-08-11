@@ -15,6 +15,7 @@ import {
   type Slot,
 } from "@/lib/api-client";
 import { ConversationPanel } from "./conversation-panel";
+import { LocaleSwitcher } from "./locale-switcher";
 
 /**
  * The public booking flow. tech-impl §30, §16.
@@ -268,9 +269,17 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
-      <header>
-        <h1 className="text-2xl font-semibold">{tenant.data.name}</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("subtitle")}</p>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{tenant.data.name}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t("subtitle")}</p>
+        </div>
+        {/* The page opens in the tenant's language (see book/page.tsx). This is
+            the only way a customer who wants another one can say so — without
+            it they would have to edit the URL, which is not a thing to ask of
+            somebody trying to book a haircut. Using it also records the choice,
+            so the tenant's default stops being reapplied. */}
+        <LocaleSwitcher label={t("language")} />
       </header>
 
       <ConversationPanel

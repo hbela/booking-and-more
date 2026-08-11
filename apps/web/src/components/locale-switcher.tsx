@@ -3,6 +3,7 @@
 import { useLocale } from "next-intl";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { routing, type Locale } from "@/i18n/routing";
+import { LOCALE_PREFERENCE_COOKIE, LOCALE_PREFERENCE_MAX_AGE } from "@/lib/locale-preference";
 
 const LABELS: Record<Locale, string> = {
   hu: "Magyar",
@@ -24,6 +25,10 @@ export function LocaleSwitcher({ label }: { label: string }): React.ReactElement
       <select
         value={locale}
         onChange={(event) => {
+          // Recorded before navigating, because the booking page reads it on the
+          // very next request to decide whether it may still apply the tenant's
+          // language over the top. See lib/locale-preference.ts.
+          document.cookie = `${LOCALE_PREFERENCE_COOKIE}=${event.target.value}; path=/; max-age=${LOCALE_PREFERENCE_MAX_AGE}; samesite=lax`;
           router.replace(pathname, { locale: event.target.value });
         }}
         className="rounded-md border border-slate-300 bg-transparent px-2 py-1 dark:border-slate-700"

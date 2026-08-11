@@ -114,7 +114,10 @@
     "signInAs": "Ehhez a címhez már tartozik fiók: {email}. Jelentkezzen be, majd nyissa meg újra a linket.",
     "createAccount": "Fiók létrehozása és csatlakozás",
     "joinTitleAsProvider": "Csatlakozás: {organization} — {provider}",
-    "goToAvailability": "Munkaidő beállítása"
+    "goToAvailability": "Munkaidő beállítása",
+    "wrongUser": "Ezt a meghívót a(z) {invited} címre állítottuk ki, Ön viszont {current} néven van bejelentkezve.",
+    "signOutAndContinue": "Kijelentkezés és folytatás {email} néven",
+    "wrongUserHint": "A kijelentkezés csak ezt a böngészőt érinti. Utána bármikor visszajelentkezhet."
   },
   "catalogue": {
     "loading": "Betöltés…",
@@ -330,7 +333,8 @@
     "manageLink": "foglalás kezelése",
     "confirmationEmail": "A visszaigazolást e-mailben küldjük. Mentse el ezt a linket is — online csak ezen keresztül módosíthat vagy mondhat le.",
     "slotTaken": "Valaki épp lefoglalta ezt az időpontot. Íme a még szabad időpontok.",
-    "holdExpired": "A fenntartás lejárt. Kérjük, válasszon újra időpontot."
+    "holdExpired": "A fenntartás lejárt. Kérjük, válasszon újra időpontot.",
+    "language": "Nyelv"
   },
   "manage": {
     "loading": "Betöltés…",

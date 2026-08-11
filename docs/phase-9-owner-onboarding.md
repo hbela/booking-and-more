@@ -175,7 +175,8 @@ because it also created a user.
 ```text
 checking ──▶ lookup ──▶ registering ──▶ accepted
                 │
-                ├──▶ needs-sign-in     (account exists, or already signed in as someone else)
+                ├──▶ needs-sign-in     (account exists, signed out)
+                ├──▶ wrong-user        (signed in as somebody else — see §4.1)
                 └──▶ failed
 ```
 
@@ -189,6 +190,33 @@ navigating, or `/dashboard` renders as signed out.
 
 Localization keys go into the `invitation` namespace in **both** `en.json` and `hu.json` — next-intl throws
 on a missing key rather than falling back, so a one-language change breaks the other language's build.
+
+## 4.1 Signed in as the wrong person
+
+**Added 2026-08-11, after it was hit by hand.** The four arrivals above were three, and the missing one is
+the one that actually happens: whoever issued the invitation is signed in as the owner, opens the link to
+check it, and `acceptInvitation` correctly refuses because the session's address is not the invited one
+(`membership.service.ts` §2.5's rule — an invitation names a person).
+
+The refusal was right and the screen was a dead end. It rendered the API's message — which names the correct
+address — and offered nothing to act on, so the only way forward was knowing to clear a cookie. A provider
+who happens to have a colleague's session open in that browser cannot get in at all.
+
+The `wrong-user` state offers **sign out and continue as {invited address}**. Three things about it:
+
+- **It branches on the error, not on a comparison.** `409` + `FORBIDDEN` is that refusal and nothing else on
+  this route — the platform-admin refusal is a `403`, and the other three 409s carry different codes. The
+  server stays the one that decides whether the address matches; the client only picks which way out to
+  offer. §2.3's reasoning, applied to the failure path.
+- **It does not re-run the lookup after signing out.** The lookup already said whether the invited address
+  has an account, so the button goes straight to `register` or `needs-sign-in`. Repeating the request would
+  spend a round trip to learn what is already in hand.
+- **It calls `router.refresh()` before switching state**, for the same reason `RegisterForm` does: the
+  session cookie has just changed and a cached server render still believes the old one.
+
+The screen says the sign-out affects this browser only. That is worth stating, because the person most
+likely to see this message is an operator who does not want to lose the session they are working in — and
+the honest answer is that they will, and can sign back in.
 
 ---
 

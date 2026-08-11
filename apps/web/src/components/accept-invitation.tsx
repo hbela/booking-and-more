@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ApiError, apiFetch } from "@/lib/api-client";
-import { useSession } from "@/lib/auth-client";
+import { signOut, useSession } from "@/lib/auth-client";
 import { Field } from "./auth-form";
 
 interface InvitationDetails {
@@ -26,16 +26,18 @@ type State =
   | { kind: "checking" }
   /** No account for the invited address: the owner sets a password here. */
   | { kind: "register"; details: InvitationDetails }
-  /** They already have an account, or are signed in as somebody else. */
+  /** They already have an account and are signed out. */
   | { kind: "needs-sign-in"; details: InvitationDetails | null }
-  | { kind: "accepting" }
+  | { kind: "accepting"; details: InvitationDetails }
+  /** Signed in, but as somebody else. See {@link AcceptInvitation} §4. */
+  | { kind: "wrong-user"; details: InvitationDetails; signedInAs: string }
   | { kind: "accepted"; role: string }
   | { kind: "failed"; message: string };
 
 /**
  * Invitation landing page. docs/phase-9-owner-onboarding.md §4.
  *
- * Three arrivals, one screen:
+ * Four arrivals, one screen:
  *
  *  - **No account yet** — the owner of a newly provisioned organization, which
  *    is every owner in the sales-led flow. They set a password and are done in
@@ -43,7 +45,12 @@ type State =
  *    had nothing to sign in with.
  *  - **An account, signed out** — a colleague invited to a second organization.
  *    Sent to sign in, told which address to use.
- *  - **Signed in** — accepted directly, as before.
+ *  - **Signed in as the invited person** — accepted directly.
+ *  - **Signed in as somebody else** — offered a way out. This is the common case
+ *    in practice and it used to be a dead end: whoever issued the invitation is
+ *    signed in as the owner, opens the link to check it, and the API correctly
+ *    refuses. The message named the right address and the screen offered nothing
+ *    to act on, so the only exit was knowing to clear a cookie.
  *
  * The lookup runs in every case, because the organization's name belongs on the
  * screen before anyone is asked to type a password.
@@ -70,9 +77,11 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
         if (cancelled) return;
 
         // Signed in already: the API decides whether the address matches, and
-        // says so far better than a client-side guess would.
+        // says so far better than a client-side guess would. The details are
+        // carried along so that if it refuses, the recovery below can name both
+        // addresses without a second lookup.
         if (session.data) {
-          setState({ kind: "accepting" });
+          setState({ kind: "accepting", details });
           return;
         }
 
@@ -98,6 +107,9 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
   useEffect(() => {
     if (state.kind !== "accepting") return;
 
+    const { details } = state;
+    const signedInAs = session.data?.user.email ?? "";
+
     void apiFetch<{ tenantId: string; role: string }>("/v1/invitations/accept", {
       method: "POST",
       body: { token },
@@ -106,12 +118,21 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
         setState({ kind: "accepted", role: result.role });
       })
       .catch((error: unknown) => {
+        // 409 + FORBIDDEN is `acceptInvitation`'s "this belongs to somebody
+        // else". Branching on the error rather than comparing the two addresses
+        // here keeps the server as the one that decides; the client only picks
+        // which way out to offer.
+        if (error instanceof ApiError && error.status === 409 && error.code === "FORBIDDEN") {
+          setState({ kind: "wrong-user", details, signedInAs });
+          return;
+        }
+
         setState({
           kind: "failed",
           message: error instanceof ApiError ? error.message : t("genericError"),
         });
       });
-  }, [state.kind, token, t]);
+  }, [state, session.data?.user.email, token, t]);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 px-6">
@@ -157,6 +178,42 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
           >
             {t("goToSignIn")}
           </button>
+        </>
+      ) : null}
+
+      {state.kind === "wrong-user" ? (
+        <>
+          <p role="alert" className="text-slate-600 dark:text-slate-400">
+            {t("wrongUser", {
+              invited: state.details.email,
+              current: state.signedInAs,
+            })}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void signOut().then(() => {
+                // Straight to the right branch rather than back to `checking`:
+                // the lookup already told us whether the invited address has an
+                // account, and repeating it would spend a request to learn what
+                // is in hand.
+                //
+                // `router.refresh()` first, for the same reason RegisterForm
+                // calls it: the session cookie has just changed and any cached
+                // server render still believes the old one.
+                router.refresh();
+                setState(
+                  state.details.requiresRegistration
+                    ? { kind: "register", details: state.details }
+                    : { kind: "needs-sign-in", details: state.details },
+                );
+              });
+            }}
+            className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            {t("signOutAndContinue", { email: state.details.email })}
+          </button>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t("wrongUserHint")}</p>
         </>
       ) : null}
 

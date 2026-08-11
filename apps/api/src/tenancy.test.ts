@@ -561,6 +561,11 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
       });
 
       expect(response.statusCode).toBe(409);
+      // The pair, not just the status. `accept-invitation.tsx` §4.1 branches on
+      // 409 + FORBIDDEN to offer signing out, and the other 409s on this route
+      // carry different codes — so this is the contract that keeps the wrong
+      // recovery off the screen.
+      expect(response.json().error.code).toBe("FORBIDDEN");
 
       const membership = await app.prisma.membership.findUnique({
         where: { tenantId_userId: { tenantId, userId: mallory.id } },

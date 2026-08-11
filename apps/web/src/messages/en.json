@@ -114,7 +114,10 @@
     "signInAs": "There is already an account for {email}. Sign in, then open this link again.",
     "createAccount": "Create account and join",
     "joinTitleAsProvider": "Join {organization} as {provider}",
-    "goToAvailability": "Set up my working hours"
+    "goToAvailability": "Set up my working hours",
+    "wrongUser": "This invitation was issued to {invited}, but you are signed in as {current}.",
+    "signOutAndContinue": "Sign out and continue as {email}",
+    "wrongUserHint": "Signing out here only affects this browser. You can sign back in afterwards."
   },
   "catalogue": {
     "loading": "Loading…",
@@ -330,7 +333,8 @@
     "manageLink": "manage your booking",
     "confirmationEmail": "A confirmation is on its way. Save this link too — it is the only way to change or cancel online.",
     "slotTaken": "Somebody just took that time. Here are the times still free.",
-    "holdExpired": "Your reservation ran out. Please pick a time again."
+    "holdExpired": "Your reservation ran out. Please pick a time again.",
+    "language": "Language"
   },
   "manage": {
     "loading": "Loading…",

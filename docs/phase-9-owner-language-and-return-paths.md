@@ -118,6 +118,53 @@ same query — no second round trip to make a URL.
 
 ---
 
+# 4.3 Whose language is a tenant's booking page in?
+
+**Added 2026-08-11, after `/medicare/book` was found redirecting to `/en/medicare/book` during manual
+testing.** Not a regression — this had been the behaviour since Phase 1, and nobody had looked at a customer
+page with an English-configured browser before.
+
+`defineRouting` never sets `localeDetection`, so next-intl's default applies: the middleware reads
+`Accept-Language`, and redirects. Reproduced exactly:
+
+```
+Accept-Language: en-US  →  307  /en/medicare/book
+Accept-Language: hu-HU  →  200  (stays)
+```
+
+**That is right for our screens and wrong for a tenant's.** The dashboard, sign-in and the platform console
+are ours, and a person reading them should get their own language. A Hungarian clinic's booking page opening
+in English because the visitor's laptop is set to English is not a localisation — the services are named in
+Hungarian, the Epic 7 assistant answers in whatever the page says, and the clinic chose none of it.
+
+So the rule is now: **on `/{tenantSlug}` and `/{tenantSlug}/book`, the tenant's `defaultLanguage` decides,
+unless the visitor has said otherwise.** Everything else keeps browser detection.
+
+Three parts, and each exists because the obvious one-part version does not work:
+
+- **`proxy.ts` runs two middlewares** and picks by path (`isTenantPath` in `routing.ts`). Detection has to be
+  off in the middleware, not merely overridden in the page: with it on, a page redirecting
+  `/en/medicare/book` → `/medicare/book` is sent straight back by the middleware, forever.
+- **`book/page.tsx` decides**, because it is the first place the tenant is known. Middleware cannot ask —
+  it would need a per-request lookup on the edge to answer a question about which of two correct languages
+  a page opens in.
+- **`bam.locale` is the visitor's own choice**, written only by the locale switcher. next-intl's
+  `NEXT_LOCALE` cannot serve: it is written as part of resolving *any* request, so after one page view every
+  visitor has one and it says nothing about intent. Without a cookie of our own, the tenant's default would
+  be reapplied over the top of the customer who had just used the switcher.
+
+The booking page also gains that switcher. It had none — a customer who landed in the wrong language could
+only edit the URL, which is not a thing to ask of somebody trying to book a haircut.
+
+An unroutable `defaultLanguage` is ignored rather than interpolated, on the same reasoning as §2's note about
+`resolveAppLocale`: a wrong-language page is a defect, a 404 is a dead end.
+
+`routing.test.ts` pins the classification, including a check that reads `app/[locale]/` and asserts every
+directory beside `[tenantSlug]` is treated as ours — because that list is hand-maintained and a route added
+beside it would otherwise silently stop following the reader's language.
+
+---
+
 # 5. Stripe's own pages
 
 ## 5.1 The customer portal: fixed
