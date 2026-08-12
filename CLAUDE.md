@@ -1,7 +1,8 @@
 # booking-and-more — working conventions
 
-Multi-tenant, voice-enabled booking SaaS. Specs live in [docs/PRD.md](docs/PRD.md) and
-[docs/technical-implementation.md](docs/technical-implementation.md).
+Multi-tenant appointment-booking SaaS. Specs live in [docs/PRD.md](docs/PRD.md) and
+[docs/technical-implementation.md](docs/technical-implementation.md) — both still describe it as
+voice-enabled, which it deliberately is no longer: see the withdrawal note below Phase 10.
 
 Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 1 — auth and tenancy](docs/phase-1-authentication-and-tenancy.md) ·

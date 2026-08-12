@@ -1,13 +1,13 @@
 {
   "common": {
     "appName": "booking-and-more",
-    "tagline": "Book by form, chat, or voice.",
+    "tagline": "Online appointment booking for clinics, salons and studios.",
     "language": "Language",
     "loading": "Loading…"
   },
   "home": {
-    "title": "Voice-enabled booking",
-    "description": "A booking platform where customers book appointments and providers manage availability by speaking — without the cost of a telephone voice agent.",
+    "title": "Online appointment booking",
+    "description": "A booking platform where customers book appointments from your own page, and each provider keeps their own working hours — with the services, people and locations of one organization kept entirely separate from every other.",
     "phaseNotice": "Phase 2 — providers, services and locations. The booking flow arrives in Epic 4.",
     "apiStatus": {
       "heading": "API status",

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Multi-tenant voice-enabled booking SaaS",
+  "description": "Multi-tenant appointment-booking SaaS",
   "packageManager": "pnpm@10.32.1",
   "engines": {
     "node": ">=22.12"

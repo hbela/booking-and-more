@@ -25,7 +25,7 @@ const openApiPlugin: FastifyPluginAsync<OpenApiPluginOptions> = async (app, opti
       info: {
         title: "booking-and-more API",
         description:
-          "Multi-tenant booking platform. Forms, chat and voice all call the same deterministic booking engine.",
+          "Multi-tenant booking platform. The public booking form and the staff dashboard call the same deterministic booking engine.",
         version: "0.1.0",
       },
       servers: [{ url: options.apiBaseUrl }],

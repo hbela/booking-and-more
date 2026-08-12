@@ -1,13 +1,13 @@
 {
   "common": {
     "appName": "booking-and-more",
-    "tagline": "Foglalás űrlappal, chatben vagy hanggal.",
+    "tagline": "Online időpontfoglalás rendelőknek, szalonoknak és stúdióknak.",
     "language": "Nyelv",
     "loading": "Betöltés…"
   },
   "home": {
-    "title": "Hangvezérelt időpontfoglalás",
-    "description": "Foglalási platform, ahol az ügyfelek beszéddel foglalnak időpontot, a szolgáltatók pedig beszéddel kezelik a szabad időpontjaikat — telefonos hangasszisztens költsége nélkül.",
+    "title": "Online időpontfoglalás",
+    "description": "Foglalási platform, ahol az ügyfelek a saját oldalukról foglalnak időpontot, a szolgáltatók pedig maguk kezelik a munkaidejüket — az egyes szervezetek szolgáltatásai, munkatársai és helyszínei teljesen elkülönítve.",
     "phaseNotice": "2. fázis — szolgáltatók, szolgáltatások és helyszínek. A foglalási folyamat a 4. epikban készül el.",
     "apiStatus": {
       "heading": "API állapot",
