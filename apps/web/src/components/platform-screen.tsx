@@ -4,15 +4,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ApiError, apiFetch, type MeResponse } from "@/lib/api-client";
-import {
-  ErrorText,
-  Field,
-  Panel,
-  Section,
-  buttonClass,
-  inputClass,
-  useSignInRedirect,
-} from "./dashboard-shell";
+import { useSignInRedirect } from "./dashboard-shell";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
+import { Section } from "./ui/section";
 
 /**
  * Platform administration. docs/phase-9-saas-administration.md §7.
@@ -136,17 +133,17 @@ export function PlatformScreen(): React.ReactElement {
     <main className="mx-auto flex max-w-5xl flex-col gap-8 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("subtitle")}</p>
+        <p className="text-sm text-ink-muted">{t("subtitle")}</p>
       </header>
 
       {acceptUrl === null ? null : (
         <div
           role="status"
-          className="flex flex-col gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm dark:border-emerald-800 dark:bg-emerald-950"
+          className="flex flex-col gap-2 rounded-xl border border-success-surface bg-success-surface text-on-success-surface p-4 text-sm"
         >
           <strong>{t("acceptLinkHeading")}</strong>
-          <p className="text-slate-700 dark:text-slate-300">{t("acceptLinkExplanation")}</p>
-          <code className="overflow-x-auto rounded bg-white/70 p-2 font-mono text-xs dark:bg-black/30">
+          <p className="text-ink-muted">{t("acceptLinkExplanation")}</p>
+          <code className="bg-surface-sunken text-ink overflow-x-auto rounded p-2 font-mono text-xs">
             {acceptUrl}
           </code>
           <button
@@ -161,8 +158,8 @@ export function PlatformScreen(): React.ReactElement {
         </div>
       )}
 
-      <Panel title={t("provisionHeading")}>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("provisionExplanation")}</p>
+      <Card title={t("provisionHeading")}>
+        <p className="text-sm text-ink-muted">{t("provisionExplanation")}</p>
 
         <form
           className="grid gap-4 sm:grid-cols-2"
@@ -187,28 +184,28 @@ export function PlatformScreen(): React.ReactElement {
           }}
         >
           <Field id="name" label={t("name")}>
-            <input id="name" name="name" required className={inputClass} />
+            <Input id="name" name="name" required  />
           </Field>
 
           <Field id="domain" label={t("domain")}>
-            <input
+            <Input
               id="domain"
               name="domain"
               required
               placeholder="wellness.hu"
-              className={inputClass}
+              
             />
           </Field>
 
           <Field id="slug" label={t("slug")}>
-            <input id="slug" name="slug" required placeholder="wellness" className={inputClass} />
+            <Input id="slug" name="slug" required placeholder="wellness"  />
           </Field>
 
           <Field id="mode" label={t("mode")}>
-            <select id="mode" name="mode" defaultValue="PROSPECT" className={inputClass}>
+            <Select id="mode" name="mode" defaultValue="PROSPECT" >
               <option value="PROSPECT">{t("modeProspect")}</option>
               <option value="INTERNAL">{t("modeInternal")}</option>
-            </select>
+            </Select>
           </Field>
 
           {/* A select rather than a text input, matching `mode`: the API takes
@@ -216,44 +213,44 @@ export function PlatformScreen(): React.ReactElement {
               into a 400 for anybody who typed `en-GB`. The markup default and
               the schema default are both `hu` so they cannot drift. */}
           <Field id="defaultLanguage" label={t("language")}>
-            <select
+            <Select
               id="defaultLanguage"
               name="defaultLanguage"
               defaultValue="hu"
               aria-describedby="defaultLanguage-hint"
-              className={inputClass}
+              
             >
               <option value="hu">{t("languageHu")}</option>
               <option value="en">{t("languageEn")}</option>
-            </select>
-            <span id="defaultLanguage-hint" className="text-xs text-slate-500">
+            </Select>
+            <span id="defaultLanguage-hint" className="text-xs text-ink-subtle">
               {t("languageHint")}
             </span>
           </Field>
 
           <Field id="ownerName" label={t("ownerName")}>
-            <input id="ownerName" name="ownerName" required className={inputClass} />
+            <Input id="ownerName" name="ownerName" required  />
           </Field>
 
           <Field id="ownerEmail" label={t("ownerEmail")}>
-            <input id="ownerEmail" name="ownerEmail" type="email" required className={inputClass} />
+            <Input id="ownerEmail" name="ownerEmail" type="email" required  />
           </Field>
 
           <div className="sm:col-span-2 flex flex-col gap-2">
             <ErrorText>{formError}</ErrorText>
-            <button type="submit" className={buttonClass} disabled={provision.isPending}>
+            <Button type="submit"  disabled={provision.isPending}>
               {provision.isPending ? t("provisioning") : t("provision")}
-            </button>
+            </Button>
           </div>
         </form>
-      </Panel>
+      </Card>
 
       <Section title={t("organizations")}>
-        <input
+        <Input
           type="search"
           value={search}
           placeholder={t("searchPlaceholder")}
-          className={inputClass}
+          
           onChange={(event) => {
             setSearch(event.target.value);
           }}
@@ -263,13 +260,13 @@ export function PlatformScreen(): React.ReactElement {
         {organizations.error ? <ErrorText>{t("loadFailed")}</ErrorText> : null}
 
         {organizations.data?.items.length === 0 ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("empty")}</p>
+          <p className="text-sm text-ink-muted">{t("empty")}</p>
         ) : null}
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[52rem] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-left dark:border-slate-800">
+              <tr className="border-b border-line text-left">
                 <th className="py-2 pr-4 font-medium">{t("colOrganization")}</th>
                 <th className="py-2 pr-4 font-medium">{t("colOwner")}</th>
                 <th className="py-2 pr-4 font-medium">{t("colStatus")}</th>
@@ -281,16 +278,16 @@ export function PlatformScreen(): React.ReactElement {
               {organizations.data?.items.map((organization) => (
                 <tr
                   key={organization.id}
-                  className="border-b border-slate-100 align-top dark:border-slate-900"
+                  className="border-b border-line align-top"
                 >
                   <td className="py-3 pr-4">
                     <div className="font-medium">{organization.name}</div>
                     {/* The domain is the identity (§2.3), so it is shown before
                         the slug rather than after it. */}
-                    <div className="text-xs text-slate-600 dark:text-slate-400">
+                    <div className="text-xs text-ink-muted">
                       {organization.domain ?? "—"}
                     </div>
-                    <div className="text-xs text-slate-500">/{organization.slug}</div>
+                    <div className="text-xs text-ink-subtle">/{organization.slug}</div>
                   </td>
 
                   <td className="py-3 pr-4">
@@ -299,12 +296,12 @@ export function PlatformScreen(): React.ReactElement {
                         column dropped it, so an operator looking for a person
                         by the name they know them by found only an address. */}
                     {organization.owner?.name ? (
-                      <div className="text-xs text-slate-600 dark:text-slate-400">
+                      <div className="text-xs text-ink-muted">
                         {organization.owner.name}
                       </div>
                     ) : null}
                     {organization.owner?.accepted === false ? (
-                      <div className="text-xs text-amber-700 dark:text-amber-500">
+                      <div className="text-xs text-warning">
                         {t("ownerPending")}
                       </div>
                     ) : null}
@@ -313,7 +310,7 @@ export function PlatformScreen(): React.ReactElement {
                   <td className="py-3 pr-4">
                     <StatusBadge status={organization.status} label={t(organization.status)} />
                     {organization.daysRemaining === null ? null : (
-                      <div className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                      <div className="mt-1 text-xs text-ink-muted">
                         {t("daysRemaining", { days: organization.daysRemaining })}
                       </div>
                     )}
@@ -321,11 +318,11 @@ export function PlatformScreen(): React.ReactElement {
 
                   <td className="py-3 pr-4">
                     {organization.subscription === null ? (
-                      <span className="text-slate-500">{t("noSubscription")}</span>
+                      <span className="text-ink-subtle">{t("noSubscription")}</span>
                     ) : (
                       <>
                         <div>{organization.subscription.plan}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">
+                        <div className="text-xs text-ink-muted">
                           {organization.subscription.status}
                         </div>
                       </>
@@ -383,12 +380,12 @@ function StatusBadge({
 }): React.ReactElement {
   const tone =
     status === "ACTIVE"
-      ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
+      ? "bg-success-surface text-on-success-surface"
       : status === "PENDING_SUBSCRIPTION"
-        ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        ? "bg-warning-surface text-on-warning-surface"
         : status === "SUSPENDED"
-          ? "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200"
-          : "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200";
+          ? "bg-danger-surface text-on-danger-surface"
+          : "bg-surface-sunken text-ink-muted";
 
   return (
     <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${tone}`}>{label}</span>

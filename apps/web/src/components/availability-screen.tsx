@@ -7,16 +7,11 @@ import { useTranslations } from "next-intl";
 import { apiFetch, type AssignedService, type Paginated, type Provider } from "@/lib/api-client";
 import { AvailabilityExceptions } from "./availability-exceptions";
 import { WorkingHoursEditor } from "./working-hours-editor";
-import {
-  DashboardShell,
-  Field,
-  Notice,
-  NoticeLink,
-  Section,
-  inputClass,
-  useDashboardContext,
-  useSignInRedirect,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { Callout, CalloutLink } from "./ui/callout";
+import { Field } from "./ui/field";
+import { Select } from "./ui/input";
+import { Section } from "./ui/section";
 
 /**
  * Provider availability. tech-impl §28.
@@ -102,7 +97,7 @@ export function AvailabilityScreen(): React.ReactElement {
     <DashboardShell context={context}>
       {providerId === null ? (
         <Section title={t("title")}>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-ink-muted">
             {canManageAll ? t("noProviders") : t("notLinked")}
           </p>
         </Section>
@@ -111,30 +106,30 @@ export function AvailabilityScreen(): React.ReactElement {
           {canManageAll && (providers.data?.items.length ?? 0) > 0 ? (
             <Section title={t("title")}>
               <Field id="availability-provider" label={t("provider")}>
-                <select
+                <Select
                   id="availability-provider"
                   value={providerId}
                   onChange={(event) => {
                     setSelected(event.target.value);
                   }}
-                  className={`${inputClass} max-w-sm`}
+                  className="max-w-sm"
                 >
                   {providers.data?.items.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.displayName}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </Section>
           ) : null}
 
           {offersNothing ? (
-            <Notice tone="action">
+            <Callout tone="action">
               {t.rich("providerOffersNothing", {
-                link: (chunks) => <NoticeLink href="/dashboard/providers">{chunks}</NoticeLink>,
+                link: (chunks) => <CalloutLink href="/dashboard/providers">{chunks}</CalloutLink>,
               })}
-            </Notice>
+            </Callout>
           ) : null}
 
           {context.tenantId ? (

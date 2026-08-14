@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import type { ReadinessResponse } from "@bam/contracts";
+import { Badge } from "./ui/badge";
 
 const API_BASE_URL = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
 
@@ -37,23 +38,26 @@ export function ApiStatus(): React.ReactElement {
   return (
     <section
       aria-labelledby="api-status-heading"
-      className="rounded-xl border border-slate-200 p-5 dark:border-slate-800"
+      className="border-line bg-surface rounded-xl border p-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="api-status-heading" className="text-sm font-semibold uppercase tracking-wide">
+        <h2 id="api-status-heading" className="text-ink text-sm font-semibold tracking-wide uppercase">
           {t("heading")}
         </h2>
-        <span className="text-sm text-slate-500 dark:text-slate-400">
+        {/* The badge carries a word, never a bare coloured dot: colour alone
+            fails WCAG 1.4.1, and "is the API up" is exactly the sort of thing a
+            reader should not have to infer from a hue. */}
+        <Badge tone={isPending ? "neutral" : isError ? "danger" : "success"}>
           {isPending ? t("checking") : isError ? t("unreachable") : t("ok")}
-        </span>
+        </Badge>
       </div>
 
       {data ? (
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt className="text-slate-500 dark:text-slate-400">{t("postgres")}</dt>
-          <dd>{describe(data.checks.postgres.status)}</dd>
-          <dt className="text-slate-500 dark:text-slate-400">{t("redis")}</dt>
-          <dd>{describe(data.checks.redis.status)}</dd>
+          <dt className="text-ink-muted">{t("postgres")}</dt>
+          <dd className="text-ink">{describe(data.checks.postgres.status)}</dd>
+          <dt className="text-ink-muted">{t("redis")}</dt>
+          <dd className="text-ink">{describe(data.checks.redis.status)}</dd>
         </dl>
       ) : null}
     </section>

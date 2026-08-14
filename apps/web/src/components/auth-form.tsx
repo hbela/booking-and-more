@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signIn, signUp } from "@/lib/auth-client";
+import { Button } from "./ui/button";
+import { ErrorText, TextField } from "./ui/field";
 
 /**
  * Where a freshly signed-in person belongs.
@@ -110,21 +112,13 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.React
         hint={mode === "sign-up" ? t("passwordHint") : undefined}
       />
 
-      {error ? (
-        // role="alert" so a screen reader announces the failure rather than
-        // leaving the user wondering why nothing happened (PRD §12.4).
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
+      {/* role="alert" so a screen reader announces the failure rather than
+          leaving the user wondering why nothing happened (PRD §12.4). */}
+      <ErrorText>{error}</ErrorText>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-brand-600 px-4 py-2 font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
-      >
+      <Button type="submit" disabled={pending} className="w-full">
         {pending ? t("working") : mode === "sign-up" ? t("createAccount") : t("signIn")}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -133,6 +127,17 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.React
  * Exported so the invitation flow renders identical inputs rather than a second
  * set that drifts — it is the same act (choosing a password) on a different
  * screen. See accept-invitation.tsx.
+ *
+ * This is now a thin adapter over {@link TextField}: it keeps the
+ * `onChange: (value: string) => void` signature its two callers already use,
+ * rather than making them each unwrap an event. The styling and the
+ * hint/`aria-describedby` wiring come from the shared primitive.
+ *
+ * It kept the name `Field` deliberately. There were two components called that
+ * — this one, which owns its input, and `dashboard-shell.tsx`'s, which wraps an
+ * arbitrary control. They were never in conflict; they are `TextField` and
+ * `Field` in `components/ui`, and this local name survives only until its two
+ * callers move over.
  */
 export function Field({
   id,
@@ -151,31 +156,23 @@ export function Field({
   value: string;
   onChange: (value: string) => void;
   autoComplete: string;
-  required?: boolean;
-  minLength?: number;
+  required?: boolean | undefined;
+  minLength?: number | undefined;
   hint?: string | undefined;
 }): React.ReactElement {
   return (
-    <label htmlFor={id} className="flex flex-col gap-1 text-sm">
-      <span className="font-medium">{label}</span>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        autoComplete={autoComplete}
-        required={required}
-        minLength={minLength}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        className="rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
-      />
-      {hint ? (
-        <span id={`${id}-hint`} className="text-xs text-slate-500 dark:text-slate-400">
-          {hint}
-        </span>
-      ) : null}
-    </label>
+    <TextField
+      id={id}
+      label={label}
+      type={type}
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+      autoComplete={autoComplete}
+      required={required}
+      minLength={minLength}
+      hint={hint}
+    />
   );
 }

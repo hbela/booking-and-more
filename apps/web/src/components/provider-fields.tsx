@@ -9,7 +9,8 @@ import {
   textValue,
   type FormMode,
 } from "@/lib/catalogue-form";
-import { Field, inputClass } from "./dashboard-shell";
+import { Field } from "./ui/field";
+import { Input, Textarea } from "./ui/input";
 
 /**
  * One field set, used by both the create panel and the edit panel.
@@ -89,7 +90,7 @@ export function ProviderFields({
   return (
     <>
       <Field id={`${idPrefix}-name`} label={t("name")}>
-        <input
+        <Input
           id={`${idPrefix}-name`}
           value={state.displayName}
           onChange={(event) => {
@@ -98,12 +99,12 @@ export function ProviderFields({
           required
           minLength={2}
           maxLength={160}
-          className={inputClass}
+          
         />
       </Field>
 
       <Field id={`${idPrefix}-description`} label={t("description")}>
-        <textarea
+        <Textarea
           id={`${idPrefix}-description`}
           value={state.description}
           onChange={(event) => {
@@ -111,7 +112,7 @@ export function ProviderFields({
           }}
           rows={3}
           maxLength={4000}
-          className={inputClass}
+          
         />
       </Field>
 
@@ -120,7 +121,7 @@ export function ProviderFields({
             signs nobody in — it is how the person behind the diary is reached at
             all, including by the invitation that would later give them one. */}
         <Field id={`${idPrefix}-email`} label={t("email")}>
-          <input
+          <Input
             id={`${idPrefix}-email`}
             type="email"
             value={state.email}
@@ -128,12 +129,12 @@ export function ProviderFields({
               onChange({ email: event.target.value });
             }}
             required
-            className={inputClass}
+            
           />
         </Field>
 
         <Field id={`${idPrefix}-phone`} label={t("phone")}>
-          <input
+          <Input
             id={`${idPrefix}-phone`}
             type="tel"
             value={state.phone}
@@ -141,7 +142,7 @@ export function ProviderFields({
               onChange({ phone: event.target.value });
             }}
             maxLength={40}
-            className={inputClass}
+            
           />
         </Field>
       </div>
@@ -150,14 +151,14 @@ export function ProviderFields({
           so a browser that cannot enumerate zones degrades to typing one rather
           than to being unable to set one. The server validates either way. */}
       <Field id={`${idPrefix}-timezone`} label={t("timezone")}>
-        <input
+        <Input
           id={`${idPrefix}-timezone`}
           value={state.timezone}
           onChange={(event) => {
             onChange({ timezone: event.target.value });
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
-          className={inputClass}
+          
         />
       </Field>
       {zones.length === 0 ? null : (
@@ -195,7 +196,7 @@ export function ProviderFields({
 
       <div className="flex flex-wrap gap-3">
         <Field id={`${idPrefix}-notice`} label={t("minimumNotice")}>
-          <input
+          <Input
             id={`${idPrefix}-notice`}
             type="number"
             min={0}
@@ -204,12 +205,12 @@ export function ProviderFields({
             onChange={(event) => {
               onChange({ minimumNoticeMinutes: event.target.value });
             }}
-            className={`${inputClass} w-40`}
+            className="w-40"
           />
         </Field>
 
         <Field id={`${idPrefix}-advance`} label={t("maximumAdvance")}>
-          <input
+          <Input
             id={`${idPrefix}-advance`}
             type="number"
             min={1}
@@ -218,11 +219,11 @@ export function ProviderFields({
             onChange={(event) => {
               onChange({ maximumAdvanceDays: event.target.value });
             }}
-            className={`${inputClass} w-40`}
+            className="w-40"
           />
         </Field>
       </div>
-      <p className="text-xs text-slate-500">{t("inheritHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>
 
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -234,7 +235,7 @@ export function ProviderFields({
         />
         <span>{t("onlineBooking")}</span>
       </label>
-      <p className="text-xs text-slate-500">{t("onlineBookingHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("onlineBookingHint")}</p>
     </>
   );
 }

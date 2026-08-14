@@ -2,10 +2,12 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signOut } from "@/lib/auth-client";
 import { LocaleSwitcher } from "./locale-switcher";
+import { Button, ButtonLink } from "./ui/button";
+import { ThemeToggle } from "./ui/theme-toggle";
 
 /**
  * Language, and the way in or out. Shared by the site root and the admin
@@ -33,19 +35,18 @@ export function AuthHeader({ signOutTo }: { signOutTo: string }): React.ReactEle
     retry: false,
   });
 
-  const controlClass =
-    "rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700";
-
   return (
     <div className="flex flex-wrap items-end gap-3">
       <LocaleSwitcher label={t("language")} />
+      <ThemeToggle />
 
       {/* Nothing is rendered until the session is known: a Sign in button that
           flips to Sign out a moment later invites a click on whichever one the
           reader was aiming at. */}
       {me.isPending ? null : me.data ? (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => {
             void signOut().then(() => {
               // Clear rather than invalidate: every cached query was answered
@@ -54,14 +55,13 @@ export function AuthHeader({ signOutTo }: { signOutTo: string }): React.ReactEle
               router.push(signOutTo);
             });
           }}
-          className={controlClass}
         >
           {dashboard("signOut")}
-        </button>
+        </Button>
       ) : (
-        <Link href="/sign-in" className={controlClass}>
+        <ButtonLink href="/sign-in" variant="secondary" size="sm">
           {auth("signIn")}
-        </Link>
+        </ButtonLink>
       )}
     </div>
   );

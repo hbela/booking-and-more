@@ -86,7 +86,18 @@ on 2026-08-04, from something created on the server rather than from either comp
 of it — **`ufw deny` does not close a published container port** (Docker's DNAT runs before UFW's INPUT
 chain, so the control has to be the Hetzner Cloud Firewall), and **a password that goes into a connection
 string must be `openssl rand -hex`, never `-base64`**, because a `/` ends the URL's authority and yields a
-different host rather than an error. Redis now has a `requirepass`.
+different host rather than an error. Redis now has a `requirepass`. ·
+[Phase 11 — GUI redesign](docs/phase-11-gui-redesign.md) (**in progress**). The app had never had a design
+pass: four placeholder teal tokens, no fonts, and a design system that was three exported class-name
+_strings_ at the bottom of a feature file. Rebuilt on a deep blue at oklch hue 262, a semantic token layer,
+and a real `components/ui/`. **Read its §2.2 before using a colour**: there are two ramps, `brand-*` for
+product chrome and `accent-*` for the public booking page, and mixing them throws away the only thing that
+makes PRD §9.1 white-labelling a data change later. §2.4 is why `color-scheme` may never be `light dark`
+again and why the dark block is deliberately duplicated; §2.5 is why redefining `--color-slate-*` rather
+than replacing it is what lets the migration land one screen at a time. **§2.6 lists what must not be
+"improved"** — five accessibility decisions with written rationale that a redesign is exactly the moment to
+reverse by accident. Google Stitch is used as the visual specification and **its generated HTML is never
+shipped** (§2.1).
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

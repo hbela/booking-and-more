@@ -13,7 +13,10 @@ import {
   type WorkingPeriod,
   type WorkingWeek,
 } from "@/lib/working-hours";
-import { ErrorText, Field, Panel, buttonClass, inputClass } from "./dashboard-shell";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
 
 /**
  * The week, as a grid.
@@ -118,14 +121,14 @@ export function WorkingHoursEditor({
   }
 
   return (
-    <Panel title={t("workingHours")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+    <Card title={t("workingHours")}>
+      <p className="text-sm text-ink-muted">
         {t("workingHoursHint")}
         {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
       </p>
 
       {week === null ? (
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("loading")}</p>
+        <p className="text-sm text-ink-muted">{t("loading")}</p>
       ) : (
         <form
           className="flex flex-col gap-4"
@@ -149,12 +152,12 @@ export function WorkingHoursEditor({
                         : { ...current, [weekday]: [...(current[weekday] ?? []), emptyPeriod()] },
                     );
                   }}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
+                  className="rounded-md border border-line-strong px-2 py-1 text-xs"
                 >
                   {t("addPeriod")}
                 </button>
                 {(week[weekday] ?? []).length === 0 ? (
-                  <span className="text-xs text-slate-500">{t("closed")}</span>
+                  <span className="text-xs text-ink-subtle">{t("closed")}</span>
                 ) : null}
               </div>
 
@@ -179,14 +182,14 @@ export function WorkingHoursEditor({
           ))}
 
           <ErrorText>{error}</ErrorText>
-          {saved ? <p className="text-sm text-teal-700 dark:text-teal-400">{t("saved")}</p> : null}
+          {saved ? <p className="text-success text-sm font-medium">{t("saved")}</p> : null}
 
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {t("save")}
-          </button>
+          </Button>
         </form>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -217,7 +220,7 @@ function PeriodRow({
   return (
     <div className="flex flex-col gap-2 pl-28">
       <div className="flex flex-wrap items-center gap-2">
-        <input
+        <Input
           type="time"
           aria-label={t("from")}
           value={period.startTime}
@@ -225,10 +228,10 @@ function PeriodRow({
             onChange({ startTime: event.target.value });
           }}
           required
-          className={inputClass}
+          
         />
         <span className="text-sm">–</span>
-        <input
+        <Input
           type="time"
           aria-label={t("to")}
           value={toMidnight ? "" : period.endTime}
@@ -240,7 +243,7 @@ function PeriodRow({
           // than showing a blank that looks like a mistake.
           disabled={toMidnight}
           required={!toMidnight}
-          className={`${inputClass} disabled:opacity-50`}
+          className="disabled:opacity-50"
         />
 
         <label className="flex items-center gap-1 text-xs">
@@ -257,25 +260,25 @@ function PeriodRow({
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
+          className="rounded-md border border-line-strong px-2 py-1 text-xs"
         >
           {t("remove")}
         </button>
       </div>
 
       <details open={scoped}>
-        <summary className="cursor-pointer text-xs text-slate-600 dark:text-slate-400">
+        <summary className="cursor-pointer text-xs text-ink-muted">
           {t("periodOptions")}
         </summary>
 
-        <div className="mt-2 flex flex-wrap gap-3 border-l border-slate-200 pl-3 dark:border-slate-800">
+        <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
           <Field id="period-location" label={t("location")}>
-            <select
+            <Select
               value={period.locationId ?? ""}
               onChange={(event) => {
                 onChange({ locationId: event.target.value === "" ? null : event.target.value });
               }}
-              className={inputClass}
+              
             >
               <option value="">{t("anyLocation")}</option>
               {locations.map((location) => (
@@ -283,31 +286,31 @@ function PeriodRow({
                   {location.locationName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
 
           {/* Date-only, and it stays a string all the way to the wire: the
               server reads it as midnight UTC, so a value carrying a local
               offset lands a day out everywhere east of Greenwich. */}
           <Field id="period-valid-from" label={t("validFrom")}>
-            <input
+            <Input
               type="date"
               value={period.validFrom ?? ""}
               onChange={(event) => {
                 onChange({ validFrom: event.target.value === "" ? null : event.target.value });
               }}
-              className={inputClass}
+              
             />
           </Field>
 
           <Field id="period-valid-until" label={t("validUntil")}>
-            <input
+            <Input
               type="date"
               value={period.validUntil ?? ""}
               onChange={(event) => {
                 onChange({ validUntil: event.target.value === "" ? null : event.target.value });
               }}
-              className={inputClass}
+              
             />
           </Field>
 

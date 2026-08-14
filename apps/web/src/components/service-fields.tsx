@@ -3,7 +3,8 @@
 import { useTranslations } from "next-intl";
 import { fromMinorUnits, toMinorUnits, type Service } from "@/lib/api-client";
 import { numberValue, textValue, type FormMode } from "@/lib/catalogue-form";
-import { Field, inputClass } from "./dashboard-shell";
+import { Field } from "./ui/field";
+import { Input, Select, Textarea } from "./ui/input";
 
 /** What the currency picker offers. The API accepts any ISO 4217 code. */
 const CURRENCIES = ["HUF", "EUR", "USD", "GBP"] as const;
@@ -95,7 +96,7 @@ export function ServiceFields({
   return (
     <>
       <Field id={`${idPrefix}-name`} label={t("name")}>
-        <input
+        <Input
           id={`${idPrefix}-name`}
           value={state.name}
           onChange={(event) => {
@@ -104,25 +105,25 @@ export function ServiceFields({
           required
           minLength={2}
           maxLength={160}
-          className={inputClass}
+          
         />
       </Field>
 
       <Field id={`${idPrefix}-slug`} label={t("slug")}>
-        <input
+        <Input
           id={`${idPrefix}-slug`}
           value={state.slug}
           onChange={(event) => {
             onChange({ slug: event.target.value });
           }}
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
-          className={inputClass}
+          
         />
       </Field>
-      <p className="text-xs text-slate-500">{t("slugHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("slugHint")}</p>
 
       <Field id={`${idPrefix}-description`} label={t("description")}>
-        <textarea
+        <Textarea
           id={`${idPrefix}-description`}
           value={state.description}
           onChange={(event) => {
@@ -130,13 +131,13 @@ export function ServiceFields({
           }}
           rows={3}
           maxLength={4000}
-          className={inputClass}
+          
         />
       </Field>
 
       <div className="flex flex-wrap gap-3">
         <Field id={`${idPrefix}-duration`} label={t("durationMinutes")}>
-          <input
+          <Input
             id={`${idPrefix}-duration`}
             type="number"
             min={5}
@@ -147,12 +148,12 @@ export function ServiceFields({
               onChange({ durationMinutes: event.target.value });
             }}
             required
-            className={`${inputClass} w-32`}
+            className="w-32"
           />
         </Field>
 
         <Field id={`${idPrefix}-buffer-before`} label={t("bufferBefore")}>
-          <input
+          <Input
             id={`${idPrefix}-buffer-before`}
             type="number"
             min={0}
@@ -162,12 +163,12 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ bufferBeforeMinutes: event.target.value });
             }}
-            className={`${inputClass} w-32`}
+            className="w-32"
           />
         </Field>
 
         <Field id={`${idPrefix}-buffer-after`} label={t("bufferAfter")}>
-          <input
+          <Input
             id={`${idPrefix}-buffer-after`}
             type="number"
             min={0}
@@ -177,15 +178,15 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ bufferAfterMinutes: event.target.value });
             }}
-            className={`${inputClass} w-32`}
+            className="w-32"
           />
         </Field>
       </div>
-      <p className="text-xs text-slate-500">{t("bufferHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("bufferHint")}</p>
 
       <div className="flex flex-wrap gap-3">
         <Field id={`${idPrefix}-price`} label={t("priceOptional")}>
-          <input
+          <Input
             id={`${idPrefix}-price`}
             type="number"
             min={0}
@@ -194,31 +195,31 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ price: event.target.value });
             }}
-            className={`${inputClass} w-40`}
+            className="w-40"
           />
         </Field>
 
         <Field id={`${idPrefix}-currency`} label={t("currency")}>
-          <select
+          <Select
             id={`${idPrefix}-currency`}
             value={state.currency}
             onChange={(event) => {
               onChange({ currency: event.target.value });
             }}
-            className={inputClass}
+            
           >
             {CURRENCIES.map((code) => (
               <option key={code} value={code}>
                 {code}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <Field id={`${idPrefix}-notice`} label={t("minimumNotice")}>
-          <input
+          <Input
             id={`${idPrefix}-notice`}
             type="number"
             min={0}
@@ -227,12 +228,12 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ minimumNoticeMinutes: event.target.value });
             }}
-            className={`${inputClass} w-40`}
+            className="w-40"
           />
         </Field>
 
         <Field id={`${idPrefix}-advance`} label={t("maximumAdvance")}>
-          <input
+          <Input
             id={`${idPrefix}-advance`}
             type="number"
             min={1}
@@ -241,13 +242,13 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ maximumAdvanceDays: event.target.value });
             }}
-            className={`${inputClass} w-40`}
+            className="w-40"
           />
         </Field>
       </div>
       {/* Blank is not zero here: blank inherits, zero means "up to the last
           second". The hint says so because the input cannot. */}
-      <p className="text-xs text-slate-500">{t("inheritHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>
 
       <label className="flex items-center gap-2 text-sm">
         <input
@@ -259,7 +260,7 @@ export function ServiceFields({
         />
         <span>{t("requiresApproval")}</span>
       </label>
-      <p className="text-xs text-slate-500">{t("requiresApprovalHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("requiresApprovalHint")}</p>
     </>
   );
 }

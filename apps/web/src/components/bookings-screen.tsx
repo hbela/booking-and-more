@@ -14,16 +14,11 @@ import {
   type Paginated,
   type Provider,
 } from "@/lib/api-client";
-import {
-  DashboardShell,
-  ErrorText,
-  Field,
-  Section,
-  inputClass,
-  secondaryButtonClass,
-  useDashboardContext,
-  useSignInRedirect,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { Button } from "./ui/button";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
+import { Section } from "./ui/section";
 
 /**
  * The staff diary. tech-impl §17, §28.
@@ -86,31 +81,31 @@ export function BookingsScreen(): React.ReactElement {
       <Section title={t("title")}>
         <div className="flex flex-wrap gap-3">
           <Field id="bookings-from" label={t("from")}>
-            <input
+            <Input
               id="bookings-from"
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              className={inputClass}
+              
             />
           </Field>
           <Field id="bookings-to" label={t("to")}>
-            <input
+            <Input
               id="bookings-to"
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              className={inputClass}
+              
             />
           </Field>
 
           {canSeeEveryone ? (
             <Field id="bookings-provider" label={t("provider")}>
-              <select
+              <Select
                 id="bookings-provider"
                 value={providerId}
                 onChange={(event) => setProviderId(event.target.value)}
-                className={inputClass}
+                
               >
                 <option value="">{t("allProviders")}</option>
                 {providers.data?.items.map((provider) => (
@@ -118,16 +113,16 @@ export function BookingsScreen(): React.ReactElement {
                     {provider.displayName}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
           ) : null}
 
           <Field id="bookings-status" label={t("statusLabel")}>
-            <select
+            <Select
               id="bookings-status"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              className={inputClass}
+              
             >
               <option value="">{t("anyStatus")}</option>
               {(["PENDING", "CONFIRMED", "COMPLETED", "NO_SHOW", "CANCELLED"] as const).map(
@@ -137,7 +132,7 @@ export function BookingsScreen(): React.ReactElement {
                   </option>
                 ),
               )}
-            </select>
+            </Select>
           </Field>
         </div>
 
@@ -220,7 +215,7 @@ function BookingCard({
   const busy = setStatus.isPending || cancel.isPending;
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+    <li className="flex flex-col gap-2 rounded-lg border border-line p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <p className="font-medium">
@@ -232,7 +227,7 @@ function BookingCard({
             </time>{" "}
             · {booking.serviceName}
           </p>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-ink-muted">
             {booking.customerName} · {booking.providerName} · {booking.reference}
             {booking.priceMinor !== null && booking.currency
               ? ` · ${formatMoney(booking.priceMinor, booking.currency, locale)}`
@@ -281,12 +276,12 @@ function StatusBadge({ status }: { status: BookingStatus }): React.ReactElement 
   const t = useTranslations("bookings");
 
   const tone: Record<BookingStatus, string> = {
-    PENDING: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-    CONFIRMED: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
-    COMPLETED: "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
-    NO_SHOW: "bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-200",
-    CANCELLED: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
-    EXPIRED: "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200",
+    PENDING: "bg-warning-surface text-on-warning-surface",
+    CONFIRMED: "bg-success-surface text-on-success-surface",
+    COMPLETED: "bg-surface-sunken text-ink-muted",
+    NO_SHOW: "bg-warning-surface text-on-warning-surface",
+    CANCELLED: "bg-danger-surface text-on-danger-surface",
+    EXPIRED: "bg-surface-sunken text-ink-muted",
   };
 
   return (
@@ -299,18 +294,19 @@ function StatusBadge({ status }: { status: BookingStatus }): React.ReactElement 
 /**
  * A quiet action on a booking card.
  *
- * Built from {@link secondaryButtonClass}, **not** from `buttonClass` with
- * overrides bolted on. That is what this used to do, and it rendered an
- * invisible button: `buttonClass` carries `bg-brand-600 text-white`, and
- * appending `bg-transparent text-slate-900` does not override them — Tailwind
- * resolves conflicting utilities by their order in the generated stylesheet,
- * not by their order in the `class` attribute. There `text-white` happens to
- * come after `text-slate-900` while `bg-transparent` comes after
- * `bg-brand-600`, so the button ended up white-on-transparent: a label nobody
- * could read, above a one-click, irreversible "Complete".
+ * `<Button variant="secondary">`, **not** the primary variant with overrides
+ * bolted on. That is what this used to do, back when styling was shared as
+ * interpolated strings, and it rendered an invisible button: the primary recipe
+ * carries `bg-primary text-white`, and appending `bg-transparent text-ink` did
+ * not override them — Tailwind resolves conflicting utilities by their order in
+ * the generated stylesheet, not by their order in the `class` attribute. There
+ * `text-white` happened to come after `text-ink` while `bg-transparent` came
+ * after `bg-primary`, so the button ended up white-on-transparent: a label
+ * nobody could read, above a one-click, irreversible "Complete".
  *
- * The rule this encodes: compose a variant from a base that sets no conflicting
- * property, never from one that does.
+ * This is the bug `cn()` now makes structurally impossible — `twMerge` drops
+ * the losing utility instead of leaving both to race. Asking for the variant you
+ * want is still better than overriding one you do not.
  */
 function ActionButton({
   onClick,
@@ -322,13 +318,13 @@ function ActionButton({
   disabled: boolean;
 }): React.ReactElement {
   return (
-    <button
+    <Button variant="secondary"
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${secondaryButtonClass} font-medium disabled:opacity-60`}
+      className="font-medium disabled:opacity-60"
     >
       {label}
-    </button>
+    </Button>
   );
 }

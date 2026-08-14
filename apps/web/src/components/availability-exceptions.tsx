@@ -12,15 +12,11 @@ import {
   type AvailabilityException,
 } from "@/lib/api-client";
 import { formatInZone, resolveInZone, toLocalInputValue } from "@/lib/exception-time";
-import {
-  ErrorText,
-  Field,
-  Panel,
-  RowButton,
-  buttonClass,
-  inputClass,
-  secondaryButtonClass,
-} from "./dashboard-shell";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
+import { RowButton } from "./ui/table";
 
 /** How far ahead the list looks by default, matching the API's own default. */
 const DEFAULT_WINDOW_DAYS = 90;
@@ -145,39 +141,39 @@ export function AvailabilityExceptions({
   });
 
   return (
-    <Panel title={t("exceptions")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+    <Card title={t("exceptions")}>
+      <p className="text-sm text-ink-muted">
         {t("exceptionsHint")}
         {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
         <Field id="exception-range-from" label={t("rangeFrom")}>
-          <input
+          <Input
             id="exception-range-from"
             type="date"
             value={from}
             onChange={(event) => {
               setFrom(event.target.value);
             }}
-            className={inputClass}
+            
           />
         </Field>
         <Field id="exception-range-to" label={t("rangeTo")}>
-          <input
+          <Input
             id="exception-range-to"
             type="date"
             value={to}
             onChange={(event) => {
               setTo(event.target.value);
             }}
-            className={inputClass}
+            
           />
         </Field>
       </div>
 
       {(exceptions.data?.items.length ?? 0) === 0 ? (
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("noExceptions")}</p>
+        <p className="text-sm text-ink-muted">{t("noExceptions")}</p>
       ) : (
         <ul className="flex flex-col gap-2 text-sm">
           {exceptions.data?.items.map((exception) => (
@@ -185,8 +181,8 @@ export function AvailabilityExceptions({
               <span
                 className={
                   exception.type === "UNAVAILABLE"
-                    ? "rounded bg-red-50 px-2 py-0.5 text-xs dark:bg-red-950/40"
-                    : "rounded bg-teal-50 px-2 py-0.5 text-xs dark:bg-teal-950/40"
+                    ? "bg-danger-surface text-on-danger-surface rounded px-2 py-0.5 text-xs"
+                    : "bg-success-surface text-on-success-surface rounded px-2 py-0.5 text-xs"
                 }
               >
                 {t(`type.${exception.type}`)}
@@ -204,7 +200,7 @@ export function AvailabilityExceptions({
                     )}`}
               </span>
               {exception.reason ? (
-                <span className="text-slate-500">· {exception.reason}</span>
+                <span className="text-ink-subtle">· {exception.reason}</span>
               ) : null}
 
               <RowButton
@@ -255,21 +251,21 @@ export function AvailabilityExceptions({
 
         <div className="flex flex-wrap items-end gap-3">
           <Field id="exception-type" label={t("type.label")}>
-            <select
+            <Select
               id="exception-type"
               value={draft.type}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, type: event.target.value }));
               }}
-              className={inputClass}
+              
             >
               <option value="UNAVAILABLE">{t("type.UNAVAILABLE")}</option>
               <option value="ADDITIONAL_AVAILABILITY">{t("type.ADDITIONAL_AVAILABILITY")}</option>
-            </select>
+            </Select>
           </Field>
 
           <Field id="exception-start" label={t("from")}>
-            <input
+            <Input
               id="exception-start"
               type="datetime-local"
               value={draft.startAt}
@@ -277,12 +273,12 @@ export function AvailabilityExceptions({
                 setDraft((current) => ({ ...current, startAt: event.target.value }));
               }}
               required
-              className={inputClass}
+              
             />
           </Field>
 
           <Field id="exception-end" label={t("to")}>
-            <input
+            <Input
               id="exception-end"
               type="datetime-local"
               value={draft.endAt}
@@ -290,20 +286,20 @@ export function AvailabilityExceptions({
                 setDraft((current) => ({ ...current, endAt: event.target.value }));
               }}
               required
-              className={inputClass}
+              
             />
           </Field>
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <Field id="exception-location" label={t("location")}>
-            <select
+            <Select
               id="exception-location"
               value={draft.locationId}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, locationId: event.target.value }));
               }}
-              className={inputClass}
+              
             >
               <option value="">{t("anyLocation")}</option>
               {locations.data?.items.map((location) => (
@@ -311,17 +307,17 @@ export function AvailabilityExceptions({
                   {location.locationName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
 
           <Field id="exception-service" label={t("service")}>
-            <select
+            <Select
               id="exception-service"
               value={draft.serviceId}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, serviceId: event.target.value }));
               }}
-              className={inputClass}
+              
             >
               <option value="">{t("anyService")}</option>
               {services.data?.items.map((service) => (
@@ -329,17 +325,17 @@ export function AvailabilityExceptions({
                   {service.serviceName}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
 
           <Field id="exception-reason" label={t("reason")}>
-            <input
+            <Input
               id="exception-reason"
               value={draft.reason}
               onChange={(event) => {
                 setDraft((current) => ({ ...current, reason: event.target.value }));
               }}
-              className={inputClass}
+              
             />
           </Field>
         </div>
@@ -353,23 +349,23 @@ export function AvailabilityExceptions({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {draft.id === null ? t("add") : t("save")}
-          </button>
+          </Button>
           {draft.id === null ? null : (
-            <button
+            <Button variant="secondary"
               type="button"
               onClick={() => {
                 setDraft(emptyDraft());
               }}
-              className={secondaryButtonClass}
+              
             >
               {t("cancel")}
-            </button>
+            </Button>
           )}
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -379,7 +375,7 @@ function DstNotice({ resolution }: { resolution?: string | undefined }): React.R
   if (resolution === undefined || resolution === "exact") return null;
 
   return (
-    <p role="status" className="text-sm text-amber-700 dark:text-amber-400">
+    <p role="status" className="text-sm text-warning">
       {resolution === "skipped" ? t("skippedWarning") : t("ambiguousWarning")}
     </p>
   );

@@ -3,7 +3,11 @@
     "appName": "booking-and-more",
     "tagline": "Online appointment booking for clinics, salons and studios.",
     "language": "Language",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "theme": "Appearance",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark"
   },
   "home": {
     "title": "Online appointment booking",

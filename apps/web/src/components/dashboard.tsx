@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import {
   ApiError,
   apiFetch,
@@ -12,19 +11,13 @@ import {
   type Paginated,
   type Provider,
 } from "@/lib/api-client";
-import {
-  DashboardShell,
-  ErrorText,
-  Field,
-  Notice,
-  NoticeLink,
-  Panel,
-  Section,
-  buttonClass,
-  inputClass,
-  useDashboardContext,
-  useSignInRedirect,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { Button, ButtonLink } from "./ui/button";
+import { Callout, CalloutLink } from "./ui/callout";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
+import { Section } from "./ui/section";
 
 /**
  * Dashboard overview: who is here, and who to invite.
@@ -113,7 +106,7 @@ export function Dashboard(): React.ReactElement {
             <Section title={t("members")}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-md text-left text-sm">
-                  <thead className="border-b border-slate-200 dark:border-slate-800">
+                  <thead className="border-b border-line">
                     <tr>
                       <th scope="col" className="py-2 pr-4 font-medium">
                         {t("name")}
@@ -137,7 +130,7 @@ export function Dashboard(): React.ReactElement {
                     {members.data?.items.map((member) => (
                       <tr
                         key={member.id}
-                        className="border-b border-slate-100 dark:border-slate-900"
+                        className="border-b border-line"
                       >
                         <td className="py-2 pr-4">{member.user.name}</td>
                         <td className="py-2 pr-4">{member.user.email}</td>
@@ -200,8 +193,8 @@ function PendingPanel({
   ];
 
   return (
-    <Panel title={t("pendingTitle", { organization: organizationName })}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{t("pendingIntro")}</p>
+    <Card title={t("pendingTitle", { organization: organizationName })}>
+      <p className="text-sm text-ink-muted">{t("pendingIntro")}</p>
 
       <ol className="flex flex-col gap-3">
         {steps.map((step, index) => (
@@ -210,13 +203,13 @@ function PendingPanel({
               aria-hidden="true"
               className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
                 step.active
-                  ? "bg-brand-600 text-white"
-                  : "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  ? "bg-primary text-white"
+                  : "bg-surface-sunken text-ink-subtle"
               }`}
             >
               {index + 1}
             </span>
-            <span className={step.active ? "" : "text-slate-500 dark:text-slate-400"}>
+            <span className={step.active ? "" : "text-ink-subtle"}>
               {t(step.key)}
             </span>
           </li>
@@ -227,15 +220,15 @@ function PendingPanel({
           not the same as none left, so nothing is rendered rather than
           "0 days" (phase-9 §2.2). */}
       {daysRemaining === null ? null : (
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-ink-muted">
           {t("daysRemaining", { days: daysRemaining })}
         </p>
       )}
 
-      <Link href="/dashboard/subscription" className={buttonClass}>
+      <ButtonLink href="/dashboard/subscription" >
         {t("subscribeCta")}
-      </Link>
-    </Panel>
+      </ButtonLink>
+    </Card>
   );
 }
 
@@ -255,13 +248,13 @@ function PlatformAdminPanel(): React.ReactElement {
   const t = useTranslations("admin");
 
   return (
-    <Panel title={t("platformAdminTitle")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{t("platformAdminHint")}</p>
+    <Card title={t("platformAdminTitle")}>
+      <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
 
-      <Link href="/admin" className={buttonClass}>
+      <ButtonLink href="/admin" >
         {t("platformAdminLink")}
-      </Link>
-    </Panel>
+      </ButtonLink>
+    </Card>
   );
 }
 
@@ -280,8 +273,8 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
   });
 
   return (
-    <Panel title={t("createTenant")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{t("createTenantHint")}</p>
+    <Card title={t("createTenant")}>
+      <p className="text-sm text-ink-muted">{t("createTenantHint")}</p>
 
       <form
         className="flex flex-col gap-3"
@@ -292,7 +285,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
         }}
       >
         <Field id="tenant-name" label={t("name")}>
-          <input
+          <Input
             id="tenant-name"
             value={name}
             onChange={(event) => {
@@ -309,29 +302,29 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
               );
             }}
             required
-            className={inputClass}
+            
           />
         </Field>
 
         <Field id="tenant-slug" label={t("slug")}>
-          <input
+          <Input
             id="tenant-slug"
             value={slug}
             onChange={(event) => {
               setSlug(event.target.value);
             }}
             required
-            className={`${inputClass} font-mono`}
+            className="font-mono"
           />
         </Field>
 
         <ErrorText>{error}</ErrorText>
 
-        <button type="submit" disabled={mutation.isPending} className={buttonClass}>
+        <Button type="submit" disabled={mutation.isPending} >
           {t("create")}
-        </button>
+        </Button>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -395,7 +388,7 @@ function MemberDiary({
   // Only PROVIDER memberships need one. An owner or an assistant with no diary
   // is the normal case and deserves no warning.
   if (member.role !== "PROVIDER") {
-    return <span className="text-slate-400 dark:text-slate-600">—</span>;
+    return <span className="text-ink-subtle">—</span>;
   }
 
   // At most one login per diary, and archived diaries are refused by
@@ -406,14 +399,14 @@ function MemberDiary({
   );
 
   if (!canManage) {
-    return <span className="text-amber-700 dark:text-amber-500">{t("diaryMissing")}</span>;
+    return <span className="text-warning">{t("diaryMissing")}</span>;
   }
 
   return (
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-2">
         <span className="sr-only">{t("linkDiary")}</span>
-        <select
+        <Select
           defaultValue=""
           disabled={link.isPending}
           onChange={(event) => {
@@ -421,7 +414,7 @@ function MemberDiary({
             setError(null);
             link.mutate(event.target.value);
           }}
-          className={inputClass}
+          
         >
           <option value="">{t("linkDiaryPrompt")}</option>
           {available.map((provider) => (
@@ -429,10 +422,10 @@ function MemberDiary({
               {provider.displayName}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {available.length === 0 ? (
-        <span className="text-xs text-slate-500">{t("noDiaryToLink")}</span>
+        <span className="text-xs text-ink-subtle">{t("noDiaryToLink")}</span>
       ) : null}
       <ErrorText>{error}</ErrorText>
     </div>
@@ -472,7 +465,7 @@ function InvitePanel({
   });
 
   return (
-    <Panel title={t("invite")}>
+    <Card title={t("invite")}>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
@@ -484,7 +477,7 @@ function InvitePanel({
       >
         <div className="flex-1">
           <Field id="invite-email" label={t("email")}>
-            <input
+            <Input
               id="invite-email"
               type="email"
               value={email}
@@ -492,19 +485,19 @@ function InvitePanel({
                 setEmail(event.target.value);
               }}
               required
-              className={`${inputClass} w-full`}
+              className="w-full"
             />
           </Field>
         </div>
 
         <Field id="invite-role" label={t("role")}>
-          <select
+          <Select
             id="invite-role"
             value={role}
             onChange={(event) => {
               setRole(event.target.value);
             }}
-            className={inputClass}
+            
           >
             {/* PROVIDER is deliberately absent, and the API refuses it here
                 too. This panel has no diary to attach, so a provider invited
@@ -517,19 +510,19 @@ function InvitePanel({
                 {value}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
-        <Notice>
+        <Callout>
           {t.rich("inviteProviderElsewhere", {
-            link: (chunks) => <NoticeLink href="/dashboard/providers">{chunks}</NoticeLink>,
+            link: (chunks) => <CalloutLink href="/dashboard/providers">{chunks}</CalloutLink>,
           })}
-        </Notice>
+        </Callout>
 
         <button
           type="submit"
           disabled={mutation.isPending}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
           {t("sendInvite")}
         </button>
@@ -538,7 +531,7 @@ function InvitePanel({
       <ErrorText>{error}</ErrorText>
 
       {acceptUrl ? (
-        <div className="rounded-md bg-amber-50 p-3 text-sm dark:bg-amber-950/40">
+        <div className="bg-warning-surface text-on-warning-surface rounded-lg p-3 text-sm">
           {/* Shown once. Only a hash is stored, so this link cannot be recovered
               later. Epic 5 emails it instead of putting it on screen. */}
           <p className="font-medium">{t("inviteLinkOnce")}</p>
@@ -549,13 +542,13 @@ function InvitePanel({
       {invitations.length > 0 ? (
         <ul className="flex flex-col gap-1 text-sm">
           {invitations.map((invitation) => (
-            <li key={invitation.id} className="text-slate-600 dark:text-slate-400">
+            <li key={invitation.id} className="text-ink-muted">
               {invitation.email} · {invitation.role} · {t("expires")}{" "}
               {new Date(invitation.expiresAt).toLocaleDateString()}
             </li>
           ))}
         </ul>
       ) : null}
-    </Panel>
+    </Card>
   );
 }

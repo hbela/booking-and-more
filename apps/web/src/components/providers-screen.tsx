@@ -34,24 +34,15 @@ import {
   providerStateFrom,
   type ProviderFormState,
 } from "./provider-fields";
-import {
-  DashboardShell,
-  ErrorText,
-  Field,
-  Notice,
-  NoticeLink,
-  Panel,
-  RowButton,
-  RowLink,
-  Section,
-  buttonClass,
-  inputClass,
-  secondaryButtonClass,
-  useDashboardContext,
-  useEditPanel,
-  useSignInRedirect,
-  type EditPanel,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
+import { Button } from "./ui/button";
+import { Callout, CalloutLink } from "./ui/callout";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
+import { Section } from "./ui/section";
+import { RowButton, RowLink } from "./ui/table";
 
 /** One node, shared by every disabled Invite button, so the reason is announced. */
 const INVITE_HINT_ID = "provider-invite-needs-email";
@@ -147,22 +138,22 @@ export function ProvidersScreen(): React.ReactElement {
         {/* A provider with no service to offer cannot be booked at all, so this
             is a real prerequisite rather than a suggestion. */}
         {noServices ? (
-          <Notice tone="action">
+          <Callout tone="action">
             {t.rich("needServicesFirst", {
-              link: (chunks) => <NoticeLink href="/dashboard/services">{chunks}</NoticeLink>,
+              link: (chunks) => <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>,
             })}
-          </Notice>
+          </Callout>
         ) : null}
 
         {/* Locations are genuinely optional — slot search never requires one, so
             an online-only or telephone practice is bookable without any. Said
             plainly, rather than dressed up as a second blocker. */}
         {noLocations ? (
-          <Notice>
+          <Callout>
             {t.rich("noLocationsYet", {
-              link: (chunks) => <NoticeLink href="/dashboard/locations">{chunks}</NoticeLink>,
+              link: (chunks) => <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>,
             })}
-          </Notice>
+          </Callout>
         ) : null}
 
         <label className="flex items-center gap-2 text-sm">
@@ -177,11 +168,11 @@ export function ProvidersScreen(): React.ReactElement {
         </label>
 
         {providers.data?.items.length === 0 ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("noProviders")}</p>
+          <p className="text-sm text-ink-muted">{t("noProviders")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-slate-200 dark:border-slate-800">
+              <thead className="border-b border-line">
                 <tr>
                   <th scope="col" className="py-2 pr-4 font-medium">
                     {t("name")}
@@ -204,12 +195,12 @@ export function ProvidersScreen(): React.ReactElement {
                   return (
                     <tr
                       key={provider.id}
-                      className="border-b border-slate-100 dark:border-slate-900"
+                      className="border-b border-line"
                     >
-                      <td className={`py-2 pr-4 ${archived ? "text-slate-500" : ""}`}>
+                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {provider.displayName}
                       </td>
-                      <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                      <td className="py-2 pr-4 text-ink-muted">
                         {provider.timezone}
                       </td>
                       <td className="py-2 pr-4">
@@ -272,7 +263,7 @@ export function ProvidersScreen(): React.ReactElement {
                                 }}
                                 aria-disabled="true"
                                 aria-describedby={INVITE_HINT_ID}
-                                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-400 dark:border-slate-700 dark:text-slate-600"
+                                className="border-line-strong text-ink-subtle rounded-md border px-2 py-1 text-xs"
                               >
                                 {t("invite")}
                               </RowButton>
@@ -326,13 +317,13 @@ export function ProvidersScreen(): React.ReactElement {
             owner could create services and providers and still have no idea what
             joins them. Naming it here is the cheapest fix. */}
         {(providers.data?.items.length ?? 0) > 0 && !noServices ? (
-          <Notice>{t("assignHint")}</Notice>
+          <Callout>{t("assignHint")}</Callout>
         ) : null}
 
         {/* One node, referenced by every disabled Invite button, so the reason
             is announced rather than left to be guessed from a grey button. */}
         {canInvite && anyWithoutEmail ? (
-          <p id={INVITE_HINT_ID} className="text-xs text-slate-500 dark:text-slate-400">
+          <p id={INVITE_HINT_ID} className="text-xs text-ink-subtle">
             {t("inviteNeedsEmail")}
           </p>
         ) : null}
@@ -432,7 +423,7 @@ function InvitePanel({
   });
 
   return (
-    <Panel title={t("inviteTitle", { name: provider.displayName })} {...panelProps}>
+    <Card title={t("inviteTitle", { name: provider.displayName })} {...panelProps}>
       {sent ? (
         <div className="flex flex-col gap-3">
           <p role="status" className="text-sm">
@@ -445,26 +436,26 @@ function InvitePanel({
               (phase-9-owner-onboarding-emails §2). Shown once — only a hash of
               the token is stored, so it cannot be recovered afterwards. */}
           <details>
-            <summary className="cursor-pointer text-xs text-slate-600 dark:text-slate-400">
+            <summary className="cursor-pointer text-xs text-ink-muted">
               {t("inviteLinkFallback")}
             </summary>
             <div className="mt-2 flex flex-col gap-2">
-              <p className="text-xs text-slate-500">{t("inviteLinkOnceHint")}</p>
-              <input
+              <p className="text-xs text-ink-subtle">{t("inviteLinkOnceHint")}</p>
+              <Input
                 readOnly
                 value={sent.acceptUrl}
                 aria-label={t("inviteLinkFallback")}
                 onFocus={(event) => {
                   event.currentTarget.select();
                 }}
-                className={inputClass}
+                
               />
             </div>
           </details>
 
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+          <Button variant="secondary" type="button" onClick={onClose} >
             {t("close")}
-          </button>
+          </Button>
         </div>
       ) : (
         <form
@@ -475,29 +466,29 @@ function InvitePanel({
             send.mutate();
           }}
         >
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-ink-muted">
             {t("inviteIntro", { email: provider.email ?? "" })}
           </p>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("inviteWhatTheyGet")}</p>
+          <p className="text-sm text-ink-muted">{t("inviteWhatTheyGet")}</p>
 
           {/* Said before the press, not after: re-inviting silently kills the
               link the first email carried, and somebody halfway through using
               it deserves to be the owner's decision rather than a surprise. */}
-          {alreadyInvited ? <Notice>{t("alreadyInvited")}</Notice> : null}
+          {alreadyInvited ? <Callout>{t("alreadyInvited")}</Callout> : null}
 
           <ErrorText>{error}</ErrorText>
 
           <div className="flex gap-3">
-            <button type="submit" disabled={send.isPending} className={buttonClass}>
+            <Button type="submit" disabled={send.isPending} >
               {alreadyInvited ? t("reinvite") : t("sendInvitation")}
-            </button>
-            <button type="button" onClick={onClose} className={secondaryButtonClass}>
+            </Button>
+            <Button variant="secondary" type="button" onClick={onClose} >
               {t("cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -648,8 +639,8 @@ function CreateProviderPanel({
   });
 
   return (
-    <Panel title={t("addProvider")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{t("addProviderHint")}</p>
+    <Card title={t("addProvider")}>
+      <p className="text-sm text-ink-muted">{t("addProviderHint")}</p>
 
       <form
         className="flex flex-col gap-3"
@@ -692,14 +683,14 @@ function CreateProviderPanel({
                 />
                 <span>
                   {service.name}
-                  <span className="text-slate-500">
+                  <span className="text-ink-subtle">
                     {" · "}
                     {t("minutes", { count: service.durationMinutes })}
                   </span>
                 </span>
               </label>
             ))}
-            <p className="text-xs text-slate-500">{t("assignOnCreateHint")}</p>
+            <p className="text-xs text-ink-subtle">{t("assignOnCreateHint")}</p>
           </fieldset>
         ) : null}
 
@@ -710,13 +701,13 @@ function CreateProviderPanel({
         {locations && locations.length > 0 ? (
           <>
             <Field id="new-provider-location" label={t("defaultLocation")}>
-              <select
+              <Select
                 id="new-provider-location"
                 value={defaultLocationId}
                 onChange={(event) => {
                   setDefaultLocationId(event.target.value);
                 }}
-                className={inputClass}
+                
               >
                 <option value="">{t("noDefaultLocation")}</option>
                 {locations.map((location) => (
@@ -724,19 +715,19 @@ function CreateProviderPanel({
                     {location.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
-            <p className="text-xs text-slate-500">{t("defaultLocationHint")}</p>
+            <p className="text-xs text-ink-subtle">{t("defaultLocationHint")}</p>
           </>
         ) : null}
 
         <ErrorText>{error}</ErrorText>
 
-        <button type="submit" disabled={mutation.isPending} className={buttonClass}>
+        <Button type="submit" disabled={mutation.isPending} >
           {t("create")}
-        </button>
+        </Button>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -776,7 +767,7 @@ function EditProviderPanel({
   });
 
   return (
-    <Panel title={t("editProvider")} {...panelProps}>
+    <Card title={t("editProvider")} {...panelProps}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -796,15 +787,15 @@ function EditProviderPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {t("saveChanges")}
-          </button>
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+          </Button>
+          <Button variant="secondary" type="button" onClick={onClose} >
             {t("cancel")}
-          </button>
+          </Button>
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -956,9 +947,9 @@ function AssignmentsPanel({
   }
 
   return (
-    <Panel title={t("assignments")} {...panelProps}>
+    <Card title={t("assignments")} {...panelProps}>
       {!ready ? (
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("loadingAssignments")}</p>
+        <p className="text-sm text-ink-muted">{t("loadingAssignments")}</p>
       ) : (
         <form
           className="flex flex-col gap-5"
@@ -971,11 +962,11 @@ function AssignmentsPanel({
           <fieldset className="flex flex-col gap-3">
             <legend className="text-sm font-medium">{t("services")}</legend>
             {services.data?.items.length === 0 ? (
-              <Notice tone="action">
+              <Callout tone="action">
                 {t.rich("needServicesFirst", {
-                  link: (chunks) => <NoticeLink href="/dashboard/services">{chunks}</NoticeLink>,
+                  link: (chunks) => <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>,
                 })}
-              </Notice>
+              </Callout>
             ) : (
               services.data?.items.map((service) => {
                 const row = serviceRows?.get(service.id);
@@ -993,7 +984,7 @@ function AssignmentsPanel({
                       />
                       <span>
                         {service.name}
-                        <span className="text-slate-500">
+                        <span className="text-ink-subtle">
                           {" · "}
                           {t("minutes", { count: service.durationMinutes })}
                         </span>
@@ -1019,11 +1010,11 @@ function AssignmentsPanel({
           <fieldset className="flex flex-col gap-2">
             <legend className="text-sm font-medium">{t("locations")}</legend>
             {locations.data?.items.length === 0 ? (
-              <Notice>
+              <Callout>
                 {t.rich("noLocationsYet", {
-                  link: (chunks) => <NoticeLink href="/dashboard/locations">{chunks}</NoticeLink>,
+                  link: (chunks) => <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>,
                 })}
-              </Notice>
+              </Callout>
             ) : (
               locations.data?.items.map((location) => {
                 const row = locationRows?.get(location.id);
@@ -1048,16 +1039,16 @@ function AssignmentsPanel({
           <ErrorText>{error}</ErrorText>
 
           <div className="flex gap-3">
-            <button type="submit" disabled={save.isPending} className={buttonClass}>
+            <Button type="submit" disabled={save.isPending} >
               {t("save")}
-            </button>
-            <button type="button" onClick={onClose} className={secondaryButtonClass}>
+            </Button>
+            <Button variant="secondary" type="button" onClick={onClose} >
               {t("cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -1097,13 +1088,13 @@ function ServiceOverrides({
 
   return (
     <details open={customised} className="ml-6">
-      <summary className="cursor-pointer text-xs text-slate-600 dark:text-slate-400">
+      <summary className="cursor-pointer text-xs text-ink-muted">
         {t("customise")}
       </summary>
 
-      <div className="mt-2 flex flex-col gap-2 border-l border-slate-200 pl-3 dark:border-slate-800">
+      <div className="mt-2 flex flex-col gap-2 border-l border-line pl-3">
         <Field id={`duration-${service.id}`} label={t("customDuration")}>
-          <input
+          <Input
             id={`duration-${service.id}`}
             type="number"
             min={5}
@@ -1114,19 +1105,19 @@ function ServiceOverrides({
               onChange({ customDurationMinutes: optionalNumber(event.target.value) });
             }}
             placeholder={String(service.durationMinutes)}
-            className={`${inputClass} w-32`}
+            className="w-32"
           />
         </Field>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink-subtle">
           {t("inheritsDuration", { count: service.durationMinutes })}
         </p>
 
         {currency === null || service.priceMinor === null ? (
-          <p className="text-xs text-slate-500">{t("priceOverrideNeedsBasePrice")}</p>
+          <p className="text-xs text-ink-subtle">{t("priceOverrideNeedsBasePrice")}</p>
         ) : (
           <>
             <Field id={`price-${service.id}`} label={`${t("customPrice")} (${currency})`}>
-              <input
+              <Input
                 id={`price-${service.id}`}
                 type="number"
                 min={0}
@@ -1142,10 +1133,10 @@ function ServiceOverrides({
                     customPriceMinor: amount === null ? null : toMinorUnits(amount, currency),
                   });
                 }}
-                className={`${inputClass} w-32`}
+                className="w-32"
               />
             </Field>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-subtle">
               {t("inheritsPrice", { price: formatMoney(service.priceMinor, currency, locale) })}
             </p>
           </>

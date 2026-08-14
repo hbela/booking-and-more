@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,19 +11,13 @@ import {
   locationStateFrom,
   type LocationFormState,
 } from "./location-fields";
-import {
-  DashboardShell,
-  ErrorText,
-  Panel,
-  RowButton,
-  Section,
-  buttonClass,
-  secondaryButtonClass,
-  useDashboardContext,
-  useEditPanel,
-  useSignInRedirect,
-  type EditPanel,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText } from "./ui/field";
+import { Section } from "./ui/section";
+import { RowButton } from "./ui/table";
 
 /**
  * One-line address for the list.
@@ -80,11 +74,11 @@ export function LocationsScreen(): React.ReactElement {
         </label>
 
         {locations.data?.items.length === 0 ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("noLocations")}</p>
+          <p className="text-sm text-ink-muted">{t("noLocations")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-slate-200 dark:border-slate-800">
+              <thead className="border-b border-line">
                 <tr>
                   <th scope="col" className="py-2 pr-4 font-medium">
                     {t("name")}
@@ -110,13 +104,13 @@ export function LocationsScreen(): React.ReactElement {
                   return (
                     <tr
                       key={location.id}
-                      className="border-b border-slate-100 dark:border-slate-900"
+                      className="border-b border-line"
                     >
-                      <td className={`py-2 pr-4 ${archived ? "text-slate-500" : ""}`}>
+                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {location.name}
                       </td>
                       <td className="py-2 pr-4">{t(`locationType.${location.type}`)}</td>
-                      <td className="py-2 pr-4 text-slate-600 dark:text-slate-400">
+                      <td className="py-2 pr-4 text-ink-muted">
                         {formatAddress(location)}
                       </td>
                       <td className="py-2 pr-4">
@@ -222,7 +216,7 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
   });
 
   return (
-    <Panel title={t("addLocation")}>
+    <Card title={t("addLocation")}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -241,11 +235,11 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
 
         <ErrorText>{error}</ErrorText>
 
-        <button type="submit" disabled={mutation.isPending} className={buttonClass}>
+        <Button type="submit" disabled={mutation.isPending} >
           {t("create")}
-        </button>
+        </Button>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -285,7 +279,7 @@ function EditLocationPanel({
   });
 
   return (
-    <Panel title={t("editLocation")} {...panelProps}>
+    <Card title={t("editLocation")} {...panelProps}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -305,14 +299,14 @@ function EditLocationPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {t("saveChanges")}
-          </button>
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+          </Button>
+          <Button variant="secondary" type="button" onClick={onClose} >
             {t("cancel")}
-          </button>
+          </Button>
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }

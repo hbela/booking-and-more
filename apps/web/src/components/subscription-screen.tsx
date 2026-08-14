@@ -5,14 +5,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { isLiveSubscription } from "@bam/contracts";
 import { ApiError, apiFetch } from "@/lib/api-client";
-import {
-  DashboardShell,
-  ErrorText,
-  Panel,
-  buttonClass,
-  useDashboardContext,
-  useSignInRedirect,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { Button, buttonRecipe } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText } from "./ui/field";
 
 type Plan = "STARTER" | "PROFESSIONAL";
 
@@ -122,7 +118,7 @@ export function SubscriptionScreen(): React.ReactElement {
 
   return (
     <DashboardShell context={context}>
-      <Panel title={t("subscriptionTitle")}>
+      <Card title={t("subscriptionTitle")}>
         {isSubscribed ? (
           <>
             <p role="status">{t("currentPlan", { plan: planLabel(subscription.plan, t) })}</p>
@@ -132,14 +128,14 @@ export function SubscriptionScreen(): React.ReactElement {
                 *charge*, and calling that a renewal is how a customer ends up
                 surprised by a bill they were told about in the wrong words. */}
             {isTrialing && subscription.trialEndsAt ? (
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-ink-muted">
                 {t("trialEndsOn", {
                   date: new Date(subscription.trialEndsAt).toLocaleDateString(),
                   plan: planLabel(subscription.plan, t),
                 })}
               </p>
             ) : subscription.currentPeriodEnd ? (
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-ink-muted">
                 {subscription.cancelAtPeriodEnd
                   ? t("cancelsOn", {
                       date: new Date(subscription.currentPeriodEnd).toLocaleDateString(),
@@ -154,7 +150,7 @@ export function SubscriptionScreen(): React.ReactElement {
                 the plan they are leaving and no sign that they left it, which
                 is the support ticket §2.4 exists to prevent. */}
             {subscription.pendingPlan && subscription.pendingPlanStartsAt ? (
-              <p role="status" className="text-sm text-slate-600 dark:text-slate-400">
+              <p role="status" className="text-sm text-ink-muted">
                 {t("planChangesOn", {
                   plan: planLabel(subscription.pendingPlan, t),
                   date: new Date(subscription.pendingPlanStartsAt).toLocaleDateString(),
@@ -166,12 +162,12 @@ export function SubscriptionScreen(): React.ReactElement {
                 be false — but the deadline has to be named or it gets ignored
                 until the organization is suspended (§2.3). */}
             {subscription.status === "PAST_DUE" ? (
-              <p role="alert" className="text-sm text-amber-700 dark:text-amber-400">
+              <p role="alert" className="text-sm text-warning">
                 {t("paymentFailedNotice")}
               </p>
             ) : null}
 
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-sm text-ink-muted">
               {subscription.cancelAtPeriodEnd
                 ? t("subscriptionEnding")
                 : isTrialing
@@ -184,21 +180,19 @@ export function SubscriptionScreen(): React.ReactElement {
             {/* Absent rather than broken when Stripe is unconfigured — the same
                 rule that decides which plans are offered. */}
             {billing.data?.portalAvailable ? (
-              <button
-                type="button"
+              <Button
                 disabled={portal.isPending}
                 onClick={() => {
                   setError(null);
                   portal.mutate();
                 }}
-                className={buttonClass}
               >
                 {portal.isPending ? t("loading") : t("manageBilling")}
-              </button>
+              </Button>
             ) : null}
 
             {billing.data?.portalAvailable ? (
-              <p className="text-sm text-slate-600 dark:text-slate-400">{t("manageBillingHint")}</p>
+              <p className="text-sm text-ink-muted">{t("manageBillingHint")}</p>
             ) : null}
           </>
         ) : availablePlans.length === 0 ? (
@@ -208,11 +202,14 @@ export function SubscriptionScreen(): React.ReactElement {
         ) : sent ? (
           <>
             <p role="status">{t("paymentLinkSent", { email: sent.emailedTo })}</p>
+            {/* A real <a>, not ButtonLink: this leaves the app for Stripe's
+                hosted page, so it must not go through the locale-aware router.
+                The recipe gives it the button's styling without its element. */}
             <a
               href={sent.paymentUrl}
               target="_blank"
               rel="noreferrer noopener"
-              className={buttonClass}
+              className={buttonRecipe()}
             >
               {sent.trial ? t("goToTrial") : t("goToPayment")}
             </a>
@@ -231,11 +228,11 @@ export function SubscriptionScreen(): React.ReactElement {
                 one the link does not carry would be a promise Stripe breaks at
                 the checkout page (§2.1). */}
             {billing.data?.trialAvailable ? (
-              <p className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="text-sm text-ink-muted">
                 {t("trialOffer", { days: billing.data.trialPeriodDays })}
               </p>
             ) : (
-              <p className="text-sm text-slate-600 dark:text-slate-400">{t("trialAlreadyUsed")}</p>
+              <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
             )}
 
             <fieldset className="flex flex-col gap-2">
@@ -259,16 +256,16 @@ export function SubscriptionScreen(): React.ReactElement {
 
             <ErrorText>{error}</ErrorText>
 
-            <button type="submit" disabled={subscribe.isPending} className={buttonClass}>
+            <Button type="submit" disabled={subscribe.isPending}>
               {subscribe.isPending
                 ? t("loading")
                 : billing.data?.trialAvailable
                   ? t("startTrial")
                   : t("sendPaymentLink")}
-            </button>
+            </Button>
           </form>
         )}
-      </Panel>
+      </Card>
     </DashboardShell>
   );
 }

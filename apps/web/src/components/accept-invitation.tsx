@@ -6,6 +6,9 @@ import { useRouter } from "@/i18n/navigation";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Field } from "./auth-form";
+import { Button } from "./ui/button";
+import { Callout } from "./ui/callout";
+import { ErrorText } from "./ui/field";
 
 interface InvitationDetails {
   organizationName: string;
@@ -135,63 +138,69 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
   }, [state, session.data?.user.email, token, t]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 px-6">
-      <h1 className="text-2xl font-semibold">
-        {state.kind !== "register"
-          ? t("title")
-          : state.details.providerName === null
-            ? t("joinTitle", { organization: state.details.organizationName })
-            : t("joinTitleAsProvider", {
-                organization: state.details.organizationName,
-                provider: state.details.providerName,
-              })}
-      </h1>
+    // Deliberately not `ui/auth-layout.tsx`, which is an async server component
+    // and cannot be rendered from here. The frame is duplicated rather than the
+    // layout being made client-only, because sign-in and sign-up are static
+    // pages and should stay that way.
+    <main className="bg-surface-raised flex min-h-screen flex-col items-center justify-center px-6 py-12">
+      <div className="border-line bg-surface flex w-full max-w-md flex-col gap-5 rounded-xl border p-6">
+        <h1 className="font-display text-ink text-2xl font-bold tracking-tight">
+          {state.kind !== "register"
+            ? t("title")
+            : state.details.providerName === null
+              ? t("joinTitle", { organization: state.details.organizationName })
+              : t("joinTitleAsProvider", {
+                  organization: state.details.organizationName,
+                  provider: state.details.providerName,
+                })}
+        </h1>
 
-      {state.kind === "checking" || state.kind === "accepting" ? <p>{t("working")}</p> : null}
+        {state.kind === "checking" || state.kind === "accepting" ? (
+          <p className="text-ink-muted">{t("working")}</p>
+        ) : null}
 
-      {state.kind === "register" ? (
-        <RegisterForm
-          token={token}
-          details={state.details}
-          onAccepted={(role) => {
-            setState({ kind: "accepted", role });
-          }}
-          onAccountExists={() => {
-            // Not a failure state: this is a redirection, and the sign-in panel
-            // below already names the address to use.
-            setState({ kind: "needs-sign-in", details: state.details });
-          }}
-        />
-      ) : null}
-
-      {state.kind === "needs-sign-in" ? (
-        <>
-          <p className="text-slate-600 dark:text-slate-400">
-            {state.details ? t("signInAs", { email: state.details.email }) : t("signInFirst")}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              router.push("/sign-in");
+        {state.kind === "register" ? (
+          <RegisterForm
+            token={token}
+            details={state.details}
+            onAccepted={(role) => {
+              setState({ kind: "accepted", role });
             }}
-            className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-          >
-            {t("goToSignIn")}
-          </button>
-        </>
-      ) : null}
+            onAccountExists={() => {
+              // Not a failure state: this is a redirection, and the sign-in
+              // panel below already names the address to use.
+              setState({ kind: "needs-sign-in", details: state.details });
+            }}
+          />
+        ) : null}
 
-      {state.kind === "wrong-user" ? (
-        <>
-          <p role="alert" className="text-slate-600 dark:text-slate-400">
-            {t("wrongUser", {
-              invited: state.details.email,
-              current: state.signedInAs,
-            })}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
+        {state.kind === "needs-sign-in" ? (
+          <>
+            <p className="text-ink-muted">
+              {state.details ? t("signInAs", { email: state.details.email }) : t("signInFirst")}
+            </p>
+            <Button
+              className="self-start"
+              onClick={() => {
+                router.push("/sign-in");
+              }}
+            >
+              {t("goToSignIn")}
+            </Button>
+          </>
+        ) : null}
+
+        {state.kind === "wrong-user" ? (
+          <>
+            <Callout tone="action" role="alert">
+              {t("wrongUser", {
+                invited: state.details.email,
+                current: state.signedInAs,
+              })}
+            </Callout>
+            <Button
+              className="self-start"
+              onClick={() => {
               void signOut().then(() => {
                 // Straight to the right branch rather than back to `checking`:
                 // the lookup already told us whether the invited address has an
@@ -209,20 +218,21 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
                 );
               });
             }}
-            className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-          >
-            {t("signOutAndContinue", { email: state.details.email })}
-          </button>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("wrongUserHint")}</p>
-        </>
-      ) : null}
+            >
+              {t("signOutAndContinue", { email: state.details.email })}
+            </Button>
+            <p className="text-ink-muted text-sm">{t("wrongUserHint")}</p>
+          </>
+        ) : null}
 
-      {state.kind === "accepted" ? (
-        <>
-          <p role="status">{t("accepted", { role: state.role })}</p>
-          <button
-            type="button"
-            onClick={() => {
+        {state.kind === "accepted" ? (
+          <>
+            <Callout tone="success" role="status">
+              {t("accepted", { role: state.role })}
+            </Callout>
+            <Button
+              className="self-start"
+              onClick={() => {
               // A provider goes to their own diary, not to the members table.
               // Availability is the one part of this system that is theirs
               // (phase-2-3 §2.7) and the thing the email just asked them to
@@ -232,20 +242,16 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
               // router.refresh() first precisely because the session cookie
               // arrives on a response the cached session does not know about,
               // and navigating on its behalf re-opens that race.
-              router.push(state.role === "PROVIDER" ? "/dashboard/availability" : "/dashboard");
-            }}
-            className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white"
-          >
-            {state.role === "PROVIDER" ? t("goToAvailability") : t("goToDashboard")}
-          </button>
-        </>
-      ) : null}
+                router.push(state.role === "PROVIDER" ? "/dashboard/availability" : "/dashboard");
+              }}
+            >
+              {state.role === "PROVIDER" ? t("goToAvailability") : t("goToDashboard")}
+            </Button>
+          </>
+        ) : null}
 
-      {state.kind === "failed" ? (
-        <p role="alert" className="text-red-600 dark:text-red-400">
-          {state.message}
-        </p>
-      ) : null}
+        {state.kind === "failed" ? <ErrorText>{state.message}</ErrorText> : null}
+      </div>
     </main>
   );
 }
@@ -312,9 +318,7 @@ function RegisterForm({
 
   return (
     <>
-      <p className="text-slate-600 dark:text-slate-400">
-        {t("settingUpFor", { email: details.email })}
-      </p>
+      <p className="text-ink-muted">{t("settingUpFor", { email: details.email })}</p>
 
       <form
         onSubmit={(event) => {
@@ -345,19 +349,11 @@ function RegisterForm({
           hint={tAuth("passwordHint")}
         />
 
-        {error ? (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-            {error}
-          </p>
-        ) : null}
+        <ErrorText>{error}</ErrorText>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md bg-brand-600 px-4 py-2 font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
-        >
+        <Button type="submit" disabled={pending} className="w-full">
           {pending ? tAuth("working") : t("createAccount")}
-        </button>
+        </Button>
       </form>
     </>
   );

@@ -104,19 +104,19 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 px-6 py-10">
       <header>
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-ink-muted text-sm">
           {t("reference", { reference: data.reference })}
         </p>
       </header>
 
       {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-danger text-sm">
           {error}
         </p>
       ) : null}
 
       <BookingSection title={t("details")}>
-        <dl className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+        <dl className="border-line flex flex-col gap-2 rounded-xl border p-4">
           <BookingRow label={t("statusLabel")} value={t(`statusName.${data.status}`)} />
           <BookingRow label={t("when")} value={formatDateTime(data.startAt, locale)} />
           <BookingRow label={t("service")} value={data.serviceName} />
@@ -131,7 +131,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
         </dl>
 
         {data.cancellationPolicy ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{data.cancellationPolicy}</p>
+          <p className="text-ink-muted text-sm">{data.cancellationPolicy}</p>
         ) : null}
       </BookingSection>
 
@@ -142,14 +142,14 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
           <button
             type="button"
             onClick={() => setMode("reschedule")}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm dark:border-slate-700"
+            className="border-line-strong text-ink hover:bg-surface-raised min-h-11 rounded-lg border px-4 py-2 text-sm transition-colors"
           >
             {t("reschedule")}
           </button>
           <button
             type="button"
             onClick={() => setMode("cancel")}
-            className="rounded-md border border-slate-300 px-4 py-2 text-sm dark:border-slate-700"
+            className="border-line-strong text-ink hover:bg-surface-raised min-h-11 rounded-lg border px-4 py-2 text-sm transition-colors"
           >
             {t("cancel")}
           </button>
@@ -168,7 +168,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
               type="datetime-local"
               value={newStartAt}
               onChange={(event) => setNewStartAt(event.target.value)}
-              className="max-w-xs rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+              className="border-line-strong bg-surface text-ink min-h-11 max-w-xs rounded-lg border px-3 py-2"
             />
           </label>
 
@@ -177,7 +177,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
               type="button"
               disabled={newStartAt === "" || reschedulePreview.isPending}
               onClick={() => reschedulePreview.mutate(new Date(newStartAt).toISOString())}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm disabled:opacity-60 dark:border-slate-700"
+              className="border-line-strong text-ink hover:bg-surface-raised min-h-11 rounded-lg border px-4 py-2 text-sm transition-colors disabled:opacity-60"
             >
               {t("check")}
             </button>
@@ -220,7 +220,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
                     type="button"
                     disabled={confirmCancel.isPending}
                     onClick={() => confirmCancel.mutate("")}
-                    className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    className="bg-danger text-on-accent min-h-11 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
                   >
                     {t("confirmCancel")}
                   </button>
@@ -259,7 +259,7 @@ function ReschedulePreviewPanel({
   if (!preview) return null;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+    <div className="border-line flex flex-col gap-2 rounded-xl border p-4">
       <p className="text-sm">
         {preview.allowed
           ? t("moveTo", { time: formatDateTime(preview.proposed.startAt, locale) })
@@ -271,7 +271,7 @@ function ReschedulePreviewPanel({
           type="button"
           disabled={pending}
           onClick={() => onConfirm(preview.proposed.startAt)}
-          className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="bg-accent text-on-accent hover:bg-accent-hover min-h-11 self-start rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
         >
           {t("confirmMove")}
         </button>

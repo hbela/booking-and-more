@@ -21,7 +21,7 @@ export function LocaleSwitcher({ label }: { label: string }): React.ReactElement
 
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="text-ink-subtle">{label}</span>
       <select
         value={locale}
         onChange={(event) => {
@@ -31,7 +31,7 @@ export function LocaleSwitcher({ label }: { label: string }): React.ReactElement
           document.cookie = `${LOCALE_PREFERENCE_COOKIE}=${event.target.value}; path=/; max-age=${LOCALE_PREFERENCE_MAX_AGE}; samesite=lax`;
           router.replace(pathname, { locale: event.target.value });
         }}
-        className="rounded-md border border-slate-300 bg-transparent px-2 py-1 dark:border-slate-700"
+        className="border-line-strong text-ink rounded-md border bg-transparent px-2 py-1"
       >
         {routing.locales.map((value) => (
           <option key={value} value={value}>

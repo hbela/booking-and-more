@@ -3,7 +3,11 @@
     "appName": "booking-and-more",
     "tagline": "Online időpontfoglalás rendelőknek, szalonoknak és stúdióknak.",
     "language": "Nyelv",
-    "loading": "Betöltés…"
+    "loading": "Betöltés…",
+    "theme": "Megjelenés",
+    "themeSystem": "Rendszer szerint",
+    "themeLight": "Világos",
+    "themeDark": "Sötét"
   },
   "home": {
     "title": "Online időpontfoglalás",

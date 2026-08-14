@@ -3,7 +3,8 @@
 import { useTranslations } from "next-intl";
 import type { Location, LocationType } from "@/lib/api-client";
 import { numberValue, supportedTimeZones, textValue, type FormMode } from "@/lib/catalogue-form";
-import { Field, inputClass } from "./dashboard-shell";
+import { Field } from "./ui/field";
+import { Input, Select } from "./ui/input";
 
 const TYPES: LocationType[] = ["PHYSICAL", "ONLINE", "HOME_VISIT", "TELEPHONE"];
 
@@ -80,7 +81,7 @@ export function LocationFields({
   return (
     <>
       <Field id={`${idPrefix}-name`} label={t("name")}>
-        <input
+        <Input
           id={`${idPrefix}-name`}
           value={state.name}
           onChange={(event) => {
@@ -89,29 +90,29 @@ export function LocationFields({
           required
           minLength={2}
           maxLength={160}
-          className={inputClass}
+          
         />
       </Field>
 
       <Field id={`${idPrefix}-type`} label={t("type")}>
-        <select
+        <Select
           id={`${idPrefix}-type`}
           value={state.type}
           onChange={(event) => {
             onChange({ type: event.target.value as LocationType });
           }}
-          className={inputClass}
+          
         >
           {TYPES.map((value) => (
             <option key={value} value={value}>
               {t(`locationType.${value}`)}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field id={`${idPrefix}-address`} label={t("address")}>
-        <input
+        <Input
           id={`${idPrefix}-address`}
           value={state.addressLine1}
           onChange={(event) => {
@@ -119,19 +120,19 @@ export function LocationFields({
           }}
           required={needsAddress}
           maxLength={200}
-          className={inputClass}
+          
         />
       </Field>
 
       <Field id={`${idPrefix}-address-2`} label={t("addressLine2")}>
-        <input
+        <Input
           id={`${idPrefix}-address-2`}
           value={state.addressLine2}
           onChange={(event) => {
             onChange({ addressLine2: event.target.value });
           }}
           maxLength={200}
-          className={inputClass}
+          
         />
       </Field>
 
@@ -139,7 +140,7 @@ export function LocationFields({
           and read ("1134 Budapest"). */}
       <div className="flex flex-wrap gap-3">
         <Field id={`${idPrefix}-postal-code`} label={t("postalCode")}>
-          <input
+          <Input
             id={`${idPrefix}-postal-code`}
             value={state.postalCode}
             onChange={(event) => {
@@ -147,19 +148,19 @@ export function LocationFields({
             }}
             inputMode="numeric"
             maxLength={20}
-            className={`${inputClass} w-32`}
+            className="w-32"
           />
         </Field>
 
         <Field id={`${idPrefix}-city`} label={t("city")}>
-          <input
+          <Input
             id={`${idPrefix}-city`}
             value={state.city}
             onChange={(event) => {
               onChange({ city: event.target.value });
             }}
             maxLength={120}
-            className={inputClass}
+            
           />
         </Field>
 
@@ -167,7 +168,7 @@ export function LocationFields({
             keys in two languages for no gain. Upper-cased on submit, as the
             schema does. */}
         <Field id={`${idPrefix}-country`} label={t("countryCode")}>
-          <input
+          <Input
             id={`${idPrefix}-country`}
             value={state.countryCode}
             onChange={(event) => {
@@ -175,20 +176,20 @@ export function LocationFields({
             }}
             maxLength={2}
             pattern="[A-Za-z]{2}"
-            className={`${inputClass} w-20`}
+            className="w-20"
           />
         </Field>
       </div>
 
       <Field id={`${idPrefix}-timezone`} label={t("timezone")}>
-        <input
+        <Input
           id={`${idPrefix}-timezone`}
           value={state.timezone}
           onChange={(event) => {
             onChange({ timezone: event.target.value });
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
-          className={inputClass}
+          
         />
       </Field>
       {zones.length === 0 ? null : (
@@ -198,18 +199,18 @@ export function LocationFields({
           ))}
         </datalist>
       )}
-      <p className="text-xs text-slate-500">{t("timezoneHint")}</p>
+      <p className="text-xs text-ink-subtle">{t("timezoneHint")}</p>
 
       {/* Stored but unread until the public map (phase-2 §5.5). Behind a
           disclosure so it is reachable without being in anybody's way. */}
       <details>
-        <summary className="cursor-pointer text-sm text-slate-600 dark:text-slate-400">
+        <summary className="cursor-pointer text-sm text-ink-muted">
           {t("coordinates")}
         </summary>
 
-        <div className="mt-2 flex flex-wrap gap-3 border-l border-slate-200 pl-3 dark:border-slate-800">
+        <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
           <Field id={`${idPrefix}-latitude`} label={t("latitude")}>
-            <input
+            <Input
               id={`${idPrefix}-latitude`}
               type="number"
               min={-90}
@@ -219,12 +220,12 @@ export function LocationFields({
               onChange={(event) => {
                 onChange({ latitude: event.target.value });
               }}
-              className={`${inputClass} w-40`}
+              className="w-40"
             />
           </Field>
 
           <Field id={`${idPrefix}-longitude`} label={t("longitude")}>
-            <input
+            <Input
               id={`${idPrefix}-longitude`}
               type="number"
               min={-180}
@@ -234,7 +235,7 @@ export function LocationFields({
               onChange={(event) => {
                 onChange({ longitude: event.target.value });
               }}
-              className={`${inputClass} w-40`}
+              className="w-40"
             />
           </Field>
         </div>

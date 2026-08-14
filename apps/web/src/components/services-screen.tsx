@@ -18,21 +18,14 @@ import {
   serviceStateFrom,
   type ServiceFormState,
 } from "./service-fields";
-import {
-  DashboardShell,
-  ErrorText,
-  Field,
-  Panel,
-  RowButton,
-  Section,
-  buttonClass,
-  inputClass,
-  secondaryButtonClass,
-  useDashboardContext,
-  useEditPanel,
-  useSignInRedirect,
-  type EditPanel,
-} from "./dashboard-shell";
+import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { ErrorText, Field } from "./ui/field";
+import { Input } from "./ui/input";
+import { Section } from "./ui/section";
+import { RowButton } from "./ui/table";
 
 /** A trimmed text value from a form. `FormData.get` can also hand back a File,
  *  which would stringify to "[object Object]" if taken at face value. */
@@ -89,11 +82,11 @@ export function ServicesScreen(): React.ReactElement {
         </label>
 
         {services.data?.items.length === 0 ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("noServices")}</p>
+          <p className="text-sm text-ink-muted">{t("noServices")}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-slate-200 dark:border-slate-800">
+              <thead className="border-b border-line">
                 <tr>
                   <th scope="col" className="py-2 pr-4 font-medium">
                     {t("name")}
@@ -119,11 +112,11 @@ export function ServicesScreen(): React.ReactElement {
                   return (
                     <tr
                       key={service.id}
-                      className="border-b border-slate-100 dark:border-slate-900"
+                      className="border-b border-line"
                     >
-                      <td className={`py-2 pr-4 ${archived ? "text-slate-500" : ""}`}>
+                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {service.name}
-                        <span className="block font-mono text-xs text-slate-500">
+                        <span className="block font-mono text-xs text-ink-subtle">
                           {service.slug}
                         </span>
                       </td>
@@ -263,8 +256,8 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
   });
 
   return (
-    <Panel title={t("addService")}>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{t("addServiceHint")}</p>
+    <Card title={t("addService")}>
+      <p className="text-sm text-ink-muted">{t("addServiceHint")}</p>
 
       <form
         className="flex flex-col gap-3"
@@ -285,14 +278,14 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
 
         <ErrorText>{error}</ErrorText>
         {slugTaken ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("slugTakenArchivedHint")}</p>
+          <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p>
         ) : null}
 
-        <button type="submit" disabled={mutation.isPending} className={buttonClass}>
+        <Button type="submit" disabled={mutation.isPending} >
           {t("create")}
-        </button>
+        </Button>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -346,7 +339,7 @@ function EditServicePanel({
   });
 
   return (
-    <Panel title={t("editService")} {...panelProps}>
+    <Card title={t("editService")} {...panelProps}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -366,9 +359,9 @@ function EditServicePanel({
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium">{t("offeredBy")}</span>
           {detail.data === undefined ? null : detail.data.providers.length === 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">{t("noProvidersAssigned")}</p>
+            <p className="text-sm text-ink-muted">{t("noProvidersAssigned")}</p>
           ) : (
-            <ul className="text-sm text-slate-600 dark:text-slate-400">
+            <ul className="text-sm text-ink-muted">
               {detail.data.providers.map((entry) => (
                 <li key={entry.providerId}>
                   {entry.displayName}
@@ -377,21 +370,21 @@ function EditServicePanel({
               ))}
             </ul>
           )}
-          <p className="text-xs text-slate-500">{t("offeredByHint")}</p>
+          <p className="text-xs text-ink-subtle">{t("offeredByHint")}</p>
         </div>
 
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {t("saveChanges")}
-          </button>
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+          </Button>
+          <Button variant="secondary" type="button" onClick={onClose} >
             {t("cancel")}
-          </button>
+          </Button>
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }
 
@@ -446,7 +439,7 @@ function TranslationsPanel({
   });
 
   return (
-    <Panel title={t("translationsFor", { name: service.name })}>
+    <Card title={t("translationsFor", { name: service.name })}>
       <form
         className="flex flex-col gap-4"
         onSubmit={(event) => {
@@ -461,12 +454,12 @@ function TranslationsPanel({
           return (
             <div key={locale} className="flex flex-col gap-2">
               <Field id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
-                <input
+                <Input
                   id={`name-${locale}`}
                   name={`name-${locale}`}
                   defaultValue={existing?.name ?? ""}
                   placeholder={service.name}
-                  className={inputClass}
+                  
                 />
               </Field>
 
@@ -474,11 +467,11 @@ function TranslationsPanel({
                 id={`description-${locale}`}
                 label={`${locale.toUpperCase()} — ${t("description")}`}
               >
-                <input
+                <Input
                   id={`description-${locale}`}
                   name={`description-${locale}`}
                   defaultValue={existing?.description ?? ""}
-                  className={inputClass}
+                  
                 />
               </Field>
             </div>
@@ -488,14 +481,14 @@ function TranslationsPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <button type="submit" disabled={save.isPending} className={buttonClass}>
+          <Button type="submit" disabled={save.isPending} >
             {t("save")}
-          </button>
-          <button type="button" onClick={onClose} className={secondaryButtonClass}>
+          </Button>
+          <Button variant="secondary" type="button" onClick={onClose} >
             {t("cancel")}
-          </button>
+          </Button>
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }

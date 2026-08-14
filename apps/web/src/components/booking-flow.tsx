@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
+import { cn } from "@/lib/cn";
 import {
   apiFetch,
   formatMoney,
@@ -15,6 +16,7 @@ import {
   type Slot,
 } from "@/lib/api-client";
 import { LocaleSwitcher } from "./locale-switcher";
+import { ErrorText } from "./ui/field";
 
 /**
  * The public booking flow. tech-impl §30, §16.
@@ -233,11 +235,17 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
   if (tenant.isError) return <p className="p-8">{t("notFound")}</p>;
 
   return (
+    // Everything below styles itself with `accent-*`, never `brand-*`: this is
+    // the one screen that belongs to the tenant rather than to us, and
+    // `book/page.tsx` wraps it in the element that will one day carry their
+    // colour (phase-11 §2.2).
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
-      <header className="flex items-start justify-between gap-4">
+      <header className="border-line flex items-start justify-between gap-4 border-b pb-5">
         <div>
-          <h1 className="text-2xl font-semibold">{tenant.data.name}</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("subtitle")}</p>
+          <h1 className="font-display text-ink text-2xl font-bold tracking-tight">
+            {tenant.data.name}
+          </h1>
+          <p className="text-ink-muted text-sm">{t("subtitle")}</p>
         </div>
         {/* The page opens in the tenant's language (see book/page.tsx). This is
             the only way a customer who wants another one can say so — without
@@ -249,11 +257,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
 
       <Steps current={step} />
 
-      {error ? (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorText>{error}</ErrorText> : null}
 
       {step === "service" ? (
         <Section title={t("chooseService")}>
@@ -268,10 +272,10 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(null);
                     setStep("provider");
                   }}
-                  className="w-full rounded-lg border border-slate-200 p-4 text-left hover:border-brand-600 dark:border-slate-800"
+                  className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
                 >
                   <span className="font-medium">{item.name}</span>
-                  <span className="block text-sm text-slate-600 dark:text-slate-400">
+                  <span className="text-ink-muted block text-sm">
                     {t("minutes", { count: item.durationMinutes })}
                     {item.priceMinor !== null && item.currency
                       ? ` · ${formatMoney(item.priceMinor, item.currency, locale)}`
@@ -300,7 +304,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                   setProviderId(null);
                   setStep("time");
                 }}
-                className="w-full rounded-lg border border-slate-200 p-4 text-left hover:border-brand-600 dark:border-slate-800"
+                className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
               >
                 <span className="font-medium">{t("anyProvider")}</span>
               </button>
@@ -313,11 +317,11 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(item.id);
                     setStep("time");
                   }}
-                  className="w-full rounded-lg border border-slate-200 p-4 text-left hover:border-brand-600 dark:border-slate-800"
+                  className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
                 >
                   <span className="font-medium">{item.displayName}</span>
                   {item.description ? (
-                    <span className="block text-sm text-slate-600 dark:text-slate-400">
+                    <span className="text-ink-muted block text-sm">
                       {item.description}
                     </span>
                   ) : null}
@@ -339,21 +343,24 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
               value={day}
               min={new Date().toISOString().slice(0, 10)}
               onChange={(event) => setDay(event.target.value)}
-              className="max-w-xs rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+              className="max-w-xs rounded-md border border-line-strong bg-transparent px-3 py-2"
             />
           </label>
 
           {slots.isPending ? <p>{t("loading")}</p> : null}
           {slots.data?.items.length === 0 ? <p>{t("noSlots")}</p> : null}
 
-          <ul className="flex flex-wrap gap-2">
+          {/* A grid rather than a wrapping flex row, so slots line up in
+              columns and the eye can scan down a time of day. `tabular-nums`
+              comes from globals.css via the <time> element. */}
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-2">
             {slots.data?.items.map((slot) => (
               <li key={`${slot.providerId}-${slot.startAt}`}>
                 <button
                   type="button"
                   disabled={takeHold.isPending}
                   onClick={() => takeHold.mutate(slot)}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm hover:border-brand-600 disabled:opacity-60 dark:border-slate-700"
+                  className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 w-full rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-60"
                 >
                   <time dateTime={slot.startAt}>{formatTime(slot.startAt, locale)}</time>
                 </button>
@@ -382,7 +389,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
 
       {step === "success" && booking ? (
         <Section title={t("booked")}>
-          <dl className="flex flex-col gap-2 rounded-lg border border-slate-200 p-4 dark:border-slate-800">
+          <dl className="border-line flex flex-col gap-2 rounded-xl border p-4">
             <Row label={t("reference")} value={booking.reference} />
             <Row label={t("when")} value={formatDateTime(booking.startAt, locale)} />
             <Row label={t("service")} value={booking.serviceName} />
@@ -395,7 +402,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
           <p className="text-sm">
             {t("manageHint")}{" "}
             <a
-              className="underline"
+              className="text-accent font-medium underline underline-offset-2"
               href={`/booking/manage/${encodeURIComponent(booking.managementToken)}`}
             >
               {t("manageLink")}
@@ -405,7 +412,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
               (docs/phase-5-booking-notifications.md). The link is still worth
               saving: it is the customer's only route to changing the booking
               online, and the reminder deliberately does not repeat it (§2.2). */}
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("confirmationEmail")}</p>
+          <p className="text-ink-muted text-sm">{t("confirmationEmail")}</p>
         </Section>
       ) : null}
     </main>
@@ -451,7 +458,7 @@ function DetailsStep({
         // region would have a screen reader interrupt the user continuously
         // while they are trying to type their name.
         aria-live="polite"
-        className="rounded-md bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/40"
+        className="bg-warning-surface text-on-warning-surface rounded-lg px-3 py-2 text-sm font-medium"
       >
         {t("heldFor", { time: formatCountdown(remaining) })}
       </p>
@@ -489,13 +496,13 @@ function DetailsStep({
             nobody can confirm or warn about a cancellation. Saying it here
             saves a round trip. */}
         {contactMissing ? (
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("contactRequired")}</p>
+          <p className="text-ink-muted text-sm">{t("contactRequired")}</p>
         ) : null}
 
         <button
           type="submit"
           disabled={pending || remaining <= 0 || fullName.trim() === "" || contactMissing}
-          className="self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="bg-accent text-on-accent hover:bg-accent-hover min-h-11 w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? t("confirming") : t("confirm")}
         </button>
@@ -559,17 +566,43 @@ function Steps({ current }: { current: Step }): React.ReactElement {
   const index = order.indexOf(current);
 
   return (
-    <ol className="flex flex-wrap gap-2 text-sm text-slate-600 dark:text-slate-400">
-      {order.map((step, position) => (
-        <li key={step} aria-current={step === current ? "step" : undefined}>
-          <span
-            className={position <= index ? "font-medium text-slate-900 dark:text-slate-100" : ""}
+    // Still an <ol> with `aria-current="step"` — the numbered circles below are
+    // only the visual echo of that, exactly as the dashboard nav's underline is
+    // the echo of `aria-current="page"`. The number is rendered decorative
+    // because the step's name is already the list item's text.
+    <ol className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm">
+      {order.map((step, position) => {
+        const done = position < index;
+        const currentStep = position === index;
+
+        return (
+          <li
+            key={step}
+            aria-current={currentStep ? "step" : undefined}
+            className="flex items-center gap-2"
           >
-            {t(`step.${step}`)}
-          </span>
-          {position < order.length - 1 ? <span aria-hidden="true"> › </span> : null}
-        </li>
-      ))}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                done && "bg-accent border-accent text-on-accent",
+                currentStep && "border-accent text-accent border-2",
+                !done && !currentStep && "border-line-strong text-ink-subtle",
+              )}
+            >
+              {done ? "✓" : position + 1}
+            </span>
+            <span className={currentStep ? "text-ink font-semibold" : "text-ink-muted"}>
+              {t(`step.${step}`)}
+            </span>
+            {position < order.length - 1 ? (
+              <span aria-hidden="true" className="text-ink-subtle ml-1">
+                ›
+              </span>
+            ) : null}
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -582,8 +615,8 @@ function Section({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">{title}</h2>
+    <section className="border-line bg-surface flex flex-col gap-4 rounded-xl border p-6">
+      <h2 className="font-display text-ink text-lg font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -592,8 +625,8 @@ function Section({
 function Row({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-slate-600 dark:text-slate-400">{label}</dt>
-      <dd className="text-right font-medium">{value}</dd>
+      <dt className="text-ink-muted">{label}</dt>
+      <dd className="text-ink text-right font-medium">{value}</dd>
     </div>
   );
 }
@@ -606,7 +639,11 @@ function BackButton({
   label: string;
 }): React.ReactElement {
   return (
-    <button type="button" onClick={onClick} className="self-start text-sm underline">
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-accent hover:text-accent-hover self-start text-sm font-medium underline underline-offset-2"
+    >
       {label}
     </button>
   );
@@ -628,15 +665,15 @@ function TextField({
   required?: boolean;
 }): React.ReactElement {
   return (
-    <label htmlFor={id} className="flex flex-col gap-1 text-sm">
-      <span className="font-medium">{label}</span>
+    <label htmlFor={id} className="flex flex-col gap-1.5 text-sm">
+      <span className="text-ink font-medium">{label}</span>
       <input
         id={id}
         type={type}
         value={value}
         required={required}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700"
+        className="border-line-strong bg-surface text-ink min-h-11 rounded-lg border px-3 py-2"
       />
     </label>
   );

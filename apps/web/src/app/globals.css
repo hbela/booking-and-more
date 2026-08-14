@@ -1,16 +1,314 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+ * 1. The static palette (phase-11 §2.3).
+ *
+ * `@theme` values are compile-time constants, so nothing declared here flips
+ * with the theme — this is raw material, and §3 below turns it into the
+ * semantic tokens screens actually use.
+ *
+ * Deep blue at oklch hue 262. Hue 262 reads as corporate blue; the more obvious
+ * ~258 at this lightness renders closer to an electric cobalt that fights every
+ * status colour beside it.
+ *
+ * `--color-slate-*` deliberately shadows Tailwind's own slate, re-tinted to the
+ * same hue so greys sit *under* the blue rather than beside it. That is what let
+ * the migration land one screen at a time: every `slate-*` class already in the
+ * app re-tinted the moment this file did, so an unconverted screen and a
+ * converted one were pixel-identical throughout (phase-11 §2.5).
+ *
+ * The migration is now finished — no component references `slate-*` — and the
+ * block **stays anyway**, which reverses what phase-11 §3 originally planned.
+ * Two reasons. It is the neutral palette the semantic tokens below are built
+ * from, so deleting it would replace named steps with eleven magic oklch
+ * literals. And while it is here, a stray `slate-500` typed out of habit lands
+ * on the product's neutral rather than on Tailwind's blue-grey — the shadowing
+ * is a safety net, not debt.
+ * ------------------------------------------------------------------------- */
 @theme {
-  /* Placeholder brand palette. Epic 9 replaces these with per-tenant values
-     injected as CSS custom properties at request time (white-label branding). */
-  --color-brand-50: oklch(0.97 0.02 175);
-  --color-brand-500: oklch(0.62 0.11 182);
-  --color-brand-600: oklch(0.54 0.1 183);
-  --color-brand-700: oklch(0.45 0.08 184);
+  --color-brand-50: oklch(0.972 0.013 262);
+  --color-brand-100: oklch(0.936 0.028 262);
+  --color-brand-200: oklch(0.885 0.052 262);
+  --color-brand-300: oklch(0.812 0.087 262);
+  --color-brand-400: oklch(0.706 0.14 262);
+  --color-brand-500: oklch(0.606 0.18 262);
+  --color-brand-600: oklch(0.512 0.196 262);
+  --color-brand-700: oklch(0.438 0.176 262);
+  --color-brand-800: oklch(0.375 0.146 262);
+  --color-brand-900: oklch(0.32 0.118 262);
+  --color-brand-950: oklch(0.235 0.088 262);
+
+  /* The public booking page's ramp (PRD §9.1, phase-11 §2.2). Identical to
+     brand today and kept separate on purpose: when per-tenant white-labelling
+     is built, a tenant's colour replaces eleven values in one place instead of
+     an audit of every screen for which blue meant "us" and which meant "them".
+     Product chrome must never reference these. */
+  --color-accent-50: oklch(0.972 0.013 262);
+  --color-accent-100: oklch(0.936 0.028 262);
+  --color-accent-200: oklch(0.885 0.052 262);
+  --color-accent-300: oklch(0.812 0.087 262);
+  --color-accent-400: oklch(0.706 0.14 262);
+  --color-accent-500: oklch(0.606 0.18 262);
+  --color-accent-600: oklch(0.512 0.196 262);
+  --color-accent-700: oklch(0.438 0.176 262);
+  --color-accent-800: oklch(0.375 0.146 262);
+  --color-accent-900: oklch(0.32 0.118 262);
+  --color-accent-950: oklch(0.235 0.088 262);
+
+  --color-slate-50: oklch(0.984 0.003 262);
+  --color-slate-100: oklch(0.968 0.006 262);
+  --color-slate-200: oklch(0.928 0.012 262);
+  --color-slate-300: oklch(0.866 0.018 262);
+  --color-slate-400: oklch(0.7 0.028 262);
+  --color-slate-500: oklch(0.551 0.033 262);
+  --color-slate-600: oklch(0.446 0.032 262);
+  --color-slate-700: oklch(0.371 0.031 262);
+  --color-slate-800: oklch(0.28 0.03 262);
+  --color-slate-900: oklch(0.213 0.028 262);
+  --color-slate-950: oklch(0.152 0.026 262);
+
+  /* Loaded by next/font in [locale]/layout.tsx, which also supplies the
+     fallback stack. `latin-ext` is not optional there: Hungarian ő (U+0151) and
+     ű (U+0171) live in that subset. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-manrope), var(--font-inter), ui-sans-serif, sans-serif;
 }
 
-:root {
-  color-scheme: light dark;
+/* ---------------------------------------------------------------------------
+ * 2. `dark:` under an attribute strategy (phase-11 §2.4).
+ *
+ * Three states have to resolve correctly and a bare media query gets two of
+ * them wrong:
+ *
+ *   no attribute        + OS dark   → dark   (the media branch)
+ *   data-theme="light"  + OS dark   → light  (the media branch must NOT fire)
+ *   data-theme="dark"   + OS light  → dark   (the media branch cannot fire)
+ *
+ * Hence a guarded media branch plus an attribute branch. `:where()` holds both
+ * at zero specificity, so a `dark:` utility never outranks a plain one by
+ * accident of selector weight.
+ * ------------------------------------------------------------------------- */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-theme="light"], [data-theme="light"] *)) {
+      @slot;
+    }
+  }
+
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Semantic tokens.
+ *
+ * `inline` is the load-bearing word. Without it `bg-surface` compiles to
+ * `background-color: var(--color-surface)`, `--color-surface` is pinned at
+ * :root, and redefining it deeper in the tree does nothing. With it, Tailwind
+ * substitutes the reference textually — `bg-surface` becomes
+ * `background-color: var(--surface)` — so any ancestor that redefines
+ * `--surface` wins. That is both how the theme flips below and how the booking
+ * page will take a tenant's accent from an inline style (phase-11 §2.2).
+ * ------------------------------------------------------------------------- */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-surface: var(--primary-surface);
+  --color-on-primary-surface: var(--on-primary-surface);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-surface: var(--accent-surface);
+  --color-on-accent-surface: var(--on-accent-surface);
+
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-on-danger-surface: var(--on-danger-surface);
+
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-on-success-surface: var(--on-success-surface);
+
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-on-warning-surface: var(--on-warning-surface);
+}
+
+/* Light, and the fallback whenever no preference has been expressed at all. */
+:root,
+:root[data-theme="light"] {
+  /* Never `light dark`. With both, the native <select> in locale-switcher.tsx —
+     a deliberate accessibility choice — plus scrollbars and date inputs follow
+     the operating system regardless of the visitor's cookie. It is the most
+     visible bug this architecture can ship (phase-11 §2.4). */
+  color-scheme: light;
+
+  --surface: #fff;
+  --surface-raised: var(--color-slate-50);
+  --surface-sunken: var(--color-slate-100);
+
+  /* Two different jobs, two different bars.
+     `--line` separates things — card edges, row dividers, rules. Decorative, so
+     WCAG asks nothing of it.
+     `--line-strong` is the *boundary of a control* — the edge that tells you
+     where an input or a secondary button is. WCAG 1.4.11 requires 3:1 for that
+     against the surface behind it, which slate-300 (1.50:1 on white) does not
+     come close to. These values clear 3:1 against both the plain and the raised
+     surface. They look heavier than a fashionable hairline border; that is the
+     requirement, not an accident. */
+  --line: var(--color-slate-200);
+  --line-strong: oklch(0.64 0.028 262);
+
+  --ink: var(--color-slate-900);
+  --ink-muted: var(--color-slate-600);
+  --ink-subtle: var(--color-slate-500);
+
+  /* brand-600 on white is 5.93:1. brand-500 is 3.95:1 — it looks usable and is
+     not, so it never carries text (phase-11 §2.3). */
+  --primary: var(--color-brand-600);
+  --primary-hover: var(--color-brand-700);
+  --on-primary: #fff;
+  --primary-surface: var(--color-brand-50);
+  --on-primary-surface: var(--color-brand-800);
+
+  --accent: var(--color-accent-600);
+  --accent-hover: var(--color-accent-700);
+  --on-accent: #fff;
+  --accent-surface: var(--color-accent-50);
+  --on-accent-surface: var(--color-accent-800);
+
+  /* Chromas are trimmed to the sRGB gamut rather than rounded to nicer numbers.
+     An out-of-gamut oklch is clipped by the browser, so the stored value would
+     stop describing what renders and the contrast test would assert against a
+     colour nobody sees. */
+  --danger: oklch(0.505 0.205 27);
+  --danger-surface: oklch(0.955 0.022 27);
+  --on-danger-surface: oklch(0.36 0.14 27);
+
+  --success: oklch(0.5 0.12 155);
+  --success-surface: oklch(0.96 0.04 155);
+  --on-success-surface: oklch(0.36 0.085 155);
+
+  --warning: oklch(0.5 0.1 75);
+  --warning-surface: oklch(0.965 0.03 80);
+  --on-warning-surface: oklch(0.4 0.075 75);
+
+  --focus-ring: var(--color-brand-600);
+}
+
+/* Dark, chosen by the operating system.
+ *
+ * `:not([data-theme])` rather than `:not([data-theme="light"])` — an explicit
+ * "dark" falls through to the block below instead, so forced-dark is decided in
+ * exactly one place. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+
+    --surface: oklch(0.19 0.027 262);
+    --surface-raised: oklch(0.235 0.028 262);
+    --surface-sunken: oklch(0.152 0.026 262);
+
+    --line: oklch(0.31 0.03 262);
+    /* 3:1 against both the plain and the raised dark surface — see the light
+       block above for why this is not the next step down the neutral ramp. */
+    --line-strong: oklch(0.52 0.032 262);
+
+    --ink: var(--color-slate-100);
+    --ink-muted: var(--color-slate-400);
+    --ink-subtle: oklch(0.62 0.032 262);
+
+    /* The dark primary is a bright fill with near-black text, not a darkened
+       button with white text — a dark blue cannot reach 4.5:1 against this
+       ground at any chroma worth having. */
+    --primary: var(--color-brand-400);
+    --primary-hover: var(--color-brand-300);
+    --on-primary: var(--color-slate-950);
+    --primary-surface: oklch(0.29 0.075 262);
+    --on-primary-surface: var(--color-brand-200);
+
+    --accent: var(--color-accent-400);
+    --accent-hover: var(--color-accent-300);
+    --on-accent: var(--color-slate-950);
+    --accent-surface: oklch(0.29 0.075 262);
+    --on-accent-surface: var(--color-accent-200);
+
+    --danger: oklch(0.72 0.16 25);
+    --danger-surface: oklch(0.28 0.09 27);
+    --on-danger-surface: oklch(0.85 0.08 25);
+
+    --success: oklch(0.78 0.15 155);
+    --success-surface: oklch(0.28 0.07 155);
+    --on-success-surface: oklch(0.87 0.1 155);
+
+    --warning: oklch(0.83 0.15 80);
+    --warning-surface: oklch(0.3 0.06 75);
+    --on-warning-surface: oklch(0.88 0.11 80);
+
+    --focus-ring: var(--color-brand-400);
+  }
+}
+
+/* Dark, chosen by the visitor.
+ *
+ * The declarations are duplicated from the block above **on purpose**. CSS has
+ * no way to attach one block to both a media query and a bare selector, and
+ * aliasing through a second layer of variables trades twelve literals for
+ * twelve indirections without removing the duplication. Keep the two in step —
+ * globals.contrast.test.ts reads both and fails if they drift. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface: oklch(0.19 0.027 262);
+  --surface-raised: oklch(0.235 0.028 262);
+  --surface-sunken: oklch(0.152 0.026 262);
+
+  --line: oklch(0.31 0.03 262);
+  --line-strong: oklch(0.52 0.032 262);
+
+  --ink: var(--color-slate-100);
+  --ink-muted: var(--color-slate-400);
+  --ink-subtle: oklch(0.62 0.032 262);
+
+  --primary: var(--color-brand-400);
+  --primary-hover: var(--color-brand-300);
+  --on-primary: var(--color-slate-950);
+  --primary-surface: oklch(0.29 0.075 262);
+  --on-primary-surface: var(--color-brand-200);
+
+  --accent: var(--color-accent-400);
+  --accent-hover: var(--color-accent-300);
+  --on-accent: var(--color-slate-950);
+  --accent-surface: oklch(0.29 0.075 262);
+  --on-accent-surface: var(--color-accent-200);
+
+  --danger: oklch(0.72 0.16 25);
+  --danger-surface: oklch(0.28 0.09 27);
+  --on-danger-surface: oklch(0.85 0.08 25);
+
+  --success: oklch(0.78 0.15 155);
+  --success-surface: oklch(0.28 0.07 155);
+  --on-success-surface: oklch(0.87 0.1 155);
+
+  --warning: oklch(0.83 0.15 80);
+  --warning-surface: oklch(0.3 0.06 75);
+  --on-warning-surface: oklch(0.88 0.11 80);
+
+  --focus-ring: var(--color-brand-400);
 }
 
 html {
@@ -18,17 +316,21 @@ html {
 }
 
 body {
-  @apply bg-white text-slate-900 antialiased;
+  background-color: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    @apply bg-slate-950 text-slate-100;
-  }
+/* Times, prices and durations line up in a column. */
+:where(time, td, th, output, .tabular) {
+  font-variant-numeric: tabular-nums;
 }
 
-/* WCAG 2.1 AA (PRD §12.4): focus must always be visible, never removed. */
+/* WCAG 2.1 AA (PRD §12.4): focus must always be visible, never removed.
+   `--focus-ring` flips with the theme so it clears 3:1 on both grounds —
+   5.93:1 on white, 7.00:1 on the dark surface. */
 :focus-visible {
-  outline: 2px solid var(--color-brand-500);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
@@ -193,7 +193,7 @@ export function DashboardShell({
         <div>
           <h1 className="text-2xl font-semibold">{t("title")}</h1>
           {context.me ? (
-            <p className="text-sm text-slate-600 dark:text-slate-400">
+            <p className="text-sm text-ink-muted">
               {context.me.user.name} · {context.me.user.email}
               {context.me.membership ? ` · ${context.me.membership.role}` : ""}
             </p>
@@ -215,7 +215,7 @@ export function DashboardShell({
                     void queryClient.invalidateQueries();
                   });
                 }}
-                className="rounded-md border border-slate-300 bg-transparent px-3 py-1.5 dark:border-slate-700"
+                className="rounded-md border border-line-strong bg-transparent px-3 py-1.5"
               >
                 {context.tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
@@ -233,7 +233,7 @@ export function DashboardShell({
                 router.push("/sign-in");
               });
             }}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm dark:border-slate-700"
+            className="rounded-md border border-line-strong px-3 py-1.5 text-sm"
           >
             {t("signOut")}
           </button>
@@ -246,7 +246,7 @@ export function DashboardShell({
           target somebody is already reaching for. */}
       {context.tenantId && !context.isPending ? (
         <nav aria-label={t("sections")}>
-          <ul className="flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
+          <ul className="flex flex-wrap gap-1 border-b border-line">
             {(context.me?.membership?.providerId ? [...NAV, OWN_DIARY] : NAV)
               .filter(
                 (item) =>
@@ -267,7 +267,7 @@ export function DashboardShell({
                       <span
                         aria-disabled="true"
                         aria-describedby={GATE_HINT_ID}
-                        className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-slate-400 dark:text-slate-600"
+                        className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-ink-subtle"
                       >
                         {t(item.key)}
                       </span>
@@ -284,8 +284,8 @@ export function DashboardShell({
                       aria-current={current ? "page" : undefined}
                       className={`inline-block border-b-2 px-3 py-2 text-sm ${
                         current
-                          ? "border-brand-600 font-medium"
-                          : "border-transparent text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+                          ? "border-primary font-medium"
+                          : "border-transparent text-ink-muted hover:text-ink"
                       }`}
                     >
                       {t(item.key)}
@@ -298,7 +298,7 @@ export function DashboardShell({
           {/* The reason, once, referenced by every disabled item above. A
               tooltip would not reach a keyboard or screen-reader user. */}
           {context.awaitingSubscription ? (
-            <p id={GATE_HINT_ID} className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <p id={GATE_HINT_ID} className="mt-2 text-xs text-ink-subtle">
               {t("gatedUntilSubscribed")}
             </p>
           ) : null}
@@ -310,238 +310,13 @@ export function DashboardShell({
   );
 }
 
-/** Shared chrome for a catalogue screen: heading, error slot, and a table. */
-export function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-/**
- * A form panel with a heading.
+/* The compatibility surface that lived here through increments 2–7 is gone.
+ * `Section`, `Panel`, `Notice`, `NoticeLink`, `ErrorText`, `Field`, `RowLink`,
+ * `RowButton` and `useEditPanel` were re-exported from this module so the files
+ * importing them could migrate one at a time; the three class-name constants
+ * (`inputClass`, `buttonClass`, `secondaryButtonClass`) were redefined in terms
+ * of the recipes for the same reason.
  *
- * Takes the rest of a `<section>`'s props so {@link useEditPanel}'s
- * `panelProps` can be spread onto it — that is how an editing panel becomes
- * focusable and addressable by the row button's `aria-controls`.
- */
-export function Panel({
-  title,
-  children,
-  ...rest
-}: {
-  title: string;
-  children: React.ReactNode;
-} & Omit<React.ComponentPropsWithRef<"section">, "title" | "children">): React.ReactElement {
-  return (
-    // No `focus:outline-none` here: when the panel takes focus programmatically
-    // the ring from globals.css is the only thing telling the user where they
-    // landed.
-    <section
-      className="flex flex-col gap-4 rounded-xl border border-slate-200 p-5 dark:border-slate-800"
-      {...rest}
-    >
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-/**
- * A prerequisite or next-step message.
- *
- * Not an `ErrorText`: nothing has gone wrong, the owner is simply part-way
- * through setting up and the screen can say what comes next. `role="note"` and
- * not `role="alert"`, so it is available to a screen reader without interrupting
- * whatever the user is doing.
- */
-export function Notice({
-  children,
-  tone = "info",
-}: {
-  children: React.ReactNode;
-  /** `action` when something must be done before this screen is useful. */
-  tone?: "info" | "action";
-}): React.ReactElement {
-  const palette =
-    tone === "action"
-      ? "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
-      : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40";
-
-  return (
-    <p role="note" className={`rounded-lg border px-4 py-3 text-sm ${palette}`}>
-      {children}
-    </p>
-  );
-}
-
-/** An inline link out to another dashboard screen, for use inside a {@link Notice}. */
-export function NoticeLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <Link href={href} className="font-medium text-brand-600 underline dark:text-brand-500">
-      {children}
-    </Link>
-  );
-}
-
-export function ErrorText({ children }: { children: React.ReactNode }): React.ReactElement | null {
-  if (!children) return null;
-
-  return (
-    <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-      {children}
-    </p>
-  );
-}
-
-export function Field({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <label htmlFor={id} className="flex flex-col gap-1 text-sm">
-      <span className="font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-export const inputClass =
-  "rounded-md border border-slate-300 bg-transparent px-3 py-2 dark:border-slate-700";
-
-export const buttonClass =
-  "self-start rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60";
-
-/** The quieter sibling of {@link buttonClass}: cancel, back out, dismiss. */
-export const secondaryButtonClass =
-  "rounded-md border border-slate-300 px-4 py-2 text-sm dark:border-slate-700";
-
-/** A compact action inside a table row. */
-/**
- * A row action that navigates rather than acting. Styled as {@link RowButton}
- * because it sits in the same group, but it is an anchor: it opens in a new tab
- * on middle-click, and a screen reader announces it as a link.
- */
-export function RowLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <Link
-      href={href}
-      className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
-    >
-      {children}
-    </Link>
-  );
-}
-
-export function RowButton({
-  onClick,
-  children,
-  ...rest
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-} & Omit<React.ComponentPropsWithRef<"button">, "onClick" | "children">): React.ReactElement {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-md border border-slate-300 px-2 py-1 text-xs dark:border-slate-700"
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
-
-export interface EditPanel {
-  /** The row currently open, or null. */
-  openId: string | null;
-  /** Open this row, or close it if it is already open. */
-  toggle: (id: string) => void;
-  close: () => void;
-  /** Spread onto the panel element so focus and labelling work. */
-  panelProps: { id: string; ref: React.RefObject<HTMLElement | null>; tabIndex: -1 };
-  /** Spread onto the row's trigger button. */
-  triggerProps: (id: string) => { "aria-expanded": boolean; "aria-controls": string };
-}
-
-/**
- * One open editing panel per screen, with the focus wiring a dialog would give
- * us for free.
- *
- * There is no Dialog primitive here and there is not going to be one — the
- * screens use an inline `Panel` toggled by state. What that pattern loses is
- * everything a dialog does about focus: before this hook, pressing "Assign"
- * rendered a panel below the fold and left the caret on the button, so for a
- * keyboard or screen-reader user *nothing observable happened*. So the panel
- * takes focus on open and hands it back on close, and the trigger announces
- * what it controls.
- *
- * `scrollIntoView` uses `block: "nearest"`, which does nothing when the panel is
- * already visible — the common case on a short list, where scrolling would be
- * an unexplained jump.
- */
-export function useEditPanel(name: string): EditPanel {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-  const panelId = `${name}-edit-panel`;
-
-  // After the panel mounts, not during the click that opened it.
-  useEffect(() => {
-    if (openId === null) return;
-
-    panelRef.current?.focus();
-    panelRef.current?.scrollIntoView({ block: "nearest" });
-  }, [openId]);
-
-  const close = useCallback(() => {
-    setOpenId(null);
-    // Focus would otherwise fall back to <body>, stranding a keyboard user at
-    // the top of the document with no idea where they were.
-    triggerRef.current?.focus();
-  }, []);
-
-  const toggle = useCallback((id: string) => {
-    setOpenId((current) => (current === id ? null : id));
-    triggerRef.current = document.activeElement as HTMLElement | null;
-  }, []);
-
-  const triggerProps = useCallback(
-    (id: string) => ({ "aria-expanded": openId === id, "aria-controls": panelId }),
-    [openId, panelId],
-  );
-
-  return {
-    openId,
-    toggle,
-    close,
-    panelProps: { id: panelId, ref: panelRef, tabIndex: -1 },
-    triggerProps,
-  };
-}
+ * All 94 call sites now use `components/ui/*` directly, so this file is back to
+ * the three things that belong in it: the tenant/permission context, the
+ * signed-out redirect, and the shell itself. */

@@ -1,0 +1,38 @@
+import { THEME_PREFERENCE_COOKIE } from "./theme-preference";
+
+/**
+ * The blocking script that stamps `data-theme` on `<html>` before first paint.
+ *
+ * ## Why a script and not the server
+ *
+ * The obvious implementation is `cookies()` in `[locale]/layout.tsx`. It is
+ * also the wrong one: reading a cookie opts the whole locale layout into
+ * dynamic rendering, which defeats `generateStaticParams` and
+ * `setRequestLocale` for every route beneath it — and a cached response would
+ * still carry one visitor's theme to the next.
+ *
+ * So the document stays static and one tiny synchronous script personalises it.
+ * It runs before the browser paints, so there is no flash; it is deliberately
+ * placed in `<head>` for that reason, and must not be deferred.
+ *
+ * ## Why it is a string
+ *
+ * `dangerouslySetInnerHTML` is the only way to emit a synchronous inline
+ * script from React. There are two documents that need it — `[locale]/layout.tsx`
+ * and `app/not-found.tsx`, which sits above the locale segment and has no
+ * layout of its own — so it lives here once rather than being typed twice and
+ * drifting.
+ *
+ * ## Note for whoever adds a CSP
+ *
+ * There is no Content-Security-Policy header today. When one arrives this
+ * script needs a nonce threaded through to both call sites, or it will be
+ * blocked and every visitor who chose a theme will silently get the system one
+ * (phase-11 §5.2).
+ *
+ * The `catch` is not defensive padding: `document.cookie` throws in some
+ * embedded and privacy-restricted contexts, and an exception here would abort
+ * the parser before `<body>`. Failing to a system-themed page is fine; failing
+ * to a blank one is not.
+ */
+export const THEME_SCRIPT = `try{var m=document.cookie.match(/(?:^|; )${THEME_PREFERENCE_COOKIE.replaceAll(".", "\\.")}=(light|dark)/);if(m)document.documentElement.dataset.theme=m[1]}catch(e){}`;

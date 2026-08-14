@@ -2,10 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { AdminShell } from "./admin-shell";
-import { Panel, buttonClass } from "./dashboard-shell";
+import { ButtonLink } from "./ui/button";
+import { Card } from "./ui/card";
 
 /**
  * The admin section's landing page, and the one screen that has to make sense
@@ -33,12 +33,12 @@ export function AdminScreen(): React.ReactElement {
     // No session. A 401 is the ordinary answer here rather than an error.
     if (!me.data) {
       return (
-        <Panel title={t("signedOutTitle")}>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("signedOutHint")}</p>
-          <Link href="/sign-in" className={buttonClass}>
+        <Card title={t("signedOutTitle")}>
+          <p className="text-sm text-ink-muted">{t("signedOutHint")}</p>
+          <ButtonLink href="/sign-in" >
             {t("signedOutLink")}
-          </Link>
-        </Panel>
+          </ButtonLink>
+        </Card>
       );
     }
 
@@ -46,22 +46,22 @@ export function AdminScreen(): React.ReactElement {
     // rather than leaving them on a page with nothing on it.
     if (!me.data.user.isPlatformAdmin) {
       return (
-        <Panel title={t("notAdminTitle")}>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t("notAdminHint")}</p>
-          <Link href="/dashboard" className={buttonClass}>
+        <Card title={t("notAdminTitle")}>
+          <p className="text-sm text-ink-muted">{t("notAdminHint")}</p>
+          <ButtonLink href="/dashboard" >
             {t("notAdminLink")}
-          </Link>
-        </Panel>
+          </ButtonLink>
+        </Card>
       );
     }
 
     return (
-      <Panel title={t("platformAdminTitle")}>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{t("platformAdminHint")}</p>
-        <Link href="/admin/platform" className={buttonClass}>
+      <Card title={t("platformAdminTitle")}>
+        <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
+        <ButtonLink href="/admin/platform" >
           {t("platformAdminLink")}
-        </Link>
-      </Panel>
+        </ButtonLink>
+      </Card>
     );
   }
 }

@@ -1,5 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AuthForm } from "@/components/auth-form";
+import { AuthLayout } from "@/components/ui/auth-layout";
 import { Link } from "@/i18n/navigation";
 
 export default async function SignUpPage({
@@ -12,15 +13,17 @@ export default async function SignUpPage({
   const t = await getTranslations("auth");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
-      <h1 className="text-2xl font-semibold">{t("signUpTitle")}</h1>
+    <AuthLayout title={t("signUpTitle")}>
       <AuthForm mode="sign-up" />
-      <p className="text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-ink-muted text-sm">
         {t("haveAccount")}{" "}
-        <Link href="/sign-in" className="text-brand-600 underline">
+        <Link
+          href="/sign-in"
+          className="text-primary hover:text-primary-hover font-medium underline underline-offset-2"
+        >
           {t("signIn")}
         </Link>
       </p>
-    </main>
+    </AuthLayout>
   );
 }
