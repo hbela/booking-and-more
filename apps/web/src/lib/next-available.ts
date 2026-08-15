@@ -1,101 +1,53 @@
-/**
- * "Nothing free on that day" is a dead end. This turns it into a next step.
- *
- * The customer picked one date and got an empty list. Rather than leaving them
- * to guess-and-check a date picker — which is how somebody decides a business
- * has no availability at all and closes the tab — the page searches the days
- * that follow and offers the first few that have something.
- *
- * ## Why this module is pure, and why the grouping is local
- *
- * A slot is an absolute instant (`startAt`), and "which day is that" is a
- * question only a timezone can answer. The page renders every time through
- * `Intl.DateTimeFormat` with no `timeZone` option — that is, in the browser's
- * zone — so the grouping has to use the same zone, or a 23:30 slot would be
- * offered under a heading a day away from the time printed beside it.
- *
- * Nothing here converts an instant by adding an offset by hand (CLAUDE.md rule
- * 13). {@link localDayOf} asks the platform which local day an instant falls
- * on, and {@link addDaysToDateOnly} does calendar arithmetic on a date-only
- * string through UTC, where every day is exactly 24 hours and no daylight-saving
- * transition exists to be wrong about.
- */
+import { summariseSlotsByDay, type DaySummary } from "./month-availability";
+import type { DateOnly } from "@bam/availability-engine";
 
 /**
- * How far past the requested day to look.
+ * Where to send a customer when the month they are looking at holds nothing.
  *
- * Two weeks: long enough to cross a provider who works alternate weeks or is
- * away for a few days, short enough that the answer is still useful to somebody
- * who wanted an appointment "soon". The API caps a single search at 62 days, so
- * this is well inside one request.
- */
-export const LOOKAHEAD_DAYS = 14;
-
-/** How many alternative days to offer. More than three is a second date picker. */
-export const SUGGESTED_DAYS = 3;
-
-/**
- * Calendar arithmetic on a `YYYY-MM-DD` string.
+ * This file used to own the whole "nothing free on that day" answer: a 14-day
+ * lookahead and three suggestion chips beside a date input. The month grid took
+ * most of that over — a day with times is now marked on the calendar, so
+ * offering the same day again as a chip says nothing new — and what survives is
+ * the one question the grid cannot answer, because it only ever shows one
+ * month: *where is the next free day at all?*
  *
- * Through UTC deliberately: the input names a calendar day rather than an
- * instant, and local-time arithmetic across a daylight-saving boundary can land
- * on the same date twice or skip one.
+ * The day-grouping arithmetic, and `localDayOf` with it, moved to
+ * `./month-availability`. Import those from there; this file depends on that
+ * one and never the other way round.
  */
-export function addDaysToDateOnly(date: string, days: number): string {
-  const shifted = new Date(`${date}T00:00:00Z`);
-  shifted.setUTCDate(shifted.getUTCDate() + days);
-  return shifted.toISOString().slice(0, 10);
-}
 
-/**
- * The calendar day an instant falls on, in the browser's zone, as `YYYY-MM-DD`.
- *
- * `toISOString().slice(0, 10)` would be the UTC day, which is a different day
- * for any evening appointment east of Greenwich — including every slot this
- * application currently sells.
- */
-export function localDayOf(instant: string): string {
-  const at = new Date(instant);
-  const year = String(at.getFullYear()).padStart(4, "0");
-  const month = String(at.getMonth() + 1).padStart(2, "0");
-  const day = String(at.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export interface DayWithSlots {
-  /** `YYYY-MM-DD` in the browser's zone — what the date input expects. */
-  date: string;
-  /** How many start times that day holds. */
-  count: number;
-  /** The earliest of them, for the "from 09:00" hint. */
-  firstStartAt: string;
+export interface DayWithSlots extends DaySummary {
+  date: DateOnly;
 }
 
 /**
  * The first `limit` days that hold anything, earliest first.
  *
- * Sorted here rather than trusting the response: the API does return slots in
- * time order, but this reads the *first* start time of each day as the one it
- * shows, which is a claim worth making true locally.
+ * Built on {@link summariseSlotsByDay} so a day's count means the same thing
+ * here as it does on a calendar cell — distinct start times, not one entry per
+ * provider offering the same one.
  */
 export function nextAvailableDays(
-  slots: readonly { startAt: string }[],
-  limit: number = SUGGESTED_DAYS,
+  slots: readonly { startAt: string; providerId: string }[],
+  limit = 1,
 ): DayWithSlots[] {
-  const byDay = new Map<string, { count: number; firstStartAt: string }>();
-
-  for (const slot of [...slots].sort((left, right) =>
-    left.startAt < right.startAt ? -1 : left.startAt > right.startAt ? 1 : 0,
-  )) {
-    const date = localDayOf(slot.startAt);
-    const existing = byDay.get(date);
-
-    if (existing === undefined) byDay.set(date, { count: 1, firstStartAt: slot.startAt });
-    else existing.count += 1;
-  }
-
-  return [...byDay.entries()]
+  return [...summariseSlotsByDay(slots).entries()]
     .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     .slice(0, limit)
-    .map(([date, entry]) => ({ date, count: entry.count, firstStartAt: entry.firstStartAt }));
+    .map(([date, summary]) => ({ date, ...summary }));
+}
+
+/**
+ * The earliest free day across the lookahead months, or null.
+ *
+ * The months arrive as separate query results — each one a real month search
+ * sharing the navigation cache — so they are concatenated rather than merged in
+ * order: the sort inside {@link nextAvailableDays} puts them right regardless
+ * of which resolved first, and a caller passing them out of order still gets
+ * the earliest day.
+ */
+export function firstAcrossMonths(
+  months: readonly (readonly { startAt: string; providerId: string }[])[],
+): DayWithSlots | null {
+  return nextAvailableDays(months.flat(), 1)[0] ?? null;
 }

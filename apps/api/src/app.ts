@@ -5,6 +5,7 @@ import Fastify, {
   type RawServerDefault,
 } from "fastify";
 
+import compress from "@fastify/compress";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -139,6 +140,19 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     // here so it does not break the OpenAPI reference page.
     contentSecurityPolicy: false,
   });
+
+  // Responses only. `requestEncodings` is deliberately left alone: the Stripe
+  // webhook reads a raw body to verify its signature, and decompressing
+  // requests here would put a transform between the bytes Stripe signed and
+  // the bytes we check.
+  //
+  // It earns its place on one endpoint in particular. The public slot search
+  // answers a month with a few thousand objects that are almost entirely
+  // near-identical ISO timestamps — ~430 KB that gzip takes to ~15 KB — and
+  // nothing else in the stack can compress it: the browser calls the API
+  // cross-origin, so the web app's server is not in the path, and Coolify's
+  // Traefik does not enable compression by default.
+  await app.register(compress, { global: true, threshold: 1024 });
 
   // Explicit allow-list. Not `origin: true` — the predecessor shipped
   // reflect-any CORS alongside `credentials: true`, which defeats the point.

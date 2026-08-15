@@ -1,117 +1,82 @@
 import { describe, expect, it } from "vitest";
-import { addDaysToDateOnly, localDayOf, nextAvailableDays } from "./next-available";
+import { localDayOf } from "./month-availability";
+import { firstAcrossMonths, nextAvailableDays } from "./next-available";
 
 /**
- * The empty-day suggestion, tested where the timezone traps live.
+ * The "nothing this month" escape hatch.
  *
- * Every case that matters here is a boundary: the day arithmetic across a
- * daylight-saving change, and the instant → calendar-day grouping for an
- * evening appointment, which is a different day in UTC than it is on the wall
- * the customer is reading.
+ * The date arithmetic these used to test moved to `./month-availability` with
+ * `localDayOf` and the day grouping; what is left is the ordering, which is the
+ * part that decides where a customer is sent.
  */
 
-describe("addDaysToDateOnly", () => {
-  it("advances a date", () => {
-    expect(addDaysToDateOnly("2026-08-17", 1)).toBe("2026-08-18");
-    expect(addDaysToDateOnly("2026-08-17", 14)).toBe("2026-08-31");
-  });
-
-  it("crosses month and year ends", () => {
-    expect(addDaysToDateOnly("2026-08-31", 1)).toBe("2026-09-01");
-    expect(addDaysToDateOnly("2026-12-28", 14)).toBe("2027-01-11");
-  });
-
-  it("counts calendar days across a daylight-saving change", () => {
-    // Europe/Budapest turns the clocks back on 2026-10-25. A local-time
-    // implementation can land on the same date twice here; a UTC one cannot.
-    expect(addDaysToDateOnly("2026-10-24", 1)).toBe("2026-10-25");
-    expect(addDaysToDateOnly("2026-10-25", 1)).toBe("2026-10-26");
-    expect(addDaysToDateOnly("2026-10-24", 7)).toBe("2026-10-31");
-  });
-
-  it("handles a leap day", () => {
-    expect(addDaysToDateOnly("2028-02-28", 1)).toBe("2028-02-29");
-  });
-});
-
-describe("localDayOf", () => {
-  it("reads the day off the local clock, not off UTC", () => {
-    // Written against whatever zone the test runs in, because that is the
-    // property that matters: the grouping must agree with Intl, which is also
-    // zone-less. Asserting a fixed string would only test the runner's TZ.
-    const instant = "2026-08-17T21:30:00.000Z";
-    const local = new Date(instant);
-    const expected = `${String(local.getFullYear()).padStart(4, "0")}-${String(
-      local.getMonth() + 1,
-    ).padStart(2, "0")}-${String(local.getDate()).padStart(2, "0")}`;
-
-    expect(localDayOf(instant)).toBe(expected);
-  });
-});
+function slot(startAt: string, providerId = "p1"): { startAt: string; providerId: string } {
+  return { startAt, providerId };
+}
 
 describe("nextAvailableDays", () => {
-  function slot(startAt: string): { startAt: string } {
-    return { startAt };
-  }
-
   it("returns nothing for no slots", () => {
     expect(nextAvailableDays([])).toEqual([]);
   });
 
-  it("groups by day, counts, and keeps the earliest start", () => {
+  it("returns the earliest day by default, with its distinct-start count", () => {
     const days = nextAvailableDays([
-      slot("2026-08-18T07:00:00.000Z"),
-      slot("2026-08-18T07:15:00.000Z"),
-      slot("2026-08-19T09:00:00.000Z"),
+      slot("2026-09-20T09:00:00.000Z"),
+      slot("2026-09-14T07:00:00.000Z", "p1"),
+      slot("2026-09-14T07:00:00.000Z", "p2"),
+      slot("2026-09-14T07:15:00.000Z"),
     ]);
 
-    expect(days).toHaveLength(2);
-    expect(days[0]).toMatchObject({ count: 2, firstStartAt: "2026-08-18T07:00:00.000Z" });
-    expect(days[1]).toMatchObject({ count: 1, firstStartAt: "2026-08-19T09:00:00.000Z" });
-    expect(days[0]?.date).toBe(localDayOf("2026-08-18T07:00:00.000Z"));
+    expect(days).toHaveLength(1);
+    expect(days[0]).toMatchObject({
+      date: localDayOf("2026-09-14T07:00:00.000Z"),
+      count: 2,
+      firstStartAt: "2026-09-14T07:00:00.000Z",
+    });
   });
 
-  it("orders days earliest first and takes the earliest start whatever the input order", () => {
-    const days = nextAvailableDays([
-      slot("2026-08-20T10:00:00.000Z"),
-      slot("2026-08-18T11:00:00.000Z"),
-      slot("2026-08-18T08:00:00.000Z"),
-    ]);
-
-    expect(days.map((entry) => entry.firstStartAt)).toEqual([
-      "2026-08-18T08:00:00.000Z",
-      "2026-08-20T10:00:00.000Z",
-    ]);
-  });
-
-  it("offers at most the limit, keeping the nearest days", () => {
+  it("orders days earliest first whatever the input order", () => {
     const days = nextAvailableDays(
       [
-        slot("2026-08-18T08:00:00.000Z"),
-        slot("2026-08-19T08:00:00.000Z"),
-        slot("2026-08-20T08:00:00.000Z"),
-        slot("2026-08-21T08:00:00.000Z"),
+        slot("2026-09-20T10:00:00.000Z"),
+        slot("2026-09-14T11:00:00.000Z"),
+        slot("2026-09-14T08:00:00.000Z"),
       ],
       3,
     );
 
-    expect(days).toHaveLength(3);
-    expect(days.at(-1)?.date).toBe(localDayOf("2026-08-20T08:00:00.000Z"));
+    expect(days.map((entry) => entry.firstStartAt)).toEqual([
+      "2026-09-14T08:00:00.000Z",
+      "2026-09-20T10:00:00.000Z",
+    ]);
+  });
+});
+
+describe("firstAcrossMonths", () => {
+  it("returns null when every month is empty", () => {
+    expect(firstAcrossMonths([[], []])).toBeNull();
   });
 
-  it("splits a run of slots on the local day boundary", () => {
-    // Two instants an hour apart across local midnight must land in different
-    // groups — the heading has to match the time printed beside it.
-    const before = "2026-08-18T21:30:00.000Z";
-    const after = "2026-08-18T23:30:00.000Z";
+  it("takes the earliest day across months", () => {
+    const found = firstAcrossMonths([
+      [slot("2026-10-05T08:00:00.000Z")],
+      [slot("2026-09-28T08:00:00.000Z")],
+    ]);
 
-    if (localDayOf(before) === localDayOf(after)) {
-      // Same local day in this runner's zone: nothing to assert about a
-      // boundary that is not crossed here.
-      expect(nextAvailableDays([slot(before), slot(after)])).toHaveLength(1);
-      return;
-    }
+    expect(found?.firstStartAt).toBe("2026-09-28T08:00:00.000Z");
+  });
 
-    expect(nextAvailableDays([slot(before), slot(after)])).toHaveLength(2);
+  it("does not care which month's query resolved first", () => {
+    // The months arrive as independent query results, so the caller cannot
+    // guarantee their order — the sort has to do it.
+    const early = [slot("2026-09-28T08:00:00.000Z")];
+    const late = [slot("2026-10-05T08:00:00.000Z")];
+
+    expect(firstAcrossMonths([early, late])?.date).toBe(firstAcrossMonths([late, early])?.date);
+  });
+
+  it("skips an empty month to reach a later one", () => {
+    const found = firstAcrossMonths([[], [slot("2026-11-02T08:00:00.000Z")]]);
+    expect(found?.firstStartAt).toBe("2026-11-02T08:00:00.000Z");
   });
 });

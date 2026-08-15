@@ -17,6 +17,14 @@ sweep that makes a reminder fire; done). It closes phase-4 §5.2 and phase-5 §5
 before putting a link in any email**: the management token is stored only as a hash, so it travels in the
 outbox payload and reaches exactly two of the five templates — and §2.2 records why the reminder is
 deliberately not one of them ·
+[Phase 6 — booking calendar](docs/phase-6-booking-calendar.md) (the customer's month view only; the staff
+calendar, Google Calendar sync and per-step deep links are still Epic 6's and still unbuilt — its §6 says so
+explicitly). The "When" step was a date input and a list, so an empty day was a dead end. **Read its §2.2
+before widening or narrowing any slot search**: it reverses phase 4's "never widen the search", with the
+measurement that justifies it, and §2.2.1 records why `@fastify/compress` arrived with it and why
+`requestEncodings` must stay untouched. §2.4 is the one that bites — a day's count is *distinct start times*,
+because the search merges providers without deduplicating. §2.7 is two zones on one screen on purpose: a slot
+is an instant in the reader's zone, a calendar cell is a zoneless square formatted in UTC ·
 [Phase 9 — SaaS administration](docs/phase-9-saas-administration.md) (part plan, part record: provisioning,
 the owner's invitation and its email are built; Stripe, the pending owner dashboard and the expiry sweep are
 not — its §1.2 is the authority on which is which) ·
