@@ -278,7 +278,19 @@ pnpm db:drift-check      # what CI runs
 pnpm db:grant-platform-admin <email>   # the only way to set isPlatformAdmin
 pnpm db:join-tenant <email> <slug> [ROLE]   # development only; a second membership by hand
 pnpm db:discard-organization <slug|domain> [--yes]   # development only; see below
+pnpm db:explain-availability <slug> [YYYY-MM-DD] [--service <slug>] [--provider <name>]
 ```
+
+**`db:explain-availability` is the answer to "the provider has hours but the booking page offers nothing".**
+An empty slot list is the honest answer to a real search that matched nobody, and it is indistinguishable
+from a misconfiguration — of which there are eight, spread across four screens. The script walks the same
+gates `AvailabilityService.searchSlots` walks, in the same order, and prints what each one decided: the
+service's own flags, the provider assignment, the effective notice and advance window after the
+most-restrictive rule, whether the working periods are long enough to hold the service *plus its buffers*,
+which rows are ignored and why, and finally the verdict from `generateSlots` itself rather than from a
+reimplementation. It reads only — no write, no audit row — and so, alone among the scripts here, it does
+**not** refuse to run against production: refusing would remove it from the one database whose data is ever
+in question. It is a script and not a route because of rule 7.
 
 **There is no `db:seed`.** It created one demo tenant, Sunshine Dental, and was removed on 2026-08-01 along
 with that tenant — an ACTIVE organization with no subscription row, which is precisely what phase-9 §2.2's

@@ -219,10 +219,32 @@ Four decisions worth keeping:
   customer — empty, then searching, then suggestions — and a sighted reader watching that happen is the only
   one told, otherwise.
 
-It is also the fastest diagnostic there is for "the provider has hours but the page shows none": if the
-suggestion names a different day, the cause is specific to the day asked for — no working hours on that
-weekday, or an `UNAVAILABLE` exception. If it reports nothing free in the whole fortnight, the cause is
-provider-wide — the booking window, or the service duration plus buffers not fitting the working period.
+It is also a first-cut diagnostic for "the provider has hours but the page shows none": if the suggestion
+names a different day, the cause is specific to the day asked for — no working hours on that weekday, or an
+`UNAVAILABLE` exception. If it reports nothing free in the whole fortnight, the cause is provider-wide.
+
+### 3.4.2 `pnpm db:explain-availability` — added 2026-08-15
+
+The fortnight came back empty on a live tenant whose provider visibly had working hours, and narrowing it
+further from the outside meant guessing among eight causes spread over four screens. The gates are only
+legible from the database, and rule 7 forbids the endpoint that would show them — so it is a script,
+alongside `db:discard-organization` and for the same reason.
+
+It walks `searchSlots`'s gates in order and prints each decision, ending with the verdict from
+`generateSlots` itself rather than from a reimplementation — so a disagreement between the script and the
+booking page is a finding about the service layer, not about the engine. Only the plan assembly is
+duplicated from `availability.service.ts`; the two must be kept in step.
+
+Two properties make it safe to point at production, which is the only place it is any use: **it only reads**
+— no write, no upsert, no audit row, so unlike every other script here it does not refuse when
+`NODE_ENV=production` — and **it prints business configuration, never people**. It never reads a customer,
+and a booking appears only as an occupied interval (CLAUDE.md rule 6).
+
+Verified locally against a fixture covering all three interesting branches: a day that produces slots (and
+whose first offered start is 09:15 rather than 09:00, because the 5-minute before-buffer must also fit), a
+period ignored for being too short to hold the service plus buffers, and a period ignored for being
+inactive — which is the one that is invisible on the availability screen, since an unticked row still
+renders there.
 
 ## 3.5 Seed
 
