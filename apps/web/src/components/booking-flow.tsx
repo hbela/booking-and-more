@@ -15,6 +15,12 @@ import {
   type PublicBookingCreated,
   type Slot,
 } from "@/lib/api-client";
+import {
+  addDaysToDateOnly,
+  nextAvailableDays,
+  LOOKAHEAD_DAYS,
+  type DayWithSlots,
+} from "@/lib/next-available";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ErrorText } from "./ui/field";
 
@@ -140,6 +146,36 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
       }),
     enabled: serviceId !== null && step === "time",
   });
+
+  const dayIsEmpty = slots.data?.items.length === 0;
+
+  /**
+   * The days after the empty one, asked for only once the day itself has come
+   * back with nothing.
+   *
+   * Deliberately a second request rather than always searching a fortnight: the
+   * common case is a day that has slots, and widening every search would make
+   * the engine do fourteen days of work to answer a question about one. The
+   * public search is rate-limited to 30/minute, and this adds at most one
+   * request per date the customer tries.
+   */
+  const lookahead = useQuery({
+    queryKey: ["public-slots-lookahead", tenantSlug, serviceId, providerId, day],
+    queryFn: () =>
+      apiFetch<{ items: Slot[] }>(`/v1/public/tenants/${tenantSlug}/slots/search`, {
+        method: "POST",
+        body: {
+          serviceId,
+          ...(providerId === null ? {} : { providerId }),
+          // From the day *after* the one we already know is empty.
+          dateFrom: addDaysToDateOnly(day, 1),
+          dateTo: addDaysToDateOnly(day, LOOKAHEAD_DAYS),
+        },
+      }),
+    enabled: serviceId !== null && step === "time" && dayIsEmpty === true,
+  });
+
+  const suggestions = nextAvailableDays(lookahead.data?.items ?? []);
 
   /**
    * Release the hold when the customer leaves.
@@ -348,7 +384,24 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
           </label>
 
           {slots.isPending ? <p>{t("loading")}</p> : null}
-          {slots.data?.items.length === 0 ? <p>{t("noSlots")}</p> : null}
+
+          {/* `role="status"` because this region replaces itself twice without
+              the customer doing anything — empty, then searching, then the
+              suggestions. A sighted reader watches that happen; without a live
+              region nobody else is told the page changed its mind. */}
+          {dayIsEmpty === true ? (
+            <div role="status" className="flex flex-col gap-3">
+              <p>{t("noSlots")}</p>
+
+              {lookahead.isPending ? <p className="text-ink-muted">{t("findingNext")}</p> : null}
+
+              {suggestions.length > 0 ? (
+                <NextAvailable days={suggestions} locale={locale} onPick={setDay} />
+              ) : lookahead.isSuccess ? (
+                <p className="text-ink-muted">{t("noSlotsNearby", { days: LOOKAHEAD_DAYS })}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* A grid rather than a wrapping flex row, so slots line up in
               columns and the eye can scan down a time of day. `tabular-nums`
@@ -416,6 +469,52 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
         </Section>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * The nearest days that do have times, offered as one tap each.
+ *
+ * Buttons rather than links or a second date picker: picking one moves the day
+ * the customer is already looking at, which is the same thing the date input
+ * does, so the page keeps one idea of "the day being shown" instead of two.
+ *
+ * The count is shown because "3 times" and "18 times" are different offers —
+ * one of them is worth waiting a week for. The first start time is shown for
+ * the same reason: a day that only opens at 18:00 is not a match for everybody.
+ */
+function NextAvailable({
+  days,
+  locale,
+  onPick,
+}: {
+  days: DayWithSlots[];
+  locale: string;
+  onPick: (date: string) => void;
+}): React.ReactElement {
+  const t = useTranslations("booking");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="font-medium">{t("nextAvailable")}</p>
+      <ul className="flex flex-wrap gap-2">
+        {days.map((entry) => (
+          <li key={entry.date}>
+            <button
+              type="button"
+              onClick={() => onPick(entry.date)}
+              className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+            >
+              <span className="block font-medium">{formatDay(entry.firstStartAt, locale)}</span>
+              <span className="text-ink-muted block text-xs">
+                {t("fromTime", { time: formatTime(entry.firstStartAt, locale) })} ·{" "}
+                {t("slotCount", { count: entry.count })}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -558,6 +657,21 @@ export function formatDateTime(instant: string, locale: string): string {
 
 function formatTime(instant: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(new Date(instant));
+}
+
+/**
+ * "Tuesday, 18 August" — weekday included on purpose.
+ *
+ * A bare date makes somebody count on their fingers to work out whether the
+ * suggestion is a working day for *them*. No year: everything offered is within
+ * a fortnight.
+ */
+function formatDay(instant: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(instant));
 }
 
 function Steps({ current }: { current: Step }): React.ReactElement {

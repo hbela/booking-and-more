@@ -192,6 +192,38 @@ where browsers throttle timers hard — shows the truth when it returns.
 The staff screen is a list, not a calendar grid; Epic 6 brings the calendar, and building half of one here
 would mean throwing it away.
 
+### 3.4.1 The empty day suggests the next one — added 2026-08-15
+
+"Nothing free on that day. Try another." was a dead end dressed as a sentence. The only way forward was to
+guess dates in a picker, and the number of guesses somebody makes before deciding a business has no
+availability at all is small.
+
+When the chosen day comes back empty, the page now searches the following **14 days** in one further request
+and offers the **first three days that hold anything**, each as a button carrying its earliest start time and
+how many slots it has — "Tuesday, 18 August · from 09:00 · 6 times". Picking one sets the same `day` state
+the date input drives, so the page keeps one idea of which day it is showing rather than two.
+
+Four decisions worth keeping:
+
+- **The lookahead is a second request, made only on an empty answer.** Always searching a fortnight would
+  make the engine do fourteen days of work to answer a question about one, on every date the customer tries.
+  The public search is rate-limited to 30/minute and this adds at most one request per attempt. The schema
+  caps a single search at 62 days, so the window has room to grow if 14 proves short.
+- **The grouping is by *local* calendar day** (`lib/next-available.ts`). A slot is an instant; which day it
+  falls on is a question only a zone can answer, and the times beside it are rendered by `Intl` in the
+  browser's zone. Grouping by the UTC day instead would file every evening appointment east of Greenwich
+  under the wrong heading — visibly wrong for the last slot of the day, and only then.
+- **Day arithmetic goes through UTC** (`addDaysToDateOnly`). The value is a calendar date, not an instant;
+  local-time arithmetic across a daylight-saving change can land on the same date twice.
+- **The whole empty state is one `role="status"` region.** It replaces itself twice with no input from the
+  customer — empty, then searching, then suggestions — and a sighted reader watching that happen is the only
+  one told, otherwise.
+
+It is also the fastest diagnostic there is for "the provider has hours but the page shows none": if the
+suggestion names a different day, the cause is specific to the day asked for — no working hours on that
+weekday, or an `UNAVAILABLE` exception. If it reports nothing free in the whole fortnight, the cause is
+provider-wide — the booking window, or the service duration plus buffers not fitting the working period.
+
 ## 3.5 Seed
 
 One confirmed booking next Monday, idempotent by reference — re-running the seed would otherwise collide with
