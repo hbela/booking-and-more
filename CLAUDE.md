@@ -290,6 +290,12 @@ pnpm db:explain-availability <slug> [YYYY-MM-DD] [--service <slug>] [--provider 
 ```
 
 **`db:explain-availability` is the answer to "the provider has hours but the booking page offers nothing".**
+It opens by counting `working_hours` rows per provider, because the nastiest version of that question is a
+tenant whose table is *full* while the search reaches a provider who has none: an archived provider still
+has an availability screen, and a membership linked to one still saves to it, so the schedule lands
+somewhere real and invisible. That first block turns "no working hours here" into "the working hours are
+over there".
+
 An empty slot list is the honest answer to a real search that matched nobody, and it is indistinguishable
 from a misconfiguration — of which there are eight, spread across four screens. The script walks the same
 gates `AvailabilityService.searchSlots` walks, in the same order, and prints what each one decided: the

@@ -80,6 +80,59 @@ async function main(): Promise<void> {
     console.log(`Date         : ${date} (${WEEKDAY_NAMES[weekday] ?? "?"}, ISO weekday ${String(weekday)})`);
     console.log("");
 
+    // Gate 0 — where the schedules actually are.
+    //
+    // Printed before anything else because of the failure it names: a tenant
+    // whose `working_hours` is full while the booking page offers nothing,
+    // because the rows sit on a provider the search never reaches. An archived
+    // provider still has an availability screen, and a membership linked to one
+    // still saves to it — so the hours land somewhere real and invisible. The
+    // same goes for a live provider who was never assigned the service.
+    //
+    // Counting rows per provider turns "no working hours here" into "the
+    // working hours are over there", which is the whole difference between a
+    // dead end and a fix.
+    const scheduleOwners = await prisma.workingHours.groupBy({
+      by: ["providerId"],
+      where: { tenantId: tenant.id },
+      _count: { _all: true },
+    });
+
+    if (scheduleOwners.length === 0) {
+      console.log("Working hours: none anywhere in this organization.\n");
+    } else {
+      const owners = await prisma.provider.findMany({
+        where: { tenantId: tenant.id, id: { in: scheduleOwners.map((row) => row.providerId) } },
+        select: {
+          id: true,
+          displayName: true,
+          archivedAt: true,
+          active: true,
+          services: { where: { active: true }, select: { serviceId: true } },
+        },
+      });
+
+      console.log("Working hours, by provider:");
+      for (const row of scheduleOwners) {
+        const owner = owners.find((candidate) => candidate.id === row.providerId);
+        const notes: string[] = [];
+
+        if (!owner) notes.push("provider row missing");
+        else {
+          if (owner.archivedAt !== null) notes.push("ARCHIVED — the search skips this provider");
+          if (!owner.active) notes.push("inactive");
+          if (owner.services.length === 0) notes.push("offers no active service");
+        }
+
+        console.log(
+          `  ${owner?.displayName ?? row.providerId}: ${String(row._count._all)} rows${
+            notes.length === 0 ? "" : `  ← ${notes.join("; ")}`
+          }`,
+        );
+      }
+      console.log("");
+    }
+
     // Gate 1 — the service. `searchSlots` refuses an archived one outright, and
     // the public search additionally requires `active`.
     const services = await prisma.service.findMany({
