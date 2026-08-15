@@ -2,7 +2,13 @@
 
 import { useTranslations } from "next-intl";
 import { fromMinorUnits, toMinorUnits, type Service } from "@/lib/api-client";
-import { numberValue, textValue, type FormMode } from "@/lib/catalogue-form";
+import {
+  advanceNote,
+  numberValue,
+  textValue,
+  DEFAULT_MAXIMUM_ADVANCE_DAYS,
+  type FormMode,
+} from "@/lib/catalogue-form";
 import { Field } from "./ui/field";
 import { Input, Select, Textarea } from "./ui/input";
 
@@ -92,6 +98,7 @@ export function ServiceFields({
   idPrefix: string;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const advance = advanceNote(state.maximumAdvanceDays);
 
   return (
     <>
@@ -232,18 +239,35 @@ export function ServiceFields({
           />
         </Field>
 
-        <Field id={`${idPrefix}-advance`} label={t("maximumAdvance")}>
+        {/* The horizon is spelled out live, because the number alone does not
+            say what it does: `1` reads as a mild restriction and means today
+            and tomorrow only. See `advanceNote`. */}
+        <Field
+          id={`${idPrefix}-advance`}
+          label={t("maximumAdvance")}
+          hint={advance.key === "advanceShort" ? undefined : t(advance.key, { days: advance.days })}
+        >
           <Input
             id={`${idPrefix}-advance`}
             type="number"
             min={1}
             max={730}
+            placeholder={String(DEFAULT_MAXIMUM_ADVANCE_DAYS)}
             value={state.maximumAdvanceDays}
             onChange={(event) => {
               onChange({ maximumAdvanceDays: event.target.value });
             }}
             className="w-40"
           />
+
+          {/* `role="note"`, not `alert`: a short horizon is a legitimate choice
+              for a business that only takes next-day bookings, so this informs
+              rather than interrupts (phase-11 §2.6). */}
+          {advance.key === "advanceShort" ? (
+            <p role="note" className="text-warning text-sm">
+              {t("advanceShort", { days: advance.days })}
+            </p>
+          ) : null}
         </Field>
       </div>
       {/* Blank is not zero here: blank inherits, zero means "up to the last

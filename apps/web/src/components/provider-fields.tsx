@@ -3,6 +3,8 @@
 import { useTranslations } from "next-intl";
 import type { Provider } from "@/lib/api-client";
 import {
+  advanceNote,
+  DEFAULT_MAXIMUM_ADVANCE_DAYS,
   LOCALES,
   numberValue,
   supportedTimeZones,
@@ -85,6 +87,7 @@ export function ProviderFields({
   idPrefix: string;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const advance = advanceNote(state.maximumAdvanceDays);
   const zones = supportedTimeZones();
 
   return (
@@ -209,18 +212,32 @@ export function ProviderFields({
           />
         </Field>
 
-        <Field id={`${idPrefix}-advance`} label={t("maximumAdvance")}>
+        {/* Spelled out live — see the same field in `service-fields.tsx`, and
+            `advanceNote` for the incident behind it. The shorter of this and
+            the service's wins, so a healthy number here can still be overruled. */}
+        <Field
+          id={`${idPrefix}-advance`}
+          label={t("maximumAdvance")}
+          hint={advance.key === "advanceShort" ? undefined : t(advance.key, { days: advance.days })}
+        >
           <Input
             id={`${idPrefix}-advance`}
             type="number"
             min={1}
             max={730}
+            placeholder={String(DEFAULT_MAXIMUM_ADVANCE_DAYS)}
             value={state.maximumAdvanceDays}
             onChange={(event) => {
               onChange({ maximumAdvanceDays: event.target.value });
             }}
             className="w-40"
           />
+
+          {advance.key === "advanceShort" ? (
+            <p role="note" className="text-warning text-sm">
+              {t("advanceShort", { days: advance.days })}
+            </p>
+          ) : null}
         </Field>
       </div>
       <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>

@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- CLI script; console is the output channel */
-import { generateSlots, weekdayOf, type TimePeriod } from "@bam/availability-engine";
+import { dateOnlyAt, generateSlots, weekdayOf, type TimePeriod } from "@bam/availability-engine";
 import { loadEnv } from "@bam/config";
 import { createPrismaClient } from "../src/index.js";
 
@@ -211,11 +211,32 @@ async function main(): Promise<void> {
         const duration = assignment.customDurationMinutes ?? service.durationMinutes;
         const required = duration + service.bufferBeforeMinutes + service.bufferAfterMinutes;
 
+        // The booking window is checked *first*, and loudly, because it is the
+        // only gate that can void every line printed below it. This started
+        // life as a footnote after the schedule, which is exactly how a real
+        // incident — a service saved with `maximum_advance_days = 1` — read as
+        // a healthy provider with a full week of hours and no explanation. The
+        // engine intersects this window and returns before it walks a schedule
+        // at all (`bookingWindow` in packages/availability-engine/src/engine.ts).
+        // "Today" in the *provider's* zone, which is where the engine measures
+        // the horizon from — not the zone this script happens to run in.
+        const today = dateOnlyAt(Date.now(), provider.timezone);
+        const horizon = addDaysToDateOnly(today, advance);
+        const noticeCloses = notice > 0 ? `, and nothing sooner than ${String(notice)} minutes away` : "";
+
         console.log(
-          `    effective notice ${String(notice)}m, advance ${String(advance)} days${
-            advance < 7 ? "  ← anything further out than this is empty by policy" : ""
-          }`,
+          `    booking window: ${today} … ${horizon}  (advance ${String(advance)} days, notice ${String(notice)}m)`,
         );
+
+        if (date > horizon) {
+          console.log(
+            `    → ${date} is OUTSIDE the booking window. This is why there are no slots,\n` +
+              `      and no schedule below can change it. Nothing after ${horizon} is bookable${noticeCloses}.\n` +
+              `      The shortest advance wins: provider ${describe(provider.maximumAdvanceDays)}, service ${describe(service.maximumAdvanceDays)}.\n`,
+          );
+          continue;
+        }
+
         console.log(
           `    duration ${String(duration)}m${assignment.customDurationMinutes === null ? "" : " (per-provider override)"}, so a working period must hold ${String(required)}m unbroken`,
         );
@@ -331,6 +352,18 @@ async function main(): Promise<void> {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/** `NULL` is "inherit", which is a different answer from a number. */
+function describe(value: number | null): string {
+  return value === null ? "inherit" : `${String(value)} days`;
+}
+
+/** Calendar-day arithmetic through UTC — the value is a date, not an instant. */
+function addDaysToDateOnly(date: string, days: number): string {
+  const shifted = new Date(`${date}T00:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
 }
 
 /** NULL means inherit, so it never constrains. Mirrors the service's two helpers. */

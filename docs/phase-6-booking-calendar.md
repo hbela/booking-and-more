@@ -18,9 +18,37 @@ and the number of guesses somebody makes before deciding a business has no avail
 
 Testing `app.booking.appointer.hu` walked straight into it. A day showed nothing; the "next available" chips
 added hours earlier ([phase 4 §3.4.1](phase-4-booking-engine.md)) then reported nothing free for a fortnight
-either. **That underlying emptiness is a separate, still-open question** — `pnpm db:explain-availability`
-exists to answer it (phase 4 §3.4.2) and had not been run. A calendar makes emptiness legible; it does not
-make it smaller.
+either, and the finished calendar went on to report three empty months. A calendar makes emptiness legible;
+it does not make it smaller.
+
+## 1.1 What the emptiness actually was — `maximum_advance_days = 1`
+
+Resolved 2026-08-15, and worth reading before trusting any screen in the dashboard about availability.
+
+The service `arctisztitás` carried `maximum_advance_days = 1`: **today and tomorrow, and nothing else.**
+`generateSlots` intersects that window and returns before it walks a schedule at all
+(`bookingWindow`, packages/availability-engine/src/engine.ts) — so every downstream gate reported honestly
+that there was nothing, while the Providers and Availability screens went on showing a live provider with a
+full Mon–Fri week. Feeding the production values back through the engine reproduces it exactly: 0 slots on
+every day at `advance: 1`, and 29 slots per weekday at the inherited 180.
+
+It read as *totally* dead rather than intermittently dead because 2026-08-15 was a **Saturday**. A one-day
+horizon from a Saturday is Saturday–Sunday, both outside Mon–Fri hours, so nothing was bookable at all.
+Tested on a Tuesday it would have offered Tuesday and Wednesday and nothing beyond — a far louder clue.
+
+Three things were wrong beyond the data:
+
+1. **Nothing said what the number meant.** "Book up to (days ahead)" over an empty box gives no hint that
+   blank inherits 180 days or that `1` means tomorrow. Both catalogue forms now state the horizon in words
+   as it is typed, carry the default as a placeholder, and warn below seven days
+   (`advanceNote` in `apps/web/src/lib/catalogue-form.ts`, with the incident in its docblock).
+2. **The diagnostic buried it.** `db:explain-availability` printed the effective advance *after* the
+   schedule, as a footnote to a healthy-looking provider. The booking window is now computed and reported
+   **first**, measured in the provider's own zone, and when the requested date falls outside it the script
+   says so and stops — because no schedule below can change that answer.
+3. **Four rounds of investigation went to code that was correct.** Every gate held; the fault was one
+   integer. The general lesson is in the ordering above: check the gate that can void the others before
+   checking the others.
 
 ---
 

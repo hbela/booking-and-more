@@ -1,4 +1,49 @@
 import { describe, expect, it } from "vitest";
+import { advanceNote, DEFAULT_MAXIMUM_ADVANCE_DAYS, SHORT_HORIZON_DAYS } from "./catalogue-form";
+
+/**
+ * The regression suite for a booking horizon of 1.
+ *
+ * A live service was saved with `maximum_advance_days = 1` — today and
+ * tomorrow, and nothing else. The engine intersects that window before it
+ * looks at any schedule, so the booking page went silent while every dashboard
+ * screen still showed a healthy provider with a full week of hours.
+ */
+describe("advanceNote", () => {
+  it("names the inherited default for a blank box", () => {
+    expect(advanceNote("")).toEqual({
+      key: "advanceInherit",
+      days: DEFAULT_MAXIMUM_ADVANCE_DAYS,
+    });
+    expect(advanceNote("   ")).toEqual({
+      key: "advanceInherit",
+      days: DEFAULT_MAXIMUM_ADVANCE_DAYS,
+    });
+  });
+
+  it("warns about the value that caused the incident", () => {
+    expect(advanceNote("1")).toEqual({ key: "advanceShort", days: 1 });
+  });
+
+  it("warns below the threshold and stops at it", () => {
+    expect(advanceNote(String(SHORT_HORIZON_DAYS - 1)).key).toBe("advanceShort");
+    expect(advanceNote(String(SHORT_HORIZON_DAYS)).key).toBe("advanceDays");
+  });
+
+  it("states the horizon plainly for an ordinary value", () => {
+    expect(advanceNote("90")).toEqual({ key: "advanceDays", days: 90 });
+    expect(advanceNote("730")).toEqual({ key: "advanceDays", days: 730 });
+  });
+
+  it("falls back to the default rather than asserting nonsense", () => {
+    // The input is `type="number" min={1}`, so these are not reachable through
+    // the UI — but a note that read "only the next -3 days" would be worse than
+    // one that describes the value the server will actually apply.
+    for (const value of ["abc", "0", "-3"]) {
+      expect(advanceNote(value).key).toBe("advanceInherit");
+    }
+  });
+});
 import { diffPatch, numberValue, textValue } from "./catalogue-form";
 
 describe("an empty box means two different things", () => {
