@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { signOut } from "@/lib/auth-client";
 import { apiFetch, type MeResponse, type TenantSummary } from "@/lib/api-client";
+import { LocaleSwitcher } from "./locale-switcher";
+import { ThemeToggle } from "./ui/theme-toggle";
 
 /**
  * Everything the staff screens share: which tenant we are in, who is signed in,
@@ -183,6 +185,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }): React.ReactElement {
   const t = useTranslations("dashboard");
+  const common = useTranslations("common");
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -200,7 +203,16 @@ export function DashboardShell({
           ) : null}
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Language and appearance belong here, not only on the signed-out
+            root and the platform screen: a signed-in tenant user never visits
+            either, so until Epic 11 put them here they had no way to change
+            language or theme from inside the app at all. `items-end` because
+            both controls caption their select, and the tenant switcher and
+            sign-out button do not — aligning tops would stagger them. */}
+        <div className="flex flex-wrap items-end gap-3">
+          <LocaleSwitcher label={common("language")} />
+          <ThemeToggle />
+
           {context.tenants.length > 1 ? (
             <label htmlFor="tenant" className="flex items-center gap-2 text-sm">
               <span className="sr-only">{t("tenant")}</span>

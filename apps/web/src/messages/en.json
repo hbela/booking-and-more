@@ -99,6 +99,7 @@
     "paymentFailedNotice": "We could not take your last payment. Your service is still working, but please update your card before it stops.",
     "diary": "Diary",
     "diaryArchived": "(archived diary)",
+    "diaryLinked": "Linked",
     "diaryMissing": "No diary — cannot work yet",
     "linkDiary": "Link this member to a diary",
     "linkDiaryPrompt": "Link a diary…",

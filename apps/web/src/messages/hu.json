@@ -99,6 +99,7 @@
     "paymentFailedNotice": "A legutóbbi fizetést nem sikerült levonni. A szolgáltatás egyelőre működik, de kérjük, frissítse a bankkártyaadatait.",
     "diary": "Naptár",
     "diaryArchived": "(archivált naptár)",
+    "diaryLinked": "Összekapcsolva",
     "diaryMissing": "Nincs naptár — még nem tud dolgozni",
     "linkDiary": "Naptár hozzárendelése ehhez a taghoz",
     "linkDiaryPrompt": "Naptár hozzárendelése…",

@@ -11,6 +11,7 @@ import {
   type Paginated,
   type Provider,
 } from "@/lib/api-client";
+import { resolveDiaryState } from "@/lib/member-diary";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Button, ButtonLink } from "./ui/button";
 import { Callout, CalloutLink } from "./ui/callout";
@@ -138,7 +139,7 @@ export function Dashboard(): React.ReactElement {
                         <td className="py-2">
                           <MemberDiary
                             member={member}
-                            providers={providers.data?.items ?? []}
+                            providers={providers.data?.items ?? null}
                             takenProviderIds={takenProviderIds}
                             tenantId={context.tenantId}
                             canManage={canManageMembers}
@@ -350,7 +351,12 @@ function MemberDiary({
   canManage,
 }: {
   member: Member;
-  providers: Provider[];
+  /**
+   * The tenant's diaries, or `null` when we do not have them — the query is
+   * only enabled for a members-manager, and is undefined until it lands.
+   * `null` is not `[]`: see {@link resolveDiaryState}.
+   */
+  providers: Provider[] | null;
   /** Diaries another member already holds — at most one login per diary. */
   takenProviderIds: Set<string>;
   tenantId: string | undefined;
@@ -377,24 +383,28 @@ function MemberDiary({
     },
   });
 
-  const linked = providers.find((provider) => provider.id === member.providerId);
+  const state = resolveDiaryState({ member, providers });
 
-  if (member.providerId !== null) {
-    // Named rather than ticked: "which diary" is the useful answer, and a
-    // provider archived since linking would otherwise show as a blank cell.
-    return <span>{linked?.displayName ?? t("diaryArchived")}</span>;
-  }
-
-  // Only PROVIDER memberships need one. An owner or an assistant with no diary
-  // is the normal case and deserves no warning.
-  if (member.role !== "PROVIDER") {
-    return <span className="text-ink-subtle">—</span>;
+  switch (state.kind) {
+    // Named rather than ticked: "which diary" is the useful answer.
+    case "named":
+      return <span>{state.displayName}</span>;
+    // Linked, but unnameable — see resolveDiaryState for why that is not the
+    // same as archived, and what claiming otherwise did to every provider.
+    case "linked":
+      return <span>{t("diaryLinked")}</span>;
+    case "archived":
+      return <span>{t("diaryArchived")}</span>;
+    case "none":
+      return <span className="text-ink-subtle">—</span>;
+    case "missing":
+      break;
   }
 
   // At most one login per diary, and archived diaries are refused by
   // `linkProvider`. The unique index is what enforces the first; this only
   // avoids offering a choice the server would reject.
-  const available = providers.filter(
+  const available = (providers ?? []).filter(
     (provider) => provider.archivedAt === null && !takenProviderIds.has(provider.id),
   );
 

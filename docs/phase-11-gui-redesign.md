@@ -361,7 +361,7 @@ palette the semantic tokens are built from — deleting it replaces eleven named
 oklch literals — and while it shadows Tailwind's stock slate, a `slate-500` typed out of habit lands on
 the product's blue-tinted neutral instead of Tailwind's. That is a safety net, not debt.
 
-### 3.2 Two pre-existing defects fixed in passing
+### 3.2 Pre-existing defects fixed in passing
 
 - **`app/not-found.tsx` never imported `globals.css`.** There is no root layout, so nothing above that
   file supplied a stylesheet, and every Tailwind class on the 404 screen was inert — it had been rendering
@@ -371,6 +371,25 @@ the product's blue-tinted neutral instead of Tailwind's. That is a safety net, n
   the user-visible `"—"` empty-address fallback, were always correct UTF-8. The corruption was in the
   *reading* — a tool opening a BOM'd file without `utf-8-sig` renders them as `â€”`. Recorded because the
   same false positive will otherwise be "found" again.
+
+Two more came out of the first hands-on walk of the deployed app (2026-08-15), both on
+`/{locale}/dashboard`:
+
+- **The tenant dashboard had neither switcher.** `ThemeToggle` and `LocaleSwitcher` are rendered by
+  `components/auth-header.tsx`, which is mounted on the signed-out site root and on the platform admin
+  shell — and nowhere else. `DashboardShell` hand-rolls its own header, so a signed-in tenant user, who
+  visits neither of those screens, could change neither theme nor language from inside the application.
+  Both controls now sit in that header. The lesson is the general one: a control added to *the* header is
+  only added to the headers that exist, and this app has two.
+- **Every provider was told their own diary was archived.** The members table's Diary column read
+  `providers.find(…) ?? t("diaryArchived")`, and the providers query is `enabled` only for a holder of
+  `member:manage`. A `PROVIDER` holds `member:read` and not `member:manage`, so the list never loaded, the
+  lookup always missed, and the fallback fired for every linked member on the screen. Not a redesign
+  regression — it shipped with phase-9's provider onboarding — but it is what a real provider account saw
+  first. The fix is in the type: the list reaches the column as `Provider[] | null`, `null` meaning *not
+  fetched*, and the decision moved into a pure `lib/member-diary.ts` with `resolveDiaryState`. A diary
+  missing **from** a list we hold is archived; not holding the list says nothing about it, and reports
+  `diaryLinked` — "Linked" — instead. `[]` and `null` are now different answers, which is the whole bug.
 
 **Increment 2 is the leverage.** The three class-name constants are redefined in terms of the new recipes
 and marked `@deprecated`, and the old component names are re-exported from `./ui/*`. That commit changes
@@ -402,6 +421,10 @@ uses when it reads the route directory off disk:
 3. **`lib/theme-preference.test.ts`** — cookie parsing, mirroring how `locale-preference` is used.
 4. **A BOM guard** — no file under `src/` begins with U+FEFF.
 5. **A characterisation test for the booking step machine** (increment 4).
+6. **`lib/member-diary.test.ts`** — the regression suite for §3.2's "(archived diary)". It asserts the
+   thing the original conflated: `providers: []` resolves to `archived`, `providers: null` to `linked`.
+   No DOM needed, which is the point — the API was answering correctly throughout, so no API test could
+   have caught it.
 
 ## 4.2 By hand
 
