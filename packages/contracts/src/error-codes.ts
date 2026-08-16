@@ -53,6 +53,18 @@ export const ErrorCodes = {
   OUTSIDE_BOOKING_WINDOW: "OUTSIDE_BOOKING_WINDOW",
   MINIMUM_NOTICE_NOT_MET: "MINIMUM_NOTICE_NOT_MET",
 
+  // --- Availability (Epic 3) ------------------------------------------------
+  /**
+   * A schedule change would leave existing bookings outside it.
+   *
+   * Not a refusal — the same request succeeds carrying
+   * `acknowledgeAffectedBookings`. It is returned once so the list of what would
+   * be stranded reaches the caller before the change lands
+   * (docs/phase-3-4-schedule-conflicts.md §2.4). `details.affectedBookings`
+   * carries them.
+   */
+  SCHEDULE_CONFLICTS_BOOKINGS: "SCHEDULE_CONFLICTS_BOOKINGS",
+
   // --- Conversational (Epics 7-8) ------------------------------------------
   PENDING_ACTION_NOT_FOUND: "PENDING_ACTION_NOT_FOUND",
   PENDING_ACTION_EXPIRED: "PENDING_ACTION_EXPIRED",

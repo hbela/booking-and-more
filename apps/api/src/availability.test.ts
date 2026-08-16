@@ -953,4 +953,297 @@ describe.skipIf(!databaseUrl)("availability", () => {
       expect(suspended.json().error.message).toBe(nonexistent.json().error.message);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Schedule changes against existing bookings
+  // -------------------------------------------------------------------------
+
+  describe("bookings a schedule change would strand", () => {
+    /**
+     * docs/phase-3-4-schedule-conflicts.md.
+     *
+     * The engine proves the arithmetic. What is proved here is that the right
+     * diary is read, that the refusal carries enough to act on, and that an
+     * acknowledgement gets through — none of which the engine can see.
+     */
+
+    /** Books the 10:00 Monday appointment, on a clinic with Monday morning hours. */
+    async function bookMondayMorning(label: string) {
+      const site = await clinic(label);
+
+      const opened = await setHours(site, MONDAY_MORNING);
+      expect(opened.statusCode, opened.body).toBe(200);
+
+      const booking = await app.inject({
+        method: "POST",
+        url: "/v1/bookings",
+        headers: {
+          ...as(site.cookie, site.tenantId),
+          "idempotency-key": randomBytes(12).toString("hex"),
+        },
+        payload: {
+          providerId: site.providerId,
+          serviceId: site.serviceId,
+          startAt: `${MONDAY}T08:00:00.000Z`, // 10:00 Budapest
+          customer: { fullName: "Nagy Béla", email: `patient-${label}-${RUN}@example.test` },
+        },
+      });
+
+      expect(booking.statusCode, booking.body).toBe(201);
+      return { site, booking: booking.json<{ id: string; reference: string }>() };
+    }
+
+    it("refuses a save that would leave a booking outside the new hours", async () => {
+      const { site, booking } = await bookMondayMorning("strand-hours");
+
+      // Afternoons only, which the 10:00 appointment is no longer inside.
+      const narrowed = await setHours(site, [
+        { weekday: 1, startTime: "13:00", endTime: "17:00" },
+      ]);
+
+      expect(narrowed.statusCode, narrowed.body).toBe(409);
+
+      const error = narrowed.json().error;
+      expect(error.code).toBe(ErrorCodes.SCHEDULE_CONFLICTS_BOOKINGS);
+      expect(error.details.affectedBookings).toHaveLength(1);
+      expect(error.details.affectedBookings[0]).toMatchObject({
+        id: booking.id,
+        reference: booking.reference,
+        reason: "OUTSIDE_WORKING_HOURS",
+      });
+      // Enough to recognise the appointment without a second request.
+      expect(error.details.affectedBookings[0].customerName).toBe("Nagy Béla");
+    });
+
+    it("changes nothing when it refuses", async () => {
+      // A 409 that had already written the hours would be worse than no check.
+      const { site } = await bookMondayMorning("strand-atomic");
+
+      await setHours(site, [{ weekday: 1, startTime: "13:00", endTime: "17:00" }]);
+
+      const stored = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${site.providerId}/working-hours`,
+        headers: as(site.cookie, site.tenantId),
+      });
+
+      expect(stored.json().items).toHaveLength(1);
+      expect(stored.json().items[0].startTime).toBe("09:00");
+    });
+
+    it("lets the same change through once it is acknowledged", async () => {
+      const { site } = await bookMondayMorning("strand-ack");
+
+      const acknowledged = await app.inject({
+        method: "PUT",
+        url: `/v1/providers/${site.providerId}/working-hours`,
+        headers: as(site.cookie, site.tenantId),
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "13:00", endTime: "17:00" }],
+          acknowledgeAffectedBookings: true,
+        },
+      });
+
+      expect(acknowledged.statusCode, acknowledged.body).toBe(200);
+      expect(acknowledged.json().items[0].startTime).toBe("13:00");
+    });
+
+    it("says nothing about a change that strands nobody", async () => {
+      // The common case, and the one that must stay quiet: a dialog on every
+      // save is a dialog nobody reads.
+      const { site } = await bookMondayMorning("strand-none");
+
+      const widened = await setHours(site, [{ weekday: 1, startTime: "08:00", endTime: "18:00" }]);
+
+      expect(widened.statusCode, widened.body).toBe(200);
+    });
+
+    it("ignores a booking that has been cancelled", async () => {
+      const { site, booking } = await bookMondayMorning("strand-cancelled");
+
+      await app.prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: "CANCELLED", cancelledAt: new Date() },
+      });
+
+      const narrowed = await setHours(site, [
+        { weekday: 1, startTime: "13:00", endTime: "17:00" },
+      ]);
+
+      expect(narrowed.statusCode, narrowed.body).toBe(200);
+    });
+
+    it("ignores a booking already in the past", async () => {
+      // §2.3. Nobody can fix last month, and warning about it makes every save
+      // noisy forever.
+      const { site, booking } = await bookMondayMorning("strand-past");
+
+      await app.prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          startAt: new Date("2026-01-05T09:00:00.000Z"),
+          endAt: new Date("2026-01-05T10:00:00.000Z"),
+        },
+      });
+
+      const narrowed = await setHours(site, [
+        { weekday: 1, startTime: "13:00", endTime: "17:00" },
+      ]);
+
+      expect(narrowed.statusCode, narrowed.body).toBe(200);
+    });
+
+    it("treats switching a period off the same as deleting it", async () => {
+      // The search ignores an inactive row, so judging against one would let an
+      // owner strand a booking by unticking a box.
+      const { site } = await bookMondayMorning("strand-inactive");
+
+      const deactivated = await setHours(site, [
+        { weekday: 1, startTime: "09:00", endTime: "12:00", active: false },
+      ]);
+
+      expect(deactivated.statusCode).toBe(409);
+      expect(deactivated.json().error.code).toBe(ErrorCodes.SCHEDULE_CONFLICTS_BOOKINGS);
+    });
+
+    it("refuses time off booked over an appointment, and names it as such", async () => {
+      // §2.5, and the likelier of the two paths.
+      const { site } = await bookMondayMorning("strand-timeoff");
+
+      const timeOff = await app.inject({
+        method: "POST",
+        url: `/v1/providers/${site.providerId}/availability-exceptions`,
+        headers: as(site.cookie, site.tenantId),
+        payload: {
+          type: "UNAVAILABLE",
+          startAt: `${MONDAY}T06:00:00.000Z`,
+          endAt: `${MONDAY}T10:00:00.000Z`,
+        },
+      });
+
+      expect(timeOff.statusCode, timeOff.body).toBe(409);
+
+      const error = timeOff.json().error;
+      expect(error.code).toBe(ErrorCodes.SCHEDULE_CONFLICTS_BOOKINGS);
+      // The other reason: the hours still cover it, a closure was laid on top.
+      expect(error.details.affectedBookings[0].reason).toBe("BLOCKED_BY_EXCEPTION");
+    });
+
+    it("lets an extra opening through without asking", async () => {
+      // ADDITIONAL_AVAILABILITY only ever adds time and can strand nothing.
+      const { site } = await bookMondayMorning("strand-opening");
+
+      const opening = await app.inject({
+        method: "POST",
+        url: `/v1/providers/${site.providerId}/availability-exceptions`,
+        headers: as(site.cookie, site.tenantId),
+        payload: {
+          type: "ADDITIONAL_AVAILABILITY",
+          startAt: `${MONDAY}T14:00:00.000Z`,
+          endAt: `${MONDAY}T16:00:00.000Z`,
+        },
+      });
+
+      expect(opening.statusCode, opening.body).toBe(201);
+    });
+
+    it("does not count a closure against itself when it is being shrunk", async () => {
+      // A PATCH that moves a closure *off* a booking must not be refused for the
+      // booking it is being moved off.
+      const { site } = await bookMondayMorning("strand-shrink");
+
+      const created = await app.inject({
+        method: "POST",
+        url: `/v1/providers/${site.providerId}/availability-exceptions`,
+        headers: as(site.cookie, site.tenantId),
+        payload: {
+          type: "UNAVAILABLE",
+          startAt: `${MONDAY}T06:00:00.000Z`,
+          endAt: `${MONDAY}T10:00:00.000Z`,
+          acknowledgeAffectedBookings: true,
+        },
+      });
+      expect(created.statusCode, created.body).toBe(201);
+
+      const shrunk = await app.inject({
+        method: "PATCH",
+        url: `/v1/availability-exceptions/${created.json().id as string}`,
+        headers: as(site.cookie, site.tenantId),
+        payload: { endAt: `${MONDAY}T07:00:00.000Z` },
+      });
+
+      expect(shrunk.statusCode, shrunk.body).toBe(200);
+    });
+
+    it("refuses to read another tenant's diary while answering", async () => {
+      // The affected list is assembled from bookings, and rule 5 applies to that
+      // read like any other.
+      const mine = await bookMondayMorning("strand-mine");
+      const theirs = await clinic("strand-theirs");
+
+      const crossed = await app.inject({
+        method: "PUT",
+        url: `/v1/providers/${mine.site.providerId}/working-hours`,
+        headers: as(theirs.cookie, theirs.tenantId),
+        payload: { workingHours: [] },
+      });
+
+      expect(crossed.statusCode).toBe(404);
+    });
+  });
+
+  describe("bookings already outside the schedule", () => {
+    it("marks one on the list, and clears it when the hours come back", async () => {
+      // §2.6, and the standing half of the pair: however a booking got stranded,
+      // it shows up the first time anybody looks at the diary.
+      const site = await clinic("badge");
+      await setHours(site, MONDAY_MORNING);
+
+      const booking = await app.inject({
+        method: "POST",
+        url: "/v1/bookings",
+        headers: {
+          ...as(site.cookie, site.tenantId),
+          "idempotency-key": randomBytes(12).toString("hex"),
+        },
+        payload: {
+          providerId: site.providerId,
+          serviceId: site.serviceId,
+          startAt: `${MONDAY}T08:00:00.000Z`,
+          customer: { fullName: "Nagy Béla", email: `badge-${RUN}@example.test` },
+        },
+      });
+      expect(booking.statusCode, booking.body).toBe(201);
+
+      const list = async () => {
+        const response = await app.inject({
+          method: "GET",
+          url: "/v1/bookings",
+          headers: as(site.cookie, site.tenantId),
+        });
+        expect(response.statusCode, response.body).toBe(200);
+        return response.json().items as { id: string; outsideSchedule: string | null }[];
+      };
+
+      expect((await list())[0]?.outsideSchedule).toBeNull();
+
+      await app.inject({
+        method: "PUT",
+        url: `/v1/providers/${site.providerId}/working-hours`,
+        headers: as(site.cookie, site.tenantId),
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "13:00", endTime: "17:00" }],
+          acknowledgeAffectedBookings: true,
+        },
+      });
+
+      expect((await list())[0]?.outsideSchedule).toBe("OUTSIDE_WORKING_HOURS");
+
+      // Derived, not stored: putting the hours back clears it with no write to
+      // the booking at all.
+      await setHours(site, MONDAY_MORNING);
+
+      expect((await list())[0]?.outsideSchedule).toBeNull();
+    });
+  });
 });

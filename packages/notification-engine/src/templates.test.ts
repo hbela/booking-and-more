@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { buildGoogleCalendarUrl } from "./calendar.js";
 import {
   escapeHtml,
   isRenderable,
@@ -266,12 +267,25 @@ const booking = {
 
 const MANAGE_URL = "http://localhost:3000/en/booking/manage/tok123";
 
+/** The same appointment, in the shape the calendar builder wants. */
+const calendarEvent = {
+  organizationName: booking.organizationName,
+  serviceName: booking.serviceName,
+  providerName: booking.providerName,
+  locationName: booking.locationName,
+  locationAddress: booking.locationAddress,
+  reference: booking.reference,
+  startAt: new Date("2026-08-12T08:00:00.000Z"),
+  endAt: new Date("2026-08-12T08:45:00.000Z"),
+};
+
 describe("booking emails", () => {
   it.each(["hu", "en"] as const)("render %s with the appointment's own facts", (locale) => {
     const email = renderBookingConfirmation(locale, {
       ...booking,
       manageUrl: MANAGE_URL,
       cancellationPolicy: null,
+      addToCalendarUrl: null,
     });
 
     for (const part of [email.text, email.html]) {
@@ -356,6 +370,7 @@ describe("renderBookingConfirmation", () => {
       ...booking,
       manageUrl: MANAGE_URL,
       cancellationPolicy: null,
+      addToCalendarUrl: null,
     });
 
     expect(email.text).toContain(MANAGE_URL);
@@ -369,8 +384,10 @@ describe("renderBookingConfirmation", () => {
       ...booking,
       manageUrl: null,
       cancellationPolicy: null,
+      addToCalendarUrl: null,
     });
 
+    expect(email.text).not.toContain(MANAGE_URL);
     expect(email.text).not.toContain("http");
     expect(email.text).toContain("the email you received when you booked");
   });
@@ -381,9 +398,70 @@ describe("renderBookingConfirmation", () => {
       ...booking,
       manageUrl: MANAGE_URL,
       cancellationPolicy: "24 órán belüli lemondás esetén a díj 50%-át felszámítjuk.",
+      addToCalendarUrl: null,
     });
 
     expect(email.text).toContain("24 órán belüli lemondás");
+  });
+
+  it("carries the calendar link in both parts, in the reader's language", () => {
+    const url = buildGoogleCalendarUrl("en", calendarEvent) as string;
+
+    const email = renderBookingConfirmation("en", {
+      ...booking,
+      manageUrl: MANAGE_URL,
+      cancellationPolicy: null,
+      addToCalendarUrl: url,
+    });
+
+    expect(email.text).toContain(url);
+    expect(email.text).toContain("Add to Google Calendar");
+
+    // The href must survive HTML-escaping with its separators intact, or Google
+    // receives one parameter named `action` and nothing else.
+    expect(email.html).toContain(`href="${escapeHtml(url)}"`);
+    expect(email.html).toContain("&amp;dates=");
+
+    const hu = renderBookingConfirmation("hu", {
+      ...booking,
+      manageUrl: MANAGE_URL,
+      cancellationPolicy: null,
+      addToCalendarUrl: url,
+    });
+
+    expect(hu.text).toContain("Hozzáadás a Google Naptárhoz");
+  });
+
+  it("offers the calendar link even when there is no manage link", () => {
+    // The two are independent: the calendar URL carries no token, so it is
+    // available on the staff-accepted path where the manage link is not.
+    const url = buildGoogleCalendarUrl("en", calendarEvent) as string;
+
+    const email = renderBookingConfirmation("en", {
+      ...booking,
+      manageUrl: null,
+      cancellationPolicy: null,
+      addToCalendarUrl: url,
+    });
+
+    expect(email.text).toContain(url);
+    expect(email.text).not.toContain(MANAGE_URL);
+    // Still says where to find the manage link, since it has no button for it.
+    expect(email.text).toContain("the email you received when you booked");
+  });
+
+  it("is the only booking email that offers it", () => {
+    // A request is explicitly not booked yet; a cancellation and a reminder are
+    // not things to save. None of them accepts the value at all, which is the
+    // structural version of this assertion — this one guards the text.
+    for (const email of [
+      renderBookingRequested("en", { ...booking, manageUrl: MANAGE_URL }),
+      renderBookingCancelled("en", { ...booking, bookingUrl: null }),
+      renderBookingReminder("en", booking),
+      renderBookingUpdated("en", { ...booking, previousWhen: null }),
+    ]) {
+      expect(email.text).not.toContain("calendar.google.com");
+    }
   });
 });
 

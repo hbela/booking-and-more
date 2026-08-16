@@ -1,6 +1,6 @@
 "use client";
 
-import type { ErrorEnvelope } from "@bam/contracts";
+import type { ErrorEnvelope, UncoveredReasonCode } from "@bam/contracts";
 
 const API_BASE_URL = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
 
@@ -16,6 +16,15 @@ export class ApiError extends Error {
     public readonly code: string,
     public readonly status: number,
     public readonly requestId?: string,
+    /**
+     * The envelope's `details`, untyped on purpose.
+     *
+     * Its shape varies by code — a field name for a validation failure, a list
+     * of affected bookings for `SCHEDULE_CONFLICTS_BOOKINGS` — so it is carried
+     * as `unknown` and narrowed by whoever knows which code they asked about.
+     * Typing it here would mean a union of every error's details in one place.
+     */
+    public readonly details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -68,6 +77,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       envelope?.error?.code ?? "UNKNOWN",
       response.status,
       envelope?.error?.requestId,
+      envelope?.error?.details,
     );
   }
 
@@ -375,6 +385,14 @@ export interface Booking {
    *  overwrite each other. */
   version: number;
   createdAt: string;
+  /**
+   * Why this appointment sits outside its provider's current schedule, or null.
+   *
+   * Only ever populated on the list — a single-booking response never asks
+   * (docs/phase-3-4-schedule-conflicts.md §2.6) — so it is optional here rather
+   * than nullable, and every reader must treat absent as "not asked".
+   */
+  outsideSchedule?: UncoveredReasonCode | null;
 }
 
 export interface Hold {

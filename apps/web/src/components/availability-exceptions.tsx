@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { addDays, dateOnlyAt } from "@bam/availability-engine";
+import type { AffectedBooking } from "@bam/contracts";
+import { affectedBookingsOf } from "@/lib/affected-bookings";
 import {
   ApiError,
   apiFetch,
@@ -12,6 +14,7 @@ import {
   type AvailabilityException,
 } from "@/lib/api-client";
 import { formatInZone, resolveInZone, toLocalInputValue } from "@/lib/exception-time";
+import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
@@ -68,6 +71,8 @@ export function AvailabilityExceptions({
 
   const [draft, setDraft] = useState<ExceptionDraft>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
+  /** Non-null while the "save anyway?" dialog is open. */
+  const [affected, setAffected] = useState<AffectedBooking[] | null>(null);
 
   // The API defaults to today..+90d, which hides everything already past. Making
   // the window explicit is what lets someone go back and look.
@@ -105,7 +110,7 @@ export function AvailabilityExceptions({
   const end = timezone === null ? null : resolveInZone(draft.endAt, timezone);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (acknowledge: boolean) => {
       if (!start || !end) throw new Error("unreachable: the form requires both times");
 
       const body = {
@@ -115,6 +120,10 @@ export function AvailabilityExceptions({
         locationId: draft.locationId === "" ? null : draft.locationId,
         serviceId: draft.serviceId === "" ? null : draft.serviceId,
         reason: draft.reason === "" ? null : draft.reason,
+        // Ignored by the server for ADDITIONAL_AVAILABILITY, which can strand
+        // nothing. Sent regardless rather than conditionally, so the retry is
+        // byte-for-byte the request that was refused apart from this flag.
+        acknowledgeAffectedBookings: acknowledge,
       };
 
       // PATCH takes the same field set, so one form serves both. Editing was
@@ -132,10 +141,20 @@ export function AvailabilityExceptions({
           });
     },
     onSuccess: () => {
+      setAffected(null);
       setDraft(emptyDraft());
       void queryClient.invalidateQueries({ queryKey: ["exceptions", providerId] });
+      // Time off changes what the bookings list says about itself.
+      void queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (cause: unknown) => {
+      // The server asking rather than refusing — see phase-3-4 §2.4.
+      const stranded = affectedBookingsOf(cause);
+      if (stranded !== null) {
+        setAffected(stranded);
+        return;
+      }
+
       setError(cause instanceof ApiError ? cause.message : t("genericError"));
     },
   });
@@ -244,7 +263,8 @@ export function AvailabilityExceptions({
         onSubmit={(event) => {
           event.preventDefault();
           setError(null);
-          save.mutate();
+          // Unacknowledged first, always: the refusal is what carries the list.
+          save.mutate(false);
         }}
       >
         <h3 className="text-sm font-medium">{draft.id === null ? t("add") : t("editException")}</h3>
@@ -364,6 +384,17 @@ export function AvailabilityExceptions({
             </Button>
           )}
         </div>
+
+        <AffectedBookingsDialog
+          bookings={affected}
+          busy={save.isPending}
+          onConfirm={() => {
+            save.mutate(true);
+          }}
+          onCancel={() => {
+            setAffected(null);
+          }}
+        />
       </form>
     </Card>
   );

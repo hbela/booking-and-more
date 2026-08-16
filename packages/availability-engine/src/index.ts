@@ -10,7 +10,18 @@
  * The caller loads the data and applies policy; the engine only computes.
  */
 
-export { generateSlots, hasAvailability } from "./engine.js";
+export {
+  findUncoveredAppointments,
+  generateSlots,
+  hasAvailability,
+  UncoveredReasons,
+} from "./engine.js";
+export type {
+  CoverageQuery,
+  ScheduledAppointment,
+  UncoveredAppointment,
+  UncoveredReason,
+} from "./engine.js";
 export { clamp, contains, normalize, subtract, totalDuration } from "./intervals.js";
 export type {
   AvailabilityQuery,

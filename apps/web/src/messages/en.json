@@ -297,7 +297,15 @@
       "5": "Friday",
       "6": "Saturday",
       "7": "Sunday"
-    }
+    },
+    "saving": "Saving…",
+    "affectedTitle": "{count, plural, one {1 booking falls outside this schedule} other {# bookings fall outside this schedule}}",
+    "affectedExplanation": "These appointments still stand and still hold their slot. Saving does not cancel or move them — it only means the schedule no longer covers them.",
+    "affectedNoNotice": "Nobody is emailed about this. If an appointment needs to move or be cancelled, do that from the Bookings screen.",
+    "affectedConfirm": "Save anyway",
+    "affectedCancel": "Go back",
+    "reasonOutsideHours": "Outside the working hours",
+    "reasonBlocked": "During time off"
   },
   "booking": {
     "loading": "Loading…",
@@ -410,7 +418,12 @@
     "accept": "Accept",
     "complete": "Mark completed",
     "noShow": "Mark no-show",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "outsideSchedule": {
+      "label": "Outside schedule",
+      "hours": "This appointment is outside the provider's current working hours.",
+      "blocked": "This appointment falls during time off."
+    }
   },
   "admin": {
     "title": "Platform administration",

@@ -297,7 +297,15 @@
       "5": "Péntek",
       "6": "Szombat",
       "7": "Vasárnap"
-    }
+    },
+    "saving": "Mentés…",
+    "affectedTitle": "{count, plural, one {1 foglalás kívül esik ezen a beosztáson} other {# foglalás kívül esik ezen a beosztáson}}",
+    "affectedExplanation": "Ezek az időpontok érvényben maradnak, és továbbra is foglalják a helyet. A mentés nem mondja le és nem helyezi át őket — csak annyit jelent, hogy a beosztás már nem fedi le őket.",
+    "affectedNoNotice": "Erről senki nem kap e-mailt. Ha egy időpontot át kell helyezni vagy le kell mondani, tegye meg a Foglalások oldalon.",
+    "affectedConfirm": "Mentés mindenképp",
+    "affectedCancel": "Vissza",
+    "reasonOutsideHours": "A munkaidőn kívül",
+    "reasonBlocked": "Szabadság idejére esik"
   },
   "booking": {
     "loading": "Betöltés…",
@@ -410,7 +418,12 @@
     "accept": "Elfogadás",
     "complete": "Megtörtént",
     "noShow": "Nem jelent meg",
-    "cancel": "Lemondás"
+    "cancel": "Lemondás",
+    "outsideSchedule": {
+      "label": "Beosztáson kívül",
+      "hours": "Ez az időpont a kolléga jelenlegi munkaidején kívül esik.",
+      "blocked": "Ez az időpont szabadság idejére esik."
+    }
   },
   "admin": {
     "title": "Platformadminisztráció",

@@ -319,6 +319,24 @@ the slot list became a `minmax` grid so times align in columns; the hold countdo
 tint with its `aria-live="polite"` intact; and every colour became `accent-*` rather than `brand-*`,
 because this is the one screen that belongs to the tenant (§2.2).
 
+**Added 2026-08-16: `<ThemeToggle />` in the header, beside the locale switcher.** The redesign gave
+every screen a light and a dark rendering and a three-valued control to choose between them, and then
+put that control only on the signed-in shells — `auth-header.tsx` and `dashboard-shell.tsx`. The
+public booking page, which is the only screen most people using this product will ever see, rendered
+whatever `prefers-color-scheme` asked for and offered no way to say otherwise: a customer on a
+dark-by-default phone who wanted the light booking page could change it for their whole device or not
+at all.
+
+Nothing new was built. `ThemeToggle` already writes the `bam.theme` cookie the inline script in
+`lib/theme-script.ts` reads before first paint, so the choice applies without a flash and survives
+into the manage-booking screen and back. The two controls are now wrapped in one
+`flex flex-wrap items-end gap-3`, which is the same arrangement `auth-header.tsx` uses — on a narrow
+screen they wrap under the clinic's name rather than squeezing it.
+
+This is chrome, not tenant content, and it is deliberately left on the neutral tokens rather than
+moved to `accent-*`: §2.2's split is about what a tenant's brand colour may repaint, and a
+system/light/dark select is ours.
+
 ### 3.4 The shims are gone
 
 Done as its own step, after the rest was green. `dashboard-shell.tsx` went from **547 lines to 322** and

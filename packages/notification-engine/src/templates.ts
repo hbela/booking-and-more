@@ -1,3 +1,4 @@
+import { calendarActionLabel } from "./calendar.js";
 import { NotificationTypes, type Locale, type NotificationType } from "./types.js";
 
 /**
@@ -140,6 +141,13 @@ const BUTTON_STYLE =
   "display:inline-block;padding:12px 24px;border-radius:6px;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:600";
 
 const MUTED_STYLE = "color:#64748b;font-size:14px";
+
+/**
+ * A secondary action. Underlined as well as coloured, because colour alone is
+ * not a link indicator (WCAG 1.4.1) and an email client is free to override the
+ * colour but not the decoration.
+ */
+const LINK_STYLE = "color:#4f46e5;text-decoration:underline;font-weight:600";
 
 /**
  * Inline styles and a table-free single column, because email clients are not
@@ -868,6 +876,13 @@ function bookingEmail(
     intro: string;
     lines: string[];
     action?: { label: string; url: string; lead: string } | undefined;
+    /**
+     * A second link, rendered as text rather than as a button. Deliberately not
+     * a second `BUTTON_STYLE`: two equally weighted buttons make the reader
+     * choose before reading, and the primary action here is the one that changes
+     * the booking.
+     */
+    secondary?: { label: string; url: string } | undefined;
     muted: string[];
   },
 ): RenderedEmail {
@@ -882,6 +897,9 @@ function bookingEmail(
     "",
     ...(parts.lines.length === 0 ? [] : [...parts.lines, ""]),
     ...(parts.action === undefined ? [] : [parts.action.lead, parts.action.url, ""]),
+    ...(parts.secondary === undefined
+      ? []
+      : [`${parts.secondary.label}: ${parts.secondary.url}`, ""]),
     ...(parts.muted.length === 0 ? [] : [...parts.muted, ""]),
     common.signoff(values.organizationName),
   ].join("\n");
@@ -902,6 +920,15 @@ function bookingEmail(
     </p>
     <p style="${MUTED_STYLE}">${escapeHtml(common.fallback)}<br />
       <a href="${escapeHtml(parts.action.url)}">${escapeHtml(parts.action.url)}</a>
+    </p>`
+    }
+    ${
+      parts.secondary === undefined
+        ? ""
+        : `<p>
+      <a href="${escapeHtml(parts.secondary.url)}" style="${LINK_STYLE}">
+        ${escapeHtml(parts.secondary.label)}
+      </a>
     </p>`
     }
     ${parts.muted.map((line) => `<p style="${MUTED_STYLE}">${escapeHtml(line)}</p>`).join("\n")}
@@ -991,6 +1018,13 @@ export interface BookingConfirmationValues extends BookingValues {
   manageUrl: string | null;
   /** `Tenant.cancellationPolicy` — free text, printed as written, or null. */
   cancellationPolicy: string | null;
+  /**
+   * Built by {@link ../calendar.ts | buildGoogleCalendarUrl}, or null when the
+   * booking could not describe an event. Independent of `manageUrl`: it carries
+   * no token, so it is available on the staff-accepted path where that one is
+   * not.
+   */
+  addToCalendarUrl: string | null;
 }
 
 const CONFIRMATION_COPY: Record<
@@ -1032,6 +1066,12 @@ const CONFIRMATION_COPY: Record<
  * and the copy changes with it rather than leaving a dead end: a straight-through
  * booking carries its token here, while an accepted request does not, and the
  * customer already holds a working link from the requested email.
+ *
+ * This is the only one of the five that offers the calendar link, and it is the
+ * only one that should: the requested email is explicit that nothing is booked
+ * yet, and a cancellation or a reminder is not a thing to save. The reschedule
+ * email is the arguable one — see calendar.ts on why a prefill link cannot
+ * update an entry the customer already saved.
  */
 export function renderBookingConfirmation(
   locale: Locale,
@@ -1046,6 +1086,14 @@ export function renderBookingConfirmation(
     ...(values.manageUrl === null
       ? {}
       : { action: { label: copy.button, url: values.manageUrl, lead: copy.lead } }),
+    ...(values.addToCalendarUrl === null
+      ? {}
+      : {
+          secondary: {
+            label: calendarActionLabel(locale),
+            url: values.addToCalendarUrl,
+          },
+        }),
     muted: [
       ...(values.manageUrl === null ? [copy.useOriginal] : []),
       copy.late,

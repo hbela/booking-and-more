@@ -2,9 +2,16 @@ import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { FastifyRequest } from "fastify";
 import { Permissions, can, canManageProviderBookings, canReadProviderBookings } from "@bam/auth";
-import { ForbiddenError, commonErrorResponses, idSchema, paginatedSchema } from "@bam/contracts";
+import {
+  ForbiddenError,
+  commonErrorResponses,
+  idSchema,
+  paginatedSchema,
+  type UncoveredReasonCode,
+} from "@bam/contracts";
 import { pageOf } from "../../lib/pagination.js";
 import { requireIdempotencyKey, withIdempotency } from "../../lib/idempotency.js";
+import { ScheduleConflictService } from "../availability/schedule-conflicts.service.js";
 import { BookingService, type AuditContext } from "./booking.service.js";
 import type { BookingWithRelations } from "./booking.repository.js";
 import {
@@ -21,8 +28,18 @@ import {
   type BookingResponse,
 } from "./booking.schemas.js";
 
-export function toBookingResponse(booking: BookingWithRelations): BookingResponse {
+/**
+ * `outsideSchedule` is a parameter rather than something computed here because
+ * this mapper is pure and synchronous, and the answer costs a query per provider
+ * (docs/phase-3-4-schedule-conflicts.md §2.6). The list route computes it once
+ * for the whole page; every other caller passes nothing and gets null.
+ */
+export function toBookingResponse(
+  booking: BookingWithRelations,
+  outsideSchedule: UncoveredReasonCode | null = null,
+): BookingResponse {
   return {
+    outsideSchedule,
     id: booking.id,
     reference: booking.reference,
     status: booking.status,
@@ -78,6 +95,9 @@ export function auditContextOf(request: FastifyRequest): AuditContext {
  */
 export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
   const service = new BookingService(app.prisma);
+  // Read-only and stateless, so a second instance beside the availability
+  // module's own costs nothing and saves threading that module's service in.
+  const conflicts = new ScheduleConflictService(app.prisma);
 
   function assertMayRead(request: FastifyRequest, providerId: string): void {
     const tenant = request.tenant!;
@@ -171,7 +191,19 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
         to: query.to === undefined ? undefined : new Date(`${query.to}T23:59:59.999Z`),
       });
 
-      return pageOf(rows, query.limit, (row) => row.startAt.toISOString(), toBookingResponse);
+      // One pass for the page, not one query per row (§2.6). `pageOf` trims the
+      // extra row it fetched to detect a next page, so this deliberately runs
+      // after nothing — it annotates every row and the surplus one is dropped
+      // with its annotation.
+      const stranded = await conflicts.annotate({
+        tenantId: tenant.id,
+        bookings: rows,
+        now: new Date(),
+      });
+
+      return pageOf(rows, query.limit, (row) => row.startAt.toISOString(), (row) =>
+        toBookingResponse(row, stranded.get(row.id) ?? null),
+      );
     },
   );
 

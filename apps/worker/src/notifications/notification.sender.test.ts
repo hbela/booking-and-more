@@ -457,6 +457,24 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
       expect(fake.sent[0]?.text).toContain("10:00");
     });
 
+    it("offers a calendar link stamped in UTC, not in the clinic's zone", async () => {
+      // The counterpart to the test above, and the reason the two disagree: the
+      // printed time is 10:00 because the clinic is in Budapest, while the
+      // calendar event is the instant, so a customer abroad sees their own
+      // local time on their own phone (calendar.ts).
+      const booking = await bookingFixture();
+      const notification = await bookingNotification(booking.id);
+      const fake = provider({ ok: true, providerMessageId: "cal" });
+
+      await sendNotification({ tenantId, notificationId: notification.id }, options(fake));
+
+      expect(fake.sent[0]?.text).toContain("calendar.google.com/calendar/render");
+      expect(fake.sent[0]?.text).toContain("dates=20260910T080000Z%2F20260910T083000Z");
+      // The href survives escaping with its separators intact — an `&` left
+      // raw in HTML is a URL Google reads as one parameter.
+      expect(fake.sent[0]?.html).toContain("&amp;dates=");
+    });
+
     it("clears the manage link once the email is away", async () => {
       const booking = await bookingFixture();
       const notification = await bookingNotification(booking.id);

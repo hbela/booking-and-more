@@ -31,6 +31,9 @@
  * check first and hope.
  */
 
+export { buildGoogleCalendarUrl, calendarActionLabel } from "./calendar.js";
+export type { CalendarEventInput } from "./calendar.js";
+
 export { buildDedupeKey, utcDayOf } from "./dedupe.js";
 export type { DedupeInput } from "./dedupe.js";
 

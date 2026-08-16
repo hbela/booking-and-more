@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import type { AffectedBooking } from "@bam/contracts";
+import { affectedBookingsOf } from "@/lib/affected-bookings";
 import { ApiError, apiFetch, type AssignedLocation, type WorkingHoursRow } from "@/lib/api-client";
 import {
   END_OF_DAY,
@@ -13,6 +15,7 @@ import {
   type WorkingPeriod,
   type WorkingWeek,
 } from "@/lib/working-hours";
+import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
@@ -51,6 +54,8 @@ export function WorkingHoursEditor({
   const [week, setWeek] = useState<WorkingWeek | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /** Non-null while the "save anyway?" dialog is open. */
+  const [affected, setAffected] = useState<AffectedBooking[] | null>(null);
 
   const stored = useQuery({
     queryKey: ["working-hours", providerId],
@@ -79,7 +84,7 @@ export function WorkingHoursEditor({
   }, [stored.data]);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (acknowledge: boolean) => {
       if (week === null) throw new Error("unreachable: the form does not render until seeded");
 
       return apiFetch(`/v1/providers/${providerId}/working-hours`, {
@@ -87,14 +92,26 @@ export function WorkingHoursEditor({
         tenantId,
         // Whole-set replacement: anything this body omits is deleted, which is
         // why the builder takes the full period and not just its times.
-        body: buildWorkingHoursBody(week),
+        body: { ...buildWorkingHoursBody(week), acknowledgeAffectedBookings: acknowledge },
       });
     },
     onSuccess: () => {
+      setAffected(null);
       setSaved(true);
       void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
+      // The badge on the bookings screen is derived from this schedule, so a
+      // save that strands (or un-strands) anything changes what that list says.
+      void queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
     onError: (cause: unknown) => {
+      // Not a failure — the server is asking. The dialog carries the list and
+      // re-sends the same body acknowledged (phase-3-4 §2.4).
+      const stranded = affectedBookingsOf(cause);
+      if (stranded !== null) {
+        setAffected(stranded);
+        return;
+      }
+
       setError(cause instanceof ApiError ? cause.message : t("genericError"));
     },
   });
@@ -136,7 +153,9 @@ export function WorkingHoursEditor({
             event.preventDefault();
             setError(null);
             setSaved(false);
-            save.mutate();
+            // Unacknowledged: the first attempt is always the one that can be
+            // refused, so the list reaches the owner before the change lands.
+            save.mutate(false);
           }}
         >
           {WEEKDAYS.map((weekday) => (
@@ -187,6 +206,17 @@ export function WorkingHoursEditor({
           <Button type="submit" disabled={save.isPending} >
             {t("save")}
           </Button>
+
+          <AffectedBookingsDialog
+            bookings={affected}
+            busy={save.isPending}
+            onConfirm={() => {
+              save.mutate(true);
+            }}
+            onCancel={() => {
+              setAffected(null);
+            }}
+          />
         </form>
       )}
     </Card>

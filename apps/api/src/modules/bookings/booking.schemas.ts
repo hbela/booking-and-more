@@ -6,6 +6,7 @@ import {
   instantSchema,
   languageSchema,
   minorAmountSchema,
+  outsideScheduleSchema,
   paginationQuerySchema,
 } from "@bam/contracts";
 
@@ -100,6 +101,18 @@ export const bookingResponseSchema = z.object({
   cancelledAt: instantSchema.nullable(),
   version: z.number().int(),
   createdAt: instantSchema,
+
+  /**
+   * Why this appointment sits outside its provider's current schedule, or null.
+   * docs/phase-3-4-schedule-conflicts.md §2.6.
+   *
+   * Derived on read, never stored, and only ever non-null for a live future
+   * booking — so it reads as "somebody should look at this", not as a fact about
+   * history. Null on every single-booking response, where the question is not
+   * asked: it is a property of a diary being scanned, not of a booking being
+   * opened.
+   */
+  outsideSchedule: outsideScheduleSchema.default(null),
 });
 
 /**

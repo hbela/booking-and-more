@@ -33,6 +33,7 @@ import type { DateOnly } from "@bam/availability-engine";
 import { BookingCalendar } from "./booking-calendar";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ErrorText } from "./ui/field";
+import { ThemeToggle } from "./ui/theme-toggle";
 
 /**
  * The public booking flow. tech-impl §30, §16.
@@ -412,12 +413,21 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
           </h1>
           <p className="text-ink-muted text-sm">{t("subtitle")}</p>
         </div>
-        {/* The page opens in the tenant's language (see book/page.tsx). This is
-            the only way a customer who wants another one can say so — without
-            it they would have to edit the URL, which is not a thing to ask of
-            somebody trying to book a haircut. Using it also records the choice,
-            so the tenant's default stops being reapplied. */}
-        <LocaleSwitcher label={t("language")} />
+        <div className="flex flex-wrap items-end gap-3">
+          {/* The page opens in the tenant's language (see book/page.tsx). This is
+              the only way a customer who wants another one can say so — without
+              it they would have to edit the URL, which is not a thing to ask of
+              somebody trying to book a haircut. Using it also records the choice,
+              so the tenant's default stops being reapplied. */}
+          <LocaleSwitcher label={t("language")} />
+          {/* The same control the signed-in screens carry. This page renders in
+              whatever the visitor's system asks for and had no way to say
+              otherwise — a customer on a dark-by-default phone who wants the
+              light booking page could only change it for their whole device.
+              It writes the same cookie, so a choice made here survives into the
+              manage-booking screen and back. */}
+          <ThemeToggle />
+        </div>
       </header>
 
       <Steps current={step} />

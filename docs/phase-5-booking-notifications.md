@@ -142,6 +142,47 @@ because it is the recovery path for two different failures — a reminder crossi
 Redis that lost every job in it — and neither is urgent to the second. The `@@index([status,
 scheduledAt])` on `notifications` was added in Epic 5 part 1 for exactly this query.
 
+## 2.6 The calendar link is a prefill URL, and only the confirmation carries it
+
+_Added 2026-08-16, after the original build._
+
+The confirmed email now offers "Add to Google Calendar" beside the manage button. It is a
+`calendar.google.com/calendar/render?action=TEMPLATE&…` URL built by `buildGoogleCalendarUrl` in
+`packages/notification-engine/src/calendar.ts` — a pure function of the booking's values, beside the
+templates and for the same reason (rule 8).
+
+**Why a link rather than an `.ics` attachment.** `.ics` is the interoperable answer and would serve
+Apple Calendar and Outlook too, but it has to be attached, and `EmailProvider.send` carries a subject
+and two bodies and nothing else. Widening that interface drags in the Resend adapter, the logging
+provider and every test double — a larger change than the one asked for, buying nothing for the
+customer it is aimed at. When Apple and Outlook are wanted, the honest move is `.ics` for everyone,
+not three vendor links side by side.
+
+**The timestamps are UTC, and that is not the inconsistency it looks like.** Everything the five
+emails _print_ is formatted in the appointment's own zone, resolved location → provider → tenant
+(tech-impl §13.4), because that is where the appointment happens. The URL sends the raw instants with
+a trailing `Z`, because a calendar entry _is_ an instant and Google renders it in whichever zone the
+customer's calendar is set to. A customer booking a Budapest clinic from Dublin therefore reads
+"10:00" in the email and sees 09:00 on their own phone, and both are right. Same distinction as
+phase-6 §2.7 — a printed time is read in a zone, an event is a moment. Two tests hold the pair in
+place, one per side.
+
+**It returns `null` rather than guessing.** An invalid or non-positive span produces no link. A saved
+calendar entry outlives the email and will be trusted over it, so a confirmation missing one
+convenience beats an entry at the wrong moment.
+
+**Only `BOOKING_CONFIRMATION` offers it, and structurally so** — the value is a required field on
+`BookingConfirmationValues` and on no other template's. The requested email is explicit that nothing
+is booked yet; a cancellation and a reminder are not things to save. The reschedule email is the
+arguable omission and was left out on purpose: a prefill URL cannot update an entry the customer
+already saved, so it would add a _second_ entry to their calendar for the same appointment. Moving an
+existing one is what Epic 6's actual Google Calendar sync is for; this is a link, not an integration,
+and holds no token and reads no account.
+
+It is independent of the manage link, so it is present on the staff-accepted path where §2.1 leaves
+that one absent. Nothing about §2.1 changes: this URL is not a credential, which is why it may also
+be built at any time from the booking rather than travelling in the payload.
+
 ---
 
 # 3. Delivered
@@ -154,6 +195,7 @@ scheduledAt])` on `notifications` was added in Epic 5 part 1 for exactly this qu
 | `dedupe.ts`    | its variant, keyed `{ bookingId }` — one request email per booking                     |
 | `planning.ts`  | `BOOKING_REQUESTED` mapped (no reminder), and `checkStillOwed` for the send-time check |
 | `templates.ts` | five renderers in `hu` and `en`, plus the shared appointment block they all print      |
+| `calendar.ts`  | §2.6, added 2026-08-16: `buildGoogleCalendarUrl` and its one localized label            |
 
 `bookingEmail` assembles all five so they differ only where they mean to: greeting, one sentence, the
 same six-fact details table, then whatever that message adds. `detailPairs` drops the place and price
@@ -161,6 +203,12 @@ lines rather than printing an empty label — a single-site clinic records neith
 nothing after it reads as missing information.
 
 The dedupe keys were already right for four of the five. The one change that mattered is §2.4's.
+
+`bookingEmail` grew one optional `secondary` link in the same 2026-08-16 change — rendered as an
+underlined text link rather than a second `BUTTON_STYLE`, because two equally weighted buttons make
+the reader choose before reading, and the primary action is the one that changes the booking. It is
+underlined as well as coloured: colour alone is not a link indicator (WCAG 1.4.1), and an email
+client may override the colour but not the decoration.
 
 ## 3.2 Database
 
@@ -189,7 +237,8 @@ is the single place §2.1's asymmetry is written down. `loadBookingFacts` also r
 now — it builds the cancellation email's "book another time" link, and is not a planning fact.
 
 The sender splits in two. `build` routes booking types to `buildBookingEmail`, which re-reads the
-booking, calls `checkStillOwed`, and formats — times through `Intl` in the location's zone falling
+booking — `endAt` included since 2026-08-16, solely to size §2.6's calendar event — calls
+`checkStillOwed`, and formats — times through `Intl` in the location's zone falling
 back to the provider's then the tenant's, money through the `formatMoney` that already asks `Intl` how
 many minor digits a currency has. Everything else goes through the existing `render`, whose
 fall-through now describes what is genuinely left: `CALENDAR_DISCONNECTED`, until Epic 6.

@@ -1,5 +1,11 @@
 import type { AvailabilityException, Prisma, PrismaClient, WorkingHours } from "@bam/db";
-import { ErrorCodes, NotFoundError, ValidationError } from "@bam/contracts";
+import {
+  ConflictError,
+  ErrorCodes,
+  NotFoundError,
+  ValidationError,
+  type AffectedBooking,
+} from "@bam/contracts";
 import {
   generateSlots,
   type AvailabilityQuery,
@@ -12,6 +18,7 @@ import { providerNotFound } from "../providers/provider.repository.js";
 import { serviceNotFound } from "../services/service.repository.js";
 import { locationNotFound } from "../locations/location.repository.js";
 import { AvailabilityRepository } from "./availability.repository.js";
+import { ScheduleConflictService } from "./schedule-conflicts.service.js";
 import type {
   CreateExceptionBody,
   SlotSearchBody,
@@ -72,13 +79,20 @@ interface ProviderPlan {
  */
 export class AvailabilityService {
   private readonly repository: AvailabilityRepository;
+  private readonly conflicts: ScheduleConflictService;
 
   constructor(private readonly prisma: PrismaClient) {
     this.repository = new AvailabilityRepository(prisma);
+    this.conflicts = new ScheduleConflictService(prisma);
   }
 
   get repo(): AvailabilityRepository {
     return this.repository;
+  }
+
+  /** Shared with the bookings module, which needs the same question answered. */
+  get scheduleConflicts(): ScheduleConflictService {
+    return this.conflicts;
   }
 
   // -------------------------------------------------------------------------
@@ -94,6 +108,9 @@ export class AvailabilityService {
     tenantId: string;
     providerId: string;
     entries: WorkingHoursEntry[];
+    /** See `setWorkingHoursBodySchema` and phase-3-4 §2.4. */
+    acknowledgeAffectedBookings: boolean;
+    now: Date;
   }): Promise<WorkingHours[]> {
     const { tenantId, providerId, entries } = args;
 
@@ -113,6 +130,19 @@ export class AvailabilityService {
           { field: "workingHours" },
         );
       }
+    }
+
+    // Last, after the cheap validation: there is no point reading a diary to
+    // report on a body that was never going to be saved.
+    if (!args.acknowledgeAffectedBookings) {
+      assertNothingStranded(
+        await this.conflicts.findAffectedByWorkingHours({
+          tenantId,
+          providerId,
+          entries,
+          now: args.now,
+        }),
+      );
     }
 
     return this.repository.replaceWorkingHours({
@@ -156,12 +186,30 @@ export class AvailabilityService {
     input: CreateExceptionBody;
     createdByUserId: string | null;
     source?: "DASHBOARD" | "VOICE" | "CHAT" | "CALENDAR" | "API";
+    now: Date;
   }): Promise<AvailabilityException> {
     const { tenantId, providerId, input } = args;
 
     await this.assertProviderExists(tenantId, providerId);
     if (input.locationId) await this.assertLocationsExist(tenantId, [input.locationId]);
     if (input.serviceId) await this.assertServiceExists(tenantId, input.serviceId);
+
+    // The likelier of the two paths (§2.5): "I am away next week" is a far
+    // commoner action than "I no longer work Tuesdays".
+    // ADDITIONAL_AVAILABILITY only ever adds time and can strand nothing.
+    if (input.type === "UNAVAILABLE" && !input.acknowledgeAffectedBookings) {
+      assertNothingStranded(
+        await this.conflicts.findAffectedByException({
+          tenantId,
+          providerId,
+          startAt: new Date(input.startAt),
+          endAt: new Date(input.endAt),
+          locationId: input.locationId ?? null,
+          serviceId: input.serviceId ?? null,
+          now: args.now,
+        }),
+      );
+    }
 
     return this.repository.createException({
       tenantId,
@@ -183,6 +231,7 @@ export class AvailabilityService {
     tenantId: string;
     exceptionId: string;
     input: UpdateExceptionBody;
+    now: Date;
   }): Promise<AvailabilityException> {
     const { tenantId, exceptionId, input } = args;
     const current = await this.repository.findExceptionOrThrow({ tenantId, exceptionId });
@@ -199,11 +248,40 @@ export class AvailabilityService {
     if (input.locationId) await this.assertLocationsExist(tenantId, [input.locationId]);
     if (input.serviceId) await this.assertServiceExists(tenantId, input.serviceId);
 
+    // Every scope is merged the same way the times are: a PATCH that moves only
+    // the end must still be judged with the location and service the row
+    // already has, or a closure would be checked against a scope nobody asked
+    // for.
+    const type = input.type ?? current.type;
+    const locationId = input.locationId === undefined ? current.locationId : input.locationId;
+    const serviceId = input.serviceId === undefined ? current.serviceId : input.serviceId;
+
+    if (type === "UNAVAILABLE" && input.acknowledgeAffectedBookings !== true) {
+      assertNothingStranded(
+        await this.conflicts.findAffectedByException({
+          tenantId,
+          providerId: current.providerId,
+          startAt,
+          endAt,
+          locationId,
+          serviceId,
+          // Its own stored extent must not count against it, or shrinking a
+          // closure off a booking would be refused for the booking it is being
+          // shrunk off.
+          replacesExceptionId: exceptionId,
+          now: args.now,
+        }),
+      );
+    }
+
     return this.repository.updateException({
       tenantId,
       exceptionId,
       data: definedOnly({
         ...input,
+        // Not a column. Stripped explicitly rather than left to `definedOnly`,
+        // which only drops undefined and would happily try to write `false`.
+        acknowledgeAffectedBookings: undefined,
         ...(input.startAt === undefined ? {} : { startAt }),
         ...(input.endAt === undefined ? {} : { endAt }),
       }),
@@ -498,6 +576,32 @@ export class AvailabilityService {
       throw new NotFoundError("Location not found.", ErrorCodes.LOCATION_NOT_FOUND);
     }
   }
+}
+
+/**
+ * Refuse a schedule change that would strand bookings — once.
+ * docs/phase-3-4-schedule-conflicts.md §2.4.
+ *
+ * The list travels in `details` so the caller can show what it is about to do
+ * without a second request, and the same request re-sent with
+ * `acknowledgeAffectedBookings` succeeds. This is not a permission check: the
+ * change belongs to the clinic (phase-2-3 §2.6), and refusing outright would
+ * leave a business that genuinely needs to move its hours with cancelling real
+ * appointments as its only way forward.
+ *
+ * The check re-runs on the acknowledged call, so a booking made between the two
+ * requests is caught by the second one rather than slipping through a window.
+ */
+function assertNothingStranded(affected: AffectedBooking[]): void {
+  if (affected.length === 0) return;
+
+  throw new ConflictError(
+    ErrorCodes.SCHEDULE_CONFLICTS_BOOKINGS,
+    affected.length === 1
+      ? "This change leaves 1 existing booking outside the schedule."
+      : `This change leaves ${String(affected.length)} existing bookings outside the schedule.`,
+    { affectedBookings: affected },
+  );
 }
 
 /**

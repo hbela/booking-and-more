@@ -135,6 +135,8 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
         tenantId,
         providerId,
         entries: request.body.workingHours,
+        acknowledgeAffectedBookings: request.body.acknowledgeAffectedBookings,
+        now: new Date(),
       });
 
       request.audit({
@@ -209,6 +211,7 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
         providerId,
         input: request.body,
         createdByUserId: request.user?.id ?? null,
+        now: new Date(),
       });
 
       request.audit({
@@ -249,7 +252,12 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
       const current = await service.repo.findExceptionOrThrow({ tenantId, exceptionId });
       assertMayManage(request, current.providerId);
 
-      const updated = await service.updateException({ tenantId, exceptionId, input: request.body });
+      const updated = await service.updateException({
+        tenantId,
+        exceptionId,
+        input: request.body,
+        now: new Date(),
+      });
 
       request.audit({
         action: "availability.exception_updated",

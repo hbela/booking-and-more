@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
+  buildGoogleCalendarUrl,
   checkStillOwed,
   decideRetry,
   NotificationTypes,
@@ -265,6 +266,9 @@ async function buildBookingEmail(
       status: true,
       reference: true,
       startAt: true,
+      // Only the confirmation email uses it, and only to size the calendar
+      // event — every printed time comes from `startAt`.
+      endAt: true,
       customerNameSnapshot: true,
       serviceNameSnapshot: true,
       priceMinorSnapshot: true,
@@ -331,6 +335,19 @@ async function buildBookingEmail(
           ...values,
           manageUrl: payload?.manageUrl ?? null,
           cancellationPolicy: booking.tenant.cancellationPolicy,
+          // Built from the instants rather than from `values.when`, which is
+          // already a string in the clinic's zone. calendar.ts explains why the
+          // two deliberately disagree about zones.
+          addToCalendarUrl: buildGoogleCalendarUrl(locale, {
+            organizationName: booking.tenant.name,
+            serviceName: booking.serviceNameSnapshot,
+            providerName: booking.provider.displayName,
+            locationName: booking.location?.name ?? null,
+            locationAddress: addressOf(booking.location),
+            reference: booking.reference,
+            startAt: booking.startAt,
+            endAt: booking.endAt,
+          }),
         }),
       };
 

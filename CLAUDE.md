@@ -9,6 +9,16 @@ Phase records: [Phase 0 — foundation](docs/phase-0-technical-foundation.md) ·
 [Phase 2 — providers, services, locations](docs/phase-2-providers-services-locations.md) ·
 [Phase 3 — availability engine](docs/phase-3-availability-engine.md) ·
 [Phase 4 — booking engine](docs/phase-4-booking-engine.md) ·
+[Phases 3–4 — schedule/booking conflicts](docs/phase-3-4-schedule-conflicts.md) (done bar its §6
+manual walk). `working_hours` and `bookings` had no constraint between them and nothing supplied one,
+so a provider could remove the hours under a confirmed appointment and be told nothing. **Read its
+§2.2 before changing what counts as covered**: the check judges the appointment span and ignores
+buffers, deliberately unlike `assertSlotIsOffered`, and §2.1 is why there is exactly one
+implementation of the question. A schedule save that would strand bookings now returns
+`SCHEDULE_CONFLICTS_BOOKINGS` **once** with the list and succeeds when re-sent with
+`acknowledgeAffectedBookings` — it warns rather than refuses, because §2.6 of the owner-management
+record puts availability in the provider's hands and the only escape hatch from a hard refusal is
+cancelling real customers ·
 [Phase 5 — notifications](docs/phase-5-notifications.md) (part 1 of 3: outbox dispatch, queues, the
 notification record. Email delivery was built early by Epic 9; the booking half of parts 2 and 3 is the
 record below) ·
@@ -16,7 +26,11 @@ record below) ·
 sweep that makes a reminder fire; done). It closes phase-4 §5.2 and phase-5 §5.1/§5.2. **Read its §2.1
 before putting a link in any email**: the management token is stored only as a hash, so it travels in the
 outbox payload and reaches exactly two of the five templates — and §2.2 records why the reminder is
-deliberately not one of them ·
+deliberately not one of them. **§2.6 is the one to read before touching the "Add to Google Calendar"
+link**: it is a prefill URL and not Epic 6's sync, its timestamps are UTC while every printed time is
+in the clinic's zone (both are right, for different reasons), and it is on the confirmation email
+alone — the reschedule email would add a *second* entry to a calendar rather than move the one
+already saved ·
 [Phase 6 — booking calendar](docs/phase-6-booking-calendar.md) (the customer's month view only; the staff
 calendar, Google Calendar sync and per-step deep links are still Epic 6's and still unbuilt — its §6 says so
 explicitly). The "When" step was a date input and a list, so an empty day was a dead end. **Read its §2.2

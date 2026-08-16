@@ -41,6 +41,16 @@ export const workingHoursEntrySchema = z.object({
  */
 export const setWorkingHoursBodySchema = z.object({
   workingHours: z.array(workingHoursEntrySchema).max(100),
+  /**
+   * "Yes, I know this strands existing bookings — do it anyway."
+   *
+   * Absent or false, a save that would leave confirmed appointments outside the
+   * new schedule is refused once with `SCHEDULE_CONFLICTS_BOOKINGS` and the list
+   * of them (docs/phase-3-4-schedule-conflicts.md §2.4). Not a permission and
+   * not a force flag: the change is the clinic's to make, and this only makes
+   * them make it knowingly.
+   */
+  acknowledgeAffectedBookings: z.boolean().default(false),
 });
 
 export const workingHoursResponseSchema = z.object({
@@ -68,6 +78,8 @@ export const createExceptionBodySchema = z
     serviceId: idSchema.nullable().optional(),
     /** Staff-facing only. Never shown to a customer. */
     reason: z.string().max(500).nullable().optional(),
+    /** See `setWorkingHoursBodySchema`. Only ever consulted for `UNAVAILABLE`. */
+    acknowledgeAffectedBookings: z.boolean().default(false),
   })
   .refine((body) => Date.parse(body.endAt) > Date.parse(body.startAt), {
     message: "endAt must be after startAt.",
@@ -82,6 +94,12 @@ export const updateExceptionBodySchema = z
     locationId: idSchema.nullable(),
     serviceId: idSchema.nullable(),
     reason: z.string().max(500).nullable(),
+    /**
+     * See `setWorkingHoursBodySchema`. Optional here like everything else in a
+     * PATCH, and read as false when absent — an acknowledgement has to be given,
+     * never inferred.
+     */
+    acknowledgeAffectedBookings: z.boolean(),
   })
   .partial();
 // The start-before-end rule is not re-checked here: a PATCH that moves only one

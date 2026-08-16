@@ -253,5 +253,133 @@ export function hasAvailability(query: AvailabilityQuery): boolean {
   return generateSlots(query).length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// Coverage — the opposite question
+// ---------------------------------------------------------------------------
+
+/**
+ * Appointments that the schedule no longer covers.
+ * docs/phase-3-4-schedule-conflicts.md §2.1.
+ *
+ * `generateSlots` asks "what could be booked?". This asks "is what *was* booked
+ * still inside the schedule?", which is the question nothing answered when a
+ * provider edits their working hours or books time off on top of existing
+ * appointments.
+ *
+ * It lives here, next to `generateSlots` and built from the same `appliesOn`,
+ * `periodToInterval` and interval algebra, because the two must not be able to
+ * disagree. A separate implementation would eventually warn about a booking the
+ * search would happily have made, and a dialog that cries wolf is one an owner
+ * learns to click through.
+ *
+ * ## What it deliberately does not consider
+ *
+ * **Buffers.** The slot search requires the whole occupied window — buffers
+ * included — inside free time, because it decides whether a booking may be
+ * *made*. This decides whether a provider will be there for an appointment that
+ * already exists, and a ten-minute after-buffer running past closing is not
+ * something to alarm anybody about. Ignoring buffers can only ever yield fewer
+ * findings, never a missed one: a buffer cannot make the appointment itself
+ * uncovered. §2.2 records this asymmetry as intended.
+ *
+ * **Other bookings.** They are not obstacles to each other here. Two overlapping
+ * appointments are a different defect, and one the exclusion constraint on
+ * `capacity_reservations` already makes impossible (CLAUDE.md rule 14).
+ *
+ * **Which appointments are worth asking about.** Past and cancelled ones are
+ * excluded by the caller, not here — that is policy, and this file has none
+ * (§2.3).
+ */
+
+export const UncoveredReasons = {
+  /** No working period, and no one-off opening, covers it. */
+  OUTSIDE_WORKING_HOURS: "OUTSIDE_WORKING_HOURS",
+  /** The schedule covers it; a closure was then laid over the top. */
+  BLOCKED_BY_EXCEPTION: "BLOCKED_BY_EXCEPTION",
+} as const;
+
+export type UncoveredReason = (typeof UncoveredReasons)[keyof typeof UncoveredReasons];
+
+/** An appointment to ask about. `id` is carried through and never read. */
+export interface ScheduledAppointment extends DateTimePeriod {
+  id: string;
+}
+
+export interface CoverageQuery {
+  /** IANA zone the schedule is written in — the location's, or the provider's. */
+  timezone: string;
+  workingPeriods: TimePeriod[];
+  /** One-off openings. Count as covered, exactly as the search treats them. */
+  additionalPeriods: DateTimePeriod[];
+  /** One-off closures. Subtracted. */
+  unavailablePeriods: DateTimePeriod[];
+  appointments: ScheduledAppointment[];
+}
+
+export interface UncoveredAppointment {
+  id: string;
+  reason: UncoveredReason;
+}
+
+export function findUncoveredAppointments(query: CoverageQuery): UncoveredAppointment[] {
+  if (query.appointments.length === 0) return [];
+
+  const spans = query.appointments.map((appointment) => {
+    const start = Date.parse(appointment.startAt);
+    const end = Date.parse(appointment.endAt);
+
+    // A caller bug, not user input — the API parses its own bodies with Zod
+    // long before this. Loud, because the alternative is an appointment
+    // silently reported as uncovered and a clinic cancelling it.
+    if (!Number.isFinite(start) || !Number.isFinite(end)) {
+      throw new Error(`Appointment ${appointment.id} has an invalid span`);
+    }
+
+    return { id: appointment.id, start, end };
+  });
+
+  // Only the days the appointments actually touch. A day either side, for the
+  // same reason step 1 of `generateSlots` looks back one: a night shift belongs
+  // to the day it started on, and a calendar day in the provider's zone is
+  // never exactly a UTC day.
+  const earliest = Math.min(...spans.map((span) => span.start));
+  const latest = Math.max(...spans.map((span) => span.end));
+
+  const dates = eachDate(
+    addDays(dateOnlyAt(earliest, query.timezone), -1),
+    addDays(dateOnlyAt(latest, query.timezone), 1),
+  );
+
+  const working = dates.flatMap((date) =>
+    query.workingPeriods
+      .filter((period) => appliesOn(period, date))
+      .map((period) => periodToInterval(period, date, query.timezone)),
+  );
+
+  // Same two steps the search takes, and in the same order: openings are added
+  // to the recurring hours, then closures are cut out of the total.
+  const open = normalize([...working, ...toIntervals(query.additionalPeriods)]);
+  const free = subtract(open, toIntervals(query.unavailablePeriods));
+
+  const uncovered: UncoveredAppointment[] = [];
+
+  for (const span of spans) {
+    if (contains(free, span)) continue;
+
+    // One reason, and the more fundamental one wins. An appointment can be both
+    // half outside the hours and under a closure; "you do not work then" is the
+    // fact that has to be dealt with first, and reporting both would make the
+    // sentence in the dialog longer without making it more actionable.
+    uncovered.push({
+      id: span.id,
+      reason: contains(open, span)
+        ? UncoveredReasons.BLOCKED_BY_EXCEPTION
+        : UncoveredReasons.OUTSIDE_WORKING_HOURS,
+    });
+  }
+
+  return uncovered;
+}
+
 /** Re-exported so the engine's own interval helpers stay testable in isolation. */
 export { clamp, contains, normalize, subtract };

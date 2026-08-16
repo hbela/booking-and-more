@@ -234,7 +234,12 @@ function BookingCard({
               : ""}
           </p>
         </div>
-        <StatusBadge status={booking.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          {booking.outsideSchedule ? (
+            <OutsideScheduleBadge reason={booking.outsideSchedule} />
+          ) : null}
+          <StatusBadge status={booking.status} />
+        </div>
       </div>
 
       {booking.notes ? <p className="text-sm">{booking.notes}</p> : null}
@@ -269,6 +274,41 @@ function BookingCard({
         ) : null}
       </div>
     </li>
+  );
+}
+
+/**
+ * "This appointment is outside the provider's schedule."
+ * docs/phase-3-4-schedule-conflicts.md §2.6.
+ *
+ * Beside the status chip rather than replacing it: the booking is still
+ * confirmed, and what has gone wrong is a disagreement between the diary and the
+ * schedule, not the booking's state.
+ *
+ * `warning`, never `danger`. Nothing is broken and nobody has lost their
+ * appointment — the provider may simply have changed their hours and meant to.
+ * The chip carries its own word for the same reason every other one does: colour
+ * alone fails WCAG 1.4.1 (see {@link ./ui/badge.tsx}). The `title` names which
+ * of the two reasons it is, which is detail rather than the message.
+ */
+function OutsideScheduleBadge({
+  reason,
+}: {
+  reason: NonNullable<Booking["outsideSchedule"]>;
+}): React.ReactElement {
+  const t = useTranslations("bookings");
+
+  return (
+    <span
+      className="bg-warning-surface text-on-warning-surface rounded-full px-2.5 py-0.5 text-xs font-medium"
+      title={
+        reason === "BLOCKED_BY_EXCEPTION"
+          ? t("outsideSchedule.blocked")
+          : t("outsideSchedule.hours")
+      }
+    >
+      {t("outsideSchedule.label")}
+    </span>
   );
 }
 
