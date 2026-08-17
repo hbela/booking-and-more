@@ -17,7 +17,9 @@
   "dependencies": {
     "@bam/config": "workspace:*",
     "@bam/contracts": "workspace:*",
+    "@bam/crypto": "workspace:*",
     "@bam/db": "workspace:*",
+    "@bam/google-calendar": "workspace:*",
     "@bam/notification-engine": "workspace:*",
     "@bam/observability": "workspace:*",
     "bullmq": "^5.81.2",

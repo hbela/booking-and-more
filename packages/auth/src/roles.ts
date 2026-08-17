@@ -67,6 +67,18 @@ export const Permissions = {
   AVAILABILITY_MANAGE_ALL: "availability:manage:all",
   AVAILABILITY_MANAGE_OWN: "availability:manage:own",
 
+  /**
+   * Connecting and disconnecting a Google Calendar (Epic 6).
+   *
+   * Mirrors the availability pair, and for the same reason: a provider owns
+   * their own diary, so connecting *their* calendar is theirs to do, while an
+   * administrator may set one up on anybody's behalf. Like every `:own`
+   * permission these are resource-scoped — the permission alone is never enough
+   * and `canManageIntegration` in policy.ts does the ownership half.
+   */
+  INTEGRATION_MANAGE_ALL: "integration:manage:all",
+  INTEGRATION_MANAGE_OWN: "integration:manage:own",
+
   BOOKING_READ_ALL: "booking:read:all",
   BOOKING_READ_OWN: "booking:read:own",
   BOOKING_MANAGE_ALL: "booking:manage:all",
@@ -98,6 +110,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.LOCATION_MANAGE,
     Permissions.AVAILABILITY_MANAGE_ALL,
     Permissions.AVAILABILITY_MANAGE_OWN,
+    Permissions.INTEGRATION_MANAGE_ALL,
+    Permissions.INTEGRATION_MANAGE_OWN,
     Permissions.BOOKING_READ_ALL,
     Permissions.BOOKING_READ_OWN,
     Permissions.BOOKING_MANAGE_ALL,
@@ -116,6 +130,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.LOCATION_MANAGE,
     Permissions.AVAILABILITY_MANAGE_ALL,
     Permissions.AVAILABILITY_MANAGE_OWN,
+    Permissions.INTEGRATION_MANAGE_ALL,
+    Permissions.INTEGRATION_MANAGE_OWN,
     Permissions.BOOKING_READ_ALL,
     Permissions.BOOKING_READ_OWN,
     Permissions.BOOKING_MANAGE_ALL,
@@ -130,6 +146,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.TENANT_READ,
     Permissions.MEMBER_READ,
     Permissions.AVAILABILITY_MANAGE_OWN,
+    Permissions.INTEGRATION_MANAGE_OWN,
     Permissions.BOOKING_READ_OWN,
     Permissions.BOOKING_MANAGE_OWN,
   ],

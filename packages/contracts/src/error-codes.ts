@@ -65,6 +65,18 @@ export const ErrorCodes = {
    */
   SCHEDULE_CONFLICTS_BOOKINGS: "SCHEDULE_CONFLICTS_BOOKINGS",
 
+  // --- Calendar integrations (Epic 6) --------------------------------------
+  /**
+   * The connection exists but cannot do work: disconnected, or waiting for a
+   * human to re-consent after Google withdrew the grant.
+   *
+   * Distinct from `SERVICE_UNAVAILABLE`, which means the *platform* has no
+   * Google credentials at all. One is fixed by the provider clicking reconnect
+   * and the other by an operator editing an environment file, so a screen that
+   * cannot tell them apart gives the wrong instruction to whoever is reading it.
+   */
+  CALENDAR_INTEGRATION_INACTIVE: "CALENDAR_INTEGRATION_INACTIVE",
+
   // --- Conversational (Epics 7-8) ------------------------------------------
   PENDING_ACTION_NOT_FOUND: "PENDING_ACTION_NOT_FOUND",
   PENDING_ACTION_EXPIRED: "PENDING_ACTION_EXPIRED",

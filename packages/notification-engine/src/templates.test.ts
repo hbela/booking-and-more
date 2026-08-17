@@ -9,11 +9,12 @@ import {
   renderBookingReminder,
   renderBookingRequested,
   renderBookingUpdated,
+  renderCalendarDisconnected,
   renderOrganizationCreated,
   renderProviderInvited,
   renderSubscriptionConfirmed,
 } from "./templates.js";
-import { NotificationTypes } from "./types.js";
+import { NotificationTypes, type NotificationType } from "./types.js";
 
 const values = {
   organizationName: "Wellness Kft",
@@ -236,6 +237,86 @@ describe("renderProviderInvited", () => {
   });
 });
 
+describe("renderCalendarDisconnected", () => {
+  const disconnected = {
+    organizationName: "Napfény Fogászat",
+    recipientName: "Dr. Kovács Anna",
+    accountEmail: "anna.personal@gmail.com",
+    providerName: "Dr. Kovács Anna",
+    reconnectUrl: "http://localhost:3000/dashboard/integrations",
+  };
+
+  it.each(["hu", "en"] as const)("renders %s with a subject, html and text", (locale) => {
+    const email = renderCalendarDisconnected(locale, disconnected);
+
+    expect(email.subject).toContain("Napfény Fogászat");
+    expect(email.html).toContain(disconnected.reconnectUrl);
+    expect(email.text).toContain(disconnected.reconnectUrl);
+    expect(email.text).not.toContain("<");
+  });
+
+  /**
+   * **The assertion this template exists for.**
+   *
+   * PRD §9.10's promise, said to the person worried about it: a calendar failure
+   * never touches a booking. An email that reports the disconnection without it
+   * reads as "your appointments may be gone", which is both false and the single
+   * most alarming thing this product could say to a provider.
+   */
+  it("promises the bookings are safe, before it asks for anything", () => {
+    const en = renderCalendarDisconnected("en", disconnected);
+
+    expect(en.text).toContain("Your bookings are safe");
+    // Before the call to action, not after it. Somebody who reads two lines and
+    // stops must still have been reassured.
+    expect(en.text.indexOf("Your bookings are safe")).toBeLessThan(en.text.indexOf("To reconnect"));
+
+    const hu = renderCalendarDisconnected("hu", disconnected);
+    expect(hu.text).toContain("biztonságban");
+  });
+
+  it("says what has actually stopped, so 'safe' does not read as 'nothing is wrong'", () => {
+    const email = renderCalendarDisconnected("en", disconnected);
+
+    expect(email.text.toLowerCase()).toContain("will not reach that calendar");
+  });
+
+  it("names the Google account, because a person may have several", () => {
+    // The address Google reports, not the one they sign in to us with. Without
+    // it, somebody with a work and a personal account cannot tell which broke.
+    const email = renderCalendarDisconnected("en", disconnected);
+    expect(email.text).toContain("anna.personal@gmail.com");
+  });
+
+  it("explains why it happened rather than implying our software broke", () => {
+    const email = renderCalendarDisconnected("en", disconnected);
+    expect(email.text.toLowerCase()).toContain("withdrawn");
+  });
+
+  it("drops the diary line rather than leaving a gap", () => {
+    const email = renderCalendarDisconnected("en", { ...disconnected, providerName: null });
+
+    expect(email.text).not.toContain("diary");
+    expect(email.text).toContain("Your bookings are safe");
+  });
+
+  it("escapes markup in the account address", () => {
+    const email = renderCalendarDisconnected("en", {
+      ...disconnected,
+      accountEmail: `a&b<script>alert(1)</script>@gmail.com`,
+    });
+
+    expect(email.html).not.toContain("<script>");
+    expect(email.html).toContain("&amp;");
+  });
+
+  it("differs by locale", () => {
+    expect(renderCalendarDisconnected("hu", disconnected).subject).not.toBe(
+      renderCalendarDisconnected("en", disconnected).subject,
+    );
+  });
+});
+
 describe("isRenderable", () => {
   it("knows the templates that exist", () => {
     expect(isRenderable(NotificationTypes.ORGANIZATION_CREATED)).toBe(true);
@@ -245,9 +326,18 @@ describe("isRenderable", () => {
     expect(isRenderable(NotificationTypes.BOOKING_REMINDER)).toBe(true);
   });
 
-  it("refuses a type with no template rather than sending an empty email", () => {
-    // The last one left: staff-facing, and it arrives with Google Calendar.
-    expect(isRenderable(NotificationTypes.CALENDAR_DISCONNECTED)).toBe(false);
+  it("now has every type in the enum, including the last one to arrive", () => {
+    // This assertion used to read `.toBe(false)` — "the last one left:
+    // staff-facing, and it arrives with Google Calendar". It has arrived
+    // (docs/phase-6-google-calendar-part-1.md §6), so what it asserts is
+    // inverted rather than the test being deleted: the point it was making is
+    // that `isRenderable` is the gate a type must pass to be sent at all, and
+    // that point still needs a test.
+    expect(isRenderable(NotificationTypes.CALENDAR_DISCONNECTED)).toBe(true);
+
+    // The gate itself, proved with a type that does not exist. Without this the
+    // suite would no longer show that `isRenderable` can say no.
+    expect(isRenderable("NOT_A_REAL_TYPE" as NotificationType)).toBe(false);
   });
 });
 

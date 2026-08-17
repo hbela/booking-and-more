@@ -39,6 +39,21 @@ measurement that justifies it, and §2.2.1 records why `@fastify/compress` arriv
 `requestEncodings` must stay untouched. §2.4 is the one that bites — a day's count is *distinct start times*,
 because the search merges providers without deduplicating. §2.7 is two zones on one screen on purpose: a slot
 is an instant in the reader's zone, a calendar cell is a zoneless square formatted in UTC ·
+[Phase 6 — Google Calendar, part 1](docs/phase-6-google-calendar-part-1.md) (code done; **its §9 manual walk
+is not**, and nothing has been run against a real Google account). Connect a Google account and write
+bookings *to* it; **reading busy time back is part 2**, so `externalBusyPeriods` is still `[]`. **Read its
+§2.2 before adding any consumer of the outbox**: that table is single-consumer — one `status`, and
+`markProcessed` clears the payload — so the calendar leg shares `dispatchOne`'s claim rather than polling
+separately. §2.3 is the other one to read first: idempotency comes from a Google event id *derived* from
+`(bookingId, mappingId)`, which is the only thing that covers a worker dying between Google's 200 and our
+row update. Three more that bite: **§2.9** — refreshing a token is the caller's job because only the caller
+can persist the re-sealed result, so the API and the worker each own one and share only
+`isAccessTokenStale`; **§7.6** — a BullMQ `jobId` may never be a bare row id, because a *failed* job lingers
+a fortnight and would silently refuse every later enqueue of that row; and **§7.8** — a dead grant parks
+every row behind it, so "needs reconnect" must be decided before "sync failed" or the screen offers a Retry
+that cannot work. §2.1 records why working hours are never written to Google, §5 why disconnecting deletes
+nothing, and §4 why the sensitive-scope verification has to start weeks before it is needed — **it has not
+been opened** ·
 [Phase 9 — SaaS administration](docs/phase-9-saas-administration.md) (part plan, part record: provisioning,
 the owner's invitation and its email are built; Stripe, the pending owner dashboard and the expiry sweep are
 not — its §1.2 is the authority on which is which) ·

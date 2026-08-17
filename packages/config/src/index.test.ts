@@ -211,4 +211,77 @@ describe("loadEnv", () => {
       expect(load().INVITATION_EXPIRY_HOURS).toBe(168);
     });
   });
+
+  /**
+   * docs/phase-6-google-calendar-part-1.md §2.5 and §4.
+   *
+   * Sign-in and Calendar share one Google project but are separately optional,
+   * and the asymmetry is the thing to get right: sign-in without Calendar is
+   * ordinary, Calendar without sign-in credentials is impossible, and a redirect
+   * URI without an encryption key is the dangerous one.
+   */
+  describe("Google Calendar", () => {
+    const calendar = {
+      GOOGLE_CLIENT_ID: "id",
+      GOOGLE_CLIENT_SECRET: "secret",
+      GOOGLE_REDIRECT_URI: "https://api.example.com/v1/integrations/google/callback",
+      GOOGLE_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
+    } satisfies NodeJS.ProcessEnv;
+
+    it("accepts the full set", () => {
+      const env = load(calendar);
+
+      expect(env.GOOGLE_REDIRECT_URI).toBe(calendar.GOOGLE_REDIRECT_URI);
+      expect(env.CALENDAR_OAUTH_STATE_TTL_MINUTES).toBe(15);
+      expect(env.CALENDAR_MAX_ATTEMPTS).toBe(8);
+      expect(env.CALENDAR_SWEEP_INTERVAL_MS).toBe(60_000);
+    });
+
+    it("leaves Calendar unconfigured when nothing is set", () => {
+      expect(load().GOOGLE_REDIRECT_URI).toBeUndefined();
+      expect(load().GOOGLE_TOKEN_ENCRYPTION_KEY).toBeUndefined();
+    });
+
+    it("still allows Google sign-in with no Calendar configuration", () => {
+      // The common deployment: Google login, no calendar sync. It must not be
+      // made harder by the calendar work.
+      const env = load({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" });
+
+      expect(env.GOOGLE_CLIENT_ID).toBe("id");
+      expect(env.GOOGLE_REDIRECT_URI).toBeUndefined();
+    });
+
+    it("refuses a redirect URI with no encryption key", () => {
+      // The dangerous half-configuration: consent succeeds, the provider grants
+      // access, and only then can the callback not seal what it was handed —
+      // a failure after the irreversible step.
+      expect(() =>
+        load({ ...calendar, GOOGLE_TOKEN_ENCRYPTION_KEY: undefined }),
+      ).toThrowError(/GOOGLE_TOKEN_ENCRYPTION_KEY/);
+    });
+
+    it("refuses an encryption key with no redirect URI", () => {
+      expect(() => load({ ...calendar, GOOGLE_REDIRECT_URI: undefined })).toThrowError(
+        /GOOGLE_REDIRECT_URI/,
+      );
+    });
+
+    it("names the client credentials when Calendar is configured without them", () => {
+      // "Why does Connect return 503" is otherwise answered by reading four
+      // variables and guessing which one is missing.
+      expect(() =>
+        load({ ...calendar, GOOGLE_CLIENT_ID: undefined, GOOGLE_CLIENT_SECRET: undefined }),
+      ).toThrowError(/GOOGLE_CLIENT_ID/);
+    });
+
+    it("rejects an encryption key that is not 64 hex characters", () => {
+      // Caught at boot rather than at the first OAuth callback, which is the one
+      // moment a provider is watching.
+      for (const bad of ["a".repeat(63), "z".repeat(64), Buffer.alloc(32).toString("base64")]) {
+        expect(() => load({ ...calendar, GOOGLE_TOKEN_ENCRYPTION_KEY: bad })).toThrowError(
+          /64 hex characters/,
+        );
+      }
+    });
+  });
 });

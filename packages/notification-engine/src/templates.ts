@@ -613,6 +613,147 @@ export function renderPaymentFailed(locale: Locale, values: PaymentFailedValues)
   return { subject: subject(values.organizationName), html, text };
 }
 
+// --- Calendar disconnected -------------------------------------------------
+
+export interface CalendarDisconnectedValues {
+  organizationName: string;
+  recipientName: string;
+  /** The Google account that stopped working, as Google reports it. */
+  accountEmail: string;
+  /** Whose diary it was filling. Null for a connection with no provider. */
+  providerName: string | null;
+  /** The integrations screen, already localised by the caller. */
+  reconnectUrl: string;
+}
+
+interface CalendarDisconnectedCopy {
+  greeting: (name: string) => string;
+  intro: (account: string) => string;
+  /** Only when the connection names a provider; otherwise the line is dropped. */
+  whoseDiary: (provider: string) => string;
+  /**
+   * **The load-bearing line of this email**, and the reason it is written the
+   * way it is.
+   *
+   * PRD §9.10 promises that the database stays authoritative and that a calendar
+   * failure never touches a booking. This is that promise said out loud to the
+   * person who is worried about it — before anything is asked of them, because a
+   * recipient who has just read "your calendar connection has stopped" is
+   * already wondering whether their appointments are gone.
+   */
+  safe: string;
+  /** What has actually stopped, so "safe" does not read as "nothing is wrong". */
+  whatStopped: string;
+  action: string;
+  button: string;
+  /**
+   * Why this happens, in the recipient's terms. Without it the email reads as a
+   * fault in our software, and the reconnection looks like a workaround rather
+   * than the fix.
+   */
+  why: string;
+  signoff: string;
+}
+
+const CALENDAR_DISCONNECTED_COPY: Record<
+  Locale,
+  { subject: (organization: string) => string; body: CalendarDisconnectedCopy }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — a Google Naptár kapcsolat megszakadt`,
+    body: {
+      greeting: (name) => `Kedves ${name}!`,
+      intro: (account) =>
+        `A(z) ${account} Google-fiókkal létesített naptárkapcsolat megszűnt működni.`,
+      whoseDiary: (provider) => `Ez a kapcsolat ${provider} naptárát töltötte fel.`,
+      safe: "A foglalásai biztonságban vannak. Az időpontokat továbbra is a rendszerünk tartja nyilván — csak a Google Naptárban lévő másolat nem frissül tovább.",
+      whatStopped:
+        "Az új és a módosított időpontok mostantól nem jutnak el abba a naptárba, amíg a kapcsolat helyre nem áll.",
+      action: "A kapcsolat helyreállításához:",
+      button: "Google Naptár újracsatlakoztatása",
+      why: "Ez általában akkor fordul elő, ha a hozzáférést visszavonták a Google-fiók beállításaiban, vagy jelszóváltoztatás után.",
+      signoff: "Üdvözlettel,\na Booking and More csapata",
+    },
+  },
+  en: {
+    subject: (organization) => `${organization} — Google Calendar disconnected`,
+    body: {
+      greeting: (name) => `Dear ${name},`,
+      intro: (account) => `The calendar connection to your Google account ${account} has stopped working.`,
+      whoseDiary: (provider) => `It was filling ${provider}'s diary.`,
+      safe: "Your bookings are safe. The platform is the record of your appointments; only the copy in Google Calendar has stopped updating.",
+      whatStopped:
+        "New and changed appointments will not reach that calendar until the connection is restored.",
+      action: "To reconnect:",
+      button: "Reconnect Google Calendar",
+      why: "This usually happens when access was withdrawn in your Google account settings, or after a password change.",
+      signoff: "Best regards,\nthe Booking and More team",
+    },
+  },
+};
+
+/**
+ * A Google grant that has gone, said to the one person who can restore it.
+ *
+ * Modelled on {@link renderPaymentFailed} because it is the same genre: an
+ * alarming subject line that must not read as an outage. The two share a shape —
+ * state the problem, state what still works, then ask for the one action — and
+ * the middle part is the part that is easy to leave out and expensive to.
+ *
+ * Addressed to whoever granted the consent rather than to the owner, because
+ * only they can re-consent to their own Google account. The caller falls back to
+ * the first active owner when that membership has gone; an email nobody can act
+ * on is still better than none, since an owner can at least find the person.
+ */
+export function renderCalendarDisconnected(
+  locale: Locale,
+  values: CalendarDisconnectedValues,
+): RenderedEmail {
+  const { subject, body } = CALENDAR_DISCONNECTED_COPY[locale];
+
+  const diaryLine =
+    values.providerName === null || values.providerName === ""
+      ? []
+      : [body.whoseDiary(values.providerName)];
+
+  const text = [
+    body.greeting(values.recipientName),
+    "",
+    body.intro(values.accountEmail),
+    ...diaryLine,
+    "",
+    // Before the ask, deliberately. Somebody who has read only the first line is
+    // already wondering whether their appointments have gone.
+    body.safe,
+    body.whatStopped,
+    "",
+    body.action,
+    values.reconnectUrl,
+    "",
+    body.why,
+    "",
+    body.signoff,
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(body.greeting(values.recipientName))}</p>
+    <p>${escapeHtml(body.intro(values.accountEmail))}</p>
+    ${diaryLine.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n")}
+    <p><strong>${escapeHtml(body.safe)}</strong></p>
+    <p>${escapeHtml(body.whatStopped)}</p>
+    <p>${escapeHtml(body.action)}</p>
+    <p>
+      <a href="${escapeHtml(values.reconnectUrl)}" style="${BUTTON_STYLE}">
+        ${escapeHtml(body.button)}
+      </a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.why)}</p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.signoff).replace(/\n/gu, "<br />")}</p>
+  `);
+
+  return { subject: subject(values.organizationName), html, text };
+}
+
 // --- Provider invited ------------------------------------------------------
 
 export interface ProviderInvitedValues {
@@ -1286,6 +1427,7 @@ export const RENDERABLE_TYPES: readonly NotificationType[] = [
   NotificationTypes.SUBSCRIPTION_CONFIRMED,
   NotificationTypes.TRIAL_ENDING_SOON,
   NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED,
+  NotificationTypes.CALENDAR_DISCONNECTED,
 ];
 
 export function isRenderable(type: NotificationType): boolean {

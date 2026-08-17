@@ -20,6 +20,7 @@ import {
   type ClaimedOutboxEvent,
 } from "./outbox.repository.js";
 import { NotificationJobs, QueueNames, type QueueRegistry } from "../queues.js";
+import { dispatchCalendarLeg } from "../calendar/calendar.leg.js";
 
 /**
  * Turns outbox rows into notification rows and queue jobs. tech-impl §12, §26.
@@ -37,6 +38,17 @@ import { NotificationJobs, QueueNames, type QueueRegistry } from "../queues.js";
  * there, PENDING, with a `scheduledAt` in the past, and the sweep added in
  * part 3 picks them up. That is what makes it safe to run this on a Redis
  * instance with no persistence.
+ *
+ * ## One claim, two legs
+ *
+ * Since Epic 6 a booking event also fans out to `calendar_event_mappings`, in
+ * exactly the same shape — durable row, then a job that is only a prompt. It
+ * runs *inside this claim* rather than from a poller of its own because the
+ * outbox is single-consumer: one `status` column, and `markProcessed` clears the
+ * payload (docs/phase-6-google-calendar-part-1.md §2.2).
+ *
+ * With no calendar connected that leg is one indexed `SELECT` returning nothing,
+ * which is what lets it sit here unconditionally rather than behind a flag.
  */
 
 export interface DispatcherOptions {
@@ -72,6 +84,8 @@ export interface DispatchSummary {
   failed: number;
   notificationsCreated: number;
   notificationsDuplicate: number;
+  /** Calendar rows created or advanced. Zero on a deployment with none connected. */
+  calendarQueued: number;
 }
 
 /**
@@ -86,6 +100,7 @@ export async function dispatchOutboxBatch(options: DispatcherOptions): Promise<D
     failed: 0,
     notificationsCreated: 0,
     notificationsDuplicate: 0,
+    calendarQueued: 0,
   };
 
   const events = await claimOutboxEvents(options.prisma, {
@@ -101,6 +116,14 @@ export async function dispatchOutboxBatch(options: DispatcherOptions): Promise<D
       const result = await dispatchOne(event, options);
       summary.notificationsCreated += result.created;
       summary.notificationsDuplicate += result.duplicate;
+
+      // The second leg, on the same claim. After the notifications on purpose:
+      // a notification is what somebody is owed, a calendar entry is a
+      // convenience, and a Google-shaped problem must not delay a confirmation.
+      // A throw here retries the whole event, and the notifications above are
+      // skipped as duplicates on the way back through.
+      const calendar = await dispatchCalendarLeg(event, options);
+      summary.calendarQueued += calendar.queued;
 
       await markProcessed(options.prisma, { tenantId: event.tenantId, eventId: event.id });
       summary.processed += 1;

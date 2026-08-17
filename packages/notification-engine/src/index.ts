@@ -56,6 +56,7 @@ export {
   isRenderable,
   RENDERABLE_TYPES,
   renderBookingCancelled,
+  renderCalendarDisconnected,
   renderBookingConfirmation,
   renderBookingReminder,
   renderBookingRequested,
@@ -69,6 +70,7 @@ export {
 } from "./templates.js";
 export type {
   BookingCancelledValues,
+  CalendarDisconnectedValues,
   BookingConfirmationValues,
   BookingReminderValues,
   BookingRequestedValues,

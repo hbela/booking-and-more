@@ -1,5 +1,7 @@
-import { hasRedis, loadEnvOrExit } from "@bam/config";
+import { hasGoogleCalendar, hasRedis, loadEnvOrExit } from "@bam/config";
+import { parseEncryptionKey } from "@bam/crypto";
 import { createPrismaClient } from "@bam/db";
+import { createGoogleCalendarClient, createGoogleOAuthClient } from "@bam/google-calendar";
 import { createLogger, flushSentry, initSentry } from "@bam/observability";
 
 import type { Worker } from "bullmq";
@@ -14,6 +16,8 @@ import {
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
+import { createCalendarWorker } from "./calendar/calendar.worker.js";
+import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
 
 /**
  * Background worker.
@@ -57,6 +61,16 @@ interface RunningQueues {
   poller: OutboxPoller;
   sweeper: NotificationSweeper;
   notifications: Worker;
+  /**
+   * Both absent unless the four `GOOGLE_*` variables are set.
+   *
+   * The rows are written either way — the dispatcher's calendar leg does not
+   * ask whether Google is configured, because it cannot: a tenant's mappings
+   * are data, not config. What is missing without credentials is anything that
+   * could *drain* them, which is the same shape as running without Redis and is
+   * recorded as such (record §8.3).
+   */
+  calendar?: { worker: Worker; sweeper: CalendarSweeper };
 }
 
 async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Promise<RunningQueues> {
@@ -113,17 +127,65 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
     intervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
   });
 
+  // Epic 6, part 1. Only when Google is configured: with no credentials there is
+  // nothing a consumer could do but claim rows and fail to open a token, which
+  // would spend every row's attempt budget against a wall (rule 4).
+  const calendar = hasGoogleCalendar(env)
+    ? {
+        worker: createCalendarWorker({
+          connection: redis,
+          prisma,
+          calendar: createGoogleCalendarClient(),
+          oauth: createGoogleOAuthClient({
+            clientId: env.GOOGLE_CLIENT_ID!,
+            clientSecret: env.GOOGLE_CLIENT_SECRET!,
+            redirectUri: env.GOOGLE_REDIRECT_URI!,
+          }),
+          // Parsed here, at boot, so a malformed key fails the deployment rather
+          // than one provider's first sync.
+          encryptionKey: parseEncryptionKey(env.GOOGLE_TOKEN_ENCRYPTION_KEY!),
+          logger: log,
+          maxAttempts: env.CALENDAR_MAX_ATTEMPTS,
+          appBaseUrl: env.APP_BASE_URL,
+          // The processor queues the disconnection email itself: it originates
+          // in the worker, so there is no outbox event to plan it from.
+          queues,
+        }),
+        // The drain for the backfill, the timer behind every backoff, and the
+        // recovery path if Redis loses a job. Without it, connecting a calendar
+        // fills a table and never a diary.
+        sweeper: startCalendarSweeper({
+          prisma,
+          queues,
+          logger: log,
+          batchSize: env.CALENDAR_SWEEP_BATCH_SIZE,
+          intervalMs: env.CALENDAR_SWEEP_INTERVAL_MS,
+          // Comfortably longer than a healthy Google call, so a slow worker is
+          // not mistaken for a dead one.
+          staleClaimSeconds: 300,
+        }),
+      }
+    : undefined;
+
   log.info(
     {
       queues: Object.keys(queues),
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
       sweepIntervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
       emailProvider: provider.name,
+      calendarSync: calendar !== undefined,
     },
     "worker: queues registered, outbox dispatcher, sweep and notification sender running",
   );
 
-  return { queues, poller, sweeper, notifications };
+  if (calendar === undefined) {
+    log.info(
+      { reason: "GOOGLE_* not configured" },
+      "worker: calendar sync is off — rows will accumulate PENDING until it is configured",
+    );
+  }
+
+  return { queues, poller, sweeper, notifications, ...(calendar === undefined ? {} : { calendar }) };
 }
 
 async function main(): Promise<void> {
@@ -190,15 +252,27 @@ async function main(): Promise<void> {
       try {
         await stripeEvents.stop();
 
-        // Order matters: stop claiming work, then let the queues close, then
-        // drop the connections underneath them.
+        // Order matters, in three stages: stop everything that *produces* work,
+        // then let the consumers finish what they hold, then drop the queues and
+        // the connection underneath them.
+        //
+        // Producers first is the load-bearing part. A sweeper still running while
+        // its consumer closes would enqueue jobs nothing is left to take — they
+        // would survive in Redis, so nothing is lost, but the shutdown log would
+        // claim a clean drain that did not happen.
         if (running !== undefined) {
           await running.poller.stop();
           await running.sweeper.stop();
-          // Close the consumer before the queues: it must be allowed to finish
-          // the job it is holding, and a job that finishes after its queue is
-          // gone cannot record its own outcome.
+          await running.calendar?.sweeper.stop();
+
+          // Consumers before the queues: each must be allowed to finish the job
+          // it is holding, and a job that finishes after its queue is gone
+          // cannot record its own outcome. The calendar processor in particular
+          // may be mid-write to Google — its row is durable and its write is
+          // idempotent, so being cut off is survivable, but it is still the
+          // difference between one Google call and two.
           await running.notifications.close();
+          await running.calendar?.worker.close();
           await closeQueues(running.queues);
         }
         await closeRedis();

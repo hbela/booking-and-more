@@ -104,7 +104,8 @@
     "linkDiary": "Link this member to a diary",
     "linkDiaryPrompt": "Link a diary…",
     "noDiaryToLink": "No unlinked provider to link. Create one on the Providers screen first.",
-    "inviteProviderElsewhere": "Inviting a provider? Do it from their row on the <link>Providers</link> screen, so the invitation carries their diary."
+    "inviteProviderElsewhere": "Inviting a provider? Do it from their row on the <link>Providers</link> screen, so the invitation carries their diary.",
+    "integrations": "Calendar"
   },
   "invitation": {
     "title": "Invitation",
@@ -306,6 +307,53 @@
     "affectedCancel": "Go back",
     "reasonOutsideHours": "Outside the working hours",
     "reasonBlocked": "During time off"
+  },
+  "integrations": {
+    "title": "Google Calendar",
+    "intro": "Connect a Google account and this provider's confirmed appointments will appear in the calendar you choose, move when they are rescheduled, and grey out when they are cancelled.",
+    "notConfigured": "Calendar sync has not been set up on this platform. Ask your administrator to configure it.",
+    "noneConnected": "No Google account is connected yet.",
+    "connect": "Connect Google Calendar",
+    "connectFor": "Connect for",
+    "noDiaryToConnect": "Your membership is not linked to a provider diary, so there is nothing to connect a calendar to.",
+    "forProvider": "{provider}'s diary",
+    "writingTo": "Appointments are written to {calendar}.",
+    "chooseCalendar": "Choose a calendar",
+    "changeCalendar": "Change calendar",
+    "calendarsUnavailable": "Google could not be reached just now. Please try again shortly.",
+    "repointWarning": "Appointments already written to the current calendar will stay there. Only new and changed ones go to the calendar you pick.",
+    "primaryCalendar": "Primary",
+    "current": "In use",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "disconnect": "Disconnect",
+    "disconnectConfirm": "Disconnect this Google account? Appointments already in the calendar will stay there — they are real appointments. Only new and changed ones will stop arriving.",
+    "needsReconnectDetail": "Your bookings are safe. The platform is the record of your appointments; only the copy in Google Calendar has stopped updating. Reconnect to start it again.",
+    "noCalendarDetail": "No calendar is selected yet, so nothing is being written to Google.",
+    "failedDetail": "Calendar sync failed for {count, plural, one {# appointment} other {# appointments}}. A retry is scheduled.",
+    "syncingDetail": "{count, plural, one {# appointment is} other {# appointments are}} on the way to Google.",
+    "healthyDetail": "{count, plural, one {# appointment is} other {# appointments are}} in this calendar.",
+    "disconnectedDetail": "This account is disconnected. Appointments already in the calendar were left there.",
+    "health": {
+      "disconnected": "Disconnected",
+      "needsReconnect": "Reconnect needed",
+      "noCalendar": "No calendar chosen",
+      "failed": "Sync failed",
+      "syncing": "Syncing",
+      "healthy": "Up to date"
+    },
+    "outcome": {
+      "connected": "Google Calendar is connected.",
+      "access_denied": "You cancelled at Google, so nothing was connected.",
+      "invalid_state": "That link has expired or was already used. Please start again.",
+      "session_required": "Your sign-in was not recognised on the way back from Google. Please sign in and try again.",
+      "session_mismatch": "That connection was started by somebody else, so it was refused. Please start again yourself.",
+      "exchange_failed": "Google could not complete the connection. Please try again shortly.",
+      "missing_scope": "Google was not given permission to manage your calendar events, so nothing can be written. Please connect again and accept that permission.",
+      "no_refresh_token": "Google did not return the long-lived permission this needs. Please try connecting again.",
+      "provider_gone": "That provider is no longer available, so the connection was not saved.",
+      "unknown": "The connection did not complete. Please try again."
+    }
   },
   "booking": {
     "loading": "Loading…",

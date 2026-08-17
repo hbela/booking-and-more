@@ -14,6 +14,7 @@ import {
   can,
   canBecomePlatformAdmin,
   canBlockProviderTime,
+  canManageIntegration,
   canChangeMemberRole,
   canHoldTenantMembership,
   canManageProviderBookings,
@@ -187,6 +188,31 @@ describe("owning a resource — the :own permissions", () => {
       providerId: PROVIDER_SELF,
     });
     expect(canBlockProviderTime(provider, TENANT_B, PROVIDER_SELF)).toBe(false);
+  });
+
+  it("applies the same rule to connecting a calendar", () => {
+    // docs/phase-6-google-calendar-part-1.md. A connected calendar *is* an
+    // availability decision made through a third party, so it inherits the
+    // availability shape rather than inventing a third one.
+    const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
+    const admin = actor({ role: Roles.ADMIN });
+    const assistant = actor({ role: Roles.ASSISTANT });
+
+    expect(canManageIntegration(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canManageIntegration(provider, TENANT_A, PROVIDER_OTHER)).toBe(false);
+    expect(canManageIntegration(admin, TENANT_A, PROVIDER_OTHER)).toBe(true);
+
+    // The front desk manages everyone's bookings and no settings (PRD §6.3).
+    // Attaching a Google account is a setting.
+    expect(canManageIntegration(assistant, TENANT_A, PROVIDER_SELF)).toBe(false);
+
+    // A `:own` permission with nothing to own is not a wildcard.
+    expect(canManageIntegration(actor({ role: Roles.PROVIDER }), TENANT_A, PROVIDER_SELF)).toBe(
+      false,
+    );
+
+    // And ownership stops at the tenant boundary.
+    expect(canManageIntegration(provider, TENANT_B, PROVIDER_SELF)).toBe(false);
   });
 
   it("applies the same rule to reading and managing bookings", () => {

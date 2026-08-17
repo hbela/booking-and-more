@@ -10,6 +10,7 @@ import {
   renderBookingReminder,
   renderBookingRequested,
   renderBookingUpdated,
+  renderCalendarDisconnected,
   renderOrganizationCreated,
   renderPaymentFailed,
   renderProviderInvited,
@@ -574,9 +575,38 @@ function render(notification: RenderableNotification, logger: Logger): RenderedE
     });
   }
 
+  if (notification.type === NotificationTypes.CALENDAR_DISCONNECTED) {
+    const payload = notification.payload as {
+      organizationName?: string;
+      recipientName?: string | null;
+      accountEmail?: string;
+      providerName?: string | null;
+      reconnectUrl?: string;
+    } | null;
+
+    if (!payload?.organizationName || !payload.reconnectUrl || !payload.accountEmail) {
+      logger.error(
+        { notificationId: notification.id },
+        "notification: calendar-disconnected payload is missing; cannot render",
+      );
+      return undefined;
+    }
+
+    return renderCalendarDisconnected(locale, {
+      organizationName: payload.organizationName,
+      recipientName: payload.recipientName ?? payload.organizationName,
+      accountEmail: payload.accountEmail,
+      // Null drops the line rather than printing an empty one — a tenant-wide
+      // connection genuinely has no diary to name.
+      providerName: payload.providerName ?? null,
+      reconnectUrl: payload.reconnectUrl,
+    });
+  }
+
   // Booking types never reach here — `build` sends them down the path that
   // re-reads the booking. What is left is a type in the schema with no renderer,
-  // which is `CALENDAR_DISCONNECTED` until Epic 6.
+  // and since Epic 6 there is none: this branch is now the guard against a type
+  // added to the enum without one, rather than a known gap.
   logger.warn(
     { notificationId: notification.id, type: notification.type },
     "notification: no template for this type yet",

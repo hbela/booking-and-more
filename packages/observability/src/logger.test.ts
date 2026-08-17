@@ -64,6 +64,31 @@ describe("log redaction", () => {
     expect(serialized).not.toContain("ya29.a0Ae");
   });
 
+  it("redacts the Google Calendar secrets Epic 6 introduces", () => {
+    // The sealed forms are included deliberately: sealed is not plaintext, but a
+    // ciphertext in a log is one an attacker no longer has to reach the database
+    // for. `stateSecret` is the live half of the OAuth state row — whoever holds
+    // it can complete somebody else's consent flow.
+    const { logger, lines } = captureLogs();
+
+    logger.info({
+      GOOGLE_TOKEN_ENCRYPTION_KEY: "a".repeat(64),
+      GOOGLE_CLIENT_SECRET: "GOCSPX-notarealsecret",
+      integration: {
+        sealedRefreshToken: "v1.aXY.Y3Q.dGFn",
+        sealedAccessToken: "v1.bXY.ZDQ.eGFn",
+      },
+      oauth: { stateSecret: "state-abcdef123456" },
+    });
+
+    const serialized = JSON.stringify(lines[0]);
+    expect(serialized).not.toContain("a".repeat(64));
+    expect(serialized).not.toContain("GOCSPX-notarealsecret");
+    expect(serialized).not.toContain("v1.aXY.Y3Q.dGFn");
+    expect(serialized).not.toContain("v1.bXY.ZDQ.eGFn");
+    expect(serialized).not.toContain("state-abcdef123456");
+  });
+
   it("redacts customer PII carried on booking payloads", () => {
     const { logger, lines } = captureLogs();
 

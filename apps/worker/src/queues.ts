@@ -72,3 +72,54 @@ export interface SendNotificationJob {
   tenantId: string;
   notificationId: string;
 }
+
+/**
+ * Job names on the `calendar-sync` queue.
+ * docs/phase-6-google-calendar-part-1.md §2.2.
+ *
+ * One name, not three. The row's `desiredState` and `syncedVersion` already say
+ * whether this is a create, an update or a cancellation, and they say it at the
+ * moment the job *runs* rather than the moment it was queued — which is the only
+ * reading that survives a booking changing in between. A `create-` job that finds
+ * a cancelled booking would have to ignore its own name anyway.
+ */
+export const CalendarJobs = {
+  SYNC_EVENT: "sync-calendar-event",
+} as const;
+
+export interface SyncCalendarEventJob {
+  tenantId: string;
+  /** The `calendar_event_mappings` row. The job is a prompt; the row is the work. */
+  eventMappingId: string;
+}
+
+/**
+ * A job's identity, so the dispatcher's leg and the sweep cannot both queue the
+ * same work.
+ *
+ * **Not the row id alone, and that is the point.** BullMQ refuses `add` for a
+ * `jobId` it already holds — silently, returning the job it has — and a finished
+ * job lingers under `DEFAULT_JOB_OPTIONS`: a day for a completed one, a
+ * fortnight for a failed one. Keyed on the row alone, a row whose job had already
+ * failed could never be enqueued again for two weeks, however many times the
+ * sweep found it due. The row would sit `PENDING` forever while looking perfectly
+ * healthy, which is the worst shape a bug can have.
+ *
+ * So the id carries what makes work genuinely *new*:
+ *
+ *   - `desiredVersion` — a reschedule or cancellation is a different thing to do;
+ *   - `attempts` — a fresh try after a backoff is a different attempt at it.
+ *
+ * Both only ever move forward for a given row, so an id is never reused, and two
+ * producers reaching for the same work in the same state still collapse to one
+ * job. Correctness never rests on this: the processor's conditional
+ * `PENDING → SYNCING` claim is what actually stops double-processing, and this
+ * only saves the queue from carrying jobs that would find nothing to do.
+ */
+export function calendarJobId(row: {
+  id: string;
+  desiredVersion: number;
+  attempts: number;
+}): string {
+  return `${row.id}:${String(row.desiredVersion)}:${String(row.attempts)}`;
+}

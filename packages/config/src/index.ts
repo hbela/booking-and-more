@@ -146,3 +146,28 @@ export const hasRedis = (env: Env): boolean => env.REDIS_URL !== undefined;
  */
 export const hasEmail = (env: Env): boolean =>
   env.RESEND_API_KEY !== undefined && env.EMAIL_FROM !== undefined;
+
+/**
+ * Whether a provider can connect a Google Calendar.
+ * docs/phase-6-google-calendar-part-1.md §2.5.
+ *
+ * Four variables, and all four are needed: the client pair is shared with Google
+ * sign-in, the redirect URI has to match what is registered in the Google
+ * console, and without the encryption key a callback could not seal the refresh
+ * token it is handed.
+ *
+ * False is an ordinary state, not an error. The integration routes answer 503
+ * and the dashboard says the platform has not configured it — rule 4, one
+ * feature degraded and nothing else touched. Notably `hasGoogleSignIn` can be
+ * true while this is false, which is the common case for a deployment that
+ * offers Google login and no calendar sync.
+ */
+export const hasGoogleCalendar = (env: Env): boolean =>
+  env.GOOGLE_CLIENT_ID !== undefined &&
+  env.GOOGLE_CLIENT_SECRET !== undefined &&
+  env.GOOGLE_REDIRECT_URI !== undefined &&
+  env.GOOGLE_TOKEN_ENCRYPTION_KEY !== undefined;
+
+/** Sign-in only. Deliberately distinct from {@link hasGoogleCalendar}. */
+export const hasGoogleSignIn = (env: Env): boolean =>
+  env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined;

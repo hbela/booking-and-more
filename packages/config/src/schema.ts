@@ -116,6 +116,50 @@ const baseEnvSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 
+  // --- Google Calendar (Epic 6, part 1) ------------------------------------
+  /**
+   * Where Google returns after consent. tech-impl §42.
+   *
+   * Shares `GOOGLE_CLIENT_ID`/`_SECRET` with sign-in above — one Google project,
+   * one consent screen, one verification submission
+   * (docs/phase-6-google-calendar-part-1.md §2.5). Only the *flow* is ours.
+   *
+   * No default is derived from `API_BASE_URL`, tempting as that is: this exact
+   * string has to be registered in the Google console character for character,
+   * and a value that appears by itself is one nobody thought to register. Absent
+   * simply means calendar sync is off.
+   */
+  GOOGLE_REDIRECT_URI: z.url().optional(),
+
+  /**
+   * Master key for sealing Google refresh tokens. tech-impl §25.2.
+   *
+   * 64 hex characters — `openssl rand -hex 32`. Validated here rather than at
+   * the first OAuth callback, because the alternative is discovering it in
+   * production at the one moment a provider is watching.
+   *
+   * Hex and not base64 for the reason phase-10 §2.9 gives about passwords: a
+   * base64 value can carry `/` and `+`, which survive an env file but make the
+   * value painful to move and impossible to eyeball for truncation.
+   *
+   * **Rotating it strands every stored token.** The sealed format carries a `v1`
+   * prefix so a future reader can accept two keys and re-seal on read; until
+   * that exists, a rotation means every provider reconnects.
+   */
+  GOOGLE_TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-fA-F]{64}$/u, "must be 64 hex characters; generate with `openssl rand -hex 32`")
+    .optional(),
+
+  /**
+   * How long a pending OAuth state row stays usable.
+   *
+   * Short on purpose: it spans one redirect to Google and back. Long enough for
+   * somebody to read a consent screen carefully, not long enough for an
+   * abandoned tab to be worth replaying.
+   */
+  CALENDAR_OAUTH_STATE_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+
   /** How long an invitation link stays usable. */
   INVITATION_EXPIRY_HOURS: z.coerce.number().int().positive().default(168), // 7 days
 
@@ -243,6 +287,44 @@ const baseEnvSchema = z.object({
    */
   NOTIFICATION_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
 
+  /**
+   * How often the calendar sweep looks for rows the queue does not have.
+   * docs/phase-6-google-calendar-part-1.md §2.2.
+   *
+   * Same catch-up role as the notification sweep and the same cadence, for the
+   * same reason: a lost job and a stale claim are both recoverable within a
+   * minute, and neither is urgent to the second. It is also what drains the
+   * backfill after a provider connects, which is the one bulk workload here —
+   * the batch size is the throttle against Google's rate limit.
+   */
+  CALENDAR_SWEEP_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  CALENDAR_SWEEP_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(50),
+
+  /**
+   * Attempts before a calendar row is parked as FAILED.
+   *
+   * Higher than the outbox's 5 deliberately: a Google incident outlasts a
+   * database blip, and the cost of parking early is a provider's diary silently
+   * falling behind. BullMQ's own `attempts` is the ceiling on one job; this is
+   * the budget for the row, which is the durable commitment (§2.2).
+   */
+  CALENDAR_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
+
+  /**
+   * How many existing bookings are copied into a calendar the moment it is
+   * selected. docs/phase-6-google-calendar-part-1.md §2.10.
+   *
+   * There has to be a backfill at all — an integration that shows an empty
+   * calendar on the day you connect it looks broken — and it has to be bounded,
+   * because a busy tenant's future diary is the one burst this feature
+   * generates and Google allows roughly 600 requests per minute per user.
+   *
+   * 200 is about three months for a full-time provider. Beyond that the older
+   * appointments are the ones least worth having in a phone's calendar, which is
+   * why the cap takes the *soonest* rows rather than the most recent.
+   */
+  CALENDAR_BACKFILL_LIMIT: z.coerce.number().int().positive().max(2_000).default(200),
+
   /** Unset is valid — Sentry is simply not initialised. */
   SENTRY_DSN: z.url().optional(),
 
@@ -268,6 +350,36 @@ const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
       path: [hasId ? "GOOGLE_CLIENT_SECRET" : "GOOGLE_CLIENT_ID"],
       message:
         "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together, or both left unset to disable Google sign-in.",
+    });
+  }
+
+  // The calendar half of the same Google project. These two are a pair with each
+  // other, not with the client credentials above: sign-in without calendar is
+  // ordinary and stays legal, but a redirect URI with no encryption key is the
+  // dangerous shape — the consent screen appears, the provider grants access,
+  // and the callback then cannot seal the refresh token it was handed. The
+  // failure lands after the irreversible step, which is the worst place for it.
+  const hasRedirect = env.GOOGLE_REDIRECT_URI !== undefined;
+  const hasCalendarKey = env.GOOGLE_TOKEN_ENCRYPTION_KEY !== undefined;
+
+  if (hasRedirect !== hasCalendarKey) {
+    ctx.addIssue({
+      code: "custom",
+      path: [hasRedirect ? "GOOGLE_TOKEN_ENCRYPTION_KEY" : "GOOGLE_REDIRECT_URI"],
+      message:
+        "GOOGLE_REDIRECT_URI and GOOGLE_TOKEN_ENCRYPTION_KEY must be set together, or both left unset to disable Google Calendar sync.",
+    });
+  }
+
+  // Calendar needs the client credentials too, and it is worth its own message:
+  // "why does Connect return 503" is otherwise answered by reading four
+  // variables and guessing which one is missing.
+  if (hasRedirect && env.GOOGLE_CLIENT_ID === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["GOOGLE_CLIENT_ID"],
+      message:
+        "GOOGLE_REDIRECT_URI is set for Calendar sync, which also needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET — the same Google project serves both sign-in and Calendar.",
     });
   }
 

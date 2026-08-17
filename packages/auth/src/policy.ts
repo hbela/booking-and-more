@@ -123,6 +123,29 @@ export function canBlockProviderTime(actor: Actor, tenantId: string, providerId:
   });
 }
 
+/**
+ * Connecting or disconnecting a calendar for one provider's diary.
+ * docs/phase-6-google-calendar-part-1.md.
+ *
+ * The same `:all` / `:own` shape as blocking time out, and deliberately so: a
+ * connected calendar *is* an availability decision, made through a third party.
+ * A provider may wire up their own; an administrator may do it for anybody.
+ *
+ * Note what this does **not** decide — whose Google account may be attached.
+ * That is settled by consent at Google itself, which is a stronger check than
+ * any table here: nobody can connect an account they cannot sign into.
+ */
+export function canManageIntegration(
+  actor: Actor,
+  tenantId: string,
+  providerId: string,
+): boolean {
+  return canForProvider(actor, tenantId, providerId, {
+    all: Permissions.INTEGRATION_MANAGE_ALL,
+    own: Permissions.INTEGRATION_MANAGE_OWN,
+  });
+}
+
 export function canReadProviderBookings(
   actor: Actor,
   tenantId: string,

@@ -14,7 +14,13 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
-import type { Env } from "@bam/config";
+import { hasGoogleCalendar, type Env } from "@bam/config";
+import { parseEncryptionKey } from "@bam/crypto";
+import {
+  createGoogleCalendarClient,
+  type GoogleCalendarClient,
+  type GoogleOAuthClient,
+} from "@bam/google-calendar";
 import { createLogger, type Logger } from "@bam/observability";
 
 import requestContextPlugin from "./plugins/request-context.plugin.js";
@@ -47,6 +53,8 @@ import { availabilityRoutes } from "./modules/availability/availability.routes.j
 import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
+import { integrationRoutes } from "./modules/integrations/integration.routes.js";
+import { getGoogleOAuth } from "./modules/integrations/google.client.js";
 
 export const API_VERSION = "0.1.0";
 
@@ -90,6 +98,20 @@ export interface BuildAppOptions {
    * composition root, for the same reason `rateLimit` is.
    */
   paymentLinkClient?: PaymentLinkClient;
+  /**
+   * Test seam: Google's OAuth endpoints, overriding the ones built from
+   * `GOOGLE_CLIENT_ID` and friends.
+   *
+   * **It replaces the network layer and does not enable the feature.** Whether
+   * calendar sync is on is decided by `hasGoogleCalendar(env)` alone, so a suite
+   * that wants working routes sets the four variables to fake values and injects
+   * this to keep `fetch` out of it — and a suite that wants to assert the 503
+   * simply omits them, which is also what CI does for every other suite in the
+   * repo (docs/phase-6-google-calendar-part-1.md §7.2).
+   */
+  googleOAuthClient?: GoogleOAuthClient;
+  /** Test seam: the Calendar API. Same rules as `googleOAuthClient` above. */
+  googleCalendarClient?: GoogleCalendarClient;
 }
 
 /**
@@ -311,6 +333,48 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   });
   await app.register(serviceRoutes, { prefix: "/v1/services" });
   await app.register(locationRoutes, { prefix: "/v1/locations" });
+
+  // --- Calendar integrations (Epic 6, part 1) -------------------------------
+  // Registered unconditionally, unlike the Stripe webhook above. The difference
+  // is what "unconfigured" means for each: a webhook with no signing secret
+  // could not verify anything and must not exist, while these routes can
+  // truthfully answer "this deployment has not configured Google" — and 503 is
+  // a more useful thing for an operator to find in a log than a 404 (rule 4).
+  await app.register(integrationRoutes, {
+    prefix: "/v1/integrations",
+    appBaseUrl: env.APP_BASE_URL,
+    stateTtlMinutes: env.CALENDAR_OAUTH_STATE_TTL_MINUTES,
+    backfillLimit: env.CALENDAR_BACKFILL_LIMIT,
+    // All four variables or none: `hasGoogleCalendar` is the single question,
+    // and the schema's superRefine has already refused the half-configurations.
+    // The key is parsed here, at boot, so a malformed one fails the deployment
+    // rather than the first provider's callback.
+    ...(hasGoogleCalendar(env)
+      ? {
+          google: {
+            clientId: env.GOOGLE_CLIENT_ID!,
+            clientSecret: env.GOOGLE_CLIENT_SECRET!,
+            redirectUri: env.GOOGLE_REDIRECT_URI!,
+            encryptionKey: parseEncryptionKey(env.GOOGLE_TOKEN_ENCRYPTION_KEY!),
+          },
+          googleOAuthClient: getGoogleOAuth({
+            clientId: env.GOOGLE_CLIENT_ID!,
+            clientSecret: env.GOOGLE_CLIENT_SECRET!,
+            redirectUri: env.GOOGLE_REDIRECT_URI!,
+          }),
+          // Holds no credentials of its own — every call takes an access token,
+          // because only the caller can persist a refreshed one.
+          googleCalendarClient: createGoogleCalendarClient(),
+        }
+      : {}),
+    // After the spread, so a supplied stub wins over the real client.
+    ...(options.googleOAuthClient === undefined
+      ? {}
+      : { googleOAuthClient: options.googleOAuthClient }),
+    ...(options.googleCalendarClient === undefined
+      ? {}
+      : { googleCalendarClient: options.googleCalendarClient }),
+  });
 
   // --- Availability (Epic 3) ------------------------------------------------
   // Registered at the version root rather than under a prefix: its routes hang

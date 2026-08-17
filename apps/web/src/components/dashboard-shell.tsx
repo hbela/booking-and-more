@@ -156,6 +156,17 @@ const NAV = [
     alwaysAvailable: false,
     permissions: ["provider:manage"],
   },
+  // Google Calendar, after the catalogue: a connection is aimed at a provider's
+  // diary, so there has to be one to aim at. Both scopes, like bookings — a
+  // provider connects their own account, an administrator connects anyone's
+  // (docs/phase-6-google-calendar-part-1.md §7.9). An ASSISTANT holds neither
+  // and does not see the item: the front desk manages bookings and no settings.
+  {
+    href: "/dashboard/integrations",
+    key: "integrations" as const,
+    alwaysAvailable: false,
+    permissions: ["integration:manage:all", "integration:manage:own"],
+  },
   // Availability is deliberately absent. It belongs to a provider, not to the
   // organization: an owner reaches one diary at a time from the row on
   // Providers, and a member who *is* a provider gets the item back below,

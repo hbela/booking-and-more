@@ -104,7 +104,8 @@
     "linkDiary": "Naptár hozzárendelése ehhez a taghoz",
     "linkDiaryPrompt": "Naptár hozzárendelése…",
     "noDiaryToLink": "Nincs szabad munkatárs a hozzárendeléshez. Előbb hozzon létre egyet a Munkatársak oldalon.",
-    "inviteProviderElsewhere": "Munkatársat hívna meg? Tegye a <link>Munkatársak</link> oldalon, az ő sorából, hogy a meghívó a naptárát is vigye."
+    "inviteProviderElsewhere": "Munkatársat hívna meg? Tegye a <link>Munkatársak</link> oldalon, az ő sorából, hogy a meghívó a naptárát is vigye.",
+    "integrations": "Naptár"
   },
   "invitation": {
     "title": "Meghívó",
@@ -306,6 +307,53 @@
     "affectedCancel": "Vissza",
     "reasonOutsideHours": "A munkaidőn kívül",
     "reasonBlocked": "Szabadság idejére esik"
+  },
+  "integrations": {
+    "title": "Google Naptár",
+    "intro": "Csatlakoztasson egy Google-fiókot, és a szakember megerősített időpontjai megjelennek a kiválasztott naptárban, átkerülnek módosításkor, és lemondáskor áthúzóttá válnak.",
+    "notConfigured": "A naptárszinkronizálás nincs beállítva ezen a platformon. Kérje meg az adminisztrátort a beállításra.",
+    "noneConnected": "Még nincs csatlakoztatott Google-fiók.",
+    "connect": "Google Naptár csatlakoztatása",
+    "connectFor": "Kihez tartozik",
+    "noDiaryToConnect": "A tagsága nincs szakemberhez kötve, így nincs mihez naptárat csatlakoztatni.",
+    "forProvider": "{provider} naptára",
+    "writingTo": "Az időpontok ide kerülnek: {calendar}.",
+    "chooseCalendar": "Naptár kiválasztása",
+    "changeCalendar": "Naptár módosítása",
+    "calendarsUnavailable": "A Google most nem érhető el. Kérjük, próbálja meg kicsit később.",
+    "repointWarning": "A jelenlegi naptárba már kiírt időpontok ott maradnak. Csak az új és a módosított időpontok kerülnek a kiválasztott naptárba.",
+    "primaryCalendar": "Elsődleges",
+    "current": "Használatban",
+    "cancel": "Mégse",
+    "retry": "Újrapróbálás",
+    "disconnect": "Leválasztás",
+    "disconnectConfirm": "Leválasztja ezt a Google-fiókot? A naptárban már szereplő időpontok ott maradnak — ezek valódi időpontok. Csak az újak és a módosultak nem jutnak el többé oda.",
+    "needsReconnectDetail": "A foglalásai biztonságban vannak. Az időpontokat továbbra is a rendszerünk tartja nyilván — csak a Google Naptárban lévő másolat nem frissül. Csatlakoztassa újra a folytatáshoz.",
+    "noCalendarDetail": "Még nincs kiválasztott naptár, így semmi nem kerül ki a Google-be.",
+    "failedDetail": "{count, plural, one {# időpont} other {# időpont}} szinkronizálása sikertelen. Az újrapróbálás ütemezve van.",
+    "syncingDetail": "{count, plural, one {# időpont} other {# időpont}} van úton a Google felé.",
+    "healthyDetail": "{count, plural, one {# időpont} other {# időpont}} szerepel ebben a naptárban.",
+    "disconnectedDetail": "Ez a fiók le van választva. A naptárban már szereplő időpontok ott maradtak.",
+    "health": {
+      "disconnected": "Leválasztva",
+      "needsReconnect": "Újracsatlakoztatás szükséges",
+      "noCalendar": "Nincs kiválasztott naptár",
+      "failed": "Szinkronizálás sikertelen",
+      "syncing": "Szinkronizálás folyamatban",
+      "healthy": "Naprakész"
+    },
+    "outcome": {
+      "connected": "A Google Naptár csatlakoztatva.",
+      "access_denied": "A Google-nál megszakította a folyamatot, így semmi nem lett csatlakoztatva.",
+      "invalid_state": "Ez a hivatkozás lejárt vagy már felhasználták. Kérjük, kezdje elölről.",
+      "session_required": "A Google-tól visszatérve nem ismertük fel a bejelentkezését. Jelentkezzen be, és próbálja újra.",
+      "session_mismatch": "Ezt a csatlakoztatást valaki más indította, ezért elutasítottuk. Kérjük, indítsa el saját maga.",
+      "exchange_failed": "A Google nem tudta befejezni a csatlakoztatást. Kérjük, próbálja meg kicsit később.",
+      "missing_scope": "A Google nem kapott jogosultságot a naptáresemények kezelésére, így semmit nem tudunk kiírni. Csatlakoztassa újra, és fogadja el ezt a jogosultságot.",
+      "no_refresh_token": "A Google nem adta vissza a tartós jogosultságot, amire szükség van. Kérjük, próbálja újra a csatlakoztatást.",
+      "provider_gone": "Ez a szakember már nem érhető el, ezért a csatlakoztatás nem lett elmentve.",
+      "unknown": "A csatlakoztatás nem fejeződött be. Kérjük, próbálja újra."
+    }
   },
   "booking": {
     "loading": "Betöltés…",

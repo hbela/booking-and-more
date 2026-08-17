@@ -129,6 +129,11 @@ model Tenant {
   subscription         Subscription?
   checkoutLink         SubscriptionCheckoutLink?
 
+  calendarIntegrations  CalendarIntegration[]
+  calendarMappings      CalendarMapping[]
+  calendarEventMappings CalendarEventMapping[]
+  calendarOauthStates   CalendarOauthState[]
+
   @@index([status])
   /// The expiry sweep's query: prospect organizations past their deadline.
   @@index([status, subscribeBy])
@@ -165,6 +170,12 @@ model User {
   accounts    Account[]
   memberships Membership[]
   invitesSent Invitation[] @relation("InvitationInviter")
+
+  /// Google Calendar connections this person granted. Ours, not Better Auth's
+  /// `accounts` — see docs/phase-6-google-calendar-part-1.md §2.5 for why an
+  /// integration is deliberately not an identity.
+  calendarIntegrations CalendarIntegration[]
+  calendarOauthStates  CalendarOauthState[]
 
   @@map("users")
 }
@@ -505,6 +516,9 @@ model Provider {
   capacityReservations CapacityReservation[]
   bookingHolds         BookingHold[]
   bookings             Booking[]
+
+  calendarIntegrations CalendarIntegration[]
+  calendarMappings     CalendarMapping[]
 
   @@index([tenantId, active])
   @@map("providers")
@@ -1129,6 +1143,11 @@ model Booking {
   reservation   CapacityReservation?
   notifications Notification[]
 
+  /// At most one per connected calendar. The copy of this appointment in
+  /// somebody's Google Calendar is a *mirror*: the row here is authoritative
+  /// (PRD §9.10), and a sync that fails never changes `status`.
+  calendarEvents CalendarEventMapping[]
+
   @@unique([tenantId, reference])
   @@index([tenantId, providerId, startAt])
   @@index([tenantId, status, startAt])
@@ -1296,7 +1315,7 @@ model Notification {
   /// template is not a migration.
   template String
   /// BCP-47, resolved from the customer then the tenant.
-  locale String
+  locale   String
 
   status NotificationStatus @default(PENDING)
 
@@ -1550,4 +1569,301 @@ model StripeEvent {
 
   @@index([processedAt])
   @@map("stripe_events")
+}
+
+// ===========================================================================
+// Google Calendar — Epic 6, part 1
+//
+// docs/phase-6-google-calendar-part-1.md. Bookings are written *to* a
+// provider's calendar; nothing is read back yet, and working hours are never
+// written at all (§2.1).
+//
+// The database stays authoritative for bookings (PRD §9.10): everything below
+// is a mirror, and a mirror that fails to update never changes a booking.
+// ===========================================================================
+
+/// Only Google in the MVP. PRD §23.2 excludes other providers; Outlook and
+/// Apple are §29 future work. An enum rather than a string so adding one is a
+/// deliberate migration.
+enum CalendarProviderType {
+  GOOGLE
+
+  @@map("calendar_provider_type")
+}
+
+/// Three values, deliberately. `lastError` carries the detail; a fourth state
+/// would be a second place to ask "can this integration do work".
+enum CalendarIntegrationStatus {
+  ACTIVE
+  /// The grant is gone — revoked at Google, or a refresh token that no longer
+  /// works. Nothing retries; a human must re-consent. Set on `invalid_grant`,
+  /// 401, and 403 insufficientPermissions.
+  NEEDS_RECONNECT
+  /// The user's own act. Distinguished from NEEDS_RECONNECT because one is a
+  /// failure to report and the other is a preference to honour — and because
+  /// only the first earns an email.
+  DISCONNECTED
+
+  @@map("calendar_integration_status")
+}
+
+/// What we want the calendar to say about a booking.
+enum CalendarEventState {
+  PRESENT
+  /// Google keeps the event and greys it out. We never DELETE — see the note on
+  /// `externalEventId` for why the id has to stay reserved.
+  CANCELLED
+
+  @@map("calendar_event_state")
+}
+
+enum CalendarSyncStatus {
+  PENDING
+  SYNCING
+  SYNCED
+  /// Terminal. The sweep deliberately does not pick these up (tech-impl §26.3
+  /// forbids retrying a permanently-broken thing); a human, a reconnect, or
+  /// POST /sync resets them.
+  FAILED
+
+  @@map("calendar_sync_status")
+}
+
+/// One connected Google account. tech-impl §10.14.
+model CalendarIntegration {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Whose diary this account fills. Nullable because a tenant-wide connection
+  /// is expressible, and `SetNull` rather than `Cascade` because archiving a
+  /// provider must not silently destroy a live Google grant — the connection
+  /// outlives the assignment, and the mappings below carry the real binding.
+  providerId String?   @map("provider_id")
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  /// Who granted consent. They are the only person who can re-consent, which is
+  /// why the disconnection email is addressed to them and not to the owner.
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  providerType CalendarProviderType @default(GOOGLE) @map("provider_type")
+
+  /// The Google account's own address, as Google reports it — not the user's
+  /// login. A provider may well connect a different account from the one they
+  /// sign in with, which is half the reason this is not Better Auth's `accounts`.
+  accountEmail String @map("account_email")
+
+  /// Sealed with AES-256-GCM by @bam/crypto (tech-impl §25.2). Never indexed and
+  /// never compared: a fresh IV per seal means the same token encrypts
+  /// differently every time.
+  sealedAccessToken  String? @map("sealed_access_token")
+  sealedRefreshToken String? @map("sealed_refresh_token")
+
+  accessTokenExpiresAt DateTime? @map("access_token_expires_at") @db.Timestamptz(3)
+
+  /// What Google actually granted, which may be less than we asked for. Stored
+  /// so a missing scope is diagnosable as itself rather than as a 403.
+  scopes String[] @default([])
+
+  status    CalendarIntegrationStatus @default(ACTIVE)
+  lastError String?                   @map("last_error")
+
+  connectedAt DateTime @default(now()) @map("connected_at") @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  mappings CalendarMapping[]
+
+  /// Reconnecting the same Google account is an upsert rather than a second
+  /// row, while a tenant may still connect several different accounts.
+  @@unique([tenantId, providerType, accountEmail])
+  @@index([tenantId, status])
+  @@map("calendar_integrations")
+}
+
+/// One selected calendar within a connected account. tech-impl §10.15.
+model CalendarMapping {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  calendarIntegrationId String              @map("calendar_integration_id")
+  integration           CalendarIntegration @relation(fields: [calendarIntegrationId], references: [id], onDelete: Cascade)
+
+  /// Whose diary this calendar *is*. NOT NULL and `Cascade`: a mapping with no
+  /// provider is meaningless, so there is nothing to preserve.
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Google's calendar id — often an email address, sometimes `primary`.
+  externalCalendarId String  @map("external_calendar_id")
+  calendarName       String? @map("calendar_name")
+
+  /// The two directions, separately switchable per §10.15. Part 1 only ever
+  /// writes, so `readBusy` defaults false and part 2 turns it on rather than
+  /// changing a shape.
+  readBusy      Boolean @default(false) @map("read_busy")
+  writeBookings Boolean @default(true) @map("write_bookings")
+
+  active Boolean @default(true)
+
+  // --- Reserved for part 2 ---------------------------------------------------
+  //
+  // Declared now and unused, which is what "design the store so a push channel
+  // can trigger the same job later" buys. A watch notification will do exactly
+  // one thing: enqueue the same sync job a poller would.
+  /// Google's incremental-sync cursor.
+  syncToken       String?   @map("sync_token")
+  watchChannelId  String?   @map("watch_channel_id")
+  watchResourceId String?   @map("watch_resource_id")
+  watchExpiresAt  DateTime? @map("watch_expires_at") @db.Timestamptz(3)
+  lastSyncedAt    DateTime? @map("last_synced_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  eventMappings CalendarEventMapping[]
+
+  /// The same calendar cannot be selected twice within one account.
+  @@unique([calendarIntegrationId, externalCalendarId])
+  /// One provider, one *writing* calendar — enforced as a partial unique index
+  /// in the migration, which Prisma cannot express (record §3.6). One booking,
+  /// one event, one answer to "where is this appointment".
+  @@index([tenantId, providerId, active])
+  @@map("calendar_mappings")
+}
+
+/// The mirror of one booking in one calendar. tech-impl §10.16, extended.
+///
+/// **This model is the phase's centre of gravity — read §2.3 and §2.4 of the
+/// record before changing any column here.**
+///
+/// It separates what we *want* the calendar to say from what it currently says,
+/// because a single `syncStatus` cannot express "cancelled, but the cancel has
+/// not landed" — it can only say the sync failed, which is a different fact.
+model CalendarEventMapping {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  bookingId String  @map("booking_id")
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  calendarMappingId String          @map("calendar_mapping_id")
+  calendarMapping   CalendarMapping @relation(fields: [calendarMappingId], references: [id], onDelete: Cascade)
+
+  /// **Ours, not Google's.** Derived deterministically from
+  /// `(bookingId, calendarMappingId)` and supplied to Google on insert, so a
+  /// retry landing after the first insert committed is refused with
+  /// `409 duplicate` rather than creating a second appointment in somebody's
+  /// diary. That is the case the unique index below cannot cover: a worker
+  /// killed between Google's 200 and our row update.
+  ///
+  /// It is also why cancellation is `PATCH status: cancelled` and never
+  /// `DELETE` — a deleted id is not immediately reusable, which would break the
+  /// guarantee on a booking that is cancelled and then reinstated.
+  externalEventId String @map("external_event_id")
+
+  /// Google's version marker. Recorded for part 2's "detect externally modified
+  /// events"; deliberately not sent as `If-Match` on our own writes, because we
+  /// are the authority and a stale etag would refuse a correction.
+  externalEventEtag String? @map("external_event_etag")
+
+  desiredState CalendarEventState @default(PRESENT) @map("desired_state")
+
+  /// `Booking.version` at the moment the desire was recorded. Every booking
+  /// write bumps it, so this is what distinguishes reschedule #1 from
+  /// reschedule #2 — and what lets the upsert refuse an outbox event that
+  /// arrives out of order.
+  desiredVersion Int @map("desired_version")
+
+  /// The version Google has. NULL until the first successful write, which is
+  /// also how the dispatcher knows to label a job `create-` rather than
+  /// `update-booking-event`.
+  syncedVersion Int? @map("synced_version")
+
+  syncStatus CalendarSyncStatus @default(PENDING) @map("sync_status")
+  attempts   Int                @default(0)
+
+  /// Backoff, the same shape as `outbox_events.available_at`. Without it a
+  /// transient 503 spins at the sweep's cadence.
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+
+  /// Set while a worker holds the row. A stale value means the worker died, and
+  /// the sweep takes it back — the same hole `outbox_events.claimed_at` closes.
+  claimedAt    DateTime? @map("claimed_at") @db.Timestamptz(3)
+  lastSyncedAt DateTime? @map("last_synced_at") @db.Timestamptz(3)
+  lastError    String?   @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// **The constraint the design rests on.** One event per booking per calendar,
+  /// forever. A redelivered outbox event, a reclaimed row and a re-dispatch all
+  /// collapse into this one row, and a reschedule updates it rather than
+  /// inserting a rival. Same mechanism as `notifications(tenant_id, dedupe_key)`
+  /// and enforced the same way: attempt the insert, read a conflict as "already
+  /// committed", never SELECT first (rule 14).
+  @@unique([bookingId, calendarMappingId])
+  /// The reverse lookup part 2 needs: an event id arriving from Google finds its
+  /// booking without reading a title, which PRD §9.10 forbids relying on.
+  @@unique([calendarMappingId, externalEventId])
+  /// The sweep's claim query.
+  @@index([syncStatus, nextAttemptAt])
+  @@index([tenantId, syncStatus])
+  @@map("calendar_event_mappings")
+}
+
+/// A pending OAuth handshake. tech-impl §25.1 step 2 requires a state record and
+/// never says where it lives (record §3.4).
+///
+/// A table rather than a signed cookie because **single-use is the property that
+/// matters**: a signed value can be replayed until it expires, and a row can be
+/// burned. Same reasoning as invitations, and the same storage discipline — only
+/// the hash is kept, so a database leak yields nothing replayable.
+model CalendarOauthState {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The session that started the flow. The callback refuses a state started by
+  /// somebody else, so a stolen link cannot attach a stranger's Google account
+  /// to this tenant.
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the value in the `state` query parameter. Only the digest is
+  /// stored and the row is *found* by it, exactly as an invitation token is —
+  /// there is no plaintext here to compare against, which is the point.
+  ///
+  /// Unique because that is what lets the callback burn it with a single
+  /// guarded `updateMany` rather than a read followed by a write (rule 14).
+  stateHash String @unique @map("state_hash")
+
+  /// Which diary the resulting calendars will fill. Captured at connect time
+  /// because the callback arrives from Google with nothing but the state.
+  providerId String? @map("provider_id")
+
+  /// Where to send the browser afterwards. Stored rather than trusted from the
+  /// callback's query string, which an attacker controls — an open redirect is
+  /// exactly what a callback URL invites.
+  returnPath String? @map("return_path")
+
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+
+  /// Burned on use. Non-null means this handshake is finished, successfully or
+  /// not, and the row survives only as evidence.
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  /// The expiry sweep, and the audit question "who started a connection".
+  @@index([tenantId, userId])
+  @@index([expiresAt])
+  @@map("calendar_oauth_states")
 }

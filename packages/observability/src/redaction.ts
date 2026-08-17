@@ -57,6 +57,26 @@ export const REDACT_PATHS: readonly string[] = [
   "RESEND_API_KEY",
   "*.RESEND_API_KEY",
 
+  // Google Calendar (Epic 6). `encryptedAccessToken`, `encryptedRefreshToken`,
+  // `accessToken`, `refreshToken`, `authorizationCode` and `clientSecret` are
+  // already listed above — they were added before anything could produce one.
+  // These are the names Epic 6 actually introduces.
+  "GOOGLE_TOKEN_ENCRYPTION_KEY",
+  "*.GOOGLE_TOKEN_ENCRYPTION_KEY",
+  "GOOGLE_CLIENT_SECRET",
+  "*.GOOGLE_CLIENT_SECRET",
+  // The sealed forms as stored, in case a row is ever logged whole. Sealed is
+  // not plaintext, but a ciphertext in a log is still a ciphertext an attacker
+  // no longer has to reach the database for.
+  "sealedAccessToken",
+  "*.sealedAccessToken",
+  "sealedRefreshToken",
+  "*.sealedRefreshToken",
+  // The OAuth state secret: whoever holds it can complete somebody else's
+  // consent flow while the row is live.
+  "stateSecret",
+  "*.stateSecret",
+
   // Booking-management tokens are bearer credentials for a booking (tech-impl §34.4)
   "managementToken",
   "*.managementToken",
