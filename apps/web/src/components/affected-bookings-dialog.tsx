@@ -88,7 +88,12 @@ export function AffectedBookingsDialog({
               </time>
             </p>
             <p className="text-ink-muted">
-              {booking.customerName} · {booking.serviceName} · {booking.reference}
+              {/* The name is absent when the caller may change this schedule
+                  but not read its bookings. Dropped rather than replaced with a
+                  placeholder: the reference already identifies the row, and
+                  "Hidden ·" would only draw attention to what is missing. */}
+              {booking.customerName === null ? null : `${booking.customerName} · `}
+              {booking.serviceName} · {booking.reference}
             </p>
             <p className="text-ink-subtle text-xs">
               {booking.reason === "BLOCKED_BY_EXCEPTION"

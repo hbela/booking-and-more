@@ -651,40 +651,157 @@ describe.skipIf(!databaseUrl)("availability", () => {
       expect(theirs.statusCode).toBe(403);
     });
 
-    it("lets an assistant read a schedule but not change it", async () => {
-      const site = await clinic("assistant-hours");
-      await setHours(site, MONDAY_MORNING);
+    /**
+     * Rewritten for diary delegation (docs/phase-3-4-diary-delegation.md §2.9).
+     *
+     * It used to assert "an assistant reads any schedule but changes none",
+     * which is exactly the shape the feature removes: reading is now the same
+     * question as changing, and an assistant reaches only the diaries handed to
+     * them. Three cases, because the interesting one is the middle: a grant that
+     * covers bookings must not open the schedule.
+     */
+    describe("an assistant and somebody else's schedule", () => {
+      async function assistantOf(
+        site: Awaited<ReturnType<typeof clinic>>,
+        label: string,
+      ): Promise<{ cookie: string; membershipId: string }> {
+        const member = await signUp(`${label}-member`);
+        const invited = await app.inject({
+          method: "POST",
+          url: "/v1/members/invitations",
+          headers: as(site.cookie, site.tenantId),
+          payload: { email: member.email, role: "ASSISTANT" },
+        });
+        const token = (invited.json().acceptUrl as string).split("/").pop()!;
+        await app.inject({
+          method: "POST",
+          url: "/v1/invitations/accept",
+          headers: as(member.cookie),
+          payload: { token },
+        });
 
-      const member = await signUp("assistant-hours-member");
-      const invited = await app.inject({
-        method: "POST",
-        url: "/v1/members/invitations",
-        headers: as(site.cookie, site.tenantId),
-        payload: { email: member.email, role: "ASSISTANT" },
-      });
-      const token = (invited.json().acceptUrl as string).split("/").pop()!;
-      await app.inject({
-        method: "POST",
-        url: "/v1/invitations/accept",
-        headers: as(member.cookie),
-        payload: { token },
+        const membership = await app.prisma.membership.findFirst({
+          where: { tenantId: site.tenantId, user: { email: member.email } },
+          select: { id: true },
+        });
+
+        return { cookie: member.cookie, membershipId: membership!.id };
+      }
+
+      function grant(
+        site: Awaited<ReturnType<typeof clinic>>,
+        membershipId: string,
+        scopes: string[],
+      ) {
+        return app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/delegations/${membershipId}`,
+          headers: as(site.cookie, site.tenantId),
+          payload: { scopes },
+        });
+      }
+
+      it("refuses an assistant nobody has delegated to, on the read as well", async () => {
+        const site = await clinic("assistant-none");
+        await setHours(site, MONDAY_MORNING);
+        const assistant = await assistantOf(site, "assistant-none");
+
+        const read = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+        });
+        expect(read.statusCode, read.body).toBe(403);
+
+        const write = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+          payload: { workingHours: [] },
+        });
+        expect(write.statusCode, write.body).toBe(403);
       });
 
-      const read = await app.inject({
-        method: "GET",
-        url: `/v1/providers/${site.providerId}/working-hours`,
-        headers: as(member.cookie, site.tenantId),
-      });
-      expect(read.statusCode).toBe(200);
-      expect(read.json().items).toHaveLength(1);
+      it("still refuses one holding only a BOOKINGS grant", async () => {
+        // The case the whole scope split exists for: handing over the
+        // appointments must not hand over the schedule.
+        const site = await clinic("assistant-bookings");
+        await setHours(site, MONDAY_MORNING);
+        const assistant = await assistantOf(site, "assistant-bookings");
 
-      const write = await app.inject({
-        method: "PUT",
-        url: `/v1/providers/${site.providerId}/working-hours`,
-        headers: as(member.cookie, site.tenantId),
-        payload: { workingHours: [] },
+        const granted = await grant(site, assistant.membershipId, ["BOOKINGS"]);
+        expect(granted.statusCode, granted.body).toBe(200);
+
+        const read = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+        });
+        expect(read.statusCode, read.body).toBe(403);
+
+        const write = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+          payload: { workingHours: [] },
+        });
+        expect(write.statusCode, write.body).toBe(403);
       });
-      expect(write.statusCode).toBe(403);
+
+      it("lets one holding an AVAILABILITY grant both read and change it", async () => {
+        const site = await clinic("assistant-availability");
+        await setHours(site, MONDAY_MORNING);
+        const assistant = await assistantOf(site, "assistant-availability");
+
+        const granted = await grant(site, assistant.membershipId, ["AVAILABILITY"]);
+        expect(granted.statusCode, granted.body).toBe(200);
+
+        const read = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+        });
+        expect(read.statusCode, read.body).toBe(200);
+        expect(read.json().items).toHaveLength(1);
+
+        const write = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+          payload: { workingHours: [] },
+        });
+        expect(write.statusCode, write.body).toBe(200);
+      });
+
+      it("stops conferring anything the moment the grant is revoked", async () => {
+        const site = await clinic("assistant-revoke");
+        await setHours(site, MONDAY_MORNING);
+        const assistant = await assistantOf(site, "assistant-revoke");
+        await grant(site, assistant.membershipId, ["AVAILABILITY"]);
+
+        const before = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+        });
+        expect(before.statusCode, before.body).toBe(200);
+
+        const revoked = await app.inject({
+          method: "DELETE",
+          url: `/v1/providers/${site.providerId}/delegations/${assistant.membershipId}`,
+          headers: as(site.cookie, site.tenantId),
+        });
+        expect(revoked.statusCode, revoked.body).toBe(204);
+
+        // Same session, no re-authentication: the set is resolved per request,
+        // so there is no cache to wait out (§2.7).
+        const after = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(assistant.cookie, site.tenantId),
+        });
+        expect(after.statusCode, after.body).toBe(403);
+      });
     });
   });
 

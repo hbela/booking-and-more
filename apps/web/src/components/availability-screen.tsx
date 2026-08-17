@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { apiFetch, type AssignedService, type Paginated, type Provider } from "@/lib/api-client";
+import { diaryScopeFor } from "@/lib/delegation";
 import { AvailabilityExceptions } from "./availability-exceptions";
+import { ProviderDelegates } from "./provider-delegates";
 import { WorkingHoursEditor } from "./working-hours-editor";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Callout, CalloutLink } from "./ui/callout";
@@ -18,11 +20,13 @@ import { Section } from "./ui/section";
  *
  * ## Who can edit what
  *
- * An administrator picks any provider; a provider linked to a diary sees only
- * their own and no picker at all. That mirrors the API exactly — `:own` versus
- * `:all` — but it is still only an affordance. The server re-decides on every
- * request, so a provider who edits the URL gets a 403 rather than someone
- * else's schedule.
+ * An administrator picks any provider; a provider linked to a diary sees their
+ * own; a delegate sees the diaries handed to them
+ * (docs/phase-3-4-diary-delegation.md §6.2). The picker appears when there is
+ * more than one to choose between, which is now possible without holding
+ * `:all`. That mirrors the API exactly, but it is still only an affordance: the
+ * server re-decides on every request, so editing the URL gets a 403 rather than
+ * someone else's schedule.
  *
  * ## How an administrator arrives
  *
@@ -45,8 +49,8 @@ export function AvailabilityScreen(): React.ReactElement {
   const context = useDashboardContext();
   useSignInRedirect(!context.isPending && !context.me);
 
-  const canManageAll = context.can("availability:manage:all");
-  const ownProviderId = context.me?.membership?.providerId ?? null;
+  const scope = diaryScopeFor(context.me, "availability:manage:all", "AVAILABILITY");
+  const canManageAll = scope.everyDiary;
 
   // Seeded from the URL, then owned by the picker. `useState`'s initialiser
   // rather than an effect: an effect would paint the first provider's diary
@@ -54,18 +58,31 @@ export function AvailabilityScreen(): React.ReactElement {
   const fromUrl = useSearchParams().get("providerId");
   const [selected, setSelected] = useState<string | null>(fromUrl);
 
+  // Fetched for a delegate too, not only an administrator: an ASSISTANT holds
+  // `tenant:read`, so the list resolves, and without names the picker would
+  // offer opaque ids. The options are filtered to `scope` below — the list is
+  // for labels, never for reach.
   const providers = useQuery({
     queryKey: ["providers", context.tenantId],
     queryFn: () =>
       apiFetch<Paginated<Provider>>("/v1/providers?limit=100", { tenantId: context.tenantId }),
-    enabled: Boolean(context.tenantId) && canManageAll,
+    enabled: Boolean(context.tenantId) && (canManageAll || scope.providerIds.length > 0),
   });
 
-  // A provider who is not an administrator edits their own diary and is never
-  // offered a choice.
-  const providerId = canManageAll
-    ? (selected ?? providers.data?.items[0]?.id ?? null)
-    : ownProviderId;
+  const options = (providers.data?.items ?? []).filter(
+    (entry) => canManageAll || scope.providerIds.includes(entry.id),
+  );
+
+  // The selection has to be *in* scope: `?providerId=` is a seed from a link,
+  // not an authorisation, and honouring one outside the scope would render a
+  // screen whose every request 403s.
+  const inScope = selected !== null && options.some((entry) => entry.id === selected);
+  const providerId = inScope
+    ? selected
+    : (options[0]?.id ??
+      // Before the list resolves, a member with exactly one diary already knows
+      // which it is. Avoids a blank frame on the commonest path of all.
+      (scope.providerIds.length === 1 ? scope.providerIds[0]! : null));
 
   const provider = useQuery({
     queryKey: ["provider", providerId],
@@ -98,12 +115,19 @@ export function AvailabilityScreen(): React.ReactElement {
       {providerId === null ? (
         <Section title={t("title")}>
           <p className="text-sm text-ink-muted">
-            {canManageAll ? t("noProviders") : t("notLinked")}
+            {canManageAll
+              ? t("noProviders")
+              : scope.ownProviderId === null
+                ? // Distinct from "not linked to a diary": a front-desk member
+                  // is not supposed to have one, and telling them to ask for a
+                  // diary would send them after the wrong thing (§6.2).
+                  t("notDelegated")
+                : t("notLinked")}
           </p>
         </Section>
       ) : (
         <>
-          {canManageAll && (providers.data?.items.length ?? 0) > 0 ? (
+          {options.length > 1 ? (
             <Section title={t("title")}>
               <Field id="availability-provider" label={t("provider")}>
                 <Select
@@ -114,7 +138,7 @@ export function AvailabilityScreen(): React.ReactElement {
                   }}
                   className="max-w-sm"
                 >
-                  {providers.data?.items.map((entry) => (
+                  {options.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.displayName}
                     </option>
@@ -144,6 +168,7 @@ export function AvailabilityScreen(): React.ReactElement {
                 providerId={providerId}
                 timezone={provider.data?.timezone ?? null}
               />
+              <ProviderDelegates tenantId={context.tenantId} providerId={providerId} />
             </>
           ) : null}
         </>

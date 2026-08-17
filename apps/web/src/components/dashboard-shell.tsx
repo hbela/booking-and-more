@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { signOut } from "@/lib/auth-client";
 import { apiFetch, type MeResponse, type TenantSummary } from "@/lib/api-client";
+import { hasPersonalDiary } from "@/lib/delegation";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
 
@@ -123,14 +124,15 @@ const NAV = [
   },
   // Bookings sit first among the gated items, ahead of the catalogue: the
   // catalogue is configured once and the diary is looked at every day.
-  // Both scopes: a provider's own bookings are the point of the role, and
-  // bookings-screen.tsx already copes — it gates only its provider filter on
-  // `booking:read:all` and lets the server scope the list.
+  // All three scopes: a provider's own bookings are the point of that role, and
+  // `booking:read:delegated` is the *only* one an ASSISTANT holds since diary
+  // delegation — omitting it would remove Bookings from every front desk in
+  // every organization (docs/phase-3-4-diary-delegation.md §6.3).
   {
     href: "/dashboard/bookings",
     key: "bookings" as const,
     alwaysAvailable: false,
-    permissions: ["booking:read:all", "booking:read:own"],
+    permissions: ["booking:read:all", "booking:read:own", "booking:read:delegated"],
   },
   // The catalogue then runs in the order it has to be built, which is not the
   // order it was written in. A provider is booked *for a service*, so a provider
@@ -177,16 +179,25 @@ const NAV = [
   // Providers, and a member who *is* a provider gets the item back below,
   // pointing at their own. A top-level entry implied the owner fills it in,
   // which is the opposite of who decides (phase-2-3 §2.7).
+  //
+  // Diary delegation adds a third way to get the item back — a grant — and does
+  // not change this. `hasPersonalDiary` is false for an administrator on
+  // purpose; see its doc comment.
 ];
 
-/** Appended for a member whose membership names a provider — their own diary. */
-const OWN_DIARY = {
+/**
+ * Appended for a member who has a diary to reach — their own, or one handed to
+ * them (docs/phase-3-4-diary-delegation.md §6.3).
+ *
+ * Gated by data rather than by permission, and now by two kinds of it, because
+ * data is the stricter test: `availability:manage:own` without a linked diary
+ * matches nothing at all, and `availability:manage:delegated` with no grant
+ * matches nothing either. An item that always 403s is worse than an absent one.
+ */
+const DIARY = {
   href: "/dashboard/availability",
   key: "availability" as const,
   alwaysAvailable: false,
-  // Already gated by `membership.providerId`, which is stricter than any
-  // permission: `availability:manage:own` without a linked diary matches
-  // nothing at all.
   permissions: null,
 };
 
@@ -275,7 +286,7 @@ export function DashboardShell({
       {context.tenantId && !context.isPending ? (
         <nav aria-label={t("sections")}>
           <ul className="flex flex-wrap gap-1 border-b border-line">
-            {(context.me?.membership?.providerId ? [...NAV, OWN_DIARY] : NAV)
+            {(hasPersonalDiary(context.me, "AVAILABILITY") ? [...NAV, DIARY] : NAV)
               .filter(
                 (item) =>
                   item.permissions === null ||

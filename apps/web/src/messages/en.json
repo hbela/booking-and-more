@@ -306,7 +306,29 @@
     "affectedConfirm": "Save anyway",
     "affectedCancel": "Go back",
     "reasonOutsideHours": "Outside the working hours",
-    "reasonBlocked": "During time off"
+    "reasonBlocked": "During time off",
+    "notDelegated": "No diaries have been delegated to you yet. A provider can hand you theirs from their own availability screen.",
+    "delegates": "Delegates",
+    "delegatesHint": "People who manage this diary alongside the provider. Each grant covers availability, bookings, or both.",
+    "delegatesEmpty": "Nobody manages this diary but the provider. Front-desk staff cannot see its bookings until somebody is added here.",
+    "delegateAdd": "Add a delegate",
+    "delegateChoose": "Member",
+    "delegateNoCandidates": "There is nobody left to add. Only active members whose role can hold a delegated diary appear here.",
+    "delegateMember": "Member",
+    "delegateActions": "Actions",
+    "delegateScopes": "What they may do",
+    "delegateScopeAvailability": "Availability",
+    "delegateScopeAvailabilityHint": "Set working hours and book out time off on this diary.",
+    "delegateScopeBookings": "Bookings",
+    "delegateScopeBookingsHint": "See, accept, reschedule and cancel this diary’s appointments.",
+    "delegateGrant": "Give access",
+    "delegateCancel": "Cancel",
+    "delegateSaved": "Saved.",
+    "delegateRevoke": "Revoke",
+    "delegateRevokeConfirm": "Take this diary back from {name}? They lose access on their next action.",
+    "delegateFailed": "That change could not be saved.",
+    "delegateStaleRole": "Role no longer accepts diaries",
+    "delegateNeedsOneScope": "A delegate needs at least one of the two. Use Revoke to remove their access entirely."
   },
   "integrations": {
     "title": "Google Calendar",
@@ -471,7 +493,8 @@
       "label": "Outside schedule",
       "hours": "This appointment is outside the provider's current working hours.",
       "blocked": "This appointment falls during time off."
-    }
+    },
+    "myProviders": "All my providers"
   },
   "admin": {
     "title": "Platform administration",

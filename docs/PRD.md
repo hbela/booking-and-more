@@ -485,6 +485,11 @@ Examples:
 - ADMIN can manage services, staff, schedules, and bookings.
 - PROVIDER can manage their own availability and appointments.
 - ASSISTANT can manage bookings but not billing.
+  > **Deviation, 2026-08-17** — an ASSISTANT manages the bookings of the providers who have *delegated*
+  > their diary to them, not every booking in the organization, and a grant may also cover that provider's
+  > availability. See [phase-3-4-diary-delegation.md](phase-3-4-diary-delegation.md) §2.1 for why the
+  > all-or-nothing reading was the wrong model, and §2.2 for the migration that kept existing behaviour
+  > intact. §6.3's persona is unchanged; only its reach is.
 - CUSTOMER can manage their own bookings.
 - PLATFORM_ADMIN can manage platform-level operations.
 

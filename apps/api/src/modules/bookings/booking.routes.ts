@@ -1,7 +1,12 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { FastifyRequest } from "fastify";
-import { Permissions, can, canManageProviderBookings, canReadProviderBookings } from "@bam/auth";
+import {
+  Permissions,
+  canManageProviderBookings,
+  canReadProviderBookings,
+  providerIdsInScope,
+} from "@bam/auth";
 import {
   ForbiddenError,
   commonErrorResponses,
@@ -159,32 +164,43 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
       const actor = request.actor as Parameters<typeof canReadProviderBookings>[0];
       const query = request.query;
 
-      // A caller holding only `:own` is narrowed to their own diary rather than
-      // refused: "show me my bookings" is the request they meant, and a 403 for
-      // omitting a filter they cannot know to send would be unhelpful.
+      // A caller holding only `:own` or `:delegated` is narrowed to the diaries
+      // they may see rather than refused: "show me my bookings" is the request
+      // they meant, and a 403 for omitting a filter they cannot know to send
+      // would be unhelpful.
       //
-      // A provider whose membership is not linked to a diary is refused
-      // outright. Leaving the filter unset for them would list the whole tenant
-      // — an unpopulated field must never widen access (CLAUDE.md rule 10).
-      let providerId = query.providerId;
+      // The empty case is refused outright, and that is the line that matters: a
+      // provider whose membership names no diary, or an assistant nobody has
+      // delegated to, must not fall through to an unset filter and list the
+      // whole tenant. An unpopulated field may never widen access (rule 10).
+      // `ProviderScope` is a discriminated union rather than a nullable array
+      // precisely so "none" cannot be spelled the same way as "all"
+      // (docs/phase-3-4-diary-delegation.md §4.3).
+      let providerIds: readonly string[] | undefined;
 
-      if (providerId === undefined) {
-        if (!can(actor, tenant.id, Permissions.BOOKING_READ_ALL)) {
-          const own = actor.membership?.providerId;
-          if (own === undefined) {
+      if (query.providerId !== undefined) {
+        assertMayRead(request, query.providerId);
+        providerIds = [query.providerId];
+      } else {
+        const scope = providerIdsInScope(actor, tenant.id, {
+          all: Permissions.BOOKING_READ_ALL,
+          own: Permissions.BOOKING_READ_OWN,
+          delegated: Permissions.BOOKING_READ_DELEGATED,
+        });
+
+        if (scope.kind === "some") {
+          if (scope.providerIds.length === 0) {
             throw new ForbiddenError("You do not have permission to view bookings.");
           }
-          providerId = own;
+          providerIds = scope.providerIds;
         }
-      } else {
-        assertMayRead(request, providerId);
       }
 
       const rows = await service.repo.list({
         tenantId: tenant.id,
         limit: query.limit,
         cursor: query.cursor,
-        providerId,
+        providerIds,
         customerId: query.customerId,
         status: query.status,
         from: query.from === undefined ? undefined : new Date(`${query.from}T00:00:00Z`),

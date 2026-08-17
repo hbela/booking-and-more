@@ -57,7 +57,9 @@ fix is to make the second step impossible to omit, which means putting it inside
   work and naming it here is all this record does about it.
 - **No delegation.** A receptionist managing somebody else's diary remains neither built nor designed
   (phase-2-3 §5.9). This work makes the provider's own access real; it does not add a notion of acting
-  _for_ another provider.
+  _for_ another provider. **Since 2026-08-17 it does exist** — see
+  [phase-3-4-diary-delegation.md](phase-3-4-diary-delegation.md) — and it builds directly on this record:
+  the provider's own access being real is what a grant is defined against.
 - **No self-service password reset.** A provider who lets their invitation lapse needs a new one, which
   is the same row action pressed again.
 
@@ -521,7 +523,10 @@ The manual walk is **§M** of [phase-9-manual-test-checklist.md](phase-9-manual-
 5. **The nav filter is advisory and drifts silently.** A typo in a permission literal hides a nav item
    with no error anywhere. The mitigation would be a unit test asserting every literal in `NAV` appears
    in `Object.values(Permissions)`, which needs `@bam/auth` as a web dependency (§5).
-6. **Delegating a provider's availability is still neither built nor designed** (phase-2-3 §5.9).
+6. ~~**Delegating a provider's availability is still neither built nor designed**~~ — **closed 2026-08-17
+   by [phase-3-4-diary-delegation.md](phase-3-4-diary-delegation.md)**, which also narrows `ASSISTANT` from
+   clinic-wide bookings to delegated ones. Note the consequence for §2.9's nav table: an ASSISTANT now
+   reaches Bookings through `booking:read:delegated` and can gain Availability through a grant.
 7. **No provider home screen** (§1.1). PRD §6.2 wants one.
 8. **PRD §9.3 still declares `userId?: string` on `Provider`.** The pointer has lived on
    `Membership.providerId` since Epic 2 — the direction was reversed so that a diary can exist without a

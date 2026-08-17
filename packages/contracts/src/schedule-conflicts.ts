@@ -43,7 +43,17 @@ export const affectedBookingSchema = z.object({
   providerId: idSchema,
   providerName: z.string(),
   serviceName: z.string(),
-  customerName: z.string(),
+  /**
+   * Null when the caller may manage this diary's *availability* but not read its
+   * bookings — which became reachable with diary delegation
+   * (docs/phase-3-4-diary-delegation.md §2.12) and could not happen before,
+   * because nobody could hold one of those without the other.
+   *
+   * The dialog still works: the reference, the time, the service and the count
+   * are what the decision needs. This field was always the part the comment
+   * above argues hardest against, so the redaction costs nothing it was for.
+   */
+  customerName: z.string().nullable(),
   reason: uncoveredReasonSchema,
 });
 

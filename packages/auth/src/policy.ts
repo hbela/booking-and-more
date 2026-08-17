@@ -1,4 +1,11 @@
-import { Permissions, ROLE_PERMISSIONS, type Permission, type Role } from "./roles.js";
+import {
+  DELEGATION_SCOPE_PERMISSIONS,
+  Permissions,
+  ROLE_PERMISSIONS,
+  type DelegationScope,
+  type Permission,
+  type Role,
+} from "./roles.js";
 
 /**
  * Authorization decisions, as pure functions.
@@ -19,6 +26,16 @@ export const MembershipStatuses = {
 export type MembershipStatus = (typeof MembershipStatuses)[keyof typeof MembershipStatuses];
 
 /**
+ * Diaries handed to this membership, indexed by the `:delegated` permission
+ * each grant confers.
+ *
+ * Keyed by permission rather than by scope so that `canForProvider` is one
+ * lookup with no scope vocabulary in it — the word "BOOKINGS" lives in exactly
+ * one table (docs/phase-3-4-diary-delegation.md §2.4).
+ */
+export type DelegatedProviderIds = Readonly<Partial<Record<Permission, readonly string[]>>>;
+
+/**
  * Who is making the request, already resolved against the database.
  *
  * Every field here is server-derived. Nothing on this object may come from a
@@ -36,7 +53,49 @@ export interface Actor {
     status: MembershipStatus;
     /** Set when this membership *is* a provider, linking role to a schedule. */
     providerId?: string | undefined;
+    /**
+     * Diaries this membership has been handed.
+     *
+     * Inside `membership`, not beside it, and that placement is the whole
+     * per-tenant safety argument: the set can only be reached through the
+     * object that also carries `tenantId`, so there is no representable state
+     * in which one tenant's grants are consulted for another tenant's
+     * resource. A person assisting at two clinics resolves a different
+     * membership per request and therefore a different set.
+     * docs/phase-3-4-diary-delegation.md §2.4.
+     */
+    delegated?: DelegatedProviderIds | undefined;
   };
+}
+
+/**
+ * Turn grant rows into the permission-indexed set the Actor carries.
+ *
+ * Pure and total: an unrecognised scope string contributes nothing rather than
+ * throwing, because a database enum value newer than this build must fail
+ * closed, not 500 every request that touches it.
+ */
+export function delegatedProviderIdsFrom(
+  grants: readonly { providerId: string; scopes: readonly string[] }[],
+): DelegatedProviderIds {
+  const byPermission = new Map<Permission, Set<string>>();
+
+  for (const grant of grants) {
+    for (const scope of grant.scopes) {
+      const permissions = DELEGATION_SCOPE_PERMISSIONS[scope as DelegationScope] as
+        | readonly Permission[]
+        | undefined;
+      if (!permissions) continue;
+
+      for (const permission of permissions) {
+        const bucket = byPermission.get(permission) ?? new Set<string>();
+        bucket.add(grant.providerId);
+        byPermission.set(permission, bucket);
+      }
+    }
+  }
+
+  return Object.fromEntries([...byPermission].map(([permission, ids]) => [permission, [...ids]]));
 }
 
 /** Tenant lifecycle, mirrored from the Prisma enum. */
@@ -86,25 +145,89 @@ export function can(actor: Actor, tenantId: string, permission: Permission): boo
 }
 
 /**
- * A permission that comes in `:all` and `:own` flavours.
+ * A permission that comes in `:all`, `:own` and `:delegated` flavours.
  *
- * Returns true if the actor has the `all` variant, or has the `own` variant and
- * the resource belongs to them. The `:own` permission on its own never
- * authorises anything — that separation is the whole point.
+ * Three branches, tried in that order:
+ *
+ *   1. `:all` — the owner and the administrator, for whom ownership is
+ *      irrelevant. Also where a platform admin returns, since `can()` is
+ *      unconditionally true for them.
+ *   2. `:own` — the resource is the actor's own diary.
+ *   3. `:delegated` — the diary was handed to this membership
+ *      (docs/phase-3-4-diary-delegation.md §2.4). The key is *optional*, and a
+ *      rule that is not delegable simply omits it: that is how
+ *      `canManageIntegration` stays closed to an assistant, since a connected
+ *      calendar is a setting rather than a day's work.
+ *
+ * Neither `:own` nor `:delegated` authorises anything on its own — that
+ * separation is the whole point, and it is why an unlinked provider and an
+ * assistant with no grants both fail closed rather than matching everything.
  */
 export function canForProvider(
   actor: Actor,
   tenantId: string,
   providerId: string,
-  permissions: { all: Permission; own: Permission },
+  permissions: { all: Permission; own: Permission; delegated?: Permission },
 ): boolean {
   if (can(actor, tenantId, permissions.all)) return true;
 
-  return (
+  const membership = actor.membership;
+
+  if (
     can(actor, tenantId, permissions.own) &&
-    actor.membership?.providerId !== undefined &&
-    actor.membership.providerId === providerId
-  );
+    membership?.providerId !== undefined &&
+    membership.providerId === providerId
+  ) {
+    return true;
+  }
+
+  if (permissions.delegated === undefined) return false;
+  if (!can(actor, tenantId, permissions.delegated)) return false;
+
+  // `isMemberOf` again, and not redundantly: `can()` short-circuits true for a
+  // platform admin without ever comparing tenants, so without this a membership
+  // resolved for a *different* tenant could supply the set. A platform admin
+  // holds no memberships (rule 9) and has already returned at branch 1, which
+  // makes this unreachable today — and exactly the sort of unreachable that
+  // stops being so.
+  if (!isMemberOf(actor, tenantId)) return false;
+
+  return (membership?.delegated?.[permissions.delegated] ?? []).includes(providerId);
+}
+
+/**
+ * Which diaries a list may cover.
+ *
+ * A discriminated union rather than `string[] | null`, because the failure this
+ * exists to prevent is an empty set being read as "no filter" and listing the
+ * whole tenant (rule 10). A caller that forgets the `all` case gets a type
+ * error; a caller handed `{ kind: "some", providerIds: [] }` cannot spell it
+ * the same way as no filter. docs/phase-3-4-diary-delegation.md §4.3.
+ */
+export type ProviderScope = { kind: "all" } | { kind: "some"; providerIds: readonly string[] };
+
+export function providerIdsInScope(
+  actor: Actor,
+  tenantId: string,
+  permissions: { all: Permission; own: Permission; delegated: Permission },
+): ProviderScope {
+  if (can(actor, tenantId, permissions.all)) return { kind: "all" };
+
+  const membership = actor.membership;
+  const ids = new Set<string>();
+
+  if (can(actor, tenantId, permissions.own) && membership?.providerId !== undefined) {
+    ids.add(membership.providerId);
+  }
+
+  // Same tenant re-assertion as canForProvider, for the same reason.
+  if (can(actor, tenantId, permissions.delegated) && isMemberOf(actor, tenantId)) {
+    for (const providerId of membership?.delegated?.[permissions.delegated] ?? []) {
+      ids.add(providerId);
+    }
+  }
+
+  return { kind: "some", providerIds: [...ids] };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,6 +240,35 @@ export function canForProvider(
 
 /** tech-impl §8.4's worked example. */
 export function canBlockProviderTime(actor: Actor, tenantId: string, providerId: string): boolean {
+  return canForProvider(actor, tenantId, providerId, {
+    all: Permissions.AVAILABILITY_MANAGE_ALL,
+    own: Permissions.AVAILABILITY_MANAGE_OWN,
+    delegated: Permissions.AVAILABILITY_MANAGE_DELEGATED,
+  });
+}
+
+/**
+ * May this actor hand this diary to somebody?
+ *
+ * The same question as "may they manage its availability", **minus the
+ * delegated branch** — and that omission is the single most important line in
+ * the whole feature. With it, an assistant handed a diary could hand it on, and
+ * the set of people who can reach a provider's calendar would grow without the
+ * provider, the owner or the audit log naming anybody who decided it.
+ * Delegation is one level deep by construction rather than by convention: there
+ * is no depth counter and no cycle check, and none is needed.
+ *
+ * Owners and admins are included not as a convenience but because they hold
+ * `:all` and can already perform every delegated act themselves. Withholding
+ * this from them would protect nothing, and would leave a provider with no
+ * login — a visiting hygienist whose diary the front desk keeps — unable to
+ * have a delegate at all. docs/phase-3-4-diary-delegation.md §2.3.
+ */
+export function canDelegateProviderDiary(
+  actor: Actor,
+  tenantId: string,
+  providerId: string,
+): boolean {
   return canForProvider(actor, tenantId, providerId, {
     all: Permissions.AVAILABILITY_MANAGE_ALL,
     own: Permissions.AVAILABILITY_MANAGE_OWN,
@@ -134,6 +286,12 @@ export function canBlockProviderTime(actor: Actor, tenantId: string, providerId:
  * Note what this does **not** decide — whose Google account may be attached.
  * That is settled by consent at Google itself, which is a stronger check than
  * any table here: nobody can connect an account they cannot sign into.
+ *
+ * **No `delegated` key, deliberately.** Diary delegation hands over the day's
+ * work — hours, time off, appointments — and a connected calendar is neither:
+ * it is a setting, and settings stay with whoever configures the organization.
+ * The omission is the whole enforcement; there is no scope that could reach
+ * this rule. docs/phase-3-4-diary-delegation.md §2.4.
  */
 export function canManageIntegration(
   actor: Actor,
@@ -154,6 +312,7 @@ export function canReadProviderBookings(
   return canForProvider(actor, tenantId, providerId, {
     all: Permissions.BOOKING_READ_ALL,
     own: Permissions.BOOKING_READ_OWN,
+    delegated: Permissions.BOOKING_READ_DELEGATED,
   });
 }
 
@@ -165,6 +324,7 @@ export function canManageProviderBookings(
   return canForProvider(actor, tenantId, providerId, {
     all: Permissions.BOOKING_MANAGE_ALL,
     own: Permissions.BOOKING_MANAGE_OWN,
+    delegated: Permissions.BOOKING_MANAGE_DELEGATED,
   });
 }
 

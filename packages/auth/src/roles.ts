@@ -66,6 +66,16 @@ export const Permissions = {
 
   AVAILABILITY_MANAGE_ALL: "availability:manage:all",
   AVAILABILITY_MANAGE_OWN: "availability:manage:own",
+  /**
+   * Managing the schedule of a diary that has been *handed* to you.
+   *
+   * A third flavour beside `:all` and `:own`, and resource-scoped exactly like
+   * `:own`: the permission alone never authorises anything, and
+   * `canForProvider` in policy.ts does the "which diary" half against the
+   * grants hanging off the actor's membership.
+   * docs/phase-3-4-diary-delegation.md §2.1.
+   */
+  AVAILABILITY_MANAGE_DELEGATED: "availability:manage:delegated",
 
   /**
    * Connecting and disconnecting a Google Calendar (Epic 6).
@@ -81,8 +91,10 @@ export const Permissions = {
 
   BOOKING_READ_ALL: "booking:read:all",
   BOOKING_READ_OWN: "booking:read:own",
+  BOOKING_READ_DELEGATED: "booking:read:delegated",
   BOOKING_MANAGE_ALL: "booking:manage:all",
   BOOKING_MANAGE_OWN: "booking:manage:own",
+  BOOKING_MANAGE_DELEGATED: "booking:manage:delegated",
 
   AUDIT_READ: "audit:read",
   USAGE_READ: "usage:read",
@@ -151,13 +163,25 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.BOOKING_MANAGE_OWN,
   ],
 
-  // Front desk: manages everyone's bookings, touches no settings and no billing
+  // Front desk: delegated rather than universal. An assistant reaches the
+  // diaries the providers handed them, and no others
+  // (docs/phase-3-4-diary-delegation.md §2.1). Still no settings and no billing
   // (PRD §6.3).
+  //
+  // Held `booking:read:all` and `booking:manage:all` until 2026-08-17. The
+  // migration that removed them backfilled a BOOKINGS grant from every diary,
+  // so no front desk lost access on the day (§2.2).
+  //
+  // OWNER and ADMIN deliberately do *not* hold the `:delegated` permissions.
+  // They hold the `:all` variant, which subsumes them, and a role holding both
+  // makes a branch of canForProvider that can never be reached — dead weight in
+  // the one table nobody may misread. Asserted in policy.test.ts.
   [Roles.ASSISTANT]: [
     Permissions.TENANT_READ,
     Permissions.MEMBER_READ,
-    Permissions.BOOKING_READ_ALL,
-    Permissions.BOOKING_MANAGE_ALL,
+    Permissions.AVAILABILITY_MANAGE_DELEGATED,
+    Permissions.BOOKING_READ_DELEGATED,
+    Permissions.BOOKING_MANAGE_DELEGATED,
   ],
 
   // Customers hold no staff permissions. Their own bookings are reached through
@@ -168,4 +192,68 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
 
 export function permissionsForRole(role: Role): readonly Permission[] {
   return ROLE_PERMISSIONS[role];
+}
+
+// ---------------------------------------------------------------------------
+// Delegation scopes
+//
+// docs/phase-3-4-diary-delegation.md §2.4. A provider hands their diary to
+// somebody else; a grant says which halves of the job come with it.
+// ---------------------------------------------------------------------------
+
+/** Mirrors the `DelegationScope` Prisma enum. */
+export const DelegationScopes = {
+  AVAILABILITY: "AVAILABILITY",
+  BOOKINGS: "BOOKINGS",
+} as const;
+
+export type DelegationScope = (typeof DelegationScopes)[keyof typeof DelegationScopes];
+
+export const ALL_DELEGATION_SCOPES: readonly DelegationScope[] = Object.values(DelegationScopes);
+
+/**
+ * Scope → the permissions a grant of it confers.
+ *
+ * The single translation point, and the only place in the system that knows the
+ * word "BOOKINGS" means anything. `canForProvider` never learns it: the rule is
+ * handed a permission and looks up the provider ids indexed by that permission,
+ * so adding a scope is an edit here and nowhere else (rule 10).
+ *
+ * It is also what keeps `canManageIntegration` closed to a delegate — that rule
+ * is simply never given a `delegated` key, so no scope can reach it. A
+ * connected calendar is a setting, not a day's work.
+ */
+export const DELEGATION_SCOPE_PERMISSIONS: Readonly<
+  Record<DelegationScope, readonly Permission[]>
+> = {
+  [DelegationScopes.AVAILABILITY]: [Permissions.AVAILABILITY_MANAGE_DELEGATED],
+  [DelegationScopes.BOOKINGS]: [
+    Permissions.BOOKING_READ_DELEGATED,
+    Permissions.BOOKING_MANAGE_DELEGATED,
+  ],
+};
+
+/** Every permission that only a delegation can satisfy. */
+export const DELEGATED_PERMISSIONS: readonly Permission[] = Object.values(
+  DELEGATION_SCOPE_PERMISSIONS,
+).flat();
+
+/**
+ * Would a grant to this role do anything?
+ *
+ * Asked as a permission question rather than `role === "ASSISTANT"` (rule 10),
+ * and three things follow — only the first of which was the goal:
+ *
+ *   1. Re-scoping which roles may receive a diary is an edit to
+ *      ROLE_PERMISSIONS and nothing else.
+ *   2. `tenant-context.plugin.ts` loads grants for exactly the roles that could
+ *      use them, so every other request costs what it cost before — and a role
+ *      that gains a `:delegated` permission later starts loading its grants
+ *      with no edit to the plugin.
+ *   3. A grant held by a membership whose role no longer receives delegations
+ *      confers nothing, with no sweep and no cascade
+ *      (docs/phase-3-4-diary-delegation.md §2.8).
+ */
+export function roleCanReceiveDelegation(role: Role): boolean {
+  return ROLE_PERMISSIONS[role].some((permission) => DELEGATED_PERMISSIONS.includes(permission));
 }

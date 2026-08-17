@@ -1,7 +1,48 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { permissionsForRole } from "@bam/auth";
+import {
+  ALL_DELEGATION_SCOPES,
+  DELEGATION_SCOPE_PERMISSIONS,
+  permissionsForRole,
+  type DelegatedProviderIds,
+} from "@bam/auth";
 import { commonErrorResponses, daysUntil, idSchema } from "@bam/contracts";
+
+/**
+ * Invert the actor's permission-indexed grant set back into one row per diary.
+ *
+ * The Actor carries `permission -> providerIds` because that is the shape
+ * `canForProvider` wants (docs/phase-3-4-diary-delegation.md §2.4); a screen
+ * wants `providerId -> scopes`. Inverting here is cheaper than a second query
+ * and, more usefully, guarantees the answer matches what the guards will decide
+ * on the next request — a query could disagree with the memoised actor.
+ */
+function delegationsOf(
+  delegated: DelegatedProviderIds | undefined,
+): { providerId: string; scopes: string[] }[] {
+  if (!delegated) return [];
+
+  const byProvider = new Map<string, Set<string>>();
+
+  for (const scope of ALL_DELEGATION_SCOPES) {
+    // A scope is present for a diary when *every* permission it confers is —
+    // they are written together, so an intersection and a union agree, and the
+    // intersection is the one that cannot over-report.
+    const permissions = DELEGATION_SCOPE_PERMISSIONS[scope];
+    const idSets = permissions.map((permission) => new Set(delegated[permission] ?? []));
+    const first = idSets[0];
+    if (!first) continue;
+
+    for (const providerId of first) {
+      if (!idSets.every((ids) => ids.has(providerId))) continue;
+      const scopes = byProvider.get(providerId) ?? new Set<string>();
+      scopes.add(scope);
+      byProvider.set(providerId, scopes);
+    }
+  }
+
+  return [...byProvider].map(([providerId, scopes]) => ({ providerId, scopes: [...scopes] }));
+}
 
 /**
  * Who am I, and what may I do here?
@@ -55,6 +96,18 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
               .nullable(),
             /** Effective permissions in the selected tenant. Advisory for the UI. */
             permissions: z.array(z.string()),
+            /**
+             * Diaries handed to this membership, and what each grant covers
+             * (docs/phase-3-4-diary-delegation.md §5.3).
+             *
+             * Read straight off the resolved actor rather than queried again, so
+             * it cannot disagree with what the guards will decide on the very
+             * next request. The web app's only source of "which diaries may I
+             * pick"; `GET /v1/me/delegations` is the richer version, with names.
+             */
+            delegations: z.array(
+              z.object({ providerId: idSchema, scopes: z.array(z.string()) }),
+            ),
           }),
           ...commonErrorResponses,
         },
@@ -73,6 +126,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
         tenant: null,
         membership: null,
         permissions: [] as string[],
+        delegations: [] as { providerId: string; scopes: string[] }[],
       };
 
       // No tenant selected is a normal state — a user who has just signed up
@@ -101,6 +155,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
               }
             : null,
           permissions: membership ? [...permissionsForRole(membership.role)] : [],
+          delegations: delegationsOf(membership?.delegated),
         };
       } catch {
         return base;

@@ -114,7 +114,49 @@ export interface MeResponse {
   } | null;
   membership: { id: string; role: string; providerId: string | null } | null;
   permissions: string[];
+  /**
+   * Diaries handed to this membership, and what each grant covers
+   * (docs/phase-3-4-diary-delegation.md). Ids only — `GET /v1/me/delegations`
+   * is the version with provider names, fetched by the screens that need to
+   * label a picker.
+   *
+   * Advisory, like `permissions`: the API re-decides every request.
+   */
+  delegations: { providerId: string; scopes: DelegationScope[] }[];
 }
+
+export type DelegationScope = "AVAILABILITY" | "BOOKINGS";
+
+/** One row of `GET /v1/me/delegations`. */
+export interface MyDelegation {
+  providerId: string;
+  providerName: string;
+  providerTimezone: string;
+  providerArchived: boolean;
+  scopes: DelegationScope[];
+}
+
+/** One row of `GET /v1/providers/:id/delegations`. */
+export interface ProviderDelegation {
+  providerId: string;
+  scopes: DelegationScope[];
+  grantedAt: string;
+  grantedByUserId: string | null;
+  member: DelegationMember;
+}
+
+export interface DelegationMember {
+  membershipId: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  /** False once the member's role no longer receives delegations: the grant
+   *  survives a role change and confers nothing (delegation record §2.8). */
+  roleReceivesDelegations: boolean;
+}
+
+export type DelegationCandidate = DelegationMember & { alreadyDelegated: boolean };
 
 export interface TenantSummary {
   id: string;

@@ -509,10 +509,12 @@ made false.
 8. **PRD §9.4/§9.5's service↔location link is not built, and will not be.** §2.7 records the reasoning and
    the reversal. A service confined to one site is expressed as a provider who offers it working only there.
    The PRD text should be amended rather than left to look like an outstanding gap.
-9. **Delegating a provider's availability is neither built nor designed.** Availability is the provider's to
-   set (§2.7); a receptionist or an owner managing someone else's diary on their behalf is a real requirement
-   that has no model yet — the current API authorises by `PROVIDER_MANAGE` and membership, with no notion of
-   acting _for_ another provider. Named so the absence reads as pending rather than decided.
+9. ~~**Delegating a provider's availability is neither built nor designed.**~~ **Closed 2026-08-17 by
+   [phase-3-4-diary-delegation.md](phase-3-4-diary-delegation.md).** A provider now hands their diary to a
+   named member, scoped to availability, bookings or both, and one assistant holds grants from several
+   providers. The model this gap said was missing is `provider_delegations` plus a third branch in
+   `canForProvider`. §2.7's "who decides what" table is unchanged and is the reason it works this way: the
+   grant is the provider exercising that decision, not the owner overriding it.
 
 10. **`Provider.email` is still a nullable column.** Both write schemas require it (§2.8), so no new null can
     appear, but rows created before today may hold one and the response schema stays nullable to serialize

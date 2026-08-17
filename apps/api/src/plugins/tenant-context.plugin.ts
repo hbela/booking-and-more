@@ -1,6 +1,12 @@
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
-import { MembershipStatuses, type Actor, type TenantStatus } from "@bam/auth";
+import {
+  MembershipStatuses,
+  delegatedProviderIdsFrom,
+  roleCanReceiveDelegation,
+  type Actor,
+  type TenantStatus,
+} from "@bam/auth";
 import { ErrorCodes, ForbiddenError, NotFoundError, UnauthenticatedError } from "@bam/contracts";
 
 declare module "fastify" {
@@ -109,6 +115,47 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
         throw new NotFoundError("Tenant not found.", ErrorCodes.TENANT_NOT_FOUND);
       }
 
+      // An invited-but-not-joined or suspended member is not a member yet.
+      // Distinguished from "no membership" so the message can be useful.
+      //
+      // Checked here rather than after the actor is assembled so that a
+      // membership which grants nothing does not pay for the delegation query
+      // below.
+      if (membership && membership.status !== MembershipStatuses.ACTIVE) {
+        throw new ForbiddenError(
+          membership.status === MembershipStatuses.INVITED
+            ? "Accept your invitation before accessing this tenant."
+            : "Your access to this tenant is suspended.",
+        );
+      }
+
+      // Diaries handed to this membership (docs/phase-3-4-diary-delegation.md
+      // §4.4). Loaded only for a role whose permission table actually contains a
+      // `:delegated` permission, so OWNER, ADMIN, PROVIDER and CUSTOMER requests
+      // cost exactly what they cost before. Derived from the table rather than
+      // from `role === "ASSISTANT"` (rule 10): a role that gains a delegated
+      // permission later starts loading its grants with no edit here.
+      //
+      // A platform admin holds no membership (rule 9), so this never runs for
+      // them — and needs not to: `can()` is already true for them everywhere and
+      // the first branch of `canForProvider` returns before the set is read.
+      //
+      // Keyed by `(tenantId, membershipId)` — rule 5, and it is also what makes a
+      // row that somehow names another tenant's diary invisible rather than
+      // dangerous.
+      //
+      // Because this is loaded per request and memoised only per request,
+      // revoking a delegation takes effect on the delegate's very next call. No
+      // session invalidation and no cache: that is the payoff for resolving it
+      // here rather than stamping it into a session at sign-in.
+      const grants =
+        membership && roleCanReceiveDelegation(membership.role)
+          ? await app.prisma.providerDelegation.findMany({
+              where: { tenantId: tenant.id, membershipId: membership.id },
+              select: { providerId: true, scopes: true },
+            })
+          : [];
+
       const actor: Actor = {
         userId: user.id,
         isPlatformAdmin: user.isPlatformAdmin,
@@ -120,20 +167,11 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
                 role: membership.role,
                 status: membership.status,
                 providerId: membership.providerId ?? undefined,
+                delegated: delegatedProviderIdsFrom(grants),
               },
             }
           : {}),
       };
-
-      // An invited-but-not-joined or suspended member is not a member yet.
-      // Distinguished from "no membership" so the message can be useful.
-      if (membership && membership.status !== MembershipStatuses.ACTIVE) {
-        throw new ForbiddenError(
-          membership.status === MembershipStatuses.INVITED
-            ? "Accept your invitation before accessing this tenant."
-            : "Your access to this tenant is suspended.",
-        );
-      }
 
       request.tenant = tenant;
       request.actor = actor;

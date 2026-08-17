@@ -49,6 +49,10 @@ import { providerRoutes } from "./modules/providers/provider.routes.js";
 import { serviceRoutes } from "./modules/services/service.routes.js";
 import { locationRoutes } from "./modules/locations/location.routes.js";
 import { availabilityRoutes } from "./modules/availability/availability.routes.js";
+import {
+  myDelegationRoutes,
+  providerDelegationRoutes,
+} from "./modules/delegations/delegation.routes.js";
 import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
@@ -387,6 +391,14 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // off two different nouns (`/v1/providers/:id/working-hours` and
   // `/v1/availability-exceptions/:id`), which is what tech-impl §17 specifies.
   await app.register(availabilityRoutes, { prefix: "/v1" });
+
+  // --- Diary delegation -----------------------------------------------------
+  // docs/phase-3-4-diary-delegation.md. Two plugins from one module, the way
+  // memberships splits its tenant-scoped routes from the acceptance ones: the
+  // write surface hangs off the diary being granted, and the delegate's own
+  // view hangs off the caller.
+  await app.register(providerDelegationRoutes, { prefix: "/v1" });
+  await app.register(myDelegationRoutes, { prefix: "/v1/me" });
 
   // --- Bookings (Epic 4) ----------------------------------------------------
   await app.register(bookingRoutes, { prefix: "/v1/bookings" });

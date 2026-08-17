@@ -116,6 +116,7 @@ model Tenant {
   locations              Location[]
   providerServices       ProviderService[]
   providerLocations      ProviderLocation[]
+  providerDelegations    ProviderDelegation[]
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
 
@@ -293,6 +294,11 @@ model Membership {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// Diaries handed to this membership. phase-3-4-diary-delegation §2.4 — the
+  /// grant is to the membership, not the user, so a person assisting at two
+  /// clinics holds two independent sets.
+  delegations ProviderDelegation[]
 
   /// One membership per person per tenant (tech-impl §10.3).
   @@unique([tenantId, userId])
@@ -520,6 +526,9 @@ model Provider {
   calendarIntegrations CalendarIntegration[]
   calendarMappings     CalendarMapping[]
 
+  /// Who this provider has handed their diary to.
+  delegations ProviderDelegation[]
+
   @@index([tenantId, active])
   @@map("providers")
 }
@@ -698,6 +707,87 @@ model ProviderLocation {
   @@unique([providerId, locationId])
   @@index([tenantId, locationId])
   @@map("provider_locations")
+}
+
+// ===========================================================================
+// Diary delegation — docs/phase-3-4-diary-delegation.md
+//
+// A provider hands the day-to-day running of their diary to somebody else. One
+// assistant holds grants from several providers, and an ASSISTANT reaches no
+// diary they have not been given.
+//
+// Placed with the provider cluster rather than with availability below: this
+// states *who runs* a diary, not anything about time.
+// ===========================================================================
+
+/// What a delegation covers.
+///
+/// Mirrored in @bam/auth's `DELEGATION_SCOPE_PERMISSIONS`, which is the only
+/// place a scope becomes a permission. Nothing outside that table may branch on
+/// a scope value (rule 10).
+enum DelegationScope {
+  /// Working hours and availability exceptions on that diary.
+  AVAILABILITY
+  /// Reading and managing that diary's bookings.
+  BOOKINGS
+
+  @@map("delegation_scope")
+}
+
+/// One provider's diary, handed to one member. phase-3-4-diary-delegation §3.1.
+///
+/// The row *is* the grant: there is no `revokedAt`, because revoking is a delete
+/// and the history lives in `audit_logs` (§2.7). Rule 11 does not reach here —
+/// it exists so a booking's foreign keys keep resolving, and nothing points at a
+/// delegation. `availability_exceptions` are hard-deleted for the same reason.
+model ProviderDelegation {
+  id String @id @default(cuid(2))
+
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The diary being delegated. `Cascade`, deliberately unlike
+  /// `Membership.providerId`'s `SetNull`: a membership that loses its provider
+  /// still carries a person's access, so nulling is the conservative act there.
+  /// A delegation that loses its diary is not a degraded grant, it is nothing.
+  providerId String   @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Who receives it. A *membership*, never a user (rule 9). The same person
+  /// assisting at two clinics holds two memberships and two independent sets of
+  /// grants, which is the structural reason a grant cannot cross a tenant
+  /// boundary (§2.4).
+  membershipId String     @map("membership_id")
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  /// An enum array rather than two booleans or a join table (§2.5). The policy
+  /// layer asks a set-membership question, the set is read on every request and
+  /// never queried the other way round, and a closed set belongs in an enum so
+  /// the database refuses a typo — the same shape as `Provider.languages` and
+  /// `CalendarIntegration.scopes`. A CHECK in the migration keeps it non-empty:
+  /// an empty grant is a revocation wearing a grant's clothes.
+  scopes DelegationScope[]
+
+  /// Recorded, not enforced: the granter may have left by the time anybody reads
+  /// this. No foreign key, matching `Membership.invitedByUserId`. NULL means the
+  /// backfill created it.
+  grantedByUserId String? @map("granted_by_user_id")
+
+  grantedAt DateTime @default(now()) @map("granted_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// One grant per (diary, member). Re-granting re-scopes the row it finds
+  /// rather than adding a second one, so "what may this person do to this diary"
+  /// has exactly one answer (§2.6). No tenant_id in the key: a provider id
+  /// already names exactly one tenant, and including it would imply the pair
+  /// could legitimately repeat across tenants.
+  @@unique([providerId, membershipId])
+  /// The hot path — every request by a role holding a `:delegated` permission
+  /// loads that membership's whole grant set (§4.4).
+  @@index([tenantId, membershipId])
+  /// The provider's Delegates panel, and the reverse question.
+  @@index([tenantId, providerId])
+  @@map("provider_delegations")
 }
 
 // ===========================================================================

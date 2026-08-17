@@ -43,7 +43,11 @@ function isAffectedBooking(value: unknown): value is AffectedBooking {
     typeof entry["id"] === "string" &&
     typeof entry["reference"] === "string" &&
     typeof entry["startAt"] === "string" &&
-    typeof entry["customerName"] === "string" &&
+    // Nullable since diary delegation: a caller who may manage this diary's
+    // availability but not read its bookings gets the list without names
+    // (docs/phase-3-4-diary-delegation.md §2.12). The dialog copes; this guard
+    // must not reject the whole payload over it.
+    (typeof entry["customerName"] === "string" || entry["customerName"] === null) &&
     typeof entry["serviceName"] === "string" &&
     typeof entry["providerName"] === "string" &&
     (entry["reason"] === "OUTSIDE_WORKING_HOURS" || entry["reason"] === "BLOCKED_BY_EXCEPTION")

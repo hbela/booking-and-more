@@ -306,7 +306,29 @@
     "affectedConfirm": "Mentés mindenképp",
     "affectedCancel": "Vissza",
     "reasonOutsideHours": "A munkaidőn kívül",
-    "reasonBlocked": "Szabadság idejére esik"
+    "reasonBlocked": "Szabadság idejére esik",
+    "notDelegated": "Még egy naptárat sem ruháztak Önre. Egy szolgáltató a saját elérhetőségi képernyőjén adhatja át az övét.",
+    "delegates": "Megbízottak",
+    "delegatesHint": "Akik a szolgáltató mellett kezelik ezt a naptárat. Minden megbízás az elérhetőségre, a foglalásokra vagy mindkettőre szólhat.",
+    "delegatesEmpty": "Ezt a naptárat a szolgáltatón kívül senki sem kezeli. A recepció addig nem látja a foglalásait, amíg ide nem kerül valaki.",
+    "delegateAdd": "Megbízott hozzáadása",
+    "delegateChoose": "Tag",
+    "delegateNoCandidates": "Nincs kit hozzáadni. Csak azok az aktív tagok jelennek meg itt, akiknek a szerepköre elfogadhat átruházott naptárat.",
+    "delegateMember": "Tag",
+    "delegateActions": "Műveletek",
+    "delegateScopes": "Mit tehet",
+    "delegateScopeAvailability": "Elérhetőség",
+    "delegateScopeAvailabilityHint": "Munkaidő beállítása és szabadság rögzítése ebben a naptárban.",
+    "delegateScopeBookings": "Foglalások",
+    "delegateScopeBookingsHint": "A naptár időpontjainak megtekintése, elfogadása, áthelyezése és lemondása.",
+    "delegateGrant": "Hozzáférés megadása",
+    "delegateCancel": "Mégse",
+    "delegateSaved": "Mentve.",
+    "delegateRevoke": "Visszavonás",
+    "delegateRevokeConfirm": "Visszaveszi a naptárat {name} felhasználótól? A következő műveletnél már nem fér hozzá.",
+    "delegateFailed": "A módosítást nem sikerült menteni.",
+    "delegateStaleRole": "A szerepkör már nem fogad naptárat",
+    "delegateNeedsOneScope": "Egy megbízottnak legalább az egyikre szüksége van. A hozzáférés teljes megszüntetéséhez használja a Visszavonás gombot."
   },
   "integrations": {
     "title": "Google Naptár",
@@ -471,7 +493,8 @@
       "label": "Beosztáson kívül",
       "hours": "Ez az időpont a kolléga jelenlegi munkaidején kívül esik.",
       "blocked": "Ez az időpont szabadság idejére esik."
-    }
+    },
+    "myProviders": "Minden naptáram"
   },
   "admin": {
     "title": "Platformadminisztráció",

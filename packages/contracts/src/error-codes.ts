@@ -65,6 +65,19 @@ export const ErrorCodes = {
    */
   SCHEDULE_CONFLICTS_BOOKINGS: "SCHEDULE_CONFLICTS_BOOKINGS",
 
+  // --- Diary delegation -----------------------------------------------------
+  /**
+   * The member named cannot receive this diary: they are not ACTIVE, their role
+   * holds no delegated permission, or the diary is already theirs.
+   *
+   * Distinct from `FORBIDDEN`, because they are about different people.
+   * `FORBIDDEN` says the *caller* may not; this says the person they named
+   * cannot receive it. A screen that cannot tell them apart sends the wrong
+   * person off to ask for permission.
+   * docs/phase-3-4-diary-delegation.md §5.2.
+   */
+  DELEGATION_TARGET_INELIGIBLE: "DELEGATION_TARGET_INELIGIBLE",
+
   // --- Calendar integrations (Epic 6) --------------------------------------
   /**
    * The connection exists but cannot do work: disconnected, or waiting for a

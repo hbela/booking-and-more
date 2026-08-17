@@ -110,6 +110,12 @@ export class AvailabilityService {
     entries: WorkingHoursEntry[];
     /** See `setWorkingHoursBodySchema` and phase-3-4 §2.4. */
     acknowledgeAffectedBookings: boolean;
+    /**
+     * May the caller read this diary's bookings? Decides whether the stranded
+     * list carries customer names (diary-delegation §2.12). The route settles
+     * it with `canReadProviderBookings`; the service only obeys.
+     */
+    mayReadBookings: boolean;
     now: Date;
   }): Promise<WorkingHours[]> {
     const { tenantId, providerId, entries } = args;
@@ -142,6 +148,7 @@ export class AvailabilityService {
           entries,
           now: args.now,
         }),
+        args.mayReadBookings,
       );
     }
 
@@ -186,6 +193,8 @@ export class AvailabilityService {
     input: CreateExceptionBody;
     createdByUserId: string | null;
     source?: "DASHBOARD" | "VOICE" | "CHAT" | "CALENDAR" | "API";
+    /** See `setWorkingHours`. */
+    mayReadBookings: boolean;
     now: Date;
   }): Promise<AvailabilityException> {
     const { tenantId, providerId, input } = args;
@@ -208,6 +217,7 @@ export class AvailabilityService {
           serviceId: input.serviceId ?? null,
           now: args.now,
         }),
+        args.mayReadBookings,
       );
     }
 
@@ -231,6 +241,8 @@ export class AvailabilityService {
     tenantId: string;
     exceptionId: string;
     input: UpdateExceptionBody;
+    /** See `setWorkingHours`. */
+    mayReadBookings: boolean;
     now: Date;
   }): Promise<AvailabilityException> {
     const { tenantId, exceptionId, input } = args;
@@ -271,6 +283,7 @@ export class AvailabilityService {
           replacesExceptionId: exceptionId,
           now: args.now,
         }),
+        args.mayReadBookings,
       );
     }
 
@@ -592,7 +605,7 @@ export class AvailabilityService {
  * The check re-runs on the acknowledged call, so a booking made between the two
  * requests is caught by the second one rather than slipping through a window.
  */
-function assertNothingStranded(affected: AffectedBooking[]): void {
+function assertNothingStranded(affected: AffectedBooking[], mayReadBookings: boolean): void {
   if (affected.length === 0) return;
 
   throw new ConflictError(
@@ -600,7 +613,15 @@ function assertNothingStranded(affected: AffectedBooking[]): void {
     affected.length === 1
       ? "This change leaves 1 existing booking outside the schedule."
       : `This change leaves ${String(affected.length)} existing bookings outside the schedule.`,
-    { affectedBookings: affected },
+    {
+      // Diary delegation split availability from bookings, so a caller may now
+      // legitimately be saving this schedule while holding no right to read its
+      // appointments. The count, the times and the references are the decision;
+      // the names are not (docs/phase-3-4-diary-delegation.md §2.12).
+      affectedBookings: mayReadBookings
+        ? affected
+        : affected.map((booking) => ({ ...booking, customerName: null })),
+    },
   );
 }
 

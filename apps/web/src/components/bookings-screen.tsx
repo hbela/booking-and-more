@@ -14,6 +14,7 @@ import {
   type Paginated,
   type Provider,
 } from "@/lib/api-client";
+import { diaryScopeFor } from "@/lib/delegation";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Button } from "./ui/button";
 import { ErrorText, Field } from "./ui/field";
@@ -41,7 +42,12 @@ export function BookingsScreen(): React.ReactElement {
   const context = useDashboardContext();
   useSignInRedirect(!context.isPending && !context.me);
 
-  const canSeeEveryone = context.can("booking:read:all");
+  // Three-way since diary delegation: every diary, the caller's own, or the
+  // ones handed to them (docs/phase-3-4-diary-delegation.md §6.2). The filter
+  // renders whenever there is more than one to choose between, which no longer
+  // implies `booking:read:all`.
+  const scope = diaryScopeFor(context.me, "booking:read:all", "BOOKINGS");
+  const canSeeEveryone = scope.everyDiary;
 
   const [providerId, setProviderId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -56,8 +62,16 @@ export function BookingsScreen(): React.ReactElement {
     queryKey: ["providers", context.tenantId],
     queryFn: () =>
       apiFetch<Paginated<Provider>>("/v1/providers?limit=100", { tenantId: context.tenantId }),
-    enabled: Boolean(context.tenantId) && canSeeEveryone,
+    // Fetched for a delegate too: an ASSISTANT holds `tenant:read`, and without
+    // names the filter would offer opaque ids. The options are narrowed to the
+    // scope below — the list supplies labels, never reach.
+    enabled:
+      Boolean(context.tenantId) && (canSeeEveryone || scope.providerIds.length > 0),
   });
+
+  const providerOptions = (providers.data?.items ?? []).filter(
+    (provider) => canSeeEveryone || scope.providerIds.includes(provider.id),
+  );
 
   const query = new URLSearchParams({ from, to, limit: "50" });
   if (providerId) query.set("providerId", providerId);
@@ -99,7 +113,7 @@ export function BookingsScreen(): React.ReactElement {
             />
           </Field>
 
-          {canSeeEveryone ? (
+          {providerOptions.length > 1 ? (
             <Field id="bookings-provider" label={t("provider")}>
               <Select
                 id="bookings-provider"
@@ -107,8 +121,11 @@ export function BookingsScreen(): React.ReactElement {
                 onChange={(event) => setProviderId(event.target.value)}
                 
               >
-                <option value="">{t("allProviders")}</option>
-                {providers.data?.items.map((provider) => (
+                {/* Sending no providerId is already correct for a delegate: the
+                    server returns the union of the diaries they hold, so "all"
+                    means "all of mine" without the client having to say so. */}
+                <option value="">{canSeeEveryone ? t("allProviders") : t("myProviders")}</option>
+                {providerOptions.map((provider) => (
                   <option key={provider.id} value={provider.id}>
                     {provider.displayName}
                   </option>

@@ -185,7 +185,14 @@ export class BookingRepository {
     tenantId: string;
     limit: number;
     cursor?: string | undefined;
-    providerId?: string | undefined;
+    /**
+     * The diaries this page may cover. `undefined` means every diary in the
+     * tenant, which only a caller holding `booking:read:all` may ask for — the
+     * route decides that and never passes an empty array, because an empty
+     * array here would be an empty page and the caller meant a refusal
+     * (docs/phase-3-4-diary-delegation.md §4.3).
+     */
+    providerIds?: readonly string[] | undefined;
     customerId?: string | undefined;
     status?: Booking["status"][] | undefined;
     from?: Date | undefined;
@@ -196,7 +203,7 @@ export class BookingRepository {
     return this.prisma.booking.findMany({
       where: {
         tenantId: args.tenantId,
-        ...(args.providerId === undefined ? {} : { providerId: args.providerId }),
+        ...(args.providerIds === undefined ? {} : { providerId: { in: [...args.providerIds] } }),
         ...(args.customerId === undefined ? {} : { customerId: args.customerId }),
         ...(args.status === undefined ? {} : { status: { in: args.status } }),
         ...(args.from === undefined && args.to === undefined

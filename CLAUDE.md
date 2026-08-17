@@ -19,6 +19,21 @@ implementation of the question. A schedule save that would strand bookings now r
 `acknowledgeAffectedBookings` — it warns rather than refuses, because §2.6 of the owner-management
 record puts availability in the provider's hands and the only escape hatch from a hard refusal is
 cancelling real customers ·
+[Phases 3–4 — diary delegation](docs/phase-3-4-diary-delegation.md) (**in progress**). A provider can now
+hand the running of their diary — availability, bookings, or both — to a named member, and one assistant
+can hold grants from several providers. `canForProvider` offered exactly two answers, `:all` and `:own`,
+and a receptionist is the third. **`ASSISTANT` is narrowed**: it loses `booking:read:all` and
+`booking:manage:all` and gains the `:delegated` variants, so the front desk reaches the diaries it was
+given and no others. **Read its §2.2 before touching the backfill** — it grants `{BOOKINGS}` only, because
+an assistant never held `availability:manage:all` and a compatibility backfill may reproduce yesterday but
+may never round up. **§2.3 is the other one to read first**: `canDelegateProviderDiary` deliberately has no
+delegated branch, which is the entire reason delegation is one level deep — with it, a delegate could hand
+the diary on and nobody would have decided it. Three more that bite: **§2.4** — the grant set lives *inside*
+`Actor.membership`, which is what makes a cross-tenant grant unrepresentable rather than merely checked;
+**§4.3** — an empty provider set may never be spelled the same way as "no filter", hence the discriminated
+union; and **§2.12** — the affected-bookings payload carries `customerName`, so splitting availability from
+bookings created a leak that could not exist before. §2.9 records why the availability `GET`s were narrowed
+and why `POST /v1/slots/search` deliberately was not ·
 [Phase 5 — notifications](docs/phase-5-notifications.md) (part 1 of 3: outbox dispatch, queues, the
 notification record. Email delivery was built early by Epic 9; the booking half of parts 2 and 3 is the
 record below) ·

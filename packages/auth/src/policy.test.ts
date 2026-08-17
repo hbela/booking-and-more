@@ -1,17 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  ALL_DELEGATION_SCOPES,
   ALL_ROLES,
+  DELEGATED_PERMISSIONS,
+  DELEGATION_SCOPE_PERMISSIONS,
   INVITABLE_ROLES,
   Permissions,
   ROLE_PERMISSIONS,
   Roles,
+  roleCanReceiveDelegation,
   type Role,
 } from "./roles.js";
 import {
   MembershipStatuses,
   TenantStatuses,
   type Actor,
+  type DelegatedProviderIds,
   can,
+  canDelegateProviderDiary,
+  delegatedProviderIdsFrom,
+  providerIdsInScope,
   canBecomePlatformAdmin,
   canBlockProviderTime,
   canManageIntegration,
@@ -27,11 +35,17 @@ import {
 const TENANT_A = "tenant_a";
 const TENANT_B = "tenant_b";
 
+// Module scope rather than inside one describe: the delegation blocks below ask
+// the same questions of the same two diaries.
+const PROVIDER_SELF = "provider_self";
+const PROVIDER_OTHER = "provider_other";
+
 function actor(overrides: {
   role?: Role;
   tenantId?: string;
   status?: (typeof MembershipStatuses)[keyof typeof MembershipStatuses];
   providerId?: string;
+  delegated?: DelegatedProviderIds;
   isPlatformAdmin?: boolean;
   noMembership?: boolean;
 }): Actor {
@@ -50,8 +64,17 @@ function actor(overrides: {
       role: overrides.role ?? Roles.ADMIN,
       status: overrides.status ?? MembershipStatuses.ACTIVE,
       providerId: overrides.providerId,
+      delegated: overrides.delegated,
     },
   };
+}
+
+/** A grant of every permission `scope` confers, over `providerIds`. */
+function grantOf(
+  scope: (typeof ALL_DELEGATION_SCOPES)[number],
+  ...providerIds: string[]
+): DelegatedProviderIds {
+  return delegatedProviderIdsFrom(providerIds.map((providerId) => ({ providerId, scopes: [scope] })));
 }
 
 describe("isMemberOf", () => {
@@ -132,10 +155,18 @@ describe("can — role boundaries", () => {
     expect(can(actor({ role: Roles.ADMIN }), TENANT_A, Permissions.TENANT_MANAGE)).toBe(false);
   });
 
-  it("lets an assistant manage bookings but not services or providers (PRD §6.3)", () => {
+  it("gives an assistant delegated reach, never universal reach (PRD §6.3)", () => {
     const assistant = actor({ role: Roles.ASSISTANT });
 
-    expect(can(assistant, TENANT_A, Permissions.BOOKING_MANAGE_ALL)).toBe(true);
+    // Held the `:all` pair until 2026-08-17. Delegation replaced it, so the
+    // front desk reaches the diaries it was handed and no others
+    // (docs/phase-3-4-diary-delegation.md §2.1).
+    expect(can(assistant, TENANT_A, Permissions.BOOKING_MANAGE_DELEGATED)).toBe(true);
+    expect(can(assistant, TENANT_A, Permissions.BOOKING_READ_DELEGATED)).toBe(true);
+    expect(can(assistant, TENANT_A, Permissions.AVAILABILITY_MANAGE_DELEGATED)).toBe(true);
+
+    expect(can(assistant, TENANT_A, Permissions.BOOKING_MANAGE_ALL)).toBe(false);
+    expect(can(assistant, TENANT_A, Permissions.BOOKING_READ_ALL)).toBe(false);
     expect(can(assistant, TENANT_A, Permissions.SERVICE_MANAGE)).toBe(false);
     expect(can(assistant, TENANT_A, Permissions.PROVIDER_MANAGE)).toBe(false);
     expect(can(assistant, TENANT_A, Permissions.AVAILABILITY_MANAGE_ALL)).toBe(false);
@@ -156,9 +187,6 @@ describe("can — role boundaries", () => {
 });
 
 describe("owning a resource — the :own permissions", () => {
-  const PROVIDER_SELF = "provider_self";
-  const PROVIDER_OTHER = "provider_other";
-
   it("lets a provider manage their own availability", () => {
     const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
     expect(canBlockProviderTime(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
@@ -223,9 +251,17 @@ describe("owning a resource — the :own permissions", () => {
     expect(canManageProviderBookings(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
     expect(canManageProviderBookings(provider, TENANT_A, PROVIDER_OTHER)).toBe(false);
 
-    // An assistant holds the :all variant, so ownership is irrelevant.
-    const assistant = actor({ role: Roles.ASSISTANT });
-    expect(canReadProviderBookings(assistant, TENANT_A, PROVIDER_OTHER)).toBe(true);
+    // An assistant reaches nothing until somebody hands them a diary, and then
+    // only that one.
+    const ungranted = actor({ role: Roles.ASSISTANT });
+    expect(canReadProviderBookings(ungranted, TENANT_A, PROVIDER_OTHER)).toBe(false);
+
+    const granted = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("BOOKINGS", PROVIDER_OTHER),
+    });
+    expect(canReadProviderBookings(granted, TENANT_A, PROVIDER_OTHER)).toBe(true);
+    expect(canReadProviderBookings(granted, TENANT_A, PROVIDER_SELF)).toBe(false);
   });
 });
 
@@ -338,5 +374,295 @@ describe("the activation gate — PENDING_SUBSCRIPTION", () => {
     // added afterwards. Asserting the whole table makes that a failing test.
     const writable = Object.values(TenantStatuses).filter(tenantAcceptsWrites);
     expect(writable.sort()).toEqual([TenantStatuses.ACTIVE, TenantStatuses.TRIAL].sort());
+  });
+});
+
+const BOOKING_SCOPE = {
+  all: Permissions.BOOKING_READ_ALL,
+  own: Permissions.BOOKING_READ_OWN,
+  delegated: Permissions.BOOKING_READ_DELEGATED,
+};
+
+/**
+ * Diary delegation. docs/phase-3-4-diary-delegation.md.
+ *
+ * A third answer beside `:all` and `:own`, and the one with the most ways to go
+ * wrong: it is a *set* rather than a single id, it hangs off a membership whose
+ * tenant must match, and it must never reach a rule it was not given a key for.
+ */
+describe("delegated diaries", () => {
+  it("reaches the granted diary and no other", () => {
+    const assistant = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF),
+    });
+
+    expect(canReadProviderBookings(assistant, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canManageProviderBookings(assistant, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canReadProviderBookings(assistant, TENANT_A, PROVIDER_OTHER)).toBe(false);
+    expect(canManageProviderBookings(assistant, TENANT_A, PROVIDER_OTHER)).toBe(false);
+  });
+
+  it("keeps the two scopes apart in both directions", () => {
+    // The whole reason scopes are selectable: handing over the diary must not
+    // hand over the appointments, and the other way round.
+    const bookingsOnly = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF),
+    });
+    expect(canManageProviderBookings(bookingsOnly, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canBlockProviderTime(bookingsOnly, TENANT_A, PROVIDER_SELF)).toBe(false);
+
+    const availabilityOnly = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("AVAILABILITY", PROVIDER_SELF),
+    });
+    expect(canBlockProviderTime(availabilityOnly, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canReadProviderBookings(availabilityOnly, TENANT_A, PROVIDER_SELF)).toBe(false);
+    expect(canManageProviderBookings(availabilityOnly, TENANT_A, PROVIDER_SELF)).toBe(false);
+  });
+
+  it("never reaches a rule that was given no delegated key", () => {
+    // canManageIntegration deliberately has no delegated branch: a connected
+    // calendar is a setting, not a day's work. No scope can reach it, and this
+    // is the assertion pinning that.
+    const both = actor({
+      role: Roles.ASSISTANT,
+      delegated: {
+        ...grantOf("AVAILABILITY", PROVIDER_SELF),
+        ...grantOf("BOOKINGS", PROVIDER_SELF),
+      },
+    });
+
+    expect(canManageIntegration(both, TENANT_A, PROVIDER_SELF)).toBe(false);
+  });
+
+  it("decides nothing in another tenant", () => {
+    // The set hangs off the membership, which carries its own tenant id, so
+    // there is no representable state in which one tenant's grants answer for
+    // another tenant's resource. Asserted anyway: this is the property the
+    // placement exists to produce.
+    const assistant = actor({
+      role: Roles.ASSISTANT,
+      tenantId: TENANT_A,
+      delegated: {
+        ...grantOf("AVAILABILITY", PROVIDER_SELF),
+        ...grantOf("BOOKINGS", PROVIDER_SELF),
+      },
+    });
+
+    expect(canBlockProviderTime(assistant, TENANT_B, PROVIDER_SELF)).toBe(false);
+    expect(canReadProviderBookings(assistant, TENANT_B, PROVIDER_SELF)).toBe(false);
+    expect(providerIdsInScope(assistant, TENANT_B, BOOKING_SCOPE)).toEqual({
+      kind: "some",
+      providerIds: [],
+    });
+  });
+
+  it("confers nothing once the role stops receiving delegations", () => {
+    // The rows survive a role change and go inert rather than being deleted
+    // (§2.8). Deleting them would let an administrator's temporary role change
+    // destroy configuration belonging to the provider, who was never asked.
+    // Pinned here so reversing that is a failing test, not a quiet change.
+    const promoted = actor({
+      role: Roles.PROVIDER,
+      delegated: grantOf("BOOKINGS", PROVIDER_OTHER),
+    });
+
+    expect(canReadProviderBookings(promoted, TENANT_A, PROVIDER_OTHER)).toBe(false);
+  });
+
+  it("is inert on a suspended membership", () => {
+    const suspended = actor({
+      role: Roles.ASSISTANT,
+      status: MembershipStatuses.SUSPENDED,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF),
+    });
+
+    expect(canReadProviderBookings(suspended, TENANT_A, PROVIDER_SELF)).toBe(false);
+  });
+});
+
+describe("canDelegateProviderDiary", () => {
+  it("refuses a delegate, so a diary cannot be handed on", () => {
+    // §2.3, and the single most important assertion in the feature. With a
+    // delegated branch here, the set of people who can reach a provider's
+    // calendar would grow without the provider, the owner or the audit log
+    // naming anybody who decided it.
+    const delegate = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("AVAILABILITY", PROVIDER_SELF),
+    });
+
+    expect(canBlockProviderTime(delegate, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canDelegateProviderDiary(delegate, TENANT_A, PROVIDER_SELF)).toBe(false);
+  });
+
+  it("allows a provider over their own diary and nobody else's", () => {
+    const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
+
+    expect(canDelegateProviderDiary(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canDelegateProviderDiary(provider, TENANT_A, PROVIDER_OTHER)).toBe(false);
+  });
+
+  it("refuses a provider whose membership names no diary", () => {
+    const unlinked = actor({ role: Roles.PROVIDER });
+    expect(canDelegateProviderDiary(unlinked, TENANT_A, PROVIDER_SELF)).toBe(false);
+  });
+
+  it("allows an owner or admin over anyone's diary, and only in their tenant", () => {
+    for (const role of [Roles.OWNER, Roles.ADMIN]) {
+      const administrator = actor({ role });
+      expect(canDelegateProviderDiary(administrator, TENANT_A, PROVIDER_OTHER)).toBe(true);
+      expect(canDelegateProviderDiary(administrator, TENANT_B, PROVIDER_OTHER)).toBe(false);
+    }
+  });
+});
+
+describe("providerIdsInScope", () => {
+  it("returns `all` for a role holding the :all variant", () => {
+    expect(providerIdsInScope(actor({ role: Roles.ADMIN }), TENANT_A, BOOKING_SCOPE)).toEqual({
+      kind: "all",
+    });
+  });
+
+  it("returns the caller's own diary for a linked provider", () => {
+    const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
+    expect(providerIdsInScope(provider, TENANT_A, BOOKING_SCOPE)).toEqual({
+      kind: "some",
+      providerIds: [PROVIDER_SELF],
+    });
+  });
+
+  it("returns an empty set — not `all` — when the caller reaches nothing", () => {
+    // The failure this return type exists to prevent. A caller that reads an
+    // empty set as "no filter" lists the whole tenant, which is rule 10's
+    // "an unpopulated field must never widen access" (§4.3).
+    const unlinked = actor({ role: Roles.PROVIDER });
+    expect(providerIdsInScope(unlinked, TENANT_A, BOOKING_SCOPE)).toEqual({
+      kind: "some",
+      providerIds: [],
+    });
+
+    const ungranted = actor({ role: Roles.ASSISTANT });
+    expect(providerIdsInScope(ungranted, TENANT_A, BOOKING_SCOPE)).toEqual({
+      kind: "some",
+      providerIds: [],
+    });
+  });
+
+  it("unions every granted diary", () => {
+    const assistant = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF, PROVIDER_OTHER),
+    });
+
+    const scope = providerIdsInScope(assistant, TENANT_A, BOOKING_SCOPE);
+    expect(scope.kind).toBe("some");
+    expect(scope.kind === "some" ? [...scope.providerIds].sort() : []).toEqual(
+      [PROVIDER_SELF, PROVIDER_OTHER].sort(),
+    );
+  });
+
+  it("does not repeat a diary that is both the caller's own and granted", () => {
+    // Reachable: nothing constrains a membership that names a provider from
+    // also holding a grant on it.
+    const provider = actor({
+      role: Roles.PROVIDER,
+      providerId: PROVIDER_SELF,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF),
+    });
+
+    expect(providerIdsInScope(provider, TENANT_A, BOOKING_SCOPE)).toEqual({
+      kind: "some",
+      providerIds: [PROVIDER_SELF],
+    });
+  });
+});
+
+describe("delegatedProviderIdsFrom", () => {
+  it("expands one BOOKINGS grant into both booking permissions", () => {
+    const delegated = delegatedProviderIdsFrom([
+      { providerId: PROVIDER_SELF, scopes: ["BOOKINGS"] },
+    ]);
+
+    expect(delegated[Permissions.BOOKING_READ_DELEGATED]).toEqual([PROVIDER_SELF]);
+    expect(delegated[Permissions.BOOKING_MANAGE_DELEGATED]).toEqual([PROVIDER_SELF]);
+    expect(delegated[Permissions.AVAILABILITY_MANAGE_DELEGATED]).toBeUndefined();
+  });
+
+  it("merges grants across diaries", () => {
+    const delegated = delegatedProviderIdsFrom([
+      { providerId: PROVIDER_SELF, scopes: ["BOOKINGS"] },
+      { providerId: PROVIDER_OTHER, scopes: ["BOOKINGS", "AVAILABILITY"] },
+    ]);
+
+    expect([...(delegated[Permissions.BOOKING_READ_DELEGATED] ?? [])].sort()).toEqual(
+      [PROVIDER_SELF, PROVIDER_OTHER].sort(),
+    );
+    expect(delegated[Permissions.AVAILABILITY_MANAGE_DELEGATED]).toEqual([PROVIDER_OTHER]);
+  });
+
+  it("ignores a scope it does not recognise rather than throwing", () => {
+    // A database enum value newer than this build must fail closed, not 500
+    // every request that touches it.
+    const delegated = delegatedProviderIdsFrom([
+      { providerId: PROVIDER_SELF, scopes: ["BILLING_SOMEDAY", "BOOKINGS"] },
+    ]);
+
+    expect(delegated[Permissions.BOOKING_READ_DELEGATED]).toEqual([PROVIDER_SELF]);
+    expect(Object.keys(delegated)).toHaveLength(2);
+  });
+
+  it("produces nothing from no grants", () => {
+    expect(delegatedProviderIdsFrom([])).toEqual({});
+  });
+});
+
+describe("delegation table invariants", () => {
+  it("gives no role both the :all and the :delegated variant of a pair", () => {
+    // A role holding both makes a branch of canForProvider that can never be
+    // reached — dead weight in the one table nobody may misread (§2.1).
+    const pairs = [
+      [Permissions.AVAILABILITY_MANAGE_ALL, Permissions.AVAILABILITY_MANAGE_DELEGATED],
+      [Permissions.BOOKING_READ_ALL, Permissions.BOOKING_READ_DELEGATED],
+      [Permissions.BOOKING_MANAGE_ALL, Permissions.BOOKING_MANAGE_DELEGATED],
+    ] as const;
+
+    for (const role of ALL_ROLES) {
+      for (const [all, delegated] of pairs) {
+        const held = ROLE_PERMISSIONS[role];
+        expect(
+          held.includes(all) && held.includes(delegated),
+          `${role} holds both ${all} and ${delegated}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("maps every scope to at least one permission that exists", () => {
+    const known = new Set<string>(Object.values(Permissions));
+
+    for (const scope of ALL_DELEGATION_SCOPES) {
+      const permissions = DELEGATION_SCOPE_PERMISSIONS[scope];
+      expect(permissions.length).toBeGreaterThan(0);
+      for (const permission of permissions) expect(known.has(permission)).toBe(true);
+    }
+  });
+
+  it("makes exactly the front desk able to receive a diary", () => {
+    // Asserted through the function rather than against a role list, because
+    // the function is what the plugin and the service both call (§2.11).
+    expect(roleCanReceiveDelegation(Roles.ASSISTANT)).toBe(true);
+
+    for (const role of [Roles.OWNER, Roles.ADMIN, Roles.PROVIDER, Roles.CUSTOMER]) {
+      expect(roleCanReceiveDelegation(role), role).toBe(false);
+    }
+  });
+
+  it("confers only :delegated permissions", () => {
+    for (const permission of DELEGATED_PERMISSIONS) {
+      expect(permission.endsWith(":delegated")).toBe(true);
+    }
   });
 });

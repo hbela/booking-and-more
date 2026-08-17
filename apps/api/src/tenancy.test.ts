@@ -771,8 +771,15 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
 
       const body = response.json();
       expect(body.membership.role).toBe("ASSISTANT");
-      expect(body.permissions).toContain("booking:manage:all");
+      // Delegated, never universal, since docs/phase-3-4-diary-delegation.md
+      // §2.1. The `not.toContain` is the half that matters: the front desk used
+      // to hold the `:all` variant and reach every diary in the organization.
+      expect(body.permissions).toContain("booking:manage:delegated");
+      expect(body.permissions).not.toContain("booking:manage:all");
+      expect(body.permissions).not.toContain("booking:read:all");
       expect(body.permissions).not.toContain("billing:manage");
+      // Nobody has handed this member a diary, so they run none.
+      expect(body.delegations).toEqual([]);
     });
 
     it("refuses to demote the last owner", async () => {
