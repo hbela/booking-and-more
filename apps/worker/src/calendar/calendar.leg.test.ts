@@ -20,9 +20,24 @@ import { QueueNames, calendarJobId, type QueueRegistry } from "../queues.js";
  * `outbox.dispatcher.test.ts` stays green **with no edit**, because with no
  * calendar connected this leg is one indexed `SELECT` returning nothing. That
  * file is deliberately untouched.
+ *
+ * ## PARKED 2026-08-17 — Epic 6 part 1
+ *
+ * The call to `dispatchCalendarLeg` inside `dispatchOutboxBatch` is commented
+ * out, so the nine tests that drive through the dispatcher observe nothing.
+ * That is the parking working, not a regression — and the property above is
+ * exactly why the suite is skipped whole rather than trimmed to the six that
+ * still pass: "the leg runs on the same claim" is what it exists to assert, and
+ * a suite that no longer asserts it would go green for the wrong reason.
+ *
+ * `calendar.processor.test.ts` and `calendar.sweeper.test.ts` are deliberately
+ * NOT parked — they call their modules directly, still pass, and keep the
+ * parked code honest while it waits.
  */
 
 const databaseUrl = process.env["TEST_DATABASE_URL"];
+/** Un-park: drop this and restore `!databaseUrl` in the `skipIf` below. */
+const parked = true;
 const suffix = Math.random().toString(36).slice(2, 10);
 
 const log = createLogger({ service: "calendar-leg-test", level: "silent", pretty: false });
@@ -55,7 +70,7 @@ function fakeQueues(): { registry: QueueRegistry; jobs: QueuedJob[] } {
 const calendarJobs = (jobs: QueuedJob[]): QueuedJob[] =>
   jobs.filter((job) => job.queue === QueueNames.CALENDAR_SYNC);
 
-describe.skipIf(!databaseUrl)("calendar leg", () => {
+describe.skipIf(parked || !databaseUrl)("calendar leg", () => {
   let prisma: PrismaClient;
   let tenantId: string;
   let providerId: string;

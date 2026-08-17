@@ -1,8 +1,10 @@
-import { hasGoogleCalendar, hasRedis, loadEnvOrExit } from "@bam/config";
-import { parseEncryptionKey } from "@bam/crypto";
+import { hasRedis, loadEnvOrExit } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
-import { createGoogleCalendarClient, createGoogleOAuthClient } from "@bam/google-calendar";
 import { createLogger, flushSentry, initSentry } from "@bam/observability";
+// PARKED — Epic 6 part 1 (see the block in `attachQueues` below).
+// import { hasGoogleCalendar } from "@bam/config";
+// import { parseEncryptionKey } from "@bam/crypto";
+// import { createGoogleCalendarClient, createGoogleOAuthClient } from "@bam/google-calendar";
 
 import type { Worker } from "bullmq";
 
@@ -16,8 +18,9 @@ import {
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
-import { createCalendarWorker } from "./calendar/calendar.worker.js";
-import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
+// PARKED — Epic 6 part 1.
+// import { createCalendarWorker } from "./calendar/calendar.worker.js";
+// import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
 
 /**
  * Background worker.
@@ -61,16 +64,11 @@ interface RunningQueues {
   poller: OutboxPoller;
   sweeper: NotificationSweeper;
   notifications: Worker;
-  /**
-   * Both absent unless the four `GOOGLE_*` variables are set.
-   *
-   * The rows are written either way — the dispatcher's calendar leg does not
-   * ask whether Google is configured, because it cannot: a tenant's mappings
-   * are data, not config. What is missing without credentials is anything that
-   * could *drain* them, which is the same shape as running without Redis and is
-   * recorded as such (record §8.3).
-   */
-  calendar?: { worker: Worker; sweeper: CalendarSweeper };
+  // PARKED — Epic 6 part 1. Was: both absent unless the four `GOOGLE_*`
+  // variables are set. Nothing now writes calendar rows either (the
+  // dispatcher's leg is parked too), so there is nothing left to drain.
+  //
+  // calendar?: { worker: Worker; sweeper: CalendarSweeper };
 }
 
 async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Promise<RunningQueues> {
@@ -127,45 +125,50 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
     intervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
   });
 
-  // Epic 6, part 1. Only when Google is configured: with no credentials there is
-  // nothing a consumer could do but claim rows and fail to open a token, which
-  // would spend every row's attempt budget against a wall (rule 4).
-  const calendar = hasGoogleCalendar(env)
-    ? {
-        worker: createCalendarWorker({
-          connection: redis,
-          prisma,
-          calendar: createGoogleCalendarClient(),
-          oauth: createGoogleOAuthClient({
-            clientId: env.GOOGLE_CLIENT_ID!,
-            clientSecret: env.GOOGLE_CLIENT_SECRET!,
-            redirectUri: env.GOOGLE_REDIRECT_URI!,
-          }),
-          // Parsed here, at boot, so a malformed key fails the deployment rather
-          // than one provider's first sync.
-          encryptionKey: parseEncryptionKey(env.GOOGLE_TOKEN_ENCRYPTION_KEY!),
-          logger: log,
-          maxAttempts: env.CALENDAR_MAX_ATTEMPTS,
-          appBaseUrl: env.APP_BASE_URL,
-          // The processor queues the disconnection email itself: it originates
-          // in the worker, so there is no outbox event to plan it from.
-          queues,
-        }),
-        // The drain for the backfill, the timer behind every backoff, and the
-        // recovery path if Redis loses a job. Without it, connecting a calendar
-        // fills a table and never a diary.
-        sweeper: startCalendarSweeper({
-          prisma,
-          queues,
-          logger: log,
-          batchSize: env.CALENDAR_SWEEP_BATCH_SIZE,
-          intervalMs: env.CALENDAR_SWEEP_INTERVAL_MS,
-          // Comfortably longer than a healthy Google call, so a slow worker is
-          // not mistaken for a dead one.
-          staleClaimSeconds: 300,
-        }),
-      }
-    : undefined;
+  // --- Epic 6, part 1 — PARKED 2026-08-17 ------------------------------------
+  // Deferred for delivery time. The processor, sweeper and their tests under
+  // `./calendar/` are complete and still compile; they are simply never
+  // constructed, so the `calendar-sync` queue has no consumer — the state it
+  // was in before this epic. Un-parking is this block, the two import lines,
+  // the `calendar?` field on `RunningQueues`, the two `running.calendar?.`
+  // shutdown calls, and the leg in `outbox.dispatcher.ts`.
+  //
+  // const calendar = hasGoogleCalendar(env)
+  //   ? {
+  //       worker: createCalendarWorker({
+  //         connection: redis,
+  //         prisma,
+  //         calendar: createGoogleCalendarClient(),
+  //         oauth: createGoogleOAuthClient({
+  //           clientId: env.GOOGLE_CLIENT_ID!,
+  //           clientSecret: env.GOOGLE_CLIENT_SECRET!,
+  //           redirectUri: env.GOOGLE_REDIRECT_URI!,
+  //         }),
+  //         // Parsed here, at boot, so a malformed key fails the deployment rather
+  //         // than one provider's first sync.
+  //         encryptionKey: parseEncryptionKey(env.GOOGLE_TOKEN_ENCRYPTION_KEY!),
+  //         logger: log,
+  //         maxAttempts: env.CALENDAR_MAX_ATTEMPTS,
+  //         appBaseUrl: env.APP_BASE_URL,
+  //         // The processor queues the disconnection email itself: it originates
+  //         // in the worker, so there is no outbox event to plan it from.
+  //         queues,
+  //       }),
+  //       // The drain for the backfill, the timer behind every backoff, and the
+  //       // recovery path if Redis loses a job. Without it, connecting a calendar
+  //       // fills a table and never a diary.
+  //       sweeper: startCalendarSweeper({
+  //         prisma,
+  //         queues,
+  //         logger: log,
+  //         batchSize: env.CALENDAR_SWEEP_BATCH_SIZE,
+  //         intervalMs: env.CALENDAR_SWEEP_INTERVAL_MS,
+  //         // Comfortably longer than a healthy Google call, so a slow worker is
+  //         // not mistaken for a dead one.
+  //         staleClaimSeconds: 300,
+  //       }),
+  //     }
+  //   : undefined;
 
   log.info(
     {
@@ -173,19 +176,21 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
       pollIntervalMs: env.OUTBOX_POLL_INTERVAL_MS,
       sweepIntervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
       emailProvider: provider.name,
-      calendarSync: calendar !== undefined,
+      calendarSync: false,
     },
     "worker: queues registered, outbox dispatcher, sweep and notification sender running",
   );
 
-  if (calendar === undefined) {
-    log.info(
-      { reason: "GOOGLE_* not configured" },
-      "worker: calendar sync is off — rows will accumulate PENDING until it is configured",
-    );
-  }
+  // Unconditional while parked, and deliberately not silent: a deployment that
+  // has set the `GOOGLE_*` variables would otherwise see no consumer and no
+  // explanation. The old message said rows would accumulate PENDING; none are
+  // written now, which is the more useful thing for an operator to know.
+  log.info(
+    { reason: "Epic 6 part 1 parked (docs/phase-6-google-calendar-part-1.md)" },
+    "worker: calendar sync is off — no calendar rows are written and none are drained",
+  );
 
-  return { queues, poller, sweeper, notifications, ...(calendar === undefined ? {} : { calendar }) };
+  return { queues, poller, sweeper, notifications };
 }
 
 async function main(): Promise<void> {
@@ -263,7 +268,8 @@ async function main(): Promise<void> {
         if (running !== undefined) {
           await running.poller.stop();
           await running.sweeper.stop();
-          await running.calendar?.sweeper.stop();
+          // PARKED — Epic 6 part 1.
+          // await running.calendar?.sweeper.stop();
 
           // Consumers before the queues: each must be allowed to finish the job
           // it is holding, and a job that finishes after its queue is gone
@@ -272,7 +278,8 @@ async function main(): Promise<void> {
           // idempotent, so being cut off is survivable, but it is still the
           // difference between one Google call and two.
           await running.notifications.close();
-          await running.calendar?.worker.close();
+          // PARKED — Epic 6 part 1.
+          // await running.calendar?.worker.close();
           await closeQueues(running.queues);
         }
         await closeRedis();

@@ -39,9 +39,22 @@ measurement that justifies it, and §2.2.1 records why `@fastify/compress` arriv
 `requestEncodings` must stay untouched. §2.4 is the one that bites — a day's count is *distinct start times*,
 because the search merges providers without deduplicating. §2.7 is two zones on one screen on purpose: a slot
 is an instant in the reader's zone, a calendar cell is a zoneless square formatted in UTC ·
-[Phase 6 — Google Calendar, part 1](docs/phase-6-google-calendar-part-1.md) (code done; **its §9 manual walk
-is not**, and nothing has been run against a real Google account). Connect a Google account and write
-bookings *to* it; **reading busy time back is part 2**, so `externalBusyPeriods` is still `[]`. **Read its
+[Phase 6 — Google Calendar, part 1](docs/phase-6-google-calendar-part-1.md) (**PARKED 2026-08-17 — read its
+§10 first**). Built and reviewed, then deferred for delivery time before it ever ran against a real Google
+account; §9's manual walk was never performed. The code is all still in the tree and still compiles, but
+**four seams are commented out** — the route registration in `app.ts`, the calendar leg in
+`outbox.dispatcher.ts`, the worker and sweeper in `worker.ts`, and the web nav item plus its route (renamed
+`dashboard/_integrations`, Next's private-folder convention). `rg "PARKED — Epic 6"` is the inventory; §10.4
+is the un-park order. **Nothing in the product touches Google and no `calendar_event_mappings` rows are
+written** — the leg is parked as well as the consumer precisely so rows do not accrue for a drain that is
+not running. The schema, migration, `@bam/crypto`, `@bam/google-calendar`, the permissions and both locales'
+copy are all deliberately left in place (§10.2), so `db:drift-check` stays green and rule 1 is not bent.
+Two suites are skipped behind a `const parked = true`; the processor and sweeper suites still run. **Before
+un-parking, read [the code review](docs/google-calendar-feature-code-review.md)** — the flow requests
+`calendar.events` while the picker calls `calendarList.list`, which that scope does not authorize, so the
+first real connection fails on its first screen. Everything below describes the design that is waiting.
+Connect a Google account and write bookings *to* it; **reading busy time back is part 2**, so
+`externalBusyPeriods` is still `[]`. **Read its
 §2.2 before adding any consumer of the outbox**: that table is single-consumer — one `status`, and
 `markProcessed` clears the payload — so the calendar leg shares `dispatchOne`'s claim rather than polling
 separately. §2.3 is the other one to read first: idempotency comes from a Google event id *derived* from

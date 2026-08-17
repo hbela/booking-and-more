@@ -33,9 +33,22 @@ import { resetGoogleOAuthForTests } from "./modules/integrations/google.client.j
  *
  * Google itself is replaced wholesale by {@link stubGoogleOAuth}; the wire
  * format is proved without a network in `@bam/google-calendar`.
+ *
+ * ## PARKED 2026-08-17 — Epic 6 part 1
+ *
+ * `integrationRoutes` is no longer registered in `app.ts`, so every request
+ * below answers 404 — including the two that assert the 503 a deployment
+ * without Google credentials should give, which is the distinction that
+ * disappears when a module is unmounted rather than unconfigured.
+ *
+ * Skipped whole rather than rewritten to expect 404: the assertions are about
+ * the module's behaviour, and re-pointing them at its absence would delete the
+ * evidence that has to be re-earned when it comes back.
  */
 
 const databaseUrl = process.env["TEST_DATABASE_URL"];
+/** Un-park: drop this and restore `!databaseUrl` in the `skipIf` below. */
+const parked = true;
 
 const RUN = `itg${randomBytes(4).toString("hex")}`;
 const PASSWORD = "correct-horse-battery-staple";
@@ -186,7 +199,7 @@ function stubGoogleCalendar() {
   return { client, next, listedWith, reset };
 }
 
-describe.skipIf(!databaseUrl)("calendar integrations", () => {
+describe.skipIf(parked || !databaseUrl)("calendar integrations", () => {
   let app: AppInstance;
   /** A second app with no Google credentials at all. See "not configured". */
   let bareApp: AppInstance;

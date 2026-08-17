@@ -20,7 +20,8 @@ import {
   type ClaimedOutboxEvent,
 } from "./outbox.repository.js";
 import { NotificationJobs, QueueNames, type QueueRegistry } from "../queues.js";
-import { dispatchCalendarLeg } from "../calendar/calendar.leg.js";
+// PARKED — Epic 6 part 1 (see the leg inside `dispatchOutboxBatch`).
+// import { dispatchCalendarLeg } from "../calendar/calendar.leg.js";
 
 /**
  * Turns outbox rows into notification rows and queue jobs. tech-impl §12, §26.
@@ -39,9 +40,13 @@ import { dispatchCalendarLeg } from "../calendar/calendar.leg.js";
  * part 3 picks them up. That is what makes it safe to run this on a Redis
  * instance with no persistence.
  *
- * ## One claim, two legs
+ * ## One claim, two legs — the second is parked
  *
- * Since Epic 6 a booking event also fans out to `calendar_event_mappings`, in
+ * **Epic 6 part 1 was parked on 2026-08-17**, so only the notification leg
+ * runs. The paragraph below describes the shape to restore, not what happens
+ * today.
+ *
+ * A booking event also fans out to `calendar_event_mappings`, in
  * exactly the same shape — durable row, then a job that is only a prompt. It
  * runs *inside this claim* rather than from a poller of its own because the
  * outbox is single-consumer: one `status` column, and `markProcessed` clears the
@@ -84,7 +89,10 @@ export interface DispatchSummary {
   failed: number;
   notificationsCreated: number;
   notificationsDuplicate: number;
-  /** Calendar rows created or advanced. Zero on a deployment with none connected. */
+  /**
+   * Calendar rows created or advanced. **Always 0 while Epic 6 part 1 is
+   * parked**; was zero anyway on a deployment with none connected.
+   */
   calendarQueued: number;
 }
 
@@ -117,13 +125,20 @@ export async function dispatchOutboxBatch(options: DispatcherOptions): Promise<D
       summary.notificationsCreated += result.created;
       summary.notificationsDuplicate += result.duplicate;
 
-      // The second leg, on the same claim. After the notifications on purpose:
-      // a notification is what somebody is owed, a calendar entry is a
-      // convenience, and a Google-shaped problem must not delay a confirmation.
-      // A throw here retries the whole event, and the notifications above are
-      // skipped as duplicates on the way back through.
-      const calendar = await dispatchCalendarLeg(event, options);
-      summary.calendarQueued += calendar.queued;
+      // PARKED 2026-08-17 — Epic 6 part 1. The second leg, on the same claim.
+      // After the notifications on purpose: a notification is what somebody is
+      // owed, a calendar entry is a convenience, and a Google-shaped problem
+      // must not delay a confirmation. A throw here retries the whole event,
+      // and the notifications above are skipped as duplicates on the way back
+      // through.
+      //
+      // Parked here rather than only at the worker's consumer, so that nothing
+      // accrues rows in `calendar_event_mappings` for a drain that is not
+      // running. `calendarQueued` stays on the summary and stays 0, so no
+      // caller or test of the shape changes.
+      //
+      // const calendar = await dispatchCalendarLeg(event, options);
+      // summary.calendarQueued += calendar.queued;
 
       await markProcessed(options.prisma, { tenantId: event.tenantId, eventId: event.id });
       summary.processed += 1;

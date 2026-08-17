@@ -1,3 +1,10 @@
+> **PARKED on 2026-08-17 — read §10 first.** The feature was built, reviewed, and then deferred for
+> delivery time before it ever ran against a real Google account. Every module described below is still
+> in the tree and still compiles; the four seams that *reach* them are commented out, so nothing in the
+> product touches Google and no calendar rows are written. §10 is the inventory of what is commented and
+> what to uncomment. Read the rest of this document as the design that is waiting, not as the behaviour
+> of the running system.
+
 This is the **record** of the first half of Epic 6's calendar synchronisation. Opened as a plan on
 2026-08-16; every step in §7 landed on 2026-08-17, so the document is now history rather than intent.
 **The code is done and the walk in §9 is not** — nothing here has been exercised against a real Google
@@ -11,8 +18,8 @@ per-step deep links remain unbuilt". This document takes the second of those thr
 
 ## Implementation Plan
 
-**Document version:** 1.0 — planned 2026-08-16, built 2026-08-17. Steps 0–12 complete; §9's manual walk not
-yet performed.
+**Document version:** 1.1 — planned 2026-08-16, built 2026-08-17, **parked 2026-08-17** (§10). Steps 0–12
+complete; §9's manual walk never performed.
 **Scope:** a provider connects their own Google account, chooses one calendar, and confirmed bookings
 appear there, move when rescheduled, and grey out when cancelled. **Reading busy time back from Google is
 part 2 and deliberately out of scope** — the availability engine's `externalBusyPeriods` seam stays empty
@@ -928,3 +935,82 @@ written for.
 Tech-impl §44's three reachable exit criteria: *confirmed bookings create calendar events* (C, D),
 *calendar failures do not invalidate bookings* (F5), and *revoked access is detected and displayed*
 (G). The fourth — *external busy periods affect slot results* — is part 2's and cannot be walked here.
+
+---
+
+# 10. Parked, 2026-08-17
+
+Deferred for delivery time, the same day it was built and reviewed. The decision is scheduling, not a
+reversal: nothing above is retracted, and the code was not deleted.
+
+Two things made parking the cheap option rather than the expensive one. §9's walk had not been done, so
+no user had ever seen the feature and nothing had to be taken away from anyone. And the code review in
+[google-calendar-feature-code-review.md](google-calendar-feature-code-review.md) had just found that the
+first real connection would fail anyway: the OAuth flow requests `calendar.events`, and the calendar
+picker then calls `calendarList.list`, which that scope does not authorize. So the feature would have
+been shipped un-walked *and* broken on its first screen.
+
+## 10.1 What is commented out
+
+Four seams. Everything else is untouched — the parking is deliberately at the edges, so the diff is
+small and the thing being restored is the wiring rather than the logic.
+
+| Where | What | Effect |
+|---|---|---|
+| [apps/api/src/app.ts](../apps/api/src/app.ts) | the `integrationRoutes` registration and its two imports | `/v1/integrations/*` 404s. Note it no longer **503**s — an unmounted module and an unconfigured one are different answers, which is why §7.2's two tests had to be skipped rather than re-pointed. |
+| [apps/worker/src/outbox/outbox.dispatcher.ts](../apps/worker/src/outbox/outbox.dispatcher.ts) | the `dispatchCalendarLeg` call inside `dispatchOutboxBatch` | No `calendar_event_mappings` rows are written at all. `calendarQueued` stays on `DispatchSummary` and stays 0. |
+| [apps/worker/src/worker.ts](../apps/worker/src/worker.ts) | `createCalendarWorker` / `startCalendarSweeper`, the `calendar?` field, both shutdown calls | The `calendar-sync` queue exists with no consumer, as before this epic. The boot log now says so unconditionally instead of only when `GOOGLE_*` is absent. |
+| [apps/web/src/components/dashboard-shell.tsx](../apps/web/src/components/dashboard-shell.tsx) and the route folder | the nav item; `dashboard/integrations` renamed to `dashboard/_integrations` | No nav item and no route. The leading underscore is Next's private-folder convention, so the page still typechecks and still builds — it simply is not routable. |
+
+Parking the dispatcher leg **as well as** the worker's consumer is the one choice here worth stating.
+Either alone would stop calendar events reaching Google. Only the leg stops rows accruing for a drain
+that is not running — the §8.3 condition, which is survivable while it is temporary and is not what a
+feature parked for an unknown number of weeks should be doing.
+
+Every commented block carries a `PARKED` marker, so `rg "PARKED — Epic 6"` is the inventory.
+
+## 10.2 What was deliberately left in place
+
+- **The schema and its migration.** Reverting them would mean a second migration to drop four tables
+  and four enums, and a third to bring them back — three schema changes to deliver nothing. The tables
+  are empty and cost nothing. Rule 1 is why this is not negotiable: migrations are forward-only, and
+  `pnpm db:drift-check` stays green precisely because the schema was not touched.
+- **`@bam/crypto` and `@bam/google-calendar`.** Both build and both keep their full test suites (26 and
+  71). `@bam/crypto` is general-purpose sealing and is the obvious home for any future secret at rest.
+- **The `GOOGLE_*` and `CALENDAR_*` config.** All optional, all unread while parked. Setting them now
+  does nothing, which is the point: there is no half-on state to discover.
+- **`INTEGRATION_MANAGE_ALL` / `INTEGRATION_MANAGE_OWN` and `canManageIntegration`.** Pure policy, no
+  route asks for them. A permission nothing checks grants nothing.
+- **`CALENDAR_DISCONNECTED`'s renderer** and the `integrations` message namespace in both locales.
+  Removing translated copy is the one part of this that would be genuinely tedious to redo.
+- **`calendar.processor.test.ts` and `calendar.sweeper.test.ts` — still running.** They call their
+  modules directly, so they still pass, and they are what keeps the parked code from rotting silently.
+
+## 10.3 What is skipped, and why not rewritten
+
+Two suites are skipped whole, each behind a `const parked = true` that is the only line to delete:
+
+- `apps/api/src/integrations.test.ts` (34) — every request would 404.
+- `apps/worker/src/calendar/calendar.leg.test.ts` (15) — nine drive through `dispatchOutboxBatch`.
+
+Neither was re-pointed at the new behaviour. A suite rewritten to assert 404 would be green, would prove
+nothing, and would have to be written back from scratch — and the six leg tests that *would* still pass
+are not worth keeping alone, because "the leg runs on the same claim" is the property that file exists to
+assert.
+
+## 10.4 Un-parking
+
+1. **Fix the scope blocker first.** It is the reason the walk would have failed on its first screen, and
+   it decides the OAuth flow: either request a scope that authorizes `calendarList.list`, or drop the
+   picker in favour of the primary calendar. Note that changing the requested scope invalidates every
+   grant already given — which today is none, and is exactly why this is cheaper to change now.
+2. Work through the rest of the code review — unvalidated calendar selection, account-to-provider
+   reassignment, disconnect ordering, the in-flight version race, missing HTTP deadlines, and the
+   cancelled-event display mismatch.
+3. Uncomment the four seams in §10.1 and `git mv _integrations integrations`.
+4. Delete the two `const parked = true` lines; both suites must go green with no other edit.
+5. Pass the Google credentials to the API and worker in the compose topology, and set `REDIS_URL` —
+   the review found both missing, and without them the parking is indistinguishable from the deployment.
+6. **Open the §4 verification submission before any of this**, not after. It has a multi-week lead time
+   that no amount of code shortens, and it was never opened. The pause changes nothing about that.
+7. Walk §9 against a throwaway Google account. It has still never been done.
