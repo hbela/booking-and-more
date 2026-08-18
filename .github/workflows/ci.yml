@@ -53,6 +53,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Production dependencies only; high and critical advisories block the
+      # build. A temporary exception must be an explicit reviewed override in
+      # package.json, never an ignored audit failure in this workflow.
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+
       - name: Check formatting
         run: pnpm format:check
 

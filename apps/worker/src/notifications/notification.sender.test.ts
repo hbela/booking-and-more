@@ -128,9 +128,9 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     expect(settled.status).toBe("SKIPPED");
     expect(settled.sentAt).toBeNull();
     expect(settled.lastError).toContain("no email provider configured");
-    // Not cleared: in this mode the link in the payload is the only copy anyone
-    // has, and there is no delivered email to read it from.
-    expect(settled.payload).not.toEqual({});
+    // A terminal fallback has no delivery path that can use the token, so it is
+    // cleared instead of becoming a long-lived bearer credential at rest.
+    expect(settled.payload).toEqual({});
   });
 
   it("clears the invitation link once the email is away", async () => {
@@ -231,6 +231,21 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
       });
       expect(settled.status).toBe("FAILED");
       expect(settled.lastError).toContain("exhausted");
+    });
+
+    it("counts the claim exactly once when deciding the attempt limit", async () => {
+      const notification = await createNotification({ attempts: 3 });
+
+      await expect(
+        sendNotification(
+          { tenantId, notificationId: notification.id },
+          options(provider({ ok: false, statusCode: 503, message: "unavailable" })),
+        ),
+      ).rejects.toThrow(/notification send failed/u);
+
+      await expect(
+        prisma.notification.findUniqueOrThrow({ where: { id: notification.id } }),
+      ).resolves.toMatchObject({ status: "PENDING", attempts: 4 });
     });
 
     it("skips rather than fails when there is no template", async () => {
@@ -336,7 +351,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
       expect(outcome).toBe("SKIPPED");
     });
 
-    it("keeps the payload when the provider cannot deliver", async () => {
+    it("clears the payload when the provider cannot deliver", async () => {
       // phase-9-owner-onboarding-emails §2: when nothing was sent, the token in
       // that column is the only copy anyone has. Clearing it here would destroy
       // the one route back to a stuck invitee.
@@ -358,9 +373,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
       });
       expect(settled.status).toBe("SKIPPED");
       expect(settled.providerMessageId).toBeNull();
-      expect(settled.payload).toMatchObject({
-        acceptUrl: "http://localhost:3000/en/invitations/tok456",
-      });
+      expect(settled.payload).toEqual({});
     });
   });
 

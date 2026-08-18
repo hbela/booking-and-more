@@ -72,7 +72,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = 
 
       const stripe = getStripe({ secretKey: options.stripeSecretKey });
 
-      let event: { id: string; type: string };
+      let event: { id: string; type: string; created: number };
 
       try {
         // Throws on a bad signature, a replayed timestamp, or a tampered body.
@@ -93,6 +93,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = 
           data: {
             id: event.id,
             type: event.type,
+            eventCreatedAt: new Date(event.created * 1_000),
             payload: JSON.parse((request.body as Buffer).toString("utf8")) as object,
           },
         });

@@ -36,12 +36,15 @@ import { NotificationJobs, QueueNames, type QueueRegistry } from "../queues.js";
 
 /** Matches the dispatcher's horizon: what it queues, this does not need to. */
 const MAX_QUEUE_LEAD_MS = 15 * 60 * 1_000;
+/** Comfortably longer than a healthy provider request. */
+const STALE_CLAIM_MS = 5 * 60 * 1_000;
 
 export interface SweeperOptions {
   prisma: PrismaClient;
   queues: QueueRegistry;
   logger: Logger;
   batchSize: number;
+  maxAttempts: number;
 }
 
 export interface SweepSummary {
@@ -51,6 +54,38 @@ export interface SweepSummary {
 
 /** One pass. Returns what it did so the caller can drain rather than sleep. */
 export async function sweepDueNotifications(options: SweeperOptions): Promise<SweepSummary> {
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+
+  // A worker can die after PENDING → SENDING. Terminally park exhausted claims
+  // first, then return the rest to PENDING so the normal enqueue path recovers
+  // them. `attempts` was incremented at claim time, so a crash loop is bounded.
+  await options.prisma.notification.updateMany({
+    where: {
+      status: "SENDING",
+      OR: [{ claimedAt: null }, { claimedAt: { lt: staleBefore } }],
+      attempts: { gte: options.maxAttempts },
+    },
+    data: {
+      status: "FAILED",
+      claimedAt: null,
+      lastError: "notification sender claim expired after the attempt limit",
+    },
+  });
+
+  await options.prisma.notification.updateMany({
+    where: {
+      status: "SENDING",
+      OR: [{ claimedAt: null }, { claimedAt: { lt: staleBefore } }],
+      attempts: { lt: options.maxAttempts },
+    },
+    data: {
+      status: "PENDING",
+      claimedAt: null,
+      scheduledAt: new Date(),
+      lastError: "notification sender claim expired; retrying",
+    },
+  });
+
   const due = await options.prisma.notification.findMany({
     where: {
       status: "PENDING",

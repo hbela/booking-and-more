@@ -1,4 +1,4 @@
-import type { AvailabilityException, Prisma, PrismaClient, WorkingHours } from "@bam/db";
+import { Prisma, type AvailabilityException, type PrismaClient, type WorkingHours } from "@bam/db";
 import { ErrorCodes, NotFoundError } from "@bam/contracts";
 import { isRecordNotFound } from "../providers/provider.repository.js";
 import { fingerprintWorkingHours } from "./working-hours-fingerprint.js";
@@ -116,13 +116,11 @@ export class AvailabilityRepository {
    * does the delete, is the only placement that means anything
    * (docs/phase-3-4-diary-delegation.md §2.14).
    *
-   * The read is `SELECT … FOR UPDATE`-free on purpose: Postgres' default READ
-   * COMMITTED lets two transactions both pass the check and serialise their
-   * deletes, so in principle one could still be lost. It cannot happen here
-   * because both would have had to read the *same* fingerprint, meaning both
-   * bodies were built from the same week — so the loser overwrites with a body
-   * that saw everything the winner saw. Locking the rows would refuse a case
-   * that is not a conflict, at the cost of a lock held across the whole save.
+   * A provider row is the stable lock target. Locking working-hours rows is not
+   * sufficient because an empty week has no row to lock, and delete/recreate
+   * changes their identities. Once this lock is held, competing saves queue;
+   * the second then reads the first one's replacement and fails its fingerprint
+   * check instead of silently overwriting it.
    */
   async replaceWorkingHours(args: {
     tenantId: string;
@@ -133,6 +131,13 @@ export class AvailabilityRepository {
     const { tenantId, providerId, rows, expectedFingerprint } = args;
 
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id
+        FROM providers
+        WHERE id = ${providerId} AND tenant_id = ${tenantId}
+        FOR UPDATE
+      `);
+
       const current = await tx.workingHours.findMany({ where: { tenantId, providerId } });
       const actual = fingerprintWorkingHours(current);
 

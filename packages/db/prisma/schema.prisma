@@ -440,6 +440,11 @@ model AuditLog {
   ipAddress String? @map("ip_address")
   userAgent String? @map("user_agent")
 
+  /// Optional deterministic identity for retryable system actions. User/API
+  /// audit rows remain append-only; a worker replaying one external event uses
+  /// this key to avoid appending the same fact twice.
+  sourceKey String? @unique @map("source_key")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@index([tenantId, createdAt])
@@ -534,13 +539,13 @@ model Provider {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
+  memberships          Membership[]
   /// Invitations that would give this diary a login of its own.
-  invitations Invitation[] @relation("InvitationProviderLogin")
+  invitations          Invitation[]       @relation("InvitationProviderLogin")
   /// Invitations that would hand this diary to an assistant.
-  delegatedInvitations Invitation[] @relation("InvitationDelegatedDiary")
-  services    ProviderService[]
-  locations   ProviderLocation[]
+  delegatedInvitations Invitation[]       @relation("InvitationDelegatedDiary")
+  services             ProviderService[]
+  locations            ProviderLocation[]
 
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
@@ -1446,6 +1451,10 @@ model Notification {
   attempts  Int     @default(0)
   lastError String? @map("last_error")
 
+  /// When a sender claimed this row. A stale SENDING claim is returned to the
+  /// queue by the notification sweeper after a worker crash.
+  claimedAt DateTime? @map("claimed_at") @db.Timestamptz(3)
+
   /// When it should go out. Now for a confirmation, hours ahead for a reminder.
   scheduledAt DateTime  @map("scheduled_at") @db.Timestamptz(3)
   sentAt      DateTime? @map("sent_at") @db.Timestamptz(3)
@@ -1567,6 +1576,18 @@ model Subscription {
   currentPeriodEnd  DateTime? @map("current_period_end") @db.Timestamptz(3)
   cancelAtPeriodEnd Boolean   @default(false) @map("cancel_at_period_end")
 
+  /// Last Stripe subscription-state event applied to this mirror. Stripe does
+  /// not guarantee delivery order, so older events must not overwrite newer
+  /// status, plan, period, or tenant-access state.
+  lastStripeStateEventAt DateTime? @map("last_stripe_state_event_at") @db.Timestamptz(3)
+  lastStripeStateEventId String?   @map("last_stripe_state_event_id")
+
+  /// Schedule events mutate a separate slice of the mirror and therefore need
+  /// their own ordering cursor; a subscription update must not suppress a
+  /// legitimate schedule update that happened slightly earlier.
+  lastStripeScheduleEventAt DateTime? @map("last_stripe_schedule_event_at") @db.Timestamptz(3)
+  lastStripeScheduleEventId String?   @map("last_stripe_schedule_event_id")
+
   // --- Trial (phase-9-subscription-lifecycle.md §2.1, §5) -------------------
 
   /// When the free trial ends. Stripe's `trial_end`, mirrored — the screen
@@ -1683,11 +1704,20 @@ model StripeEvent {
 
   payload Json @map("payload_json")
 
-  receivedAt  DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  /// Stripe's event creation time, distinct from when our webhook received it.
+  /// Claims are ordered by this value so a backlog naturally applies oldest
+  /// state first; subscription cursors still enforce correctness under retry.
+  eventCreatedAt DateTime @default(now()) @map("event_created_at") @db.Timestamptz(3)
+  receivedAt     DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  /// Durable processing lease. A second worker cannot take a live claim, while
+  /// an abandoned claim becomes eligible again after the stale-claim window.
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
+  attempts    Int       @default(0)
   processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
   lastError   String?   @map("last_error")
 
-  @@index([processedAt])
+  @@index([processedAt, claimedAt, eventCreatedAt])
   @@map("stripe_events")
 }
 

@@ -74,9 +74,14 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
    * Prisma's `InputJsonValue` without a cast — `unknown` values do not, and
    * casting around that would only hide the day one of these stops being JSON.
    */
-  const record = (id: string, type: string, object: Record<string, Json>) =>
+  const record = (
+    id: string,
+    type: string,
+    object: Record<string, Json>,
+    eventCreatedAt = new Date(),
+  ) =>
     prisma.stripeEvent.create({
-      data: { id: `${id}-${suffix}`, type, payload: { data: { object } } },
+      data: { id: `${id}-${suffix}`, type, payload: { data: { object } }, eventCreatedAt },
     });
 
   describe("checkout.session.completed", () => {
@@ -873,6 +878,117 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       ).toBe(1);
       // Access is Stripe's dunning to revoke, not this event's (§2.3).
       expect((await prisma.tenant.findUnique({ where: { id: tenantId } }))?.status).toBe("ACTIVE");
+    });
+  });
+
+  describe("durable claiming and event ordering", () => {
+    it("lets only one worker process and emit effects for an event", async () => {
+      const subscriptionId = `sub_claim-${suffix}`;
+      await prisma.subscription.create({
+        data: { tenantId, plan: "STARTER", status: "ACTIVE", stripeSubscriptionId: subscriptionId },
+      });
+      const event = await record("evt_claim", "customer.subscription.trial_will_end", {
+        id: subscriptionId,
+        trial_end: Math.floor(Date.now() / 1_000) + 3 * 24 * 60 * 60,
+      });
+
+      const summaries = await Promise.all([
+        processStripeEventBatch({ ...options(), batchSize: 1 }),
+        processStripeEventBatch({ ...options(), batchSize: 1 }),
+      ]);
+
+      expect(summaries.reduce((total, summary) => total + summary.processed, 0)).toBe(1);
+      expect(
+        await prisma.outboxEvent.count({ where: { tenantId, eventType: "TRIAL_ENDING_SOON" } }),
+      ).toBe(1);
+      expect(
+        (await prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } })).attempts,
+      ).toBe(1);
+    });
+
+    it("deduplicates a downstream effect if an event is replayed after the side effect", async () => {
+      const subscriptionId = `sub_replay-${suffix}`;
+      await prisma.subscription.create({
+        data: { tenantId, plan: "STARTER", status: "ACTIVE", stripeSubscriptionId: subscriptionId },
+      });
+      const event = await record("evt_replay", "invoice.payment_failed", {
+        subscription: subscriptionId,
+        amount_due: 10_000,
+        currency: "huf",
+      });
+
+      await processStripeEventBatch(options());
+      await prisma.stripeEvent.update({
+        where: { id: event.id },
+        data: { processedAt: null, claimedAt: null },
+      });
+      await processStripeEventBatch(options());
+
+      expect(
+        await prisma.outboxEvent.count({
+          where: { tenantId, eventType: "SUBSCRIPTION_PAYMENT_FAILED" },
+        }),
+      ).toBe(1);
+    });
+
+    it("does not let an older event regress newer subscription state", async () => {
+      const subscriptionId = `sub_order-${suffix}`;
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "INCOMPLETE",
+          stripeSubscriptionId: subscriptionId,
+        },
+      });
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { status: "PENDING_SUBSCRIPTION" },
+      });
+      const newerAt = new Date("2026-08-18T12:00:00.000Z");
+
+      await record(
+        "evt_newer",
+        "customer.subscription.updated",
+        { id: subscriptionId, status: "active", ...withPrice(PRICE_STARTER) },
+        newerAt,
+      );
+      await processStripeEventBatch(options());
+
+      await record(
+        "evt_older",
+        "customer.subscription.deleted",
+        { id: subscriptionId },
+        new Date("2026-08-18T11:00:00.000Z"),
+      );
+      await processStripeEventBatch(options());
+
+      expect((await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).status).toBe(
+        "ACTIVE",
+      );
+      expect((await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } })).status).toBe(
+        "ACTIVE",
+      );
+    });
+
+    it("recovers an abandoned processing lease", async () => {
+      const event = await record("evt_abandoned", "invoice.created", { id: "in_abandoned" });
+      await prisma.stripeEvent.update({
+        where: { id: event.id },
+        data: { claimedAt: new Date(Date.now() - 10 * 60_000) },
+      });
+
+      expect(await processStripeEventBatch({ ...options(), staleClaimSeconds: 60 })).toMatchObject({
+        claimed: 1,
+        processed: 1,
+        failed: 0,
+      });
+      await expect(
+        prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } }),
+      ).resolves.toMatchObject({
+        claimedAt: null,
+        attempts: 1,
+      });
     });
   });
 

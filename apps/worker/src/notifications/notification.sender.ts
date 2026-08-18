@@ -79,7 +79,7 @@ export async function sendNotification(
     // dead-letter queue meaningful.
     await options.prisma.notification.update({
       where: { id: notification.id },
-      data: { status: "SKIPPED", lastError: built.skipped },
+      data: { status: "SKIPPED", claimedAt: null, lastError: built.skipped },
     });
     return "SKIPPED";
   }
@@ -91,6 +91,10 @@ export async function sendNotification(
     subject: email.subject,
     html: email.html,
     text: email.text,
+    // Resend retains API idempotency keys for 24 hours. A stale SENDING claim
+    // reclaimed after a crash therefore cannot send the same message twice at
+    // the ambiguous "provider accepted, database update did not commit" edge.
+    idempotencyKey: `notification/${notification.id}`,
   });
 
   if (result.ok && !options.provider.delivers) {
@@ -107,7 +111,12 @@ export async function sendNotification(
       where: { id: notification.id },
       data: {
         status: "SKIPPED",
-        lastError: "no email provider configured; body written to the log",
+        claimedAt: null,
+        lastError: "no email provider configured; message not delivered",
+        // The fallback is terminal. Retaining an invitation or management URL
+        // here would leave a live bearer credential at rest with no delivery
+        // path that could still use it.
+        payload: {},
       },
     });
 
@@ -124,6 +133,7 @@ export async function sendNotification(
       where: { id: notification.id },
       data: {
         status: "SENT",
+        claimedAt: null,
         sentAt: new Date(),
         providerMessageId: result.providerMessageId ?? null,
         lastError: null,
@@ -148,7 +158,8 @@ export async function sendNotification(
 
   const decision = decideRetry({
     signal: { statusCode: result.statusCode, code: result.code },
-    attempts: notification.attempts + 1,
+    // The row was re-read after claim(), which already incremented attempts.
+    attempts: notification.attempts,
     maxAttempts: options.maxAttempts,
   });
 
@@ -158,6 +169,7 @@ export async function sendNotification(
       // Back to PENDING so the sweep and a BullMQ retry both find it; FAILED is
       // terminal and means a human should look.
       status: decision.retry ? "PENDING" : "FAILED",
+      claimedAt: null,
       lastError: `${decision.reason}: ${result.message}`.slice(0, 1_000),
     },
   });
@@ -165,7 +177,7 @@ export async function sendNotification(
   options.logger[decision.retry ? "warn" : "error"](
     {
       notificationId: notification.id,
-      attempts: notification.attempts + 1,
+      attempts: notification.attempts,
       kind: decision.classification.kind,
       reason: decision.reason,
     },
@@ -193,7 +205,7 @@ async function claim(
 ): Promise<number> {
   const { count } = await prisma.notification.updateMany({
     where: { id: args.notificationId, tenantId: args.tenantId, status: "PENDING" },
-    data: { status: "SENDING", attempts: { increment: 1 } },
+    data: { status: "SENDING", claimedAt: new Date(), attempts: { increment: 1 } },
   });
 
   return count;

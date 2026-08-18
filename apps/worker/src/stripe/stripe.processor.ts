@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@bam/db";
+import { Prisma, type PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
   isLiveSubscription,
@@ -44,12 +44,70 @@ export interface StripeProcessorOptions {
    * before being given up on. See {@link OrphanEventError}.
    */
   orphanTimeoutMs: number;
+  /** Lease duration before another replica may recover an abandoned event. */
+  staleClaimSeconds?: number;
 }
 
 export interface ProcessSummary {
   claimed: number;
   processed: number;
   failed: number;
+}
+
+interface ClaimedStripeEvent {
+  id: string;
+  type: string;
+  payload: unknown;
+  receivedAt: Date;
+  eventCreatedAt: Date;
+}
+
+interface ClaimedStripeRow {
+  id: string;
+  type: string;
+  payload_json: unknown;
+  received_at: Date;
+  event_created_at: Date;
+}
+
+interface StripeEventContext extends StripeProcessorOptions {
+  eventId: string;
+  eventCreatedAt: Date;
+}
+
+const DEFAULT_STALE_CLAIM_SECONDS = 300;
+
+async function claimStripeEvents(options: StripeProcessorOptions): Promise<ClaimedStripeEvent[]> {
+  const rows = await options.prisma.$queryRaw<ClaimedStripeRow[]>(Prisma.sql`
+    UPDATE stripe_events AS event
+    SET claimed_at = now(),
+        attempts = event.attempts + 1
+    FROM (
+      SELECT id
+      FROM stripe_events
+      WHERE processed_at IS NULL
+        AND (claimed_at IS NULL OR claimed_at < now() - make_interval(
+          secs => ${options.staleClaimSeconds ?? DEFAULT_STALE_CLAIM_SECONDS}
+        ))
+      ORDER BY event_created_at ASC, id ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT ${options.batchSize}
+    ) AS claimed
+    WHERE event.id = claimed.id
+    RETURNING event.id,
+              event.type,
+              event.payload_json,
+              event.received_at,
+              event.event_created_at
+  `);
+
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    payload: row.payload_json,
+    receivedAt: row.received_at,
+    eventCreatedAt: row.event_created_at,
+  }));
 }
 
 /**
@@ -76,11 +134,7 @@ class OrphanEventError extends Error {
 export async function processStripeEventBatch(
   options: StripeProcessorOptions,
 ): Promise<ProcessSummary> {
-  const pending = await options.prisma.stripeEvent.findMany({
-    where: { processedAt: null },
-    orderBy: { receivedAt: "asc" },
-    take: options.batchSize,
-  });
+  const pending = await claimStripeEvents(options);
 
   let processed = 0;
   let failed = 0;
@@ -91,7 +145,7 @@ export async function processStripeEventBatch(
 
       await options.prisma.stripeEvent.update({
         where: { id: event.id },
-        data: { processedAt: new Date(), lastError: null },
+        data: { processedAt: new Date(), claimedAt: null, lastError: null },
       });
 
       processed += 1;
@@ -103,7 +157,10 @@ export async function processStripeEventBatch(
       // is why the column exists.
       await options.prisma.stripeEvent.update({
         where: { id: event.id },
-        data: { lastError: error instanceof Error ? error.message : String(error) },
+        data: {
+          claimedAt: null,
+          lastError: error instanceof Error ? error.message : String(error),
+        },
       });
 
       // An orphan is an expected, self-healing state for a few seconds, so it
@@ -127,13 +184,17 @@ export async function processStripeEventBatch(
 }
 
 async function processOne(
-  event: { id: string; type: string; payload: unknown; receivedAt: Date },
+  event: ClaimedStripeEvent,
   options: StripeProcessorOptions,
 ): Promise<void> {
   const object = extractObject(event.payload);
 
   try {
-    await dispatch(event.type, object, options);
+    await dispatch(event.type, object, {
+      ...options,
+      eventId: event.id,
+      eventCreatedAt: event.eventCreatedAt,
+    });
   } catch (error) {
     // Give up on an orphan once it is old enough that the sibling event is
     // never coming. Marked processed rather than left failing, so it stops
@@ -156,7 +217,7 @@ async function processOne(
 async function dispatch(
   type: string,
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   switch (type) {
     case "checkout.session.completed":
@@ -230,7 +291,7 @@ async function dispatch(
  */
 async function activate(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const tenantId = asString(object["client_reference_id"]);
 
@@ -348,7 +409,7 @@ async function activate(
  * in `afterJson`, so the trail names what an operator has to go and look at.
  */
 async function recordDuplicateSubscription(
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
   input: {
     tenantId: string;
     keptSubscriptionId: string;
@@ -356,8 +417,13 @@ async function recordDuplicateSubscription(
     duplicateCustomerId: string | null;
   },
 ): Promise<void> {
-  await options.prisma.auditLog.create({
-    data: {
+  const sourceKey = `stripe:${options.eventId}:duplicate-subscription`;
+
+  await options.prisma.auditLog.upsert({
+    where: { sourceKey },
+    update: {},
+    create: {
+      sourceKey,
       tenantId: input.tenantId,
       actorType: "SYSTEM",
       action: "billing.duplicate_subscription_detected",
@@ -391,7 +457,7 @@ async function recordDuplicateSubscription(
  */
 async function mirrorSubscription(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
@@ -420,9 +486,12 @@ async function mirrorSubscription(
   // rather than "set it whenever trialing".
   const startsTrial = effect.status === "TRIALING" && existing.trialUsedAt === null;
 
-  await options.prisma.$transaction(async (tx) => {
-    await tx.subscription.update({
-      where: { stripeSubscriptionId: subscriptionId },
+  const applied = await options.prisma.$transaction(async (tx) => {
+    const updated = await tx.subscription.updateMany({
+      where: {
+        stripeSubscriptionId: subscriptionId,
+        ...newerStateEvent(options),
+      },
       data: {
         status: effect.status,
         cancelAtPeriodEnd: isEnding(object),
@@ -438,8 +507,12 @@ async function mirrorSubscription(
         ...(plan !== undefined && plan === existing.pendingPlan
           ? { stripeScheduleId: null, pendingPlan: null, pendingPlanStartsAt: null }
           : {}),
+        lastStripeStateEventAt: options.eventCreatedAt,
+        lastStripeStateEventId: options.eventId,
       },
     });
+
+    if (updated.count === 0) return false;
 
     if (tenantStatus !== null) {
       await tx.tenant.update({
@@ -447,7 +520,17 @@ async function mirrorSubscription(
         data: { status: tenantStatus, ...(startsTrial ? { subscribeBy: null } : {}) },
       });
     }
+
+    return true;
   });
+
+  if (!applied) {
+    options.logger.info(
+      { eventId: options.eventId, subscriptionId },
+      "stripe: stale subscription event ignored",
+    );
+    return;
+  }
 
   options.logger.info(
     { tenantId: existing.tenantId, status: effect.status, tenantStatus },
@@ -494,30 +577,47 @@ async function mirrorSubscription(
  */
 async function endSubscription(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
 
   const existing = await findByStripeId(subscriptionId, options, object);
 
-  await options.prisma.$transaction(async (tx) => {
-    await tx.subscription.update({
-      where: { stripeSubscriptionId: subscriptionId },
+  const applied = await options.prisma.$transaction(async (tx) => {
+    const updated = await tx.subscription.updateMany({
+      where: {
+        stripeSubscriptionId: subscriptionId,
+        ...newerStateEvent(options),
+      },
       data: {
         status: "CANCELED",
         // Nothing is scheduled on a subscription that has ended.
         stripeScheduleId: null,
         pendingPlan: null,
         pendingPlanStartsAt: null,
+        lastStripeStateEventAt: options.eventCreatedAt,
+        lastStripeStateEventId: options.eventId,
       },
     });
+
+    if (updated.count === 0) return false;
 
     await tx.tenant.update({
       where: { id: existing.tenantId },
       data: { status: "SUSPENDED" },
     });
+
+    return true;
   });
+
+  if (!applied) {
+    options.logger.info(
+      { eventId: options.eventId, subscriptionId },
+      "stripe: stale subscription-ending event ignored",
+    );
+    return;
+  }
 
   options.logger.info({ tenantId: existing.tenantId }, "stripe: organization suspended");
 }
@@ -532,7 +632,7 @@ async function endSubscription(
  */
 async function mirrorSchedule(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const scheduleId = asString(object["id"]);
   const subscriptionId = asString(object["subscription"]);
@@ -545,14 +645,27 @@ async function mirrorSchedule(
   // A schedule whose remaining phase we cannot read is not an error — it may
   // simply have no phase left, which is what a schedule about to be released
   // looks like. Recording the id still lets `released` find it.
-  await options.prisma.subscription.update({
-    where: { stripeSubscriptionId: subscriptionId },
+  const updated = await options.prisma.subscription.updateMany({
+    where: {
+      stripeSubscriptionId: subscriptionId,
+      ...newerScheduleEvent(options),
+    },
     data: {
       stripeScheduleId: scheduleId,
       pendingPlan: upcoming?.plan ?? null,
       pendingPlanStartsAt: upcoming?.startsAt ?? null,
+      lastStripeScheduleEventAt: options.eventCreatedAt,
+      lastStripeScheduleEventId: options.eventId,
     },
   });
+
+  if (updated.count === 0) {
+    options.logger.info(
+      { eventId: options.eventId, subscriptionId },
+      "stripe: stale schedule event ignored",
+    );
+    return;
+  }
 
   options.logger.info(
     { tenantId: existing.tenantId, pendingPlan: upcoming?.plan ?? null },
@@ -563,17 +676,34 @@ async function mirrorSchedule(
 /** The schedule was released or cancelled: nothing is pending any more. */
 async function clearSchedule(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const subscriptionId = asString(object["subscription"]);
   if (subscriptionId === undefined) return;
 
   const existing = await findByStripeId(subscriptionId, options);
 
-  await options.prisma.subscription.update({
-    where: { stripeSubscriptionId: subscriptionId },
-    data: { stripeScheduleId: null, pendingPlan: null, pendingPlanStartsAt: null },
+  const updated = await options.prisma.subscription.updateMany({
+    where: {
+      stripeSubscriptionId: subscriptionId,
+      ...newerScheduleEvent(options),
+    },
+    data: {
+      stripeScheduleId: null,
+      pendingPlan: null,
+      pendingPlanStartsAt: null,
+      lastStripeScheduleEventAt: options.eventCreatedAt,
+      lastStripeScheduleEventId: options.eventId,
+    },
   });
+
+  if (updated.count === 0) {
+    options.logger.info(
+      { eventId: options.eventId, subscriptionId },
+      "stripe: stale schedule-clearing event ignored",
+    );
+    return;
+  }
 
   options.logger.info({ tenantId: existing.tenantId }, "stripe: schedule cleared");
 }
@@ -586,7 +716,7 @@ async function clearSchedule(
  */
 async function notifyTrialEnding(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const subscriptionId = asString(object["id"]);
   if (subscriptionId === undefined) return;
@@ -610,7 +740,7 @@ async function notifyTrialEnding(
  */
 async function notifyPaymentFailed(
   object: Record<string, unknown>,
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
 ): Promise<void> {
   const subscriptionId = asString(object["subscription"]);
   if (subscriptionId === undefined) return;
@@ -638,11 +768,14 @@ async function notifyPaymentFailed(
  * marking a Stripe event failed and replaying the whole thing.
  */
 async function requestNotification(
-  options: StripeProcessorOptions,
+  options: StripeEventContext,
   input: { tenantId: string; eventType: string; payload: Record<string, unknown> },
 ): Promise<void> {
-  await options.prisma.outboxEvent.create({
-    data: {
+  await options.prisma.outboxEvent.upsert({
+    where: { id: `stripe:${options.eventId}:${input.eventType}` },
+    update: {},
+    create: {
+      id: `stripe:${options.eventId}:${input.eventType}`,
       tenantId: input.tenantId,
       eventType: input.eventType,
       aggregateType: "Tenant",
@@ -772,6 +905,36 @@ function extractObject(payload: unknown): Record<string, unknown> {
   const data = (payload as { data?: { object?: unknown } } | null)?.data?.object;
 
   return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
+}
+
+/** Conditional-update predicate implementing (created_at, event_id) ordering. */
+function newerStateEvent(options: StripeEventContext): Prisma.SubscriptionWhereInput {
+  return {
+    OR: [
+      { lastStripeStateEventAt: null },
+      { lastStripeStateEventAt: { lt: options.eventCreatedAt } },
+      {
+        lastStripeStateEventAt: options.eventCreatedAt,
+        OR: [{ lastStripeStateEventId: null }, { lastStripeStateEventId: { lt: options.eventId } }],
+      },
+    ],
+  };
+}
+
+function newerScheduleEvent(options: StripeEventContext): Prisma.SubscriptionWhereInput {
+  return {
+    OR: [
+      { lastStripeScheduleEventAt: null },
+      { lastStripeScheduleEventAt: { lt: options.eventCreatedAt } },
+      {
+        lastStripeScheduleEventAt: options.eventCreatedAt,
+        OR: [
+          { lastStripeScheduleEventId: null },
+          { lastStripeScheduleEventId: { lt: options.eventId } },
+        ],
+      },
+    ],
+  };
 }
 
 /**

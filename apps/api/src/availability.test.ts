@@ -352,6 +352,37 @@ describe.skipIf(!databaseUrl)("availability", () => {
         expect(after.json().items[0].startTime).toBe("09:00");
       });
 
+      it("serializes two simultaneous saves made from the same version", async () => {
+        const site = await clinic("hours-concurrent");
+        const shared = await fingerprintOf(site);
+
+        const save = (weekday: number) =>
+          app.inject({
+            method: "PUT",
+            url: `/v1/providers/${site.providerId}/working-hours`,
+            headers: as(site.cookie, site.tenantId),
+            payload: {
+              workingHours: [{ weekday, startTime: "09:00", endTime: "12:00" }],
+              expectedFingerprint: shared,
+            },
+          });
+
+        const responses = await Promise.all([save(1), save(2)]);
+
+        expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 409]);
+        expect(responses.find((response) => response.statusCode === 409)?.json().error.code).toBe(
+          ErrorCodes.SCHEDULE_MODIFIED,
+        );
+
+        const current = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+        });
+        expect(current.json().items).toHaveLength(1);
+        expect([1, 2]).toContain(current.json().items[0].weekday);
+      });
+
       it("names the other editor in the refusal", async () => {
         const site = await clinic("hours-stale-who");
         const stale = await fingerprintOf(site);
@@ -428,7 +459,6 @@ describe.skipIf(!databaseUrl)("availability", () => {
         expect(blind.statusCode, blind.body).toBe(400);
         expect(blind.json().error.code).toBe(ErrorCodes.SCHEDULE_FINGERPRINT_REQUIRED);
       });
-
     });
 
     it("replaces the whole week rather than appending", async () => {
@@ -1345,9 +1375,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
       const { site, booking } = await bookMondayMorning("strand-hours");
 
       // Afternoons only, which the 10:00 appointment is no longer inside.
-      const narrowed = await setHours(site, [
-        { weekday: 1, startTime: "13:00", endTime: "17:00" },
-      ]);
+      const narrowed = await setHours(site, [{ weekday: 1, startTime: "13:00", endTime: "17:00" }]);
 
       expect(narrowed.statusCode, narrowed.body).toBe(409);
 
@@ -1410,9 +1438,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         data: { status: "CANCELLED", cancelledAt: new Date() },
       });
 
-      const narrowed = await setHours(site, [
-        { weekday: 1, startTime: "13:00", endTime: "17:00" },
-      ]);
+      const narrowed = await setHours(site, [{ weekday: 1, startTime: "13:00", endTime: "17:00" }]);
 
       expect(narrowed.statusCode, narrowed.body).toBe(200);
     });
@@ -1430,9 +1456,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         },
       });
 
-      const narrowed = await setHours(site, [
-        { weekday: 1, startTime: "13:00", endTime: "17:00" },
-      ]);
+      const narrowed = await setHours(site, [{ weekday: 1, startTime: "13:00", endTime: "17:00" }]);
 
       expect(narrowed.statusCode, narrowed.body).toBe(200);
     });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { PrismaClient } from "@bam/db";
+import { Prisma, type PrismaClient } from "@bam/db";
 import { AppError, ConflictError, ErrorCodes, ValidationError } from "@bam/contracts";
 
 /**
@@ -96,37 +96,52 @@ export async function withIdempotency<T>(
     },
   };
 
-  const existing = await prisma.idempotencyKey.findUnique({ where });
+  const lockIdentity = JSON.stringify([args.tenantId, args.operation, args.key]);
 
-  if (existing) {
-    return { value: replay<T>(existing, requestHash), replayed: true };
-  }
+  // The advisory transaction lock makes expiry reclamation one decision. A
+  // read/delete/create sequence without it has the same race as the original
+  // read/create path: two requests can both decide an expired row is theirs.
+  const claim = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${lockIdentity}, 0)) IS NULL AS locked
+    `);
 
-  try {
-    await prisma.idempotencyKey.create({
+    const existing = await tx.idempotencyKey.findUnique({ where });
+    const now = new Date();
+
+    if (existing !== null && existing.expiresAt > now) {
+      return { kind: "existing" as const, row: existing };
+    }
+
+    if (existing !== null) {
+      await tx.idempotencyKey.delete({ where: { id: existing.id } });
+    }
+
+    const row = await tx.idempotencyKey.create({
       data: {
         tenantId: args.tenantId,
         operation: args.operation,
         key: args.key,
         requestHash,
-        expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+        expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
       },
+      select: { id: true },
     });
-  } catch (error) {
-    // Lost the race between the findUnique above and this insert. The other
-    // request owns the key; re-read and let it answer.
-    if (!isUniqueViolation(error)) throw error;
 
-    const winner = await prisma.idempotencyKey.findUnique({ where });
-    if (!winner) throw error;
+    return { kind: "claimed" as const, id: row.id };
+  });
 
-    return { value: replay<T>(winner, requestHash), replayed: true };
+  if (claim.kind === "existing") {
+    return { value: replay<T>(claim.row, requestHash), replayed: true };
   }
 
   const value = await operation();
 
   await prisma.idempotencyKey.update({
-    where,
+    // Update the exact claim, not whatever row currently owns the logical key.
+    // If an operation runs beyond its 24-hour lease, a later claimant cannot
+    // have its response overwritten by the old process finally returning.
+    where: { id: claim.id },
     data: {
       responseStatus: args.successStatus,
       // Cast rather than validate: the caller controls this shape, and it has
@@ -187,10 +202,4 @@ export function requireIdempotencyKey(headers: Record<string, unknown>): string 
   }
 
   return key;
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" && error !== null && (error as { code?: unknown }).code === "P2002"
-  );
 }

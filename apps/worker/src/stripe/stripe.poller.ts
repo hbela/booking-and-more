@@ -25,6 +25,7 @@ export interface StripePoller {
 
 export function startStripePoller(options: StripePollerOptions): StripePoller {
   let stopped = false;
+  let running = false;
   let inFlight: Promise<void> = Promise.resolve();
 
   const runBatch = async (): Promise<void> => {
@@ -53,8 +54,11 @@ export function startStripePoller(options: StripePollerOptions): StripePoller {
   };
 
   const tick = (): void => {
-    if (stopped) return;
-    inFlight = runBatch();
+    if (stopped || running) return;
+    running = true;
+    inFlight = runBatch().finally(() => {
+      running = false;
+    });
   };
 
   const timer = setInterval(tick, options.intervalMs);

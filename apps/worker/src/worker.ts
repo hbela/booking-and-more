@@ -18,6 +18,7 @@ import {
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
+import { startIdempotencyCleanup } from "./retention/idempotency-cleanup.js";
 // PARKED — Epic 6 part 1.
 // import { createCalendarWorker } from "./calendar/calendar.worker.js";
 // import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
@@ -123,6 +124,7 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
     logger: log,
     batchSize: env.OUTBOX_BATCH_SIZE,
     intervalMs: env.NOTIFICATION_SWEEP_INTERVAL_MS,
+    maxAttempts: env.OUTBOX_MAX_ATTEMPTS,
   });
 
   // --- Epic 6, part 1 — PARKED 2026-08-17 ------------------------------------
@@ -228,6 +230,10 @@ async function main(): Promise<void> {
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
   });
 
+  // Idempotency responses may contain short-lived booking management tokens.
+  // Expiry is enforced on reuse by the API; this bounds physical retention too.
+  const idempotencyCleanup = startIdempotencyCleanup({ prisma, logger: log });
+
   const heartbeat = setInterval(() => {
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
   }, HEARTBEAT_MS);
@@ -256,6 +262,7 @@ async function main(): Promise<void> {
     void (async () => {
       try {
         await stripeEvents.stop();
+        await idempotencyCleanup.stop();
 
         // Order matters, in three stages: stop everything that *produces* work,
         // then let the consumers finish what they hold, then drop the queues and

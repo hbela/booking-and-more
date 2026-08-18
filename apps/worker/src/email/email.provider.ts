@@ -15,6 +15,8 @@ export interface EmailMessage {
   subject: string;
   html: string;
   text: string;
+  /** Stable across retries at the provider-call crash boundary. */
+  idempotencyKey: string;
 }
 
 export type DeliveryResult =
@@ -48,17 +50,13 @@ export interface EmailProvider {
 }
 
 /**
- * Writes the message to the log instead of sending it.
+ * Records safe metadata instead of sending the message.
  *
  * Used when no API key is configured. This is CLAUDE.md rule 4 in its most
- * literal form: a missing key degrades one feature and nothing else — the
- * worker still runs, notification rows are still created and still settle, and
- * local development needs no third-party account.
- *
- * The recipient is logged deliberately here and only here: this provider exists
- * so a developer can read what would have been sent, and redacting the address
- * would defeat that. It is never selected when RESEND_API_KEY is set, so real
- * recipients never reach it.
+ * literal form: a missing key degrades one feature and nothing else. Complete
+ * bodies and recipients are deliberately excluded: invitation and booking
+ * templates contain bearer links, and configuration can be missing in any
+ * environment, including production.
  */
 export function createLoggingProvider(logger: Logger): EmailProvider {
   return {
@@ -68,13 +66,18 @@ export function createLoggingProvider(logger: Logger): EmailProvider {
     delivers: false,
     send(message: EmailMessage): Promise<DeliveryResult> {
       logger.info(
-        { to: message.to, subject: message.subject, body: message.text },
-        "email: not sent — no provider configured. Body follows.",
+        { recipientDomain: emailDomain(message.to) },
+        "email: not sent — no provider configured",
       );
 
       return Promise.resolve({ ok: true, providerMessageId: undefined });
     },
   };
+}
+
+function emailDomain(address: string): string | undefined {
+  const separator = address.lastIndexOf("@");
+  return separator < 0 ? undefined : address.slice(separator + 1).toLowerCase();
 }
 
 export interface ResendProviderOptions {
@@ -104,6 +107,7 @@ export function createResendProvider(options: ResendProviderOptions): EmailProvi
           headers: {
             Authorization: `Bearer ${options.apiKey}`,
             "Content-Type": "application/json",
+            "Idempotency-Key": message.idempotencyKey,
           },
           body: JSON.stringify({
             from: options.from,
@@ -170,7 +174,7 @@ export function getEmailProvider(options: EmailProviderOptions): EmailProvider {
     // key later has no effect until the worker restarts. Said plainly, because
     // "I set RESEND_API_KEY and nothing sends" is otherwise a long afternoon.
     options.logger.warn(
-      "email: RESEND_API_KEY/EMAIL_FROM not configured — nothing will be delivered. Messages are written to this log and their notifications recorded SKIPPED. Set both and restart the worker.",
+      "email: RESEND_API_KEY/EMAIL_FROM not configured — nothing will be delivered. Notifications are recorded SKIPPED without logging message bodies. Set both and restart the worker.",
     );
     provider = createLoggingProvider(options.logger);
     return provider;

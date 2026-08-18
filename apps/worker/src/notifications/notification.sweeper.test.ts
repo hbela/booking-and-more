@@ -82,6 +82,7 @@ describe.skipIf(!databaseUrl)("notification sweep", () => {
     queues: registry,
     logger: log,
     batchSize: 50,
+    maxAttempts: 5,
   });
 
   it("enqueues a row that is already due", async () => {
@@ -123,7 +124,7 @@ describe.skipIf(!databaseUrl)("notification sweep", () => {
 
   it("ignores rows that are no longer PENDING", async () => {
     await notification({ status: "SENT", sentAt: new Date() });
-    await notification({ status: "SENDING" });
+    await notification({ status: "SENDING", claimedAt: new Date() });
     await notification({ status: "SKIPPED" });
     await notification({ status: "FAILED" });
     const { registry, notifications } = fakeQueues();
@@ -131,6 +132,55 @@ describe.skipIf(!databaseUrl)("notification sweep", () => {
     await sweepDueNotifications(options(registry));
 
     expect(notifications.added).toHaveLength(0);
+  });
+
+  it("recovers an abandoned SENDING claim", async () => {
+    const row = await notification({
+      status: "SENDING",
+      attempts: 1,
+      claimedAt: new Date(Date.now() - 10 * 60_000),
+    });
+    const { registry, notifications } = fakeQueues();
+
+    await sweepDueNotifications(options(registry));
+
+    expect(notifications.added).toHaveLength(1);
+    expect((notifications.added[0]?.data as { notificationId: string }).notificationId).toBe(
+      row.id,
+    );
+    await expect(
+      prisma.notification.findUniqueOrThrow({ where: { id: row.id } }),
+    ).resolves.toMatchObject({ status: "PENDING", claimedAt: null, attempts: 1 });
+  });
+
+  it("recovers a legacy SENDING row that predates claim timestamps", async () => {
+    const row = await notification({ status: "SENDING", attempts: 1, claimedAt: null });
+    const { registry, notifications } = fakeQueues();
+
+    await sweepDueNotifications(options(registry));
+
+    expect((notifications.added[0]?.data as { notificationId: string }).notificationId).toBe(
+      row.id,
+    );
+    await expect(
+      prisma.notification.findUniqueOrThrow({ where: { id: row.id } }),
+    ).resolves.toMatchObject({ status: "PENDING", claimedAt: null });
+  });
+
+  it("parks an abandoned claim after the attempt limit", async () => {
+    const row = await notification({
+      status: "SENDING",
+      attempts: 5,
+      claimedAt: new Date(Date.now() - 10 * 60_000),
+    });
+    const { registry, notifications } = fakeQueues();
+
+    await sweepDueNotifications(options(registry));
+
+    expect(notifications.added).toHaveLength(0);
+    await expect(
+      prisma.notification.findUniqueOrThrow({ where: { id: row.id } }),
+    ).resolves.toMatchObject({ status: "FAILED", claimedAt: null, attempts: 5 });
   });
 
   it("uses the notification id as the job id", async () => {
