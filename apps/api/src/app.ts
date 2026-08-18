@@ -397,7 +397,13 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // memberships splits its tenant-scoped routes from the acceptance ones: the
   // write surface hangs off the diary being granted, and the delegate's own
   // view hangs off the caller.
-  await app.register(providerDelegationRoutes, { prefix: "/v1" });
+  await app.register(providerDelegationRoutes, {
+    prefix: "/v1",
+    // For POST /providers/:providerId/delegations/invitation — the same two the
+    // other invitation routes take, because it issues the same kind of link.
+    invitationExpiryHours: env.INVITATION_EXPIRY_HOURS,
+    appBaseUrl: env.APP_BASE_URL,
+  });
   await app.register(myDelegationRoutes, { prefix: "/v1/me" });
 
   // --- Bookings (Epic 4) ----------------------------------------------------

@@ -52,6 +52,7 @@ export type {
 } from "./planning.js";
 
 export {
+  delegationScopeLabel,
   escapeHtml,
   isRenderable,
   RENDERABLE_TYPES,
@@ -61,6 +62,7 @@ export {
   renderBookingReminder,
   renderBookingRequested,
   renderBookingUpdated,
+  renderAssistantInvited,
   renderOrganizationCreated,
   renderPaymentFailed,
   renderProviderInvited,
@@ -69,6 +71,7 @@ export {
   renderTrialEnding,
 } from "./templates.js";
 export type {
+  AssistantInvitedValues,
   BookingCancelledValues,
   CalendarDisconnectedValues,
   BookingConfirmationValues,

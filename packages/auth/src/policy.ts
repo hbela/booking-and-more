@@ -248,34 +248,6 @@ export function canBlockProviderTime(actor: Actor, tenantId: string, providerId:
 }
 
 /**
- * May this actor hand this diary to somebody?
- *
- * The same question as "may they manage its availability", **minus the
- * delegated branch** — and that omission is the single most important line in
- * the whole feature. With it, an assistant handed a diary could hand it on, and
- * the set of people who can reach a provider's calendar would grow without the
- * provider, the owner or the audit log naming anybody who decided it.
- * Delegation is one level deep by construction rather than by convention: there
- * is no depth counter and no cycle check, and none is needed.
- *
- * Owners and admins are included not as a convenience but because they hold
- * `:all` and can already perform every delegated act themselves. Withholding
- * this from them would protect nothing, and would leave a provider with no
- * login — a visiting hygienist whose diary the front desk keeps — unable to
- * have a delegate at all. docs/phase-3-4-diary-delegation.md §2.3.
- */
-export function canDelegateProviderDiary(
-  actor: Actor,
-  tenantId: string,
-  providerId: string,
-): boolean {
-  return canForProvider(actor, tenantId, providerId, {
-    all: Permissions.AVAILABILITY_MANAGE_ALL,
-    own: Permissions.AVAILABILITY_MANAGE_OWN,
-  });
-}
-
-/**
  * Connecting or disconnecting a calendar for one provider's diary.
  * docs/phase-6-google-calendar-part-1.md.
  *
@@ -301,6 +273,53 @@ export function canManageIntegration(
   return canForProvider(actor, tenantId, providerId, {
     all: Permissions.INTEGRATION_MANAGE_ALL,
     own: Permissions.INTEGRATION_MANAGE_OWN,
+  });
+}
+
+/**
+ * May this actor decide who runs the diaries in this organization?
+ *
+ * **The owner, and nobody else.** Not the administrator, who holds
+ * `availability:manage:all` and may edit every schedule in the clinic; not the
+ * provider whose diary it is. docs/phase-3-4-diary-delegation.md §2.3.
+ *
+ * Tenant-wide rather than per-provider, and that shape is the decision. Who may
+ * *work* a diary is a question about that diary, which is why every rule above
+ * takes a `providerId`. Who may put a member on one is a question about the
+ * organization's staffing, and it has one answer for the whole organization.
+ *
+ * Its own permission rather than a reading of the availability ones, because
+ * ADMIN holds those: expressing the rule as "may manage availability" would
+ * have handed staffing to administrators silently, and nothing would have said
+ * so. It is also what makes re-delegation impossible without a special case —
+ * an ASSISTANT simply does not hold `delegation:manage`, so a delegate cannot
+ * pass a diary on and there is no depth counter or cycle check anywhere.
+ */
+export function canManageDelegations(actor: Actor, tenantId: string): boolean {
+  return can(actor, tenantId, Permissions.DELEGATION_MANAGE);
+}
+
+/**
+ * May this actor see who runs this diary?
+ *
+ * Wider than managing it, and only just: the owner, plus the provider whose
+ * diary it is. A provider does not choose their assistants and must still be
+ * able to see who has been given their week — being told is the least that
+ * `phase-2-3` §2.7's "availability belongs to the provider" can survive on once
+ * the choosing moved to the owner.
+ *
+ * Expressed through `canForProvider` with **no delegated key**, so an assistant
+ * cannot enumerate the others: knowing who else holds a diary is not part of
+ * running it.
+ */
+export function canReadProviderDelegates(
+  actor: Actor,
+  tenantId: string,
+  providerId: string,
+): boolean {
+  return canForProvider(actor, tenantId, providerId, {
+    all: Permissions.DELEGATION_MANAGE,
+    own: Permissions.AVAILABILITY_MANAGE_OWN,
   });
 }
 

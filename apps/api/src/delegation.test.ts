@@ -285,60 +285,71 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
   // -------------------------------------------------------------------------
 
   describe("who may hand a diary over", () => {
-    it("refuses a delegate, so a diary cannot be passed on", async () => {
-      // The case the whole design turns on (§2.3). `canDelegateProviderDiary` is
-      // `canForProvider` without a delegated branch, and this is that omission
-      // observed over HTTP.
-      const site = await clinic("nopassing");
-      const reka = await member(site, "nopassing-reka", "ASSISTANT");
-      const eva = await member(site, "nopassing-eva", "ASSISTANT");
+    it("refuses an assistant, a provider and an admin alike", async () => {
+      // The case the design turns on, and it is now true for a duller reason
+      // than it used to be: none of these three holds `delegation:manage`, so
+      // there is no branch to get wrong (§2.3). The admin is the one most
+      // likely to regress — they may edit every schedule in the clinic.
+      const site = await clinic("whomay");
+      const reka = await member(site, "whomay-reka", "ASSISTANT");
+      const eva = await member(site, "whomay-eva", "ASSISTANT");
+      const doctor = await member(site, "whomay-doc", "PROVIDER", site.providerId);
+      const admin = await member(site, "whomay-admin", "ADMIN");
 
-      const granted = await grant(site, site.providerId, reka.membershipId, [
-        "AVAILABILITY",
-        "BOOKINGS",
-      ]);
-      expect(granted.statusCode, granted.body).toBe(200);
+      await grant(site, site.providerId, reka.membershipId, ["AVAILABILITY", "BOOKINGS"]);
 
-      const passedOn = await grant(
-        site,
-        site.providerId,
-        eva.membershipId,
-        ["BOOKINGS"],
-        reka.cookie,
-      );
-      expect(passedOn.statusCode, passedOn.body).toBe(403);
+      const refused: [string, string][] = [
+        ["delegate", reka.cookie],
+        ["provider", doctor.cookie],
+        ["admin", admin.cookie],
+      ];
 
-      // And they cannot even see who else holds it.
-      const list = await app.inject({
+      for (const [label, cookie] of refused) {
+        const granting = await grant(site, site.providerId, eva.membershipId, ["BOOKINGS"], cookie);
+        expect(granting.statusCode, label + ": " + granting.body).toBe(403);
+
+        const revoking = await revoke(site, site.providerId, reka.membershipId, cookie);
+        expect(revoking.statusCode, label + ": " + revoking.body).toBe(403);
+
+        const inviting = await app.inject({
+          method: "POST",
+          url: `/v1/providers/${site.providerId}/delegations/invitation`,
+          headers: as(cookie, site.tenantId),
+          payload: { email: `${label}-new-${RUN}@example.test`, scopes: ["BOOKINGS"] },
+        });
+        expect(inviting.statusCode, label + ": " + inviting.body).toBe(403);
+      }
+    });
+
+    it("lets the provider read their own delegates but nobody else's", async () => {
+      const site = await clinic("readonly");
+      const reka = await member(site, "readonly-reka", "ASSISTANT");
+      const doctor = await member(site, "readonly-doc", "PROVIDER", site.providerId);
+      await grant(site, site.providerId, reka.membershipId, ["BOOKINGS"]);
+
+      const own = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${site.providerId}/delegations`,
+        headers: as(doctor.cookie, site.tenantId),
+      });
+      expect(own.statusCode, own.body).toBe(200);
+      expect(own.json().items).toHaveLength(1);
+
+      const colleagues = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${site.otherProviderId}/delegations`,
+        headers: as(doctor.cookie, site.tenantId),
+      });
+      expect(colleagues.statusCode, colleagues.body).toBe(403);
+
+      // A delegate cannot enumerate the others, even of their own diary:
+      // knowing who else holds it is not part of running it.
+      const asDelegate = await app.inject({
         method: "GET",
         url: `/v1/providers/${site.providerId}/delegations`,
         headers: as(reka.cookie, site.tenantId),
       });
-      expect(list.statusCode, list.body).toBe(403);
-    });
-
-    it("lets a provider hand over their own diary and nobody else's", async () => {
-      const site = await clinic("providergrant");
-      const reka = await member(site, "providergrant-reka", "ASSISTANT");
-      const doctor = await member(site, "providergrant-doc", "PROVIDER", site.providerId);
-
-      const own = await grant(
-        site,
-        site.providerId,
-        reka.membershipId,
-        ["BOOKINGS"],
-        doctor.cookie,
-      );
-      expect(own.statusCode, own.body).toBe(200);
-
-      const colleagues = await grant(
-        site,
-        site.otherProviderId,
-        reka.membershipId,
-        ["BOOKINGS"],
-        doctor.cookie,
-      );
-      expect(colleagues.statusCode, colleagues.body).toBe(403);
+      expect(asDelegate.statusCode, asDelegate.body).toBe(403);
     });
 
     it("refuses a target that cannot hold a diary", async () => {
@@ -349,15 +360,7 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
       expect(asAdmin.statusCode, asAdmin.body).toBe(422);
       expect(asAdmin.json().error.code).toBe(ErrorCodes.DELEGATION_TARGET_INELIGIBLE);
 
-      // Invited but not joined: a membership that grants nothing yet.
       const pending = await signUp("ineligible-pending");
-      const invited = await app.inject({
-        method: "POST",
-        url: "/v1/members/invitations",
-        headers: as(site.owner.cookie, site.tenantId),
-        payload: { email: pending.email, role: "ASSISTANT" },
-      });
-      expect(invited.statusCode, invited.body).toBe(201);
       const pendingMembership = await app.prisma.membership.create({
         data: {
           tenantId: site.tenantId,
@@ -370,8 +373,8 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
       const asPending = await grant(site, site.providerId, pendingMembership.id, ["BOOKINGS"]);
       expect(asPending.statusCode, asPending.body).toBe(422);
 
-      // And the membership that *is* this diary: it already holds `:own`, so a
-      // grant would add nothing and would later be misread as its source.
+      // The membership that *is* this diary already holds `:own`, so a grant
+      // would add nothing and would later be misread as its source.
       const doctor = await member(site, "ineligible-doc", "PROVIDER", site.providerId);
       const asSelf = await grant(site, site.providerId, doctor.membershipId, ["BOOKINGS"]);
       expect(asSelf.statusCode, asSelf.body).toBe(422);
@@ -384,6 +387,173 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
       const response = await grant(site, site.providerId, reka.membershipId, []);
       expect(response.statusCode, response.body).toBe(422);
       expect(response.json().error.code).toBe(ErrorCodes.VALIDATION_FAILED);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Inviting somebody who has no account yet
+  // -------------------------------------------------------------------------
+
+  describe("inviting an assistant", () => {
+    function inviteAssistant(
+      site: Clinic,
+      email: string,
+      scopes: string[],
+      providerId?: string,
+      cookie?: string,
+    ) {
+      return app.inject({
+        method: "POST",
+        url: `/v1/providers/${providerId ?? site.providerId}/delegations/invitation`,
+        headers: as(cookie ?? site.owner.cookie, site.tenantId),
+        payload: { email, scopes },
+      });
+    }
+
+    it("creates the membership and the assignment in one acceptance", async () => {
+      // §2.13: an ASSISTANT with no assignment can see nothing at all, so a
+      // membership created without one would be indistinguishable from a
+      // permissions bug. Both rows or neither.
+      const site = await clinic("invite");
+      const email = `invite-newcomer-${RUN}@example.test`;
+
+      const invited = await inviteAssistant(site, email, ["BOOKINGS"]);
+      expect(invited.statusCode, invited.body).toBe(201);
+
+      const token = (invited.json().acceptUrl as string).split("/").pop()!;
+      const accepted = await app.inject({
+        method: "POST",
+        url: "/v1/invitations/accept-and-register",
+        payload: { token, name: "Reka", password: "correct-horse-battery-staple" },
+      });
+      expect(accepted.statusCode, accepted.body).toBeLessThan(400);
+
+      const membership = await app.prisma.membership.findFirst({
+        where: { tenantId: site.tenantId, user: { email } },
+        select: { id: true, role: true, status: true },
+      });
+      expect(membership?.role).toBe("ASSISTANT");
+      expect(membership?.status).toBe("ACTIVE");
+
+      const assignment = await app.prisma.providerDelegation.findFirst({
+        where: { tenantId: site.tenantId, membershipId: membership!.id },
+      });
+      expect(assignment?.providerId).toBe(site.providerId);
+      expect(assignment?.scopes).toEqual(["BOOKINGS"]);
+    });
+
+    it("emails the invitation rather than only showing a link", async () => {
+      // The gap that started this: an assistant invited from the members panel
+      // wrote no outbox row at all, so no email was ever going to arrive.
+      const site = await clinic("inviteemail");
+      const email = `inviteemail-newcomer-${RUN}@example.test`;
+
+      const invited = await inviteAssistant(site, email, ["AVAILABILITY", "BOOKINGS"]);
+      expect(invited.statusCode, invited.body).toBe(201);
+
+      const outbox = await app.prisma.outboxEvent.findFirst({
+        where: {
+          tenantId: site.tenantId,
+          eventType: "ASSISTANT_INVITED",
+          aggregateId: site.providerId,
+        },
+      });
+      expect(outbox).not.toBeNull();
+      expect(outbox?.aggregateType).toBe("Provider");
+
+      // The raw token travels in the payload because only its hash is stored,
+      // so the worker could not rebuild the link later.
+      const payload = outbox?.payload as { email?: string; invitationToken?: string } | null;
+      expect(payload?.email).toBe(email);
+      expect(payload?.invitationToken).toBeTruthy();
+    });
+
+    it("refuses somebody who is already a member", async () => {
+      const site = await clinic("invitemember");
+      const reka = await member(site, "invitemember-reka", "ASSISTANT");
+
+      const response = await inviteAssistant(site, reka.email, ["BOOKINGS"]);
+      expect(response.statusCode, response.body).toBe(409);
+      expect(response.json().error.message).toMatch(/already a member/iu);
+    });
+
+    it("supersedes a live invitation for the same person and diary", async () => {
+      const site = await clinic("invitesupersede");
+      const email = `invitesupersede-x-${RUN}@example.test`;
+
+      const first = await inviteAssistant(site, email, ["BOOKINGS"]);
+      const second = await inviteAssistant(site, email, ["AVAILABILITY"]);
+      expect(second.statusCode, second.body).toBe(201);
+
+      const rows = await app.prisma.invitation.findMany({
+        where: { tenantId: site.tenantId, email, delegatedProviderId: site.providerId },
+        select: { id: true, status: true },
+      });
+      expect(rows.filter((row) => row.status === "PENDING")).toHaveLength(1);
+      expect(rows.find((row) => row.id === (first.json().id as string))?.status).toBe("REVOKED");
+
+      // The first link is dead, which is the point of superseding.
+      const staleToken = (first.json().acceptUrl as string).split("/").pop()!;
+      const stale = await app.inject({
+        method: "POST",
+        url: "/v1/invitations/accept-and-register",
+        payload: { token: staleToken, name: "X", password: "correct-horse-battery-staple" },
+      });
+      expect(stale.statusCode, stale.body).toBe(404);
+    });
+
+    it("supersedes across diaries too, because one address may hold one link", async () => {
+      // `invitations_tenant_email_pending_key` has allowed exactly one live
+      // invitation per address per tenant since Epic 1, and that rule wins over
+      // anything this feature would have preferred. Inviting somebody for a
+      // second diary replaces their first invitation rather than adding to it.
+      //
+      // The way to give one person two diaries is to let them accept one and
+      // then assign the second — which is what the two actions on the panel are
+      // for, and is asserted by the union test above.
+      const site = await clinic("invitetwo");
+      const email = `invitetwo-x-${RUN}@example.test`;
+
+      await inviteAssistant(site, email, ["BOOKINGS"]);
+      const second = await inviteAssistant(site, email, ["BOOKINGS"], site.otherProviderId);
+      expect(second.statusCode, second.body).toBe(201);
+
+      const live = await app.prisma.invitation.findMany({
+        where: { tenantId: site.tenantId, email, status: "PENDING" },
+        select: { delegatedProviderId: true },
+      });
+      expect(live).toHaveLength(1);
+      expect(live[0]?.delegatedProviderId).toBe(site.otherProviderId);
+    });
+
+    it("refuses an archived diary", async () => {
+      const site = await clinic("invitearchived");
+      await app.inject({
+        method: "DELETE",
+        url: `/v1/providers/${site.otherProviderId}`,
+        headers: as(site.owner.cookie, site.tenantId),
+      });
+
+      const response = await inviteAssistant(
+        site,
+        `invitearchived-x-${RUN}@example.test`,
+        ["BOOKINGS"],
+        site.otherProviderId,
+      );
+      expect(response.statusCode, response.body).toBe(404);
+    });
+
+    it("refuses an invitation for a diary in another tenant", async () => {
+      const here = await clinic("invitecross-a");
+      const there = await clinic("invitecross-b");
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/providers/${there.providerId}/delegations/invitation`,
+        headers: as(here.owner.cookie, here.tenantId),
+        payload: { email: `invitecross-x-${RUN}@example.test`, scopes: ["BOOKINGS"] },
+      });
+      expect(response.statusCode, response.body).toBe(404);
     });
   });
 

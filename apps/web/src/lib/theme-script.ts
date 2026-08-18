@@ -23,6 +23,16 @@ import { THEME_PREFERENCE_COOKIE } from "./theme-preference";
  * layout of its own — so it lives here once rather than being typed twice and
  * drifting.
  *
+ * ## Who emits it
+ *
+ * `components/theme-script.tsx`, through `useServerInsertedHTML`, and **not** a
+ * `<script>` element in either document. Both rendered one directly until
+ * 2026-08-17, when React began reporting that a script rendered by a component
+ * cannot execute on the client: changing the `[locale]` segment's value remounts
+ * that layout, and React builds a `<div>` rather than a script on that path.
+ * The full reasoning, including why `next/script` is the wrong instrument, is in
+ * that file.
+ *
  * ## Note for whoever adds a CSP
  *
  * There is no Content-Security-Policy header today. When one arrives this

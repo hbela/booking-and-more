@@ -882,6 +882,153 @@ export function renderProviderInvited(
   return { subject: subject(values.organizationName), html, text };
 }
 
+// --- Assistant invited -----------------------------------------------------
+
+export interface AssistantInvitedValues {
+  organizationName: string;
+  /** Whose diary they are being given — `Provider.displayName`. */
+  providerName: string;
+  /** Who pressed Invite. The caller falls back to the organization. */
+  invitedByName: string;
+  /** What the assignment covers, already localized by the caller. */
+  scopes: string[];
+  acceptUrl: string;
+  /** Formatted for the recipient's locale by the caller, not here. */
+  expiresAt: string;
+}
+
+interface AssistantInvitedCopy {
+  greeting: string;
+  intro: (inviter: string, organization: string, provider: string) => string;
+  /**
+   * What an assistant gets, which is neither what an owner gets nor what a
+   * provider gets. Naming the provider is the whole point of this email: the
+   * recipient is being given somebody *else's* diary, and an invitation that
+   * did not say whose would be unanswerable.
+   */
+  whatYouGet: string;
+  action: string;
+  button: string;
+  fallback: string;
+  expiry: (when: string) => string;
+  noPassword: string;
+  /** This address was typed by an owner, so a typo sends it to a stranger. */
+  unexpected: string;
+  signoff: string;
+}
+
+const ASSISTANT_INVITED_COPY: Record<
+  Locale,
+  { subject: (organization: string) => string; body: AssistantInvitedCopy }
+> = {
+  hu: {
+    subject: (organization) => `${organization} — állítsa be a belépését`,
+    body: {
+      greeting: "Kedves Címzett!",
+      intro: (inviter, organization, provider) =>
+        `${inviter} meghívta Önt a(z) ${organization} rendszerébe a Booking and More-on, hogy segítse ${provider} munkáját.`,
+      whatYouGet: "A meghívás a következőkre szól:",
+      action: "A belépéshez és a jelszava beállításához kattintson az alábbi gombra:",
+      button: "Belépés beállítása",
+      fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
+      expiry: (when) => `A link ${when}-ig érvényes.`,
+      noPassword: "Jelszót nem küldünk e-mailben — a linken saját jelszót állíthat be.",
+      unexpected: "Ha nem számított erre a levélre, hagyja figyelmen kívül — a link magától lejár.",
+      signoff: "Üdvözlettel,\na Booking and More csapata",
+    },
+  },
+  en: {
+    subject: (organization) => `${organization} — set up your login`,
+    body: {
+      greeting: "Hello,",
+      intro: (inviter, organization, provider) =>
+        `${inviter} has invited you to join ${organization} on Booking and More, to assist ${provider}.`,
+      whatYouGet: "The invitation covers:",
+      action: "Click below to sign in and choose your password:",
+      button: "Set up your login",
+      fallback: "If the button does not work, paste this address into your browser:",
+      expiry: (when) => `The link is valid until ${when}.`,
+      noPassword: "We never email passwords — the link lets you choose your own.",
+      unexpected: "If you were not expecting this, ignore it — the link expires on its own.",
+      signoff: "Kind regards,\nthe Booking and More team",
+    },
+  },
+};
+
+export function renderAssistantInvited(
+  locale: Locale,
+  values: AssistantInvitedValues,
+): RenderedEmail {
+  const { subject, body } = ASSISTANT_INVITED_COPY[locale];
+
+  const text = [
+    body.greeting,
+    "",
+    body.intro(values.invitedByName, values.organizationName, values.providerName),
+    "",
+    body.whatYouGet,
+    ...values.scopes.map((scope) => `- ${scope}`),
+    "",
+    body.action,
+    values.acceptUrl,
+    "",
+    body.expiry(values.expiresAt),
+    body.noPassword,
+    "",
+    body.unexpected,
+    "",
+    body.signoff,
+  ].join("\n");
+
+  const html = layout(`
+    <p>${escapeHtml(body.greeting)}</p>
+    <p>${escapeHtml(body.intro(values.invitedByName, values.organizationName, values.providerName))}</p>
+    <p>${escapeHtml(body.whatYouGet)}</p>
+    <ul>
+      ${values.scopes.map((scope) => `<li>${escapeHtml(scope)}</li>`).join("\n      ")}
+    </ul>
+    <p>${escapeHtml(body.action)}</p>
+    <p>
+      <a href="${escapeHtml(values.acceptUrl)}" style="${BUTTON_STYLE}">
+        ${escapeHtml(body.button)}
+      </a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.fallback)}<br />
+      <a href="${escapeHtml(values.acceptUrl)}">${escapeHtml(values.acceptUrl)}</a>
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.expiry(values.expiresAt))}<br />
+      ${escapeHtml(body.noPassword)}
+    </p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.unexpected)}</p>
+    <p style="${MUTED_STYLE}">${escapeHtml(body.signoff).replace(/\n/gu, "<br />")}</p>
+  `);
+
+  return { subject: subject(values.organizationName), html, text };
+}
+
+/**
+ * The scope names, for the list in the email above.
+ *
+ * Here rather than in the worker because this package owns every user-visible
+ * string, and `DELEGATION_SCOPE_PERMISSIONS` in @bam/auth is deliberately the
+ * only *other* place a scope means anything — that one maps it to permissions,
+ * this one to words.
+ */
+const SCOPE_LABELS: Record<Locale, Record<string, string>> = {
+  hu: {
+    AVAILABILITY: "a munkaidő és a szabadságok kezelése",
+    BOOKINGS: "a foglalások megtekintése és kezelése",
+  },
+  en: {
+    AVAILABILITY: "setting working hours and time off",
+    BOOKINGS: "seeing and managing bookings",
+  },
+};
+
+export function delegationScopeLabel(locale: Locale, scope: string): string {
+  return SCOPE_LABELS[locale][scope] ?? scope;
+}
+
 // --- Bookings --------------------------------------------------------------
 
 /**
@@ -1423,6 +1570,7 @@ export const RENDERABLE_TYPES: readonly NotificationType[] = [
   NotificationTypes.BOOKING_REMINDER,
   NotificationTypes.ORGANIZATION_CREATED,
   NotificationTypes.PROVIDER_INVITED,
+  NotificationTypes.ASSISTANT_INVITED,
   NotificationTypes.SUBSCRIPTION_LINK,
   NotificationTypes.SUBSCRIPTION_CONFIRMED,
   NotificationTypes.TRIAL_ENDING_SOON,

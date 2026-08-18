@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { PrismaClient } from "@bam/db";
+import type { DelegationScope, PrismaClient } from "@bam/db";
 import { canHoldTenantMembership, INVITABLE_ROLES, Roles, type Role } from "@bam/auth";
 import {
   ConflictError,
@@ -31,6 +31,18 @@ export interface InviteResult {
  * resolved the row through `ProviderRepository.findByIdOrThrow`, which carries
  * the `tenantId` rule 5 requires, and this method has no business re-reading it.
  */
+export interface InviteDelegateInput {
+  tenantId: string;
+  provider: { id: string; displayName: string; archivedAt: Date | null };
+  /** Typed by the owner. Unlike a provider invitation, there is no record to read it from. */
+  email: string;
+  scopes: DelegationScope[];
+  invitedByUserId: string;
+  /** Credited in the email. Null falls back to the organization's name. */
+  invitedByName: string | null;
+  expiryHours: number;
+}
+
 export interface InviteProviderInput {
   tenantId: string;
   provider: { id: string; displayName: string; email: string | null; archivedAt: Date | null };
@@ -414,6 +426,124 @@ export class MembershipService {
     }
   }
 
+  /**
+   * Invite somebody who has no account yet to assist on one diary.
+   * docs/phase-3-4-diary-delegation.md §2.13.
+   *
+   * A third named method beside {@link invite} and {@link inviteProvider}, for
+   * the reason `inviteProvider`'s own comment gives: an optional parameter on
+   * `invite` would be a second, undocumented way to reach a feature that has
+   * its own screen and its own authorization.
+   *
+   * **The assignment travels on the invitation** and is made by
+   * `claimInvitation` in the transaction that burns the token, so there is no
+   * window in which the person is a member of the organization holding nothing.
+   * That is the same property phase-9-provider-onboarding §2.7 established for
+   * the provider's own link, and it is worth as much here: an ASSISTANT with no
+   * assignment can see nothing at all, so a half-completed acceptance would look
+   * exactly like a permissions bug.
+   *
+   * The address is typed by the owner rather than read from a record, unlike
+   * `inviteProvider`. There is no record to read — that is what makes this an
+   * invitation rather than a grant.
+   */
+  async inviteDelegate(input: InviteDelegateInput): Promise<InviteResult & { email: string }> {
+    const { tenantId, provider } = input;
+
+    if (provider.archivedAt !== null) {
+      throw new ValidationError(
+        "This provider is archived. Restore them before inviting an assistant.",
+        { field: "providerId" },
+      );
+    }
+
+    const email = input.email.toLowerCase();
+    const scopes = [...new Set(input.scopes)];
+
+    // Already in the organization: the owner wants the *assign* action, not
+    // this one. Named rather than silently redirected — a button that sometimes
+    // sends an email and sometimes does not is worse than one that says so.
+    const existingMember = await this.prisma.membership.findFirst({
+      where: { tenantId, user: { email } },
+      select: { id: true },
+    });
+
+    if (existingMember) {
+      throw new ConflictError(
+        ErrorCodes.VALIDATION_FAILED,
+        "That person is already a member. Assign them from the list instead of inviting them.",
+        { field: "email" },
+      );
+    }
+
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + input.expiryHours * 60 * 60 * 1000);
+
+    try {
+      const invitation = await this.prisma.$transaction(async (tx) => {
+        // Superseded on the address alone, tenant-wide, matching {@link invite}
+        // — because `invitations_tenant_email_pending_key` allows exactly one
+        // live invitation per address per tenant and has since Epic 1.
+        //
+        // The consequence is worth stating, because the first draft of this
+        // assumed the opposite: inviting somebody for a second diary *replaces*
+        // their first invitation rather than adding to it. Giving one person two
+        // diaries means letting them accept one and then assigning the second,
+        // which is exactly what the two actions on the Delegates panel are for.
+        await tx.invitation.updateMany({
+          where: { tenantId, status: "PENDING", email },
+          data: { status: "REVOKED" },
+        });
+
+        const created = await tx.invitation.create({
+          data: {
+            tenantId,
+            email,
+            role: Roles.ASSISTANT,
+            delegatedProviderId: provider.id,
+            delegatedScopes: scopes,
+            tokenHash: hashToken(token),
+            expiresAt,
+            invitedByUserId: input.invitedByUserId,
+          },
+        });
+
+        await tx.outboxEvent.create({
+          data: {
+            tenantId,
+            eventType: "ASSISTANT_INVITED",
+            // The diary, matching PROVIDER_INVITED, so both land in the worker's
+            // Provider handler and neither is mistaken for a tenant event.
+            aggregateType: "Provider",
+            aggregateId: provider.id,
+            // The raw token: this is the only moment it exists, since only its
+            // hash is stored (tech-impl §34.4). `markProcessed` clears this.
+            payload: {
+              email,
+              providerName: provider.displayName,
+              invitedByName: input.invitedByName,
+              invitationToken: token,
+              expiresAt: expiresAt.toISOString(),
+            },
+          },
+        });
+
+        return created;
+      });
+
+      return { invitationId: invitation.id, token, expiresAt, email };
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new ConflictError(
+          ErrorCodes.VALIDATION_FAILED,
+          "An invitation for this person and this diary was just created. Refresh before sending another.",
+        );
+      }
+
+      throw error;
+    }
+  }
+
   async listInvitations(tenantId: string) {
     return this.prisma.invitation.findMany({
       where: { tenantId, status: "PENDING" },
@@ -646,6 +776,8 @@ export class MembershipService {
       role: Role;
       invitedByUserId: string;
       providerId: string | null;
+      delegatedProviderId: string | null;
+      delegatedScopes: DelegationScope[];
     },
     userId: string,
   ) {
@@ -686,6 +818,52 @@ export class MembershipService {
             providerId: invitation.providerId,
           },
         });
+
+        // The assistant's diary assignment, made here for the same reason the
+        // provider's link is: an ASSISTANT with no assignment can see nothing
+        // at all, so a membership created without it would be indistinguishable
+        // from a permissions bug (docs/phase-3-4-diary-delegation.md §2.13).
+        if (invitation.delegatedProviderId !== null) {
+          // Re-read inside the transaction, exactly as the provider link above
+          // is: the diary may have been archived between the email being sent
+          // and the link being clicked, and assigning somebody to an archived
+          // one produces access to a row every query excludes.
+          const diary = await tx.provider.findFirst({
+            where: {
+              id: invitation.delegatedProviderId,
+              tenantId: invitation.tenantId,
+              archivedAt: null,
+            },
+            select: { id: true },
+          });
+
+          if (!diary) {
+            throw new ConflictError(
+              ErrorCodes.PROVIDER_NOT_FOUND,
+              "The diary this invitation was for is no longer active. Ask the organization to invite you again.",
+            );
+          }
+
+          // Upsert rather than create: the same person can be invited twice and
+          // accept the second link, and a second row is impossible anyway —
+          // `(providerId, membershipId)` is unique.
+          await tx.providerDelegation.upsert({
+            where: {
+              providerId_membershipId: {
+                providerId: diary.id,
+                membershipId: membership.id,
+              },
+            },
+            update: { scopes: invitation.delegatedScopes },
+            create: {
+              tenantId: invitation.tenantId,
+              providerId: diary.id,
+              membershipId: membership.id,
+              scopes: invitation.delegatedScopes,
+              grantedByUserId: invitation.invitedByUserId,
+            },
+          });
+        }
 
         await tx.invitation.update({
           where: { id: invitation.id },

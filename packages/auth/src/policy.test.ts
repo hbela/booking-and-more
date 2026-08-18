@@ -17,7 +17,8 @@ import {
   type Actor,
   type DelegatedProviderIds,
   can,
-  canDelegateProviderDiary,
+  canManageDelegations,
+  canReadProviderDelegates,
   delegatedProviderIdsFrom,
   providerIdsInScope,
   canBecomePlatformAdmin,
@@ -483,39 +484,77 @@ describe("delegated diaries", () => {
   });
 });
 
-describe("canDelegateProviderDiary", () => {
-  it("refuses a delegate, so a diary cannot be handed on", () => {
-    // §2.3, and the single most important assertion in the feature. With a
-    // delegated branch here, the set of people who can reach a provider's
-    // calendar would grow without the provider, the owner or the audit log
-    // naming anybody who decided it.
+describe("who decides who runs a diary", () => {
+  it("is the owner, and not the administrator", () => {
+    // The line most likely to be "fixed" by somebody reading the ADMIN row and
+    // seeing a gap. ADMIN holds `availability:manage:all` and may edit every
+    // schedule in the clinic; staffing is still the owner's (§2.3).
+    expect(canManageDelegations(actor({ role: Roles.OWNER }), TENANT_A)).toBe(true);
+    expect(canManageDelegations(actor({ role: Roles.ADMIN }), TENANT_A)).toBe(false);
+  });
+
+  it("is not the provider whose diary it is", () => {
+    const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
+    expect(canManageDelegations(provider, TENANT_A)).toBe(false);
+  });
+
+  it("is not a delegate, so a diary cannot be handed on", () => {
+    // Needs no special case any more: an ASSISTANT simply does not hold
+    // `delegation:manage`. There is no depth counter and no cycle check.
     const delegate = actor({
       role: Roles.ASSISTANT,
       delegated: grantOf("AVAILABILITY", PROVIDER_SELF),
     });
 
     expect(canBlockProviderTime(delegate, TENANT_A, PROVIDER_SELF)).toBe(true);
-    expect(canDelegateProviderDiary(delegate, TENANT_A, PROVIDER_SELF)).toBe(false);
+    expect(canManageDelegations(delegate, TENANT_A)).toBe(false);
   });
 
-  it("allows a provider over their own diary and nobody else's", () => {
+  it("does not carry across tenants", () => {
+    expect(canManageDelegations(actor({ role: Roles.OWNER, tenantId: TENANT_A }), TENANT_B)).toBe(
+      false,
+    );
+  });
+});
+
+describe("who may see who runs a diary", () => {
+  it("includes the provider whose diary it is, for their own only", () => {
+    // A provider does not choose their assistants and must still be told who
+    // has their week.
     const provider = actor({ role: Roles.PROVIDER, providerId: PROVIDER_SELF });
 
-    expect(canDelegateProviderDiary(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
-    expect(canDelegateProviderDiary(provider, TENANT_A, PROVIDER_OTHER)).toBe(false);
+    expect(canReadProviderDelegates(provider, TENANT_A, PROVIDER_SELF)).toBe(true);
+    expect(canReadProviderDelegates(provider, TENANT_A, PROVIDER_OTHER)).toBe(false);
   });
 
-  it("refuses a provider whose membership names no diary", () => {
-    const unlinked = actor({ role: Roles.PROVIDER });
-    expect(canDelegateProviderDiary(unlinked, TENANT_A, PROVIDER_SELF)).toBe(false);
+  it("includes the owner, for every diary", () => {
+    const owner = actor({ role: Roles.OWNER });
+    expect(canReadProviderDelegates(owner, TENANT_A, PROVIDER_OTHER)).toBe(true);
   });
 
-  it("allows an owner or admin over anyone's diary, and only in their tenant", () => {
-    for (const role of [Roles.OWNER, Roles.ADMIN]) {
-      const administrator = actor({ role });
-      expect(canDelegateProviderDiary(administrator, TENANT_A, PROVIDER_OTHER)).toBe(true);
-      expect(canDelegateProviderDiary(administrator, TENANT_B, PROVIDER_OTHER)).toBe(false);
-    }
+  it("excludes an administrator with no diary of their own", () => {
+    // Consistent with not being able to decide it. An ADMIN who *is* linked to
+    // a diary sees that one, because at that point they are its provider.
+    expect(canReadProviderDelegates(actor({ role: Roles.ADMIN }), TENANT_A, PROVIDER_OTHER)).toBe(
+      false,
+    );
+    expect(
+      canReadProviderDelegates(
+        actor({ role: Roles.ADMIN, providerId: PROVIDER_SELF }),
+        TENANT_A,
+        PROVIDER_SELF,
+      ),
+    ).toBe(true);
+  });
+
+  it("excludes a delegate, even of that very diary", () => {
+    // Knowing who else holds a diary is not part of running it.
+    const delegate = actor({
+      role: Roles.ASSISTANT,
+      delegated: grantOf("BOOKINGS", PROVIDER_SELF),
+    });
+
+    expect(canReadProviderDelegates(delegate, TENANT_A, PROVIDER_SELF)).toBe(false);
   });
 });
 
@@ -648,6 +687,15 @@ describe("delegation table invariants", () => {
       expect(permissions.length).toBeGreaterThan(0);
       for (const permission of permissions) expect(known.has(permission)).toBe(true);
     }
+  });
+
+  it("gives delegation:manage to the owner alone", () => {
+    // Asserted over the whole table rather than as two spot checks, so a role
+    // added later cannot pick it up unnoticed.
+    const holders = ALL_ROLES.filter((role) =>
+      ROLE_PERMISSIONS[role].includes(Permissions.DELEGATION_MANAGE),
+    );
+    expect(holders).toEqual([Roles.OWNER]);
   });
 
   it("makes exactly the front desk able to receive a diary", () => {

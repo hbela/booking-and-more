@@ -11,8 +11,10 @@ import {
   renderBookingUpdated,
   renderCalendarDisconnected,
   renderOrganizationCreated,
+  renderAssistantInvited,
   renderProviderInvited,
   renderSubscriptionConfirmed,
+  delegationScopeLabel,
 } from "./templates.js";
 import { NotificationTypes, type NotificationType } from "./types.js";
 
@@ -321,6 +323,7 @@ describe("isRenderable", () => {
   it("knows the templates that exist", () => {
     expect(isRenderable(NotificationTypes.ORGANIZATION_CREATED)).toBe(true);
     expect(isRenderable(NotificationTypes.PROVIDER_INVITED)).toBe(true);
+    expect(isRenderable(NotificationTypes.ASSISTANT_INVITED)).toBe(true);
     expect(isRenderable(NotificationTypes.BOOKING_CONFIRMATION)).toBe(true);
     expect(isRenderable(NotificationTypes.BOOKING_REQUESTED)).toBe(true);
     expect(isRenderable(NotificationTypes.BOOKING_REMINDER)).toBe(true);
@@ -611,5 +614,93 @@ describe("renderBookingReminder", () => {
       "the email you received when you booked",
     );
     expect(renderBookingReminder("hu", booking).text).toContain("foglaláskor kapott levélben");
+  });
+});
+
+describe("renderAssistantInvited", () => {
+  const invited = {
+    organizationName: "Wellness Kft",
+    providerName: "Dr. Kovács Anna",
+    invitedByName: "Nagy Béla",
+    scopes: ["seeing and managing bookings"],
+    acceptUrl: "http://localhost:3000/en/invitations/abc123",
+    expiresAt: "2026-08-11 10:00",
+  };
+
+  it.each(["hu", "en"] as const)("renders %s with a subject, html and text", (locale) => {
+    const email = renderAssistantInvited(locale, invited);
+
+    expect(email.subject).toContain("Wellness Kft");
+    expect(email.html).toContain(invited.acceptUrl);
+    expect(email.text).toContain(invited.acceptUrl);
+  });
+
+  it("names the provider they are being asked to assist", () => {
+    // The one fact that makes this email answerable. Without it the recipient
+    // is being handed somebody's diary and not told whose.
+    const email = renderAssistantInvited("en", invited);
+
+    expect(email.text).toContain("Dr. Kovács Anna");
+    expect(email.html).toContain("Dr. Kovács Anna");
+  });
+
+  it("never greets the recipient as the provider", () => {
+    // The mistake a shared template with renderProviderInvited would make, and
+    // the reason the two are separate functions. This recipient is *not* the
+    // provider named in the body.
+    const email = renderAssistantInvited("en", invited);
+
+    expect(email.text.startsWith("Dear Dr. Kovács Anna")).toBe(false);
+    expect(email.subject).not.toContain("Kovács");
+  });
+
+  it("lists what the invitation covers, in both parts", () => {
+    const email = renderAssistantInvited("en", {
+      ...invited,
+      scopes: ["setting working hours and time off", "seeing and managing bookings"],
+    });
+
+    for (const part of [email.text, email.html]) {
+      expect(part).toContain("setting working hours and time off");
+      expect(part).toContain("seeing and managing bookings");
+    }
+  });
+
+  it("credits whoever invited them", () => {
+    expect(renderAssistantInvited("en", invited).text).toContain("Nagy Béla");
+  });
+
+  it("says no password is coming, in both parts", () => {
+    const email = renderAssistantInvited("en", invited);
+
+    expect(email.text).toMatch(/never email passwords/iu);
+    expect(email.html).toMatch(/never email passwords/iu);
+  });
+
+  it("escapes a provider name that contains markup", () => {
+    const email = renderAssistantInvited("en", {
+      ...invited,
+      providerName: '<script>alert("x")</script>',
+    });
+
+    expect(email.html).not.toContain("<script>");
+  });
+});
+
+describe("delegationScopeLabel", () => {
+  it("names both scopes in both locales", () => {
+    for (const locale of ["hu", "en"] as const) {
+      for (const scope of ["AVAILABILITY", "BOOKINGS"]) {
+        const label = delegationScopeLabel(locale, scope);
+        expect(label).toBeTruthy();
+        // Not the raw enum value: this is what a recipient reads.
+        expect(label).not.toBe(scope);
+      }
+    }
+  });
+
+  it("falls back to the raw value rather than throwing", () => {
+    // A database enum newer than this build must degrade, not 500 the sender.
+    expect(delegationScopeLabel("en", "BILLING_SOMEDAY")).toBe("BILLING_SOMEDAY");
   });
 });

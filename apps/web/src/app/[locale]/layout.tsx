@@ -5,7 +5,7 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { QueryProvider } from "@/lib/query-provider";
-import { THEME_SCRIPT } from "@/lib/theme-script";
+import { ThemeScript } from "@/components/theme-script";
 import "../globals.css";
 
 /**
@@ -87,12 +87,13 @@ export default async function LocaleLayout({
     // writes `data-theme` before React hydrates — the server rendered no such
     // attribute, so React would report a mismatch on every themed page load.
     <html lang={locale} className={`${inter.variable} ${manrope.variable}`} suppressHydrationWarning>
-      <head>
-        {/* First thing in <head>, synchronous, never deferred: it has to run
-            before the browser paints or the visitor sees a flash of the system
-            theme. See lib/theme-script.ts for why this is not read server-side. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
+      {/* Renders nothing. It emits the theme script into <head> while the
+          response streams — synchronous and never deferred, so it runs before
+          the browser paints and the visitor never sees a flash of the system
+          theme. See components/theme-script.tsx for why it is emitted rather
+          than rendered, and lib/theme-script.ts for why it is not read
+          server-side. */}
+      <ThemeScript />
       {/* Browser extensions — Grammarly is the common one — add attributes to
           <body> before React hydrates (`data-gr-ext-installed`,
           `data-new-gr-c-s-check-loaded`), which React reports as a mismatch

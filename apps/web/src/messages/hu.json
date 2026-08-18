@@ -245,6 +245,7 @@
     "inviteLinkFallback": "Inkább a link megjelenítése",
     "inviteLinkOnceHint": "Csak akkor kell, ha az e-mail nem érkezik meg. Egyszer jelenik meg — csak a kivonatát tároljuk, így később nem hívható elő.",
     "inviteFailed": "A meghívót nem sikerült elküldeni. Kérjük, próbálja újra.",
+    "manageAssistant": "Asszisztens kezelése",
     "close": "Bezárás"
   },
   "availability": {
@@ -309,7 +310,9 @@
     "reasonBlocked": "Szabadság idejére esik",
     "notDelegated": "Még egy naptárat sem ruháztak Önre. Egy szolgáltató a saját elérhetőségi képernyőjén adhatja át az övét.",
     "delegates": "Megbízottak",
-    "delegatesHint": "Akik a szolgáltató mellett kezelik ezt a naptárat. Minden megbízás az elérhetőségre, a foglalásokra vagy mindkettőre szólhat.",
+    "delegatesFor": "{name} asszisztensei",
+    "delegateClose": "Bezárás",
+    "delegatesHint": "Akik segítenek ennek a naptárnak a kezelésében. Ön dönti el, hogy ki, és mit tehet.",
     "delegatesEmpty": "Ezt a naptárat a szolgáltatón kívül senki sem kezeli. A recepció addig nem látja a foglalásait, amíg ide nem kerül valaki.",
     "delegateAdd": "Megbízott hozzáadása",
     "delegateChoose": "Tag",
@@ -328,7 +331,14 @@
     "delegateRevokeConfirm": "Visszaveszi a naptárat {name} felhasználótól? A következő műveletnél már nem fér hozzá.",
     "delegateFailed": "A módosítást nem sikerült menteni.",
     "delegateStaleRole": "A szerepkör már nem fogad naptárat",
-    "delegateNeedsOneScope": "Egy megbízottnak legalább az egyikre szüksége van. A hozzáférés teljes megszüntetéséhez használja a Visszavonás gombot."
+    "delegateNeedsOneScope": "Egy megbízottnak legalább az egyikre szüksége van. A hozzáférés teljes megszüntetéséhez használja a Visszavonás gombot.",
+    "delegatesHintProvider": "Akik segítenek az Ön naptárának kezelésében. Azt, hogy ki, a szervezet tulajdonosa dönti el — módosításért forduljon hozzá.",
+    "delegatesEmptyProvider": "Egyelőre senki sem segít az Ön naptárának kezelésében. Ha segítségre van szüksége, szóljon a szervezet tulajdonosának.",
+    "delegateInvite": "Új személy meghívása",
+    "delegateEmail": "E-mail cím",
+    "delegateSendInvite": "Meghívó küldése",
+    "delegateInviteSent": "A meghívót elküldtük. Ha nem érkezik meg, ez a link egyszer használható:",
+    "delegateInviteLinkOnce": "Másolja ki most — csak egyszer jelenik meg."
   },
   "integrations": {
     "title": "Google Naptár",

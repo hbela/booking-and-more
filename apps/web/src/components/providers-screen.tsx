@@ -35,6 +35,7 @@ import {
   type ProviderFormState,
 } from "./provider-fields";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { ProviderDelegates } from "./provider-delegates";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Callout, CalloutLink } from "./ui/callout";
@@ -63,9 +64,16 @@ export function ProvidersScreen(): React.ReactElement {
   const assignments = useEditPanel("provider-assignments");
   const edit = useEditPanel("provider");
   const invite = useEditPanel("provider-invite");
+  const assistants = useEditPanel("provider-assistants");
   const [showArchived, setShowArchived] = useState(false);
 
   const canManage = context.can("provider:manage");
+  // Staffing a diary is `delegation:manage`, which **only OWNER holds** — not
+  // the ADMIN who may edit every schedule in the clinic
+  // (docs/phase-3-4-diary-delegation.md §2.3). Deliberately a third permission
+  // rather than reusing either of the two above: the gap in the ADMIN row is
+  // the decision, and reading it as `provider:manage` would silently close it.
+  const canDelegate = context.can("delegation:manage");
   // The invite button asks for the permission the *route* asks for, which is
   // not `provider:manage`: what it creates is an invitation granting a
   // membership, and the provider is only the object (phase-9-provider-onboarding
@@ -84,6 +92,7 @@ export function ProvidersScreen(): React.ReactElement {
 
   const editing = providers.data?.items.find((provider) => provider.id === edit.openId);
   const inviting = providers.data?.items.find((provider) => provider.id === invite.openId);
+  const staffing = providers.data?.items.find((provider) => provider.id === assistants.openId);
 
   // What a provider needs before they can be booked. Fetched here rather than
   // inside the assignment panel because the point is to say so *before* someone
@@ -290,6 +299,24 @@ export function ProvidersScreen(): React.ReactElement {
                             >
                               {provider.active ? t("deactivate") : t("activate")}
                             </RowButton>
+                            {/* Who assists on this diary. The panel already
+                                existed, at the foot of the availability screen,
+                                which put staffing behind "open their diary and
+                                scroll" — and made it read as an availability
+                                setting rather than as who works here. This is
+                                the owner's route to it: same component, same
+                                rules, reached from the row that names the
+                                person. */}
+                            {!canDelegate ? null : (
+                              <RowButton
+                                onClick={() => {
+                                  assistants.toggle(provider.id);
+                                }}
+                                {...assistants.triggerProps(provider.id)}
+                              >
+                                {t("manageAssistant")}
+                              </RowButton>
+                            )}
                             <RowButton
                               onClick={() => {
                                 void apiFetch(`/v1/providers/${provider.id}`, {
@@ -345,6 +372,19 @@ export function ProvidersScreen(): React.ReactElement {
           providerId={assignments.openId}
           panelProps={assignments.panelProps}
           onClose={assignments.close}
+        />
+      ) : null}
+
+      {/* Keyed on the id so switching rows remounts rather than carrying the
+          previous provider's half-filled invite form across. */}
+      {staffing && context.tenantId ? (
+        <ProviderDelegates
+          key={staffing.id}
+          tenantId={context.tenantId}
+          providerId={staffing.id}
+          providerName={staffing.displayName}
+          panelProps={assistants.panelProps}
+          onClose={assistants.close}
         />
       ) : null}
 

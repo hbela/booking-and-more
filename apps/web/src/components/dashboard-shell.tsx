@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { signOut } from "@/lib/auth-client";
 import { apiFetch, type MeResponse, type TenantSummary } from "@/lib/api-client";
-import { hasPersonalDiary } from "@/lib/delegation";
+import { navFor } from "@/lib/dashboard-nav";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
 
@@ -91,115 +91,6 @@ export function useSignInRedirect(signedOut: boolean): void {
     }
   }, [signedOut, router]);
 }
-
-/**
- * `alwaysAvailable` marks the two destinations that survive the activation gate
- * (phase-9 §2.11): the overview, which explains the situation, and the
- * subscription screen, which resolves it. Everything else needs a tenant that
- * accepts writes.
- *
- * `permissions` is **any one of these**, and a caller holding none of them does
- * not see the item at all. That is deliberately the opposite of the activation
- * gate below, which disables and explains: that gate is temporary and the user
- * can resolve it, so naming the reason is useful. A permission somebody will
- * never hold is not actionable, and an item announcing it on every page load is
- * noise (docs/phase-9-provider-onboarding.md §2.9).
- *
- * Advisory, like every other affordance here — the API re-authorises each
- * request, so hiding an item has never been what stops anything. The literals
- * are strings rather than `Permissions.*` because `@bam/auth` is not a
- * dependency of this app and every other call site spells them out too; the
- * risk that a typo silently hides an item is recorded in that record's §7.
- */
-const NAV = [
-  // Ungated on purpose. It is the only screen guaranteed reachable —
-  // `landingFor()` sends everyone here, and so does the sign-in redirect — so
-  // an unreachable current page would be a worse failure than a spare item.
-  { href: "/dashboard", key: "overview" as const, alwaysAvailable: true, permissions: null },
-  {
-    href: "/dashboard/subscription",
-    key: "subscription" as const,
-    alwaysAvailable: true,
-    permissions: ["billing:manage"],
-  },
-  // Bookings sit first among the gated items, ahead of the catalogue: the
-  // catalogue is configured once and the diary is looked at every day.
-  // All three scopes: a provider's own bookings are the point of that role, and
-  // `booking:read:delegated` is the *only* one an ASSISTANT holds since diary
-  // delegation — omitting it would remove Bookings from every front desk in
-  // every organization (docs/phase-3-4-diary-delegation.md §6.3).
-  {
-    href: "/dashboard/bookings",
-    key: "bookings" as const,
-    alwaysAvailable: false,
-    permissions: ["booking:read:all", "booking:read:own", "booking:read:delegated"],
-  },
-  // The catalogue then runs in the order it has to be built, which is not the
-  // order it was written in. A provider is booked *for a service*, so a provider
-  // created first has nothing to offer and cannot appear on the booking page;
-  // availability comes last because it needs a provider to belong to. Locations
-  // sit next to services because both stand alone — neither needs anything else
-  // to exist first.
-  {
-    href: "/dashboard/services",
-    key: "services" as const,
-    alwaysAvailable: false,
-    permissions: ["service:manage"],
-  },
-  {
-    href: "/dashboard/locations",
-    key: "locations" as const,
-    alwaysAvailable: false,
-    permissions: ["location:manage"],
-  },
-  {
-    href: "/dashboard/providers",
-    key: "providers" as const,
-    alwaysAvailable: false,
-    permissions: ["provider:manage"],
-  },
-  // PARKED 2026-08-17 — Epic 6 part 1. The route itself is parked as
-  // `_integrations` (Next's private-folder convention), so this item would
-  // 404; the `integrations` message keys stay in en.json and hu.json.
-  //
-  // Google Calendar, after the catalogue: a connection is aimed at a provider's
-  // diary, so there has to be one to aim at. Both scopes, like bookings — a
-  // provider connects their own account, an administrator connects anyone's
-  // (docs/phase-6-google-calendar-part-1.md §7.9). An ASSISTANT holds neither
-  // and does not see the item: the front desk manages bookings and no settings.
-  //
-  // {
-  //   href: "/dashboard/integrations",
-  //   key: "integrations" as const,
-  //   alwaysAvailable: false,
-  //   permissions: ["integration:manage:all", "integration:manage:own"],
-  // },
-  // Availability is deliberately absent. It belongs to a provider, not to the
-  // organization: an owner reaches one diary at a time from the row on
-  // Providers, and a member who *is* a provider gets the item back below,
-  // pointing at their own. A top-level entry implied the owner fills it in,
-  // which is the opposite of who decides (phase-2-3 §2.7).
-  //
-  // Diary delegation adds a third way to get the item back — a grant — and does
-  // not change this. `hasPersonalDiary` is false for an administrator on
-  // purpose; see its doc comment.
-];
-
-/**
- * Appended for a member who has a diary to reach — their own, or one handed to
- * them (docs/phase-3-4-diary-delegation.md §6.3).
- *
- * Gated by data rather than by permission, and now by two kinds of it, because
- * data is the stricter test: `availability:manage:own` without a linked diary
- * matches nothing at all, and `availability:manage:delegated` with no grant
- * matches nothing either. An item that always 403s is worse than an absent one.
- */
-const DIARY = {
-  href: "/dashboard/availability",
-  key: "availability" as const,
-  alwaysAvailable: false,
-  permissions: null,
-};
 
 /** One node, referenced by every disabled item, so the reason is announced. */
 const GATE_HINT_ID = "nav-gate-reason";
@@ -286,52 +177,48 @@ export function DashboardShell({
       {context.tenantId && !context.isPending ? (
         <nav aria-label={t("sections")}>
           <ul className="flex flex-wrap gap-1 border-b border-line">
-            {(hasPersonalDiary(context.me, "AVAILABILITY") ? [...NAV, DIARY] : NAV)
-              .filter(
-                (item) =>
-                  item.permissions === null ||
-                  item.permissions.some((permission) => context.can(permission)),
-              )
-              .map((item) => {
-                const current = pathname === item.href;
-                const gated = context.awaitingSubscription && !item.alwaysAvailable;
+            {/* Already filtered — both gates live in lib/dashboard-nav.ts, so
+                this maps and does not decide. */}
+            {navFor(context.me).map((item) => {
+              const current = pathname === item.href;
+              const gated = context.awaitingSubscription && !item.alwaysAvailable;
 
-                // Rendered as a span, not a dimmed Link. An anchor stays
-                // focusable and still activates on Enter however it is painted,
-                // so a "disabled" one would navigate anyway — to a screen that
-                // 403s, which is the failure this exists to remove.
-                if (gated) {
-                  return (
-                    <li key={item.href}>
-                      <span
-                        aria-disabled="true"
-                        aria-describedby={GATE_HINT_ID}
-                        className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-ink-subtle"
-                      >
-                        {t(item.key)}
-                      </span>
-                    </li>
-                  );
-                }
-
+              // Rendered as a span, not a dimmed Link. An anchor stays
+              // focusable and still activates on Enter however it is painted,
+              // so a "disabled" one would navigate anyway — to a screen that
+              // 403s, which is the failure this exists to remove.
+              if (gated) {
                 return (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      // aria-current is what a screen reader announces; the
-                      // underline is only its visual echo.
-                      aria-current={current ? "page" : undefined}
-                      className={`inline-block border-b-2 px-3 py-2 text-sm ${
-                        current
-                          ? "border-primary font-medium"
-                          : "border-transparent text-ink-muted hover:text-ink"
-                      }`}
+                    <span
+                      aria-disabled="true"
+                      aria-describedby={GATE_HINT_ID}
+                      className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-ink-subtle"
                     >
                       {t(item.key)}
-                    </Link>
+                    </span>
                   </li>
                 );
-              })}
+              }
+
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    // aria-current is what a screen reader announces; the
+                    // underline is only its visual echo.
+                    aria-current={current ? "page" : undefined}
+                    className={`inline-block border-b-2 px-3 py-2 text-sm ${
+                      current
+                        ? "border-primary font-medium"
+                        : "border-transparent text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    {t(item.key)}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
 
           {/* The reason, once, referenced by every disabled item above. A

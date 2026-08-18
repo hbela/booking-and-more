@@ -52,6 +52,21 @@ export function diaryScopeFor(
 }
 
 /**
+ * Does this member reach any diary at all for `scope`?
+ *
+ * True for an administrator, who reaches every diary. Use this where the screen
+ * is genuinely organization-wide — the bookings list is — and
+ * {@link hasPersonalDiary} where it belongs to one provider.
+ *
+ * The point of asking at all is that since delegation a permission no longer
+ * implies a diary: `booking:read:delegated` is held by every ASSISTANT from the
+ * moment they join, and authorises nothing until somebody grants them one.
+ */
+export function hasAnyDiary(scope: DiaryScope): boolean {
+  return scope.everyDiary || scope.providerIds.length > 0;
+}
+
+/**
  * Does this member have a diary of their *own* to reach — theirs, or one handed
  * to them?
  *

@@ -35,6 +35,8 @@ export const NotificationTypes = {
   SUBSCRIPTION_CONFIRMED: "SUBSCRIPTION_CONFIRMED",
   /** A provider invited to set up their own login for their own diary. */
   PROVIDER_INVITED: "PROVIDER_INVITED",
+  /** Somebody invited to assist on one provider's diary, carrying the assignment. */
+  ASSISTANT_INVITED: "ASSISTANT_INVITED",
 } as const;
 
 export type NotificationType = (typeof NotificationTypes)[keyof typeof NotificationTypes];

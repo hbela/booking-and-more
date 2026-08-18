@@ -11,8 +11,10 @@ import {
   renderBookingRequested,
   renderBookingUpdated,
   renderCalendarDisconnected,
+  delegationScopeLabel,
   renderOrganizationCreated,
   renderPaymentFailed,
+  renderAssistantInvited,
   renderProviderInvited,
   renderSubscriptionConfirmed,
   renderSubscriptionLink,
@@ -435,6 +437,40 @@ function render(notification: RenderableNotification, logger: Logger): RenderedE
     return renderOrganizationCreated(locale, {
       organizationName: payload.organizationName,
       ownerName: payload.ownerName ?? payload.organizationName,
+      acceptUrl: payload.acceptUrl,
+      expiresAt: formatExpiry(payload.expiresAt ?? null, locale),
+    });
+  }
+
+  if (notification.type === NotificationTypes.ASSISTANT_INVITED) {
+    const payload = notification.payload as {
+      organizationName?: string;
+      providerName?: string;
+      invitedByName?: string | null;
+      scopes?: string[];
+      acceptUrl?: string;
+      expiresAt?: string | null;
+    } | null;
+
+    if (!payload?.acceptUrl || !payload.organizationName) {
+      logger.error(
+        { notificationId: notification.id },
+        "notification: assistant invitation payload is missing; cannot render",
+      );
+      return undefined;
+    }
+
+    return renderAssistantInvited(locale, {
+      organizationName: payload.organizationName,
+      // The diary they are being given. Falls back to the organization rather
+      // than to the recipient's own address, which would read as though they
+      // were being invited to assist themselves.
+      providerName: payload.providerName || payload.organizationName,
+      invitedByName: payload.invitedByName ?? payload.organizationName,
+      // Localized here, where the locale is known. An empty list would leave
+      // "The invitation covers:" followed by nothing, so it falls back to
+      // naming the organization's diary in general terms.
+      scopes: (payload.scopes ?? []).map((scope) => delegationScopeLabel(locale, scope)),
       acceptUrl: payload.acceptUrl,
       expiresAt: formatExpiry(payload.expiresAt ?? null, locale),
     });

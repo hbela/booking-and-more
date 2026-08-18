@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { THEME_SCRIPT } from "@/lib/theme-script";
+import { ThemeScript } from "@/components/theme-script";
 import "./globals.css";
 
 /**
@@ -17,9 +17,7 @@ import "./globals.css";
 export default function NotFound(): React.ReactElement {
   return (
     <html lang="hu" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
+      <ThemeScript />
       <body>
         <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-6">
           <p className="font-display text-sm font-semibold tracking-widest text-primary uppercase">

@@ -245,6 +245,7 @@
     "inviteLinkFallback": "Show the link instead",
     "inviteLinkOnceHint": "Only needed if the email does not arrive. Shown once — we store only a hash of it, so it cannot be recovered later.",
     "inviteFailed": "The invitation could not be sent. Please try again.",
+    "manageAssistant": "Manage assistant",
     "close": "Close"
   },
   "availability": {
@@ -309,7 +310,9 @@
     "reasonBlocked": "During time off",
     "notDelegated": "No diaries have been delegated to you yet. A provider can hand you theirs from their own availability screen.",
     "delegates": "Delegates",
-    "delegatesHint": "People who manage this diary alongside the provider. Each grant covers availability, bookings, or both.",
+    "delegatesFor": "Assistants for {name}",
+    "delegateClose": "Close",
+    "delegatesHint": "People who assist on this diary. You choose who, and what each of them may do.",
     "delegatesEmpty": "Nobody manages this diary but the provider. Front-desk staff cannot see its bookings until somebody is added here.",
     "delegateAdd": "Add a delegate",
     "delegateChoose": "Member",
@@ -328,7 +331,14 @@
     "delegateRevokeConfirm": "Take this diary back from {name}? They lose access on their next action.",
     "delegateFailed": "That change could not be saved.",
     "delegateStaleRole": "Role no longer accepts diaries",
-    "delegateNeedsOneScope": "A delegate needs at least one of the two. Use Revoke to remove their access entirely."
+    "delegateNeedsOneScope": "A delegate needs at least one of the two. Use Revoke to remove their access entirely.",
+    "delegatesHintProvider": "People who assist on your diary. The organization owner decides who — ask them to change it.",
+    "delegatesEmptyProvider": "Nobody assists on your diary yet. Ask the organization owner if you need help managing it.",
+    "delegateInvite": "Invite someone new",
+    "delegateEmail": "Email address",
+    "delegateSendInvite": "Send invitation",
+    "delegateInviteSent": "Invitation sent. If it does not arrive, this link works once:",
+    "delegateInviteLinkOnce": "Copy it now — it is shown only once."
   },
   "integrations": {
     "title": "Google Calendar",

@@ -134,6 +134,9 @@ const TEMPLATES: Record<NotificationType, string> = {
   // Written by the outbox dispatcher when an owner invites a provider to set up
   // their own login (phase-9-provider-onboarding §4). Not a booking event.
   [NotificationTypes.PROVIDER_INVITED]: "provider-invited",
+  // Written by the outbox dispatcher when an owner invites somebody to assist
+  // on a diary (docs/phase-3-4-diary-delegation.md §2.13). Not a booking event.
+  [NotificationTypes.ASSISTANT_INVITED]: "assistant-invited",
 };
 
 export function planNotifications(input: PlanNotificationsInput): NotificationPlanResult {

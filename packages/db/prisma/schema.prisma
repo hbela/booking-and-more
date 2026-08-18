@@ -352,7 +352,30 @@ model Invitation {
   /// cascade fail, breaking `db:discard-organization`.
   /// docs/phase-9-provider-onboarding.md §2.2.
   providerId String?   @map("provider_id")
-  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  provider   Provider? @relation("InvitationProviderLogin", fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// The diary this invitation *delegates* on acceptance — deliberately a
+  /// different column from `providerId` above, which says the membership *is*
+  /// that diary. docs/phase-3-4-diary-delegation.md §2.13.
+  ///
+  /// They cannot share a column. `invitations_provider_pending_key` allows at
+  /// most one live invitation per diary, which is right for a login and wrong
+  /// here: a provider must be able to have a pending login invitation of their
+  /// own *and* a pending invitation for an assistant at the same time. Sharing
+  /// the column would make those two mutually exclusive for no reason anybody
+  /// could discover from the error.
+  ///
+  /// `Cascade`, matching `providerId` and for the same reason: an invitation
+  /// whose diary is gone is a promise nobody can keep, and silently downgrading
+  /// it to a bare ASSISTANT invitation would grant a role over no diary and
+  /// tell nobody.
+  delegatedProviderId String?   @map("delegated_provider_id")
+  delegatedProvider   Provider? @relation("InvitationDelegatedDiary", fields: [delegatedProviderId], references: [id], onDelete: Cascade)
+
+  /// What the pending grant covers. Empty unless `delegatedProviderId` is set,
+  /// and non-empty when it is — a CHECK in the migration enforces both halves,
+  /// because either one alone is a grant that means nothing.
+  delegatedScopes DelegationScope[] @map("delegated_scopes")
 
   tokenHash String           @unique @map("token_hash")
   status    InvitationStatus @default(PENDING)
@@ -512,7 +535,10 @@ model Provider {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships Membership[]
-  invitations Invitation[]
+  /// Invitations that would give this diary a login of its own.
+  invitations Invitation[] @relation("InvitationProviderLogin")
+  /// Invitations that would hand this diary to an assistant.
+  delegatedInvitations Invitation[] @relation("InvitationDelegatedDiary")
   services    ProviderService[]
   locations   ProviderLocation[]
 
@@ -1341,6 +1367,10 @@ enum NotificationType {
   /// that also links their membership to their diary
   /// (phase-9-provider-onboarding §2.8). Appended, as above.
   PROVIDER_INVITED
+  /// Somebody with no account yet, invited to assist on one provider's diary
+  /// (docs/phase-3-4-diary-delegation.md §2.13). Appended, as every value here
+  /// must be: PostgreSQL can only add enum values at the end.
+  ASSISTANT_INVITED
 
   /// A booking for a service with `requiresApproval`: received, not yet
   /// accepted. Its own type rather than a second BOOKING_CONFIRMATION template,

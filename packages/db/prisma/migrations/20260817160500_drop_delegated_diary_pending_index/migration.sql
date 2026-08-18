@@ -1,0 +1,17 @@
+-- Drops an index added one migration ago that can never fire.
+--
+-- `invitations_delegated_diary_pending_key` was `(delegated_provider_id, email)
+-- WHERE status = 'PENDING'`, on the assumption that one person could hold two
+-- live invitations at once — one per diary. They cannot:
+-- `invitations_tenant_email_pending_key` (20260728143700) already allows **one
+-- live invitation per address per tenant**, full stop, and that is the older and
+-- broader rule. The new index was strictly weaker, so it never decided anything.
+--
+-- Kept as its own migration rather than edited into the one that created it,
+-- because that migration has been applied (rule 1: migrations are the only path
+-- to schema change, including undoing one). The collision is worth a record: the
+-- consequence is that inviting somebody for a second diary *supersedes* their
+-- first invitation, and the way to give one person two diaries is to let them
+-- accept, then assign the second — which is what the two separate actions on the
+-- Delegates panel are for. docs/phase-3-4-diary-delegation.md §2.13.
+DROP INDEX IF EXISTS "invitations_delegated_diary_pending_key";

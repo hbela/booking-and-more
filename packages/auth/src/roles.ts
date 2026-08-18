@@ -64,6 +64,21 @@ export const Permissions = {
   SERVICE_MANAGE: "service:manage",
   LOCATION_MANAGE: "location:manage",
 
+  /**
+   * Deciding who runs a provider's diary.
+   *
+   * Tenant-wide and deliberately **not** one of the `:all` / `:own` pairs. Who
+   * may work a diary is a question about that diary; who may *hand it to
+   * somebody* is a question about the organization's staff, and the answer is
+   * the owner. docs/phase-3-4-diary-delegation.md §2.3.
+   *
+   * Note what this being its own permission buys: ADMIN holds
+   * `availability:manage:all` and can edit every diary in the clinic, and still
+   * does not hold this. Expressing the rule as "may manage availability" would
+   * have handed it to them silently.
+   */
+  DELEGATION_MANAGE: "delegation:manage",
+
   AVAILABILITY_MANAGE_ALL: "availability:manage:all",
   AVAILABILITY_MANAGE_OWN: "availability:manage:own",
   /**
@@ -120,6 +135,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.PROVIDER_MANAGE,
     Permissions.SERVICE_MANAGE,
     Permissions.LOCATION_MANAGE,
+    Permissions.DELEGATION_MANAGE,
     Permissions.AVAILABILITY_MANAGE_ALL,
     Permissions.AVAILABILITY_MANAGE_OWN,
     Permissions.INTEGRATION_MANAGE_ALL,
@@ -132,7 +148,12 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.USAGE_READ,
   ],
 
-  // Everything operational, but not billing and not tenant settings.
+  // Everything operational, but not billing, not tenant settings, and — since
+  // diary delegation — not deciding who runs a diary. An ADMIN may edit every
+  // schedule in the clinic and may not hand one to anybody: staffing is the
+  // owner's (docs/phase-3-4-diary-delegation.md §2.3). The gap is deliberate
+  // and is asserted in policy.test.ts, because it is the one line here that
+  // looks like an omission.
   [Roles.ADMIN]: [
     Permissions.TENANT_READ,
     Permissions.MEMBER_MANAGE,

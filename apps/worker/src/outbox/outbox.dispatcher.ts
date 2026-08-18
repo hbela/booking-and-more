@@ -478,6 +478,10 @@ async function dispatchProviderEvent(
   event: ClaimedOutboxEvent,
   options: DispatcherOptions,
 ): Promise<DispatchOneResult> {
+  if (event.eventType === "ASSISTANT_INVITED") {
+    return dispatchAssistantInvited(event, options);
+  }
+
   if (event.eventType !== "PROVIDER_INVITED") {
     options.logger.debug(
       { eventId: event.id, eventType: event.eventType },
@@ -556,6 +560,114 @@ async function dispatchProviderEvent(
       organizationName: tenant.name,
       providerName: provider?.displayName ?? payload?.providerName ?? recipient,
       invitedByName: payload?.invitedByName ?? null,
+      acceptUrl: buildAppUrl({
+        baseUrl: options.appBaseUrl,
+        path: `/invitations/${token}`,
+        locale: tenant.defaultLanguage,
+      }),
+      expiresAt: payload?.expiresAt ?? null,
+    },
+  });
+
+  if (created === undefined) return { created: 0, duplicate: 1 };
+
+  await enqueueIfDue(options, {
+    tenantId: event.tenantId,
+    notificationId: created.id,
+    scheduledAtIso,
+  });
+
+  return { created: 1, duplicate: 0 };
+}
+
+/**
+ * Somebody invited to assist on one diary.
+ * docs/phase-3-4-diary-delegation.md §2.13.
+ *
+ * The sibling of `dispatchProviderEvent`'s own branch, and deliberately a
+ * separate function rather than a flag on it: the two emails address different
+ * people about different jobs, and the one thing this must not do is greet the
+ * recipient as the provider whose diary they are being given.
+ *
+ * The dedupe key is the event id, so a re-invite legitimately earns a second
+ * email — a re-invite means the first did not arrive.
+ */
+async function dispatchAssistantInvited(
+  event: ClaimedOutboxEvent,
+  options: DispatcherOptions,
+): Promise<DispatchOneResult> {
+  const payload = event.payload as {
+    email?: string;
+    providerName?: string;
+    invitedByName?: string | null;
+    invitationToken?: string;
+    expiresAt?: string;
+  } | null;
+
+  const recipient = payload?.email?.trim();
+  const token = payload?.invitationToken;
+
+  // A cleared payload means this event was already dispatched and re-claimed
+  // before the status write — correctly a no-op, since the notification exists.
+  if (recipient === undefined || recipient === "" || token === undefined) {
+    options.logger.warn(
+      { eventId: event.id },
+      "outbox: assistant invitation has no usable payload; already dispatched",
+    );
+    return { created: 0, duplicate: 0 };
+  }
+
+  const tenant = await options.prisma.tenant.findUnique({
+    where: { id: event.tenantId },
+    select: { name: true, defaultLanguage: true },
+  });
+
+  if (!tenant) {
+    options.logger.warn({ eventId: event.id }, "outbox: tenant is gone; dropping invitation");
+    return { created: 0, duplicate: 0 };
+  }
+
+  const provider = await options.prisma.provider.findFirst({
+    where: { id: event.aggregateId, tenantId: event.tenantId },
+    select: { displayName: true },
+  });
+
+  // Read from the invitation rather than the payload: the scopes are what the
+  // acceptance will actually apply, and an email that promised a different set
+  // would be a lie the recipient could not check.
+  const invitation = await options.prisma.invitation.findFirst({
+    where: {
+      tenantId: event.tenantId,
+      email: recipient,
+      delegatedProviderId: event.aggregateId,
+      status: "PENDING",
+    },
+    orderBy: { createdAt: "desc" },
+    select: { delegatedScopes: true },
+  });
+
+  const scheduledAtIso = new Date().toISOString();
+
+  const created = await persistNotification(options.prisma, event.tenantId, {
+    type: NotificationTypes.ASSISTANT_INVITED,
+    channel: NotificationChannels.EMAIL,
+    template: "assistant-invited",
+    // The organization's language: nothing is known about this person yet.
+    locale: resolveLocale({ tenantLanguage: tenant.defaultLanguage }),
+    recipient,
+    scheduledAtIso,
+    dedupeKey: buildDedupeKey({
+      type: NotificationTypes.ASSISTANT_INVITED,
+      channel: NotificationChannels.EMAIL,
+      eventId: event.id,
+    }),
+    bookingId: null,
+    customerId: null,
+    payload: {
+      organizationName: tenant.name,
+      providerName: provider?.displayName ?? payload?.providerName ?? "",
+      invitedByName: payload?.invitedByName ?? null,
+      scopes: invitation?.delegatedScopes ?? [],
       acceptUrl: buildAppUrl({
         baseUrl: options.appBaseUrl,
         path: `/invitations/${token}`,

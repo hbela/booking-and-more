@@ -114,6 +114,16 @@ export type DedupeInput =
       channel: NotificationChannel;
       eventId: string;
     }
+  /**
+   * Keyed on the outbox event, like every other invitation: re-inviting means
+   * the first one did not arrive. Keying on `(diary, address)` would send the
+   * first and swallow every resend, and a resend is the recovery path.
+   */
+  | {
+      type: typeof NotificationTypes.ASSISTANT_INVITED;
+      channel: NotificationChannel;
+      eventId: string;
+    }
   | {
       /**
        * Keyed on the outbox event, not the tenant: an owner who clicks
@@ -218,6 +228,7 @@ function discriminatorFor(input: DedupeInput): string[] {
 
     case NotificationTypes.ORGANIZATION_CREATED:
     case NotificationTypes.PROVIDER_INVITED:
+    case NotificationTypes.ASSISTANT_INVITED:
     case NotificationTypes.SUBSCRIPTION_LINK:
     case NotificationTypes.TRIAL_ENDING_SOON:
     case NotificationTypes.SUBSCRIPTION_PAYMENT_FAILED:

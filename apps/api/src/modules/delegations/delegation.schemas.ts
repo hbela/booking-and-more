@@ -64,3 +64,30 @@ export const myDelegationSchema = z.object({
   providerArchived: z.boolean(),
   scopes: z.array(delegationScopeSchema),
 });
+
+export const inviteDelegateBodySchema = z.object({
+  /**
+   * Typed by the owner. Unlike a provider invitation — where the address comes
+   * from the provider record and nowhere else, so a caller cannot attach an
+   * arbitrary mailbox to a named diary — there is no record to read here. That
+   * is what makes this an invitation rather than a grant, and the authorization
+   * that covers it is `delegation:manage`, which only an owner holds.
+   */
+  email: z.email(),
+  scopes: delegationScopesSchema,
+});
+
+export const inviteDelegateResponseSchema = z.object({
+  id: idSchema,
+  email: z.email(),
+  providerId: idSchema,
+  scopes: z.array(delegationScopeSchema),
+  expiresAt: z.iso.datetime({ offset: true }),
+  /**
+   * Shown once, and still returned even though an email is sent: the worker
+   * memoises its email provider at boot, and one that cannot deliver writes
+   * SKIPPED rather than a fake SENT (phase-9-owner-onboarding-emails §2).
+   * Without this an owner in that state has no recovery path at all.
+   */
+  acceptUrl: z.url(),
+});

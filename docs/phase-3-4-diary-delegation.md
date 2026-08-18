@@ -8,10 +8,11 @@ recorded so it would not read as a decision. This is the decision.
 ## Implementation Record
 
 **Document version:** 1.0 — planned 2026-08-17.
-**Scope:** a provider (or an owner or admin) grants a named member the right to manage that provider's
-availability, that provider's bookings, or both. One member holds grants from several providers. The
-`ASSISTANT` role is narrowed from clinic-wide to delegated-only, and a migration backfills the grants
-that keep today's behaviour intact.
+**Scope:** the **owner** assigns a named member to a provider's diary — its availability, its bookings, or
+both — and can invite somebody who has no account yet in one emailed action. One member holds assignments
+from several providers. The provider sees who assists them and does not choose them. The `ASSISTANT` role is
+narrowed from clinic-wide to delegated-only, and a migration backfills the assignments that keep today's
+behaviour intact.
 **Depends on:** [phase-2-3-owner-management.md](phase-2-3-owner-management.md) §2.7 (availability
 belongs to the provider — the line this feature bends, deliberately, and only by the provider's own
 act) and §2 (the whole-set `PUT` rule, which this deliberately does *not* invoke) ·
@@ -110,21 +111,43 @@ It is a second migration file rather than an addition to the first, so the DDL s
 what Prisma generated and the data change can be read, re-run and reverted on its own. `ON CONFLICT DO
 NOTHING` makes it idempotent.
 
-## 2.3 The granter is whoever may manage that diary — and `canDelegateProviderDiary` has no delegated branch
+## 2.3 The owner decides, and only the owner
 
-**Read this before touching `canDelegateProviderDiary`.**
+**Read this before widening who may staff a diary.**
 
-Who may grant is `canForProvider` with `{ all: AVAILABILITY_MANAGE_ALL, own: AVAILABILITY_MANAGE_OWN }`
-— the provider for their own diary, an owner or admin for anyone's. Owners and admins are included not
-as a convenience but because they already hold `:all`: they can do every delegated act themselves, so
-withholding the ability to name a delegate would protect nothing and would leave a provider with no
-login unable to have a delegate at all.
+Deciding who assists on a diary is `delegation:manage`, a permission **only OWNER holds**. Not the
+administrator; not the provider whose diary it is; not, obviously, a delegate.
 
-What is **absent** from that call is the `delegated` key, and that omission is the single most important
-line in this feature. With it, an assistant handed a diary could hand it on, and the set of people who
-can reach a provider's calendar would grow without the provider, the owner, or the audit log naming
-anybody who decided it. Delegation is one level deep by construction rather than by convention: there is
-no depth counter, no cycle check, and none is needed.
+The first version of this feature answered differently — the provider, the owner or the admin, expressed as
+`canForProvider` over the availability permissions. That was reversed on 2026-08-17, and the reasons are
+worth keeping because each one is an argument that will be made again:
+
+- **Staffing is not a property of a diary.** Every other rule here takes a `providerId`, because "may you
+  work this diary" is a question about that diary. "May you put somebody on the payroll's rota" has one
+  answer for the whole organization, so this rule is tenant-wide and takes no provider at all. The shape of
+  the function is the decision.
+- **It must be its own permission, not a reading of the availability ones.** ADMIN holds
+  `availability:manage:all` and may edit every schedule in the clinic. Expressing the rule as "may manage
+  availability" would have handed staffing to administrators silently, and nothing anywhere would have said
+  so. The ADMIN row of `ROLE_PERMISSIONS` now has a deliberate gap in it, which is exactly the kind of thing
+  that gets "fixed" by a later reader — so `policy.test.ts` asserts the holder list is `[OWNER]` over the
+  whole table rather than as a spot check.
+- **Re-delegation stops needing a special case.** The previous design turned on `canDelegateProviderDiary`
+  omitting its delegated branch, and that omission carried the entire one-level guarantee. Now an ASSISTANT
+  simply does not hold `delegation:manage`. There is no depth counter, no cycle check, and no branch to get
+  wrong.
+
+### 2.3.1 What the provider keeps
+
+**Reading.** A provider sees who assists on their own diary, and on nobody else's — `canReadProviderDelegates`,
+which is `canForProvider` with `{ all: DELEGATION_MANAGE, own: AVAILABILITY_MANAGE_OWN }` and **no delegated
+key**, so an assistant cannot enumerate the others. Knowing who else holds a diary is not part of running it.
+
+This is the smallest thing phase-2-3 §2.7 can survive on. That record puts availability in the provider's
+hands, and the owner now chooses who else touches it; being *told* who that is, on the screen where their
+own week lives, is the difference between a decision made for them and one made behind them.
+
+An ADMIN sees nothing here at all, which is consistent: they cannot decide it either.
 
 ## 2.4 The delegated set lives inside `Actor.membership`, not beside it
 
@@ -244,14 +267,38 @@ trying to book it is a 403.
 
 ## 2.10 Where the Delegates panel lives, and why not on the Providers screen
 
-On the **availability screen**, below Working hours and Exceptions. The reason is decisive rather than
-aesthetic: a `PROVIDER` holds no `provider:manage`, so the navigation filter removes the Providers screen
-for them entirely (phase-9-provider-onboarding §2.9). Putting delegation there would make the primary
-granter — the provider — unable to grant.
+On the **availability screen**, below Working hours and Exceptions — and the reason survived the move to
+owner-only staffing, which is worth noting because it originally rested on the provider being the granter.
 
-The availability screen is already the one screen a provider reaches for their own diary, and phase-2-3
-§2.9 already put diary decisions there. Owners and admins arrive at the same screen from the existing
-`?providerId=` link on each Providers row, so there is no new navigation and no second entry point.
+A `PROVIDER` holds no `provider:manage`, so the navigation filter removes the Providers screen for them
+entirely (phase-9-provider-onboarding §2.9). They no longer *decide* who assists them, but they do read it
+(§2.3.1), and this is the one screen they reach for their own diary. Putting the panel on Providers would
+put it somewhere they cannot go.
+
+One panel, two audiences: the owner gets controls, the provider gets a list. An ADMIN gets nothing — they
+cannot read it either.
+
+### 2.10.1 The owner also reaches it from the Providers row — amended 2026-08-18
+
+This section originally added "so there is no new navigation and no second entry point", and the owner's
+route was the existing `?providerId=` link on each Providers row. **That was wrong in use**, and the first
+attempt to staff a diary by hand is what showed it: the owner opens a provider's diary, scrolls past Working
+hours and Exceptions, and finds Delegates at the foot of a screen whose subject is *time*. Staffing is not a
+property of a diary — that is §2.3's whole argument, and the placement said the opposite.
+
+So a **Manage assistant** row action on Providers opens the same panel, beside Edit / Assign / Availability /
+Invite. Three things about it are deliberate:
+
+- **The same component, not a simpler one.** `ProviderDelegates` gained `providerName`, `panelProps` and
+  `onClose` and nothing else. A cut-down "just add and remove" panel is the tempting version and it is how
+  the empty-scope refusal (§6.1), the stale-role badge (§2.8) and the once-only invitation link (§6.1) come
+  to hold on one screen and not the other.
+- **Gated on `delegation:manage`, not on `provider:manage`.** Every other control in that row cell is behind
+  one of those two, and reusing either would hand staffing to an ADMIN silently — the exact failure §2.3
+  names as the reason this is its own permission. The gap in the ADMIN row of `ROLE_PERMISSIONS` is only a
+  decision if the screens read it.
+- **The availability panel stays.** It is the provider's only route to it (§2.10), and a PROVIDER holds no
+  `provider:manage`, so removing it would take the read away from the one person §2.3.1 exists for.
 
 ## 2.11 Eligibility is a permission question, which is what makes a stale row inert
 
@@ -278,6 +325,58 @@ bookings they may not read.
 `customerName` is therefore nulled unless `canReadProviderBookings` says otherwise. The dialog still
 works: the reference, the time, the service and the count are what the decision needs, and the schema's
 own comment already argues for that minimum.
+
+## 2.13 The invitation carries the assignment
+
+**Read this before touching `inviteDelegate` or `claimInvitation`.**
+
+Bringing in an assistant used to take two people and two screens: the owner invited them into the
+organization from Overview, then somebody assigned them to a diary. It also produced **no email at all** —
+`POST /v1/members/invitations` writes no outbox row, so the "copy this link" text was the entire delivery
+mechanism (phase-1 §5.1). That is how the gap was found: an owner sent an invitation and nothing arrived.
+
+So the owner now does it in one action, from the Delegates panel:
+`POST /v1/providers/:providerId/delegations/invitation` with an address and the scopes. The invitation
+carries `delegatedProviderId` and `delegatedScopes`, it is emailed, and **acceptance creates the membership
+and the assignment in the same transaction that burns the token**.
+
+That atomicity matters more here than it does for a provider's own link. A PROVIDER whose membership names
+no diary at least holds a role people recognise; an **ASSISTANT with no assignment can see nothing at all** —
+no Bookings item, no Availability item, an empty dashboard. A half-completed acceptance would be
+indistinguishable from a permissions bug, and the person it happened to would have no way to describe it.
+`claimInvitation` re-reads the diary inside the transaction and refuses an archived one, exactly as it does
+for the provider link, and for the same reason: the diary may have been archived between the email being
+sent and the link being clicked.
+
+### 2.13.1 Two columns, not one
+
+`Invitation.providerId` already exists and means "this membership **is** this diary". The new
+`delegatedProviderId` means "this membership **assists on** this diary". They cannot share a column, and not
+only because the meanings differ: `invitations_provider_pending_key` allows at most one live invitation per
+diary, which is right for a login and wrong for an assistant. Sharing would make a provider's own pending
+invitation and a pending assistant invitation mutually exclusive, for a reason nobody could discover from
+the error.
+
+A CHECK keeps the two new columns consistent — a diary with no scopes, or scopes with no diary, is a grant
+that means nothing.
+
+### 2.13.2 One address, one live invitation — the rule that won
+
+The first draft added `invitations_delegated_diary_pending_key` so that one person could hold two live
+invitations, one per diary. **It could never fire.**
+`invitations_tenant_email_pending_key` has allowed exactly one live invitation per address per tenant since
+Epic 1, and that rule is older, broader and deliberate: it is what makes "resend" unambiguous, because the
+newest link is always the only one that works.
+
+The index was dropped in its own migration rather than edited out of the one that added it (rule 1 covers
+undoing a migration as much as making one). The consequence is real and is now asserted: inviting somebody
+for a second diary **supersedes** their first invitation. Giving one person two diaries means letting them
+accept one and then assigning the second — which is what the two separate actions on the panel are for.
+
+### 2.13.3 Somebody who is already a member is refused
+
+Not silently converted into an assignment. A button that sometimes sends an email and sometimes quietly does
+something else is worse than one that says "assign them from the list instead" — and the list is right there.
 
 ---
 
@@ -356,20 +455,25 @@ member does not pay for it either.
 
 | method | path | who | body → result |
 | --- | --- | --- | --- |
-| `GET` | `/v1/providers/:providerId/delegations` | `canDelegateProviderDiary` | who holds this diary |
-| `GET` | `/v1/providers/:providerId/delegations/candidates` | `canDelegateProviderDiary` | eligible memberships, with `alreadyDelegated` |
-| `PUT` | `/v1/providers/:providerId/delegations/:membershipId` | `canDelegateProviderDiary` | `{ scopes }` → grant or re-scope |
-| `DELETE` | `/v1/providers/:providerId/delegations/:membershipId` | `canDelegateProviderDiary` | 204 |
-| `GET` | `/v1/me/delegations` | any member | whose diaries do I hold, in this tenant |
+| `GET` | `/v1/providers/:providerId/delegations` | owner, or that provider | who assists on this diary |
+| `GET` | `/v1/providers/:providerId/delegations/candidates` | owner | eligible members, with `alreadyDelegated` |
+| `PUT` | `/v1/providers/:providerId/delegations/:membershipId` | owner | `{ scopes }` → assign or re-scope |
+| `DELETE` | `/v1/providers/:providerId/delegations/:membershipId` | owner | 204 |
+| `POST` | `/v1/providers/:providerId/delegations/invitation` | owner | `{ email, scopes }` → emailed invitation (§2.13) |
+| `GET` | `/v1/me/delegations` | any member | whose diaries do I assist on, in this tenant |
 
-The write surface hangs off the diary because **the diary is the resource being granted**, the same
-reason working hours do. A top-level `/v1/delegations` would put the provider id in the body and make
-"may I edit this?" a body-dependent question.
+Everything but the first read is a plain `requirePermission(DELEGATION_MANAGE)` guard, because the answer
+does not depend on which diary is in the URL (§2.3). The first read does, so it asks
+`canReadProviderDelegates` in the handler.
 
-The candidates route exists rather than filtering `GET /v1/members` client-side because the eligibility
-rule — ACTIVE, role holds a `:delegated` permission, not this diary's own login — would otherwise live in
+The write surface hangs off the diary because **the diary is the resource being staffed**, the same reason
+working hours do. A top-level `/v1/delegations` would put the provider id in the body and move the tenant
+check away from the route that needs it.
+
+The candidates route exists rather than filtering `GET /v1/members` client-side because the eligibility rule
+— ACTIVE, role holds a `:delegated` permission, not this diary's own login — would otherwise live in
 `apps/web` as a role-string comparison, breaking rule 10 at the place it matters most. `/v1/members` also
-returns owners and admins, so the picker would offer "delegate to the owner" and then refuse it.
+returns owners and admins, so the picker would offer "assign the owner" and then refuse it.
 
 ## 5.2 Errors
 
@@ -393,10 +497,20 @@ sink (rule 6).
 
 # 6. Web
 
-## 6.1 The provider's Delegates panel
+## 6.1 The Delegates panel — one panel, two audiences
 
-§2.10. The render condition mirrors `canDelegateProviderDiary` exactly — including the absent delegated
-branch — so a delegate never sees a panel the API would refuse.
+§2.10. The owner gets **Assign an existing member** and **Invite someone new**, scope checkboxes on every
+row, and Revoke. The provider gets the same list rendered as text.
+
+Read-only means *text*, not disabled checkboxes: a disabled control invites the reader to work out how to
+enable it, and there is nothing they can do. Their empty state says so too — "ask the organization owner if
+you need help managing it" rather than the owner's "nobody manages this diary but the provider", because the
+two readers have different next actions and only one of them can act.
+
+The invitation's accept link is shown once alongside the "invitation sent" confirmation, for the reason
+phase-9-owner-onboarding-emails §2 gives: the worker memoises its email provider at boot, and one that
+cannot deliver writes SKIPPED rather than a fake SENT. Without the link an owner in that state has no
+recovery path at all.
 
 ## 6.2 The assistant's diary picker
 
@@ -404,13 +518,33 @@ Availability and bookings both become three-way: every provider for `:all`, othe
 otherwise an empty state. The empty state is distinct from the existing "not linked to a diary" one,
 because they are different problems with different fixes.
 
-## 6.3 Navigation — the two literals that would have shipped this invisible
+## 6.3 Navigation — where a permission stopped being enough
 
 `apps/web` does not depend on `@bam/auth`; permission strings are literals and nothing type-checks them
 (phase-9-provider-onboarding §7.5). Two of them decide whether this feature is reachable at all:
-`dashboard-shell.tsx`'s Bookings item lists `booking:read:all`, which an `ASSISTANT` no longer holds, and
-the Availability item is appended only for a membership that names a provider. Left alone, the change
+`dashboard-shell.tsx`'s Bookings item listed `booking:read:all`, which an `ASSISTANT` no longer holds, and
+the Availability item was appended only for a membership that names a provider. Left alone, the change
 removes Bookings from every front desk and never offers Availability to anyone it was built for.
+
+**Adding `booking:read:delegated` to that list is the obvious fix and it is wrong**, which is worth stating
+because it was written that way first and looked finished. An `ASSISTANT` holds that permission from the
+moment they join and reaches nothing until a provider hands them a diary, so the item would render for
+every assistant in every organization and 403 on click — the precise failure §2.9 removed for owners. The
+same is true of a `PROVIDER` holding `booking:read:own` whose membership names no diary.
+
+So **a permission is no longer a sufficient gate for these two items, and data is the second one**. Three
+of the four booking and availability permissions authorise nothing by themselves; holding one says only
+that the caller *could* be given a diary. `NavItem.requires` asks whether they have been.
+
+The two items differ in which question they ask, deliberately. Bookings uses `hasAnyDiary`, so an
+administrator sees it — the whole organization's day is genuinely their screen. Availability uses
+`hasPersonalDiary`, which is **false for an administrator on purpose**: a diary belongs to a provider, and
+an owner reaches one at a time from the Providers row (phase-2-3 §2.7). Reading `:all` as "has a diary"
+would quietly restore the top-level entry that record removed.
+
+The whole decision moved to `lib/dashboard-nav.ts` as a pure `navFor(me)` — both gates, in order — for the
+reason `member-diary.ts` and `working-hours.ts` are pure: it is the decision, and decisions get unit tests.
+`dashboard-nav.test.ts` asserts the resulting nav for every role, including the two empty-handed cases.
 
 ## 6.4 Localization
 
@@ -432,7 +566,12 @@ row whose diary has none. The real answer is an organization-level default (§10
 
 | escalation | closed by |
 | --- | --- |
-| a delegate hands the diary on | `canDelegateProviderDiary` has no delegated branch (§2.3) |
+| a delegate hands the diary on | they hold no `delegation:manage` (§2.3) |
+| an administrator staffs a diary | `delegation:manage` is OWNER-only, asserted over the whole role table (§2.3) |
+| a provider staffs their own diary | the same permission; they may read the list and nothing else (§2.3.1) |
+| an assistant enumerates a diary's other assistants | `canReadProviderDelegates` has no delegated key (§2.3.1) |
+| an invitation grants a membership but no diary | both rows are written in one transaction, or neither (§2.13) |
+| an invited assistant lands on an archived diary | the diary is re-read inside the acceptance transaction (§2.13) |
 | a grant in one tenant decides a resource in another | the set hangs off the membership (§2.4), and `canForProvider` re-asserts `isMemberOf` (§4.2) |
 | an assistant with no grants lists the whole tenant | `providerIdsInScope` returns `{ kind: "some", [] }`, refused explicitly (§4.3) |
 | a BOOKINGS grant edits a schedule | `DELEGATION_SCOPE_PERMISSIONS` maps BOOKINGS to booking permissions only (§2.4) |
@@ -450,47 +589,68 @@ row whose diary has none. The real answer is an organization-level default (§10
 
 | Area | Files |
 | --- | --- |
-| Schema | `ProviderDelegation` + `DelegationScope` in [schema.prisma](../packages/db/prisma/schema.prisma); migrations `20260817101441_provider_delegations` (with the hand-written CHECK) and `20260817101500_backfill_provider_delegations` |
-| Authorization | [roles.ts](../packages/auth/src/roles.ts) — three permissions, the rewritten `ASSISTANT` row, `DELEGATION_SCOPE_PERMISSIONS`, `roleCanReceiveDelegation`; [policy.ts](../packages/auth/src/policy.ts) — `DelegatedProviderIds`, `delegatedProviderIdsFrom`, the three-branch `canForProvider`, `canDelegateProviderDiary`, `providerIdsInScope` |
+| Schema | `ProviderDelegation` + `DelegationScope`, and `Invitation.delegatedProviderId` + `delegatedScopes`, in [schema.prisma](../packages/db/prisma/schema.prisma). Five migrations: `..101441_provider_delegations` (with the CHECK), `..101500_backfill_provider_delegations`, `..152753_invitation_carries_delegation` (with its own CHECK), `..154619_assistant_invited_notification`, `..160500_drop_delegated_diary_pending_index` (§2.13.2) |
+| Authorization | [roles.ts](../packages/auth/src/roles.ts) — four permissions, the rewritten `ASSISTANT` row, `DELEGATION_SCOPE_PERMISSIONS`, `roleCanReceiveDelegation`; [policy.ts](../packages/auth/src/policy.ts) — `DelegatedProviderIds`, `delegatedProviderIdsFrom`, the three-branch `canForProvider`, `canManageDelegations`, `canReadProviderDelegates`, `providerIdsInScope` |
 | Request context | [tenant-context.plugin.ts](../apps/api/src/plugins/tenant-context.plugin.ts) — one conditional query, after the status throw |
-| API | `apps/api/src/modules/delegations/` (routes, schemas, service, repository, a schema-parity test); `DELEGATION_TARGET_INELIGIBLE` in [error-codes.ts](../packages/contracts/src/error-codes.ts); both plugins registered in [app.ts](../apps/api/src/app.ts) |
+| API | `apps/api/src/modules/delegations/` (routes, schemas, service, repository, a schema-parity test); `inviteDelegate` and the acceptance half of `claimInvitation` in `membership.service.ts`; `DELEGATION_TARGET_INELIGIBLE` in [error-codes.ts](../packages/contracts/src/error-codes.ts); both plugins registered in [app.ts](../apps/api/src/app.ts) |
+| Email | `ASSISTANT_INVITED` through `@bam/notification-engine` (type, dedupe, planning, hu+en template, scope labels) and the worker's `dispatchAssistantInvited` + sender branch |
 | Call sites | both availability `GET`s narrowed; the bookings list rewritten onto `providerIdsInScope` and `providerIds`; `customerName` nulled for a bookings-blind caller; `delegations` added to `/v1/me` |
-| Web | `provider-delegates.tsx`, `lib/delegation.ts`, the two diary pickers, the nav, `MeResponse`, both message catalogues |
+| Web | `provider-delegates.tsx`, `lib/delegation.ts`, the two diary pickers, the nav, `MeResponse`, both message catalogues; the **Manage assistant** row action and panel on `providers-screen.tsx` (§2.10.1) |
 
-## 8.2 Deviations from the plan
+## 8.2 Deviations from the plan, and one reversal
+
+**The reversal.** The feature shipped on 2026-08-17 with the provider, the owner *or* the admin able to
+staff a diary, and was changed the same day to owner-only, with the provider reading and the admin excluded
+(§2.3). What made it necessary was not a defect but a use: the first attempt to bring in an assistant
+revealed that it took two people and two screens and sent no email, and simplifying who decides was the
+answer to both. §2.13 is the half that fixes the email.
+
+Smaller deviations, in the order they were found:
 
 1. **No `apps/web/src/lib/permissions.ts`.** The plan floated it as a way to stop a permission-string typo
    silently hiding a nav item. Half-migrating the literals is worse than not starting — the file would agree
    with three call sites and not the other twenty — so it stays a gap (§9.1) rather than a partial change.
-2. **`lib/delegation.ts` exports `hasPersonalDiary` as well as `diaryScopeFor`.** Not in the plan, and
-   necessary: the nav condition is *not* "may reach a diary" but "has one of their own", because reading
-   `:all` as "has a diary" would give administrators the top-level Availability item that phase-2-3 §2.7
-   removed. That distinction is now a named function with a test rather than an inline expression.
+2. **`lib/delegation.ts` exports `hasPersonalDiary` as well as `diaryScopeFor`, and the whole nav decision
+   moved to `lib/dashboard-nav.ts`.** Neither was planned. The nav condition is *not* "may reach a diary"
+   but "has one of their own", because reading `:all` as "has a diary" would give administrators the
+   top-level Availability item that phase-2-3 §2.7 removed — and gating Bookings on
+   `booking:read:delegated` alone put a permanently-403ing link in front of every assistant (§6.3).
 3. **The empty-scope refusal is a 422, not a 400.** Zod rejections surface through `VALIDATION_FAILED`,
    which the error handler serialises as 422 across the whole API. The plan guessed 400.
 4. **`PROVIDER` fixtures in `delegation.test.ts` are written through Prisma**, because the generic
-   invitation route refuses that role on purpose (phase-9-provider-onboarding §2.11). Exercising that path
-   is that suite's job.
+   invitation route refuses that role on purpose (phase-9-provider-onboarding §2.11).
+5. **An index was added and dropped in consecutive migrations** (§2.13.2). It could never have fired, and
+   the reason is worth more than the tidiness of pretending it never existed.
+6. **The owner's entry point moved to the Providers row** (§2.10.1), on 2026-08-18, during the first attempt
+   to walk §8.4 by hand. Web-only: no route, schema, permission or migration changed, and the availability
+   panel is untouched.
 
 ## 8.3 Results — 2026-08-17
 
 `pnpm db:drift-check` — no drift. `pnpm lint`, `pnpm check-types` — clean, 23/23 tasks.
-`pnpm test` — 23/23 tasks:
+`pnpm test` — 23/23 tasks, after the owner-only rework:
 
-- `@bam/auth` 60 passed (was 44; two rewritten, sixteen added)
-- `@bam/api` 294 passed, 34 skipped — the skips are Epic 6's parked calendar suites. Includes the new
-  `delegation.test.ts` (18) and `delegation.schemas.test.ts` (6), and the rewritten
-  `availability.test.ts` assistant block (4, replacing 1)
-- `@bam/web` 225 passed, including the new `lib/delegation.test.ts` (10) and the locale parity test
+- `@bam/auth` 65 passed (was 44 before this epic)
+- `@bam/api` 300 passed, 34 skipped — the skips are Epic 6's parked calendar suites. `delegation.test.ts`
+  is 25, `delegation.schemas.test.ts` 6, and the rewritten `availability.test.ts` assistant block 4
+- `@bam/notification-engine` 67 passed, including the new `renderAssistantInvited` and scope-label cases
+- `@bam/web` 232 passed, including `lib/delegation.test.ts` (10) and `lib/dashboard-nav.test.ts` (7)
 - `@bam/contracts` 57, `@bam/db` 36, `@bam/worker` 113 — untouched
+
+**2026-08-18**, after §2.10.1: `@bam/web` lint, `tsc --noEmit` and 232/232 unchanged. The count does not
+move because the panel is the same component with three new optional props, and `messages.test.ts` covers
+the three added keys by parity.
 
 ## 8.4 Manual walk
 
-**Not yet performed.** The order to walk it in:
+**Not yet performed.** [phase-3-4-diary-delegation-manual-test.md](phase-3-4-diary-delegation-manual-test.md)
+is the document to open — preconditions, the setup that has to exist first, and ~50 numbered checks. The
+shape of it, in order:
 
 1. Provision an organization through `/platform` and sign in as the owner. Add two providers.
-2. Invite an ASSISTANT and accept. **Before any grant:** their nav shows Overview only — no Bookings, no
-   Availability. `/dashboard/bookings` by hand returns nothing usable.
+2. Invite an ASSISTANT and accept. **Before any grant:** their nav shows Overview only — no Bookings and
+   no Availability, because neither permission they hold reaches a diary yet (§6.3). Typing
+   `/dashboard/bookings` by hand still loads the screen and its list 403s: the nav is advisory.
 3. As the owner, open `/dashboard/availability?providerId=…` from a Providers row. The Delegates panel is
    there with an empty-state callout. Add the assistant with BOOKINGS only.
 4. As the assistant: Bookings appears; Availability does not. They see that provider's appointments and not
@@ -529,7 +689,10 @@ row whose diary has none. The real answer is an organization-level default (§10
 # 10. Next
 
 1. **An organization-level default for new diaries** — §6.5. The trap this design ships with.
-2. **Invite-by-email**, so a provider can onboard their own assistant without the owner — §1.1.
-3. **A tenant-wide delegation overview** for an owner. Every row is reachable from a provider's panel
-   today, which is enough but not convenient.
+2. **A tenant-wide delegation overview** for an owner. Every row is reachable from a provider's panel
+   today, which is enough but not convenient — and now that staffing is entirely the owner's, a single
+   screen answering "who assists whom" is the obvious next thing they will ask for.
+3. **The generic member invitation still emails nobody** (phase-1 §5.1). Inviting an admin, or an assistant
+   from Overview rather than from a diary, is still copy-the-link. This epic closed the half it needed and
+   deliberately left the rest.
 4. **`PROVIDER` receiving delegations**, for covering a colleague's leave — §2.1. One line in the table.
