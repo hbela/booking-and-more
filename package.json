@@ -27,7 +27,8 @@
     "db:grant-platform-admin": "pnpm --filter @bam/db db:grant-platform-admin",
     "db:join-tenant": "pnpm --filter @bam/db db:join-tenant",
     "db:discard-organization": "pnpm --filter @bam/db db:discard-organization",
-    "db:explain-availability": "pnpm --filter @bam/db db:explain-availability"
+    "db:explain-availability": "pnpm --filter @bam/db db:explain-availability",
+    "guide:publish": "node scripts/publish-user-guide.mjs"
   },
   "devDependencies": {
     "prettier": "catalog:",
