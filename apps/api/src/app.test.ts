@@ -105,6 +105,18 @@ describe("api", () => {
       });
     });
 
+    it("does not reflect a booking-management bearer credential in a 404", async () => {
+      const token = "secret-management-token";
+      const response = await app.inject({
+        method: "GET",
+        url: `/v1/public/bookings/${token}/not-a-route`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body).not.toContain(token);
+      expect(response.json().error.message).toBe("Route GET does not exist.");
+    });
+
     it("returns 422 in the standard envelope when the body fails its schema", async () => {
       const response = await app.inject({
         method: "POST",
@@ -242,6 +254,44 @@ describe("api", () => {
     it("sets the helmet defaults", async () => {
       const response = await app.inject({ method: "GET", url: "/health/live" });
       expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    });
+  });
+
+  describe("rate-limit identity", () => {
+    it("does not let a directly connected caller rotate X-Forwarded-For identities", async () => {
+      const env = loadEnv({
+        source: {
+          NODE_ENV: "test",
+          LOG_LEVEL: "silent",
+          APP_BASE_URL: "http://localhost:3000",
+          API_BASE_URL: "http://localhost:3001",
+          DATABASE_URL:
+            process.env["TEST_DATABASE_URL"] ??
+            "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+          BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
+        },
+        loadDotenvFile: false,
+      });
+      const limitedApp = await buildApp({ env, logger: false });
+
+      try {
+        await limitedApp.ready();
+        let response;
+        for (let request = 0; request <= 300; request += 1) {
+          response = await limitedApp.inject({
+            method: "POST",
+            url: "/health/echo",
+            remoteAddress: "203.0.113.10",
+            headers: { "x-forwarded-for": `198.51.100.${String(request % 250)}` },
+            payload: { message: "same caller" },
+          });
+        }
+
+        expect(response?.statusCode).toBe(429);
+        expect(response?.json().error.code).toBe(ErrorCodes.RATE_LIMITED);
+      } finally {
+        await limitedApp.close();
+      }
     });
   });
 });

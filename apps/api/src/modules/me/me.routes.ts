@@ -6,7 +6,7 @@ import {
   permissionsForRole,
   type DelegatedProviderIds,
 } from "@bam/auth";
-import { commonErrorResponses, daysUntil, idSchema } from "@bam/contracts";
+import { ErrorCodes, commonErrorResponses, daysUntil, idSchema, isAppError } from "@bam/contracts";
 
 /**
  * Invert the actor's permission-indexed grant set back into one row per diary.
@@ -105,9 +105,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
              * next request. The web app's only source of "which diaries may I
              * pick"; `GET /v1/me/delegations` is the richer version, with names.
              */
-            delegations: z.array(
-              z.object({ providerId: idSchema, scopes: z.array(z.string()) }),
-            ),
+            delegations: z.array(z.object({ providerId: idSchema, scopes: z.array(z.string()) })),
           }),
           ...commonErrorResponses,
         },
@@ -157,8 +155,14 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
           permissions: membership ? [...permissionsForRole(membership.role)] : [],
           delegations: delegationsOf(membership?.delegated),
         };
-      } catch {
-        return base;
+      } catch (error) {
+        // An absent or ambiguous tenant selection is the one expected empty
+        // state. A missing membership, a suspended membership, a database
+        // outage, or a programming error must retain its real 4xx/5xx signal.
+        if (isAppError(error) && error.code === ErrorCodes.TENANT_NOT_SELECTED) {
+          return base;
+        }
+        throw error;
       }
     },
   );

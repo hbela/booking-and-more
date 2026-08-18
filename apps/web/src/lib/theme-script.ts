@@ -33,12 +33,11 @@ import { THEME_PREFERENCE_COOKIE } from "./theme-preference";
  * The full reasoning, including why `next/script` is the wrong instrument, is in
  * that file.
  *
- * ## Note for whoever adds a CSP
+ * ## Content Security Policy
  *
- * There is no Content-Security-Policy header today. When one arrives this
- * script needs a nonce threaded through to both call sites, or it will be
- * blocked and every visitor who chose a theme will silently get the system one
- * (phase-11 §5.2).
+ * `proxy.ts` creates one nonce per document request. Both document call sites
+ * read it from `x-nonce` and pass it through `ThemeScript`, matching the nonce
+ * Next applies to its own streamed bootstrap scripts.
  *
  * The `catch` is not defensive padding: `document.cookie` throws in some
  * embedded and privacy-restricted contexts, and an exception here would abort

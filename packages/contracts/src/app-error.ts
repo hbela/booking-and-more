@@ -127,8 +127,11 @@ export class UnauthenticatedError extends AppError {
 
 export class ForbiddenError extends AppError {
   public override readonly name = "ForbiddenError";
-  constructor(message = "You do not have permission to perform this action.") {
-    super(ErrorCodes.FORBIDDEN, message, { statusCode: 403 });
+  constructor(
+    message = "You do not have permission to perform this action.",
+    code: ErrorCode = ErrorCodes.FORBIDDEN,
+  ) {
+    super(code, message, { statusCode: 403 });
   }
 }
 

@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { getRequestContext } from "./request-context.js";
+import { redactSecretBearingValues } from "./url-redaction.js";
 
 export interface InitSentryOptions {
   dsn?: string | undefined;
@@ -42,6 +43,7 @@ export function initSentry(options: InitSentryOptions): boolean {
     initialScope: { tags: { service } },
 
     beforeSend(event) {
+      event = redactSecretBearingValues(event);
       const context = getRequestContext();
       if (!context) return event;
 

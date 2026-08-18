@@ -25,6 +25,26 @@ The dependency audit also reports eight high-severity advisories, including runt
 - **P2 — moderate:** important reliability, privacy, operability, or maintainability gap.
 - **P3 — low:** hardening or quality improvement with limited immediate impact.
 
+### P2 remediation update — 2026-08-18
+
+The six P2 findings below have now received an implementation pass:
+
+- `/v1/me` catches only the explicit `TENANT_NOT_SELECTED` state; tenant lookup and infrastructure errors
+  retain their real 4xx/5xx response and incident signal.
+- Fastify trusts one immediate private reverse-proxy hop, and production rate limits use a namespaced Redis
+  store shared across replicas. Readiness now performs a real PING against that same client.
+- The worker runs a replica-safe, bounded PostgreSQL retention batch covering expired sessions, idempotency
+  keys, holds and OAuth states; completed outbox rows; terminal notification and processed Stripe payloads;
+  expired booking-management token hashes; and 12-month audit retention. Every run reports counts, duration,
+  remaining backlog age, and consecutive failures.
+- Booking-management credentials are normalized in request logs, exception serialization, Sentry event data,
+  and 404 responses. Deployment guidance now requires Traefik to drop `RequestPath` if access logging is on.
+- The web response uses a per-request nonce with CSP, Referrer-Policy, Permissions-Policy, frame protection,
+  content-type protection, and production HSTS while preserving next-intl and tenant-locale routing.
+- A Chromium suite now checks the production security policy/nonce, sign-in keyboard focus, and both locale
+  routing modes in CI. The Google Calendar suites remain visibly skipped because that feature remains parked;
+  they must be enabled and pass before its routes/workers are mounted.
+
 ## Findings
 
 ### P1. Working-hours optimistic concurrency does not serialize competing saves

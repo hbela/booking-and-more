@@ -20,6 +20,8 @@ export const ErrorCodes = {
   // --- Auth / tenancy (Epic 1) ---------------------------------------------
   UNAUTHENTICATED: "UNAUTHENTICATED",
   FORBIDDEN: "FORBIDDEN",
+  /** The caller is signed in, but no single tenant can be selected safely. */
+  TENANT_NOT_SELECTED: "TENANT_NOT_SELECTED",
   TENANT_NOT_FOUND: "TENANT_NOT_FOUND",
   TENANT_SUSPENDED: "TENANT_SUSPENDED",
 

@@ -5,10 +5,10 @@ import {
   livenessResponseSchema,
   readinessResponseSchema,
 } from "@bam/contracts";
-import { HealthService } from "./health.service.js";
+import { HealthService, type RedisHealthClient } from "./health.service.js";
 
 export interface HealthRoutesOptions {
-  redisUrl?: string | undefined;
+  redis?: RedisHealthClient | undefined;
   version: string;
   startedAt: number;
 }
@@ -22,7 +22,7 @@ export interface HealthRoutesOptions {
 export const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (app, options) => {
   const service = new HealthService({
     prisma: app.prisma,
-    redisUrl: options.redisUrl,
+    redis: options.redis,
     version: options.version,
     startedAt: options.startedAt,
   });

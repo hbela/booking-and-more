@@ -6,7 +6,7 @@ import {
   isResponseSerializationError,
 } from "fastify-type-provider-zod";
 import { ErrorCodes, InternalError, isAppError, type ErrorEnvelope } from "@bam/contracts";
-import { captureException } from "@bam/observability";
+import { captureException, redactSecretBearingUrls } from "@bam/observability";
 
 /**
  * Turns every failure into the standard envelope (tech-impl §15.1):
@@ -48,10 +48,14 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
     // undocumented fields.
     if (isResponseSerializationError(error)) {
       request.log.error(
-        { err: error, method: error.method, url: error.url },
+        { err: error, method: error.method, url: redactSecretBearingUrls(error.url) },
         "response failed its own schema — handler and contract disagree",
       );
-      captureException(error, { requestId, method: error.method, url: error.url });
+      captureException(error, {
+        requestId,
+        method: error.method,
+        url: redactSecretBearingUrls(error.url),
+      });
 
       return reply.status(500).send({
         error: {
@@ -125,7 +129,7 @@ const errorHandlerPlugin: FastifyPluginAsync = async (app) => {
     reply.status(404).send({
       error: {
         code: ErrorCodes.NOT_FOUND,
-        message: `Route ${request.method} ${request.url} does not exist.`,
+        message: `Route ${request.method} does not exist.`,
         requestId: request.context?.requestId ?? "unknown",
       },
     } satisfies ErrorEnvelope),

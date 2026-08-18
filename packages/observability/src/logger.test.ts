@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
 import { REDACT_PATHS, REDACTED } from "./redaction.js";
+import { redactSecretBearingUrls, redactSecretBearingValues } from "./url-redaction.js";
 
 /**
  * These assert CLAUDE.md rule 6 — secrets must not reach the logs. They build a
@@ -31,6 +32,29 @@ function captureLogs() {
 }
 
 describe("log redaction", () => {
+  it("redacts booking-management bearer credentials while preserving the route shape", () => {
+    const token = "live-management-token";
+    const url = `/v1/public/bookings/${token}/cancel/confirm?source=email`;
+
+    const redacted = redactSecretBearingUrls(`Request failed at ${url}`);
+
+    expect(redacted).toBe(
+      `Request failed at /v1/public/bookings/${REDACTED}/cancel/confirm?source=email`,
+    );
+    expect(redacted).not.toContain(token);
+  });
+
+  it("redacts secret-bearing URLs throughout telemetry event structures", () => {
+    const token = "nested-live-token";
+    const event = redactSecretBearingValues({
+      request: { url: `/v1/public/bookings/${token}` },
+      exception: { values: [{ value: `Failure at /v1/public/bookings/${token}/cancel` }] },
+    });
+
+    expect(JSON.stringify(event)).not.toContain(token);
+    expect(event.request.url).toContain(REDACTED);
+  });
+
   it("redacts the Authorization and Cookie request headers", () => {
     const { logger, lines } = captureLogs();
 

@@ -3,10 +3,13 @@ import type { DependencyCheck, ReadinessResponse } from "@bam/contracts";
 
 export interface HealthServiceDeps {
   prisma: PrismaClient;
-  /** Undefined until Epic 5 wires Redis in. */
-  redisUrl?: string | undefined;
+  redis?: RedisHealthClient | undefined;
   version: string;
   startedAt: number;
+}
+
+export interface RedisHealthClient {
+  ping(): Promise<string>;
 }
 
 /**
@@ -52,12 +55,24 @@ export class HealthService {
     };
   }
 
-  private checkRedis(): Promise<DependencyCheck> {
-    if (!this.deps.redisUrl) {
-      return Promise.resolve({ status: "not_configured" });
+  private async checkRedis(): Promise<DependencyCheck> {
+    if (!this.deps.redis) {
+      return { status: "not_configured" };
     }
 
-    // Epic 5 replaces this with a real PING once BullMQ lands.
-    return Promise.resolve({ status: "ok" });
+    const startedAt = performance.now();
+    try {
+      const response = await this.deps.redis.ping();
+      return response === "PONG"
+        ? { status: "ok", latencyMs: Math.round(performance.now() - startedAt) }
+        : { status: "down", latencyMs: Math.round(performance.now() - startedAt) };
+    } catch (error) {
+      return {
+        status: "down",
+        latencyMs: Math.round(performance.now() - startedAt),
+        // Name only: ioredis messages can include connection details.
+        error: error instanceof Error ? error.name : "RedisError",
+      };
+    }
   }
 }

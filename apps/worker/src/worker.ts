@@ -18,7 +18,7 @@ import {
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
-import { startIdempotencyCleanup } from "./retention/idempotency-cleanup.js";
+import { startRetentionCleanup } from "./retention/retention-cleanup.js";
 // PARKED — Epic 6 part 1.
 // import { createCalendarWorker } from "./calendar/calendar.worker.js";
 // import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
@@ -230,9 +230,9 @@ async function main(): Promise<void> {
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
   });
 
-  // Idempotency responses may contain short-lived booking management tokens.
-  // Expiry is enforced on reuse by the API; this bounds physical retention too.
-  const idempotencyCleanup = startIdempotencyCleanup({ prisma, logger: log });
+  // PostgreSQL-backed and independent of Redis: secrets still expire while the
+  // queue is unavailable. Every policy is bounded and replica-safe.
+  const retentionCleanup = startRetentionCleanup({ prisma, logger: log });
 
   const heartbeat = setInterval(() => {
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
@@ -262,7 +262,7 @@ async function main(): Promise<void> {
     void (async () => {
       try {
         await stripeEvents.stop();
-        await idempotencyCleanup.stop();
+        await retentionCleanup.stop();
 
         // Order matters, in three stages: stop everything that *produces* work,
         // then let the consumers finish what they hold, then drop the queues and

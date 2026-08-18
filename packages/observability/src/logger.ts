@@ -1,5 +1,6 @@
-import { pino, type Logger, type LoggerOptions } from "pino";
+import { pino, stdSerializers, type Logger, type LoggerOptions } from "pino";
 import { REDACT_PATHS, REDACTED } from "./redaction.js";
+import { redactSecretBearingUrls } from "./url-redaction.js";
 
 /**
  * Context attached to every log line. tech-impl §36.1.
@@ -56,6 +57,10 @@ export function createLogger(options: CreateLoggerOptions): Logger {
      * once errors are wrapped.
      */
     serializers: {
+      req: stdSerializers.wrapRequestSerializer((request) => ({
+        ...request,
+        url: redactSecretBearingUrls(request.url),
+      })),
       err: (error: unknown) => serializeError(error),
       error: (error: unknown) => serializeError(error),
     },
@@ -95,10 +100,10 @@ function serializeError(error: unknown, depth = 0): SerializedError {
   const record = error as unknown as Record<string, unknown>;
   const serialized: SerializedError = {
     type: error.name,
-    message: error.message,
+    message: redactSecretBearingUrls(error.message),
   };
 
-  if (error.stack !== undefined) serialized.stack = error.stack;
+  if (error.stack !== undefined) serialized.stack = redactSecretBearingUrls(error.stack);
   if (typeof record["code"] === "string") serialized.code = record["code"];
   if (typeof record["statusCode"] === "number") serialized.statusCode = record["statusCode"];
   if (error.cause !== undefined) serialized.cause = serializeError(error.cause, depth + 1);

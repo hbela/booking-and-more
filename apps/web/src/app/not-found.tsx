@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ThemeScript } from "@/components/theme-script";
 import "./globals.css";
 
@@ -14,10 +15,12 @@ import "./globals.css";
  * the import of `globals.css` matters: without it every Tailwind class on this
  * page was inert, and this screen rendered unstyled.
  */
-export default function NotFound(): React.ReactElement {
+export default async function NotFound(): Promise<React.ReactElement> {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="hu" suppressHydrationWarning>
-      <ThemeScript />
+      <ThemeScript nonce={nonce} />
       <body>
         <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-6">
           <p className="font-display text-sm font-semibold tracking-widest text-primary uppercase">
@@ -27,8 +30,8 @@ export default function NotFound(): React.ReactElement {
             Ez az oldal nem létezik. / This page does not exist.
           </h1>
           <p className="text-ink-muted">
-            Lehet, hogy elírás történt, vagy az oldalt áthelyeztük. / The address may be mistyped, or
-            the page may have moved.
+            Lehet, hogy elírás történt, vagy az oldalt áthelyeztük. / The address may be mistyped,
+            or the page may have moved.
           </p>
           <Link
             href="/"

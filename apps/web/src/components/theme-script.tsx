@@ -41,7 +41,7 @@ import { THEME_SCRIPT } from "@/lib/theme-script";
  * Every other constraint is unchanged and documented in lib/theme-script.ts:
  * synchronous, never deferred, and the reason it cannot be done server-side.
  */
-export function ThemeScript(): null {
+export function ThemeScript({ nonce }: { nonce?: string | undefined }): null {
   /**
    * The callback runs on **every stream flush**, not once per request — the
    * same reason the CSS-in-JS integrations Next documents all carry a flag like
@@ -62,7 +62,7 @@ export function ThemeScript(): null {
 
     // The payload is a build-time constant with no interpolation, so there is
     // nothing here for a value to be injected into. See lib/theme-script.ts.
-    return <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />;
+    return <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />;
   });
 
   return null;

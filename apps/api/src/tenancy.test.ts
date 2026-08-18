@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
 import { buildApp, type AppInstance } from "./app.js";
@@ -158,6 +158,27 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
       // No tenant selected yet — a normal state, not an error.
       expect(body.tenant).toBeNull();
       expect(body.permissions).toEqual([]);
+    });
+
+    it("does not disguise tenant-resolution infrastructure failures as empty access", async () => {
+      const alice = await signUp("me-database-failure");
+      const lookup = vi
+        .spyOn(app.prisma.session, "findFirst")
+        .mockRejectedValueOnce(new Error("database unavailable"));
+
+      try {
+        const response = await app.inject({
+          method: "GET",
+          url: "/v1/me",
+          headers: as(alice.cookie),
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.json().error.code).toBe(ErrorCodes.INTERNAL_ERROR);
+        expect(response.body).not.toContain("database unavailable");
+      } finally {
+        lookup.mockRestore();
+      }
     });
 
     it("reports an invited owner's permissions without an explicit tenant", async () => {

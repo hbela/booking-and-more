@@ -10,7 +10,8 @@
     "start": "next start --port 3000",
     "check-types": "tsc -p tsconfig.json",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@bam/availability-engine": "workspace:*",
@@ -30,6 +31,7 @@
     "@bam/eslint-config": "workspace:*",
     "@bam/tsconfig": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",
+    "@playwright/test": "^1.62.1",
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

@@ -93,6 +93,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Install Chromium for browser smoke tests
+        run: pnpm --filter @bam/web exec playwright install --with-deps chromium
+
+      - name: Browser smoke tests
+        run: pnpm test:e2e
+
       # A migration that cannot be applied to an empty database is broken, even
       # if it happens to work against the current one.
       - name: Verify migrations apply from scratch

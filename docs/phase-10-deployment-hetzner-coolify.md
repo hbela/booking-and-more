@@ -702,6 +702,14 @@ with a new value changes nothing; the bundle still holds the old host. Redeploy.
 Per-service in Coolify. Everything is structured JSON through Pino, with redaction configured in
 `@bam/observability` — add paths there rather than scrubbing at call sites (rule 6).
 
+Booking-management credentials are path segments (`/v1/public/bookings/:token`). The API normalizes that
+segment before Pino and Sentry see it, and the web app sends `Referrer-Policy: strict-origin-when-cross-origin`,
+but neither can rewrite a log line Traefik creates first. If Traefik access logging is enabled, configure its
+access-log field policy to drop `RequestPath` (and retain `RequestMethod`, `DownstreamStatus`, router name,
+and duration), or leave access logging disabled for this deployment. Never export raw API request paths to
+Coolify logs or a log collector. Browser history still contains a management URL on the customer's own
+device; that is inherent in the bearer-link UX and is why the server stores only the token hash.
+
 ## 8.2 A database prompt
 
 Terminal on the `postgres` container:

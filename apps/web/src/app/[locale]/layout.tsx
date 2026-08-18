@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -74,6 +75,7 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }): Promise<React.ReactElement> {
   const { locale } = await params;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   if (!hasLocale(routing.locales, locale)) {
     notFound();
@@ -86,14 +88,18 @@ export default async function LocaleLayout({
     // `suppressHydrationWarning` on <html> is for the theme script below, which
     // writes `data-theme` before React hydrates — the server rendered no such
     // attribute, so React would report a mismatch on every themed page load.
-    <html lang={locale} className={`${inter.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={`${inter.variable} ${manrope.variable}`}
+      suppressHydrationWarning
+    >
       {/* Renders nothing. It emits the theme script into <head> while the
           response streams — synchronous and never deferred, so it runs before
           the browser paints and the visitor never sees a flash of the system
           theme. See components/theme-script.tsx for why it is emitted rather
           than rendered, and lib/theme-script.ts for why it is not read
           server-side. */}
-      <ThemeScript />
+      <ThemeScript nonce={nonce} />
       {/* Browser extensions — Grammarly is the common one — add attributes to
           <body> before React hydrates (`data-gr-ext-installed`,
           `data-new-gr-c-s-check-loaded`), which React reports as a mismatch

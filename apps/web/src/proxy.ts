@@ -1,39 +1,52 @@
+import { randomBytes } from "node:crypto";
 import createMiddleware from "next-intl/middleware";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { isTenantPath, routing } from "./i18n/routing";
+import { buildContentSecurityPolicy } from "./lib/security-headers";
 
-/**
- * Two middlewares, one difference: whether the browser's language may redirect.
- *
- * next-intl detects a locale from `Accept-Language` and the `NEXT_LOCALE` cookie
- * and redirects to it. That is right for **our** screens — the dashboard, sign-in,
- * the platform console are ours, and a person reading them should get their own
- * language.
- *
- * It is wrong for a **tenant's** booking page. A Hungarian clinic's page opened
- * in English because the visitor's laptop is set to English is not a
- * localisation, it is the wrong page: the services are named in Hungarian, the
- * assistant answers in whatever the page says, and the clinic never chose any of
- * it. So detection is switched off there and the language is decided one layer
- * down, in `app/[locale]/[tenantSlug]/book/page.tsx`, where the tenant's own
- * `defaultLanguage` is actually knowable.
- *
- * It has to happen here rather than only in the page: with detection on, a page
- * redirecting `/en/medicare/book` → `/medicare/book` would be sent straight back
- * by the middleware, forever.
- */
+// Tenant booking pages use the tenant's configured language, not the
+// visitor's Accept-Language preference. All product-owned screens keep normal
+// next-intl detection. See the routing record in the original proxy design.
 const withDetection = createMiddleware(routing);
 const withoutDetection = createMiddleware({ ...routing, localeDetection: false });
 
-export default function proxy(request: NextRequest) {
-  return isTenantPath(request.nextUrl.pathname)
-    ? withoutDetection(request)
-    : withDetection(request);
+/**
+ * A request nonce is required because Next streams inline bootstrap/RSC
+ * scripts. The CSP is copied onto the request so Next can nonce its own tags,
+ * and onto the response so the browser enforces the same policy.
+ */
+export function proxy(request: NextRequest) {
+  const nonce = randomBytes(16).toString("base64");
+  const csp = buildContentSecurityPolicy(nonce, process.env["NODE_ENV"] === "production");
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  // next-intl copies the headers from this request into its NextResponse.next
+  // or rewrite result, so the nonce reaches Next's renderer without giving up
+  // locale detection (or the tenant-page exception to that detection).
+  const securedRequest = new NextRequest(request, { headers: requestHeaders });
+  const response = isTenantPath(request.nextUrl.pathname)
+    ? withoutDetection(securedRequest)
+    : withDetection(securedRequest);
+  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  );
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+
+  if (process.env["NODE_ENV"] === "production") {
+    response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+
+  return response;
 }
 
 export const config = {
   // Skip API routes, Next internals, and any path containing a dot (static
-  // files). The backslash must be escaped: this is a string, not a regex
-  // literal, so "\." would collapse to "." and match any character.
+  // files). The security policy is for documents; static assets inherit it.
   matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
 };

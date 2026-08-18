@@ -83,6 +83,7 @@ const tenantContextPlugin: FastifyPluginAsync = async (app) => {
       if (!tenantId) {
         throw new ForbiddenError(
           `No tenant selected. Send the ${TENANT_HEADER} header, or sign in to a tenant.`,
+          ErrorCodes.TENANT_NOT_SELECTED,
         );
       }
 

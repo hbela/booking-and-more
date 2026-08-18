@@ -9,6 +9,7 @@ import compress from "@fastify/compress";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import { Redis } from "ioredis";
 import {
   serializerCompiler,
   validatorCompiler,
@@ -56,6 +57,7 @@ import {
 import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
+import { trustImmediatePrivateProxy } from "./lib/trusted-proxy.js";
 // PARKED — Epic 6 part 1.
 // import { integrationRoutes } from "./modules/integrations/integration.routes.js";
 // import { getGoogleOAuth } from "./modules/integrations/google.client.js";
@@ -151,7 +153,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     // tech-impl §34.1 — bound the request body. Voice uploads get their own,
     // larger limit on their specific route in Epic 8.
     bodyLimit: 1_048_576, // 1 MiB
-    trustProxy: true,
+    trustProxy: trustImmediatePrivateProxy,
   }).withTypeProvider<ZodTypeProvider>();
 
   // Zod drives both validation and response serialization. Registering these is
@@ -204,13 +206,43 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     exposedHeaders: ["X-Request-Id"],
   });
 
-  // In-process store for now. Epic 5 swaps in Redis so limits hold across
-  // instances — until then, limits are per-instance and that is a known gap.
+  // Redis makes the budget shared across replicas and restarts in production.
+  // Local development may omit REDIS_URL and deliberately falls back to the
+  // plugin's in-process store so one optional dependency cannot prevent boot.
+  let rateLimitRedis: Redis | undefined;
   if (options.rateLimit !== false) {
+    rateLimitRedis = env.REDIS_URL
+      ? new Redis(env.REDIS_URL, {
+          enableOfflineQueue: false,
+          maxRetriesPerRequest: 1,
+          lazyConnect: false,
+          retryStrategy: (attempt) => Math.min(attempt * 250, 5_000),
+        })
+      : undefined;
+
+    rateLimitRedis?.on("error", (error: Error) => {
+      // The URL carries credentials and is intentionally never logged.
+      app.log.error({ err: error }, "rate-limit: Redis connection error");
+    });
+
+    if (rateLimitRedis) {
+      const redis = rateLimitRedis;
+      app.addHook("onClose", async () => {
+        if (redis.status === "end") return;
+        try {
+          await redis.quit();
+        } catch {
+          redis.disconnect();
+        }
+      });
+    }
+
     await app.register(rateLimit, {
       global: true,
       max: 300,
       timeWindow: "1 minute",
+      nameSpace: "bam:api:rate-limit:",
+      ...(rateLimitRedis ? { redis: rateLimitRedis } : {}),
     });
   }
 
@@ -251,7 +283,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
 
   await app.register(healthRoutes, {
     prefix: "/health",
-    redisUrl: env.REDIS_URL,
+    redis: rateLimitRedis,
     version: API_VERSION,
     startedAt,
   });
