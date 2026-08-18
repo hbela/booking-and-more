@@ -8,12 +8,17 @@ import {
   createExceptionBodySchema,
   exceptionResponseSchema,
   listExceptionsQuerySchema,
+  scheduleLastChangeSchema,
   setWorkingHoursBodySchema,
   slotResponseSchema,
   slotSearchBodySchema,
   updateExceptionBodySchema,
   workingHoursResponseSchema,
 } from "./availability.schemas.js";
+import {
+  fingerprintWorkingHours,
+  requireScheduleFingerprint,
+} from "./working-hours-fingerprint.js";
 
 function toWorkingHoursResponse(row: WorkingHours): z.infer<typeof workingHoursResponseSchema> {
   return {
@@ -119,24 +124,44 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
         tags: ["availability"],
         summary: "Read a provider's weekly working hours",
         description:
-          "Local wall-clock times, interpreted in the provider's zone. Several rows per weekday are normal — a lunch break is a gap between two periods. Readable by whoever may change them: the provider, an administrator, or a member the diary has been delegated to.",
+          "Local wall-clock times, interpreted in the provider's zone. Several rows per weekday are normal — a lunch break is a gap between two periods. Readable by whoever may change them: the provider, an administrator, or a member the diary has been delegated to. `lastChange` names whoever saved the week last, so a provider and their assistant can see each other's edits — null until somebody saves one.",
         params: z.object({ providerId: idSchema }),
         response: {
-          200: z.object({ items: z.array(workingHoursResponseSchema) }),
+          200: z.object({
+            items: z.array(workingHoursResponseSchema),
+            lastChange: scheduleLastChangeSchema.nullable(),
+            fingerprint: z
+              .string()
+              .describe(
+                "Send this back as `expectedFingerprint` on the PUT. It identifies the version of the week these rows are, and the save is refused if it has moved.",
+              ),
+          }),
           ...commonErrorResponses,
         },
       },
     },
     async (request) => {
+      const tenantId = request.tenant!.id;
       const { providerId } = request.params;
       assertMayManage(request, providerId);
 
-      const rows = await service.listWorkingHours({
-        tenantId: request.tenant!.id,
-        providerId,
-      });
+      // On the same response rather than an endpoint of its own: it describes
+      // exactly the set being returned, and a second request would let the two
+      // disagree — the screen would show a week from one moment attributed to a
+      // save from another.
+      const [rows, lastChange] = await Promise.all([
+        service.listWorkingHours({ tenantId, providerId }),
+        service.lastWorkingHoursChange({ tenantId, providerId }),
+      ]);
 
-      return { items: rows.map(toWorkingHoursResponse) };
+      return {
+        items: rows.map(toWorkingHoursResponse),
+        lastChange:
+          lastChange === null ? null : { at: lastChange.at.toISOString(), by: lastChange.by },
+        // Computed from the rows just returned, so the caller's body and the
+        // version it claims to replace can never describe different reads.
+        fingerprint: fingerprintWorkingHours(rows),
+      };
     },
   );
 
@@ -150,11 +175,14 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
         tags: ["availability"],
         summary: "Replace a provider's weekly working hours",
         description:
-          "Send the complete week. Anything omitted is removed. Providers may edit their own; administrators may edit anyone's.",
+          "Send the complete week. Anything omitted is removed. Providers may edit their own; administrators may edit anyone's. `expectedFingerprint` is required and must come from a current GET of this same set: if somebody else has saved since, the request is refused with SCHEDULE_MODIFIED and details naming them, rather than silently reverting their work.",
         params: z.object({ providerId: idSchema }),
         body: setWorkingHoursBodySchema,
         response: {
-          200: z.object({ items: z.array(workingHoursResponseSchema) }),
+          200: z.object({
+            items: z.array(workingHoursResponseSchema),
+            fingerprint: z.string().describe("The new version, for a follow-up save."),
+          }),
           ...commonErrorResponses,
         },
       },
@@ -164,12 +192,17 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
       const { providerId } = request.params;
       assertMayManage(request, providerId);
 
+      // After the permission check, deliberately: see the note on
+      // `expectedFingerprint` in the body schema.
+      const expectedFingerprint = requireScheduleFingerprint(request.body.expectedFingerprint);
+
       const rows = await service.setWorkingHours({
         tenantId,
         providerId,
         entries: request.body.workingHours,
         acknowledgeAffectedBookings: request.body.acknowledgeAffectedBookings,
         mayReadBookings: mayReadBookings(request, providerId),
+        expectedFingerprint,
         now: new Date(),
       });
 
@@ -182,7 +215,8 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
         },
       });
 
-      return { items: rows.map(toWorkingHoursResponse) };
+      // The version the caller now holds, so a second save needs no extra GET.
+      return { items: rows.map(toWorkingHoursResponse), fingerprint: fingerprintWorkingHours(rows) };
     },
   );
 

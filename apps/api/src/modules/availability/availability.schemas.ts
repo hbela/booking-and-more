@@ -51,6 +51,24 @@ export const setWorkingHoursBodySchema = z.object({
    * them make it knowingly.
    */
   acknowledgeAffectedBookings: z.boolean().default(false),
+  /**
+   * The `fingerprint` the `GET` returned — proof this body was built from a
+   * current read of this same week (docs/phase-3-4-diary-delegation.md §2.14).
+   *
+   * **Genuinely required**, and optional *here* for the reason
+   * `idempotencyHeaderSchema` is: Fastify validates the body before the
+   * preHandler runs, so marking it required would answer a caller with no
+   * permission on this diary with a 422 about a missing field instead of a 403.
+   * `requireScheduleFingerprint` refuses it in the handler, after authorization,
+   * with `SCHEDULE_FINGERPRINT_REQUIRED` — a distinct code because "you did not
+   * read before writing" is a different fix from "your body is wrong".
+   */
+  expectedFingerprint: z
+    .string()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe("Required. The `fingerprint` from this provider's working-hours GET."),
 });
 
 export const workingHoursResponseSchema = z.object({
@@ -63,6 +81,45 @@ export const workingHoursResponseSchema = z.object({
   validFrom: z.string().nullable(),
   validUntil: z.string().nullable(),
   active: z.boolean(),
+});
+
+/**
+ * Who last replaced this week, and when.
+ *
+ * Exists because diary delegation made a second editor the *expected*
+ * configuration rather than a rarity: a provider and their assistant hold equal
+ * write power on one diary (docs/phase-3-4-diary-delegation.md §2.3), and
+ * `replaceWorkingHours` is a delete-then-insert with no version check, so the
+ * later of two saves silently reverts the earlier one. This does not prevent
+ * that — optimistic concurrency is the fix and is not built — but it makes the
+ * other editor **visible**, which is the difference between a conflict somebody
+ * notices and one nobody ever finds out about.
+ *
+ * Read from the audit log rather than from a column on `working_hours`: the row
+ * is already written on every save, the whole-week replace destroys any column
+ * we might have put there, and a second source of the same fact would be a
+ * second thing to keep true.
+ *
+ * **Eventually consistent, deliberately.** `request.audit()` is fire-and-forget
+ * (`audit.plugin.ts` — an audit failure must not fail the user's write), so this
+ * field can lag a save by a moment. The lag only ever affects attributing *your
+ * own* save immediately after making it, which is the one case the reader
+ * already knows the answer to; the other editor's change is what this is for,
+ * and it arrives by a later fetch either way. Reversing the trade — awaiting the
+ * audit write — would make a provenance line able to fail a schedule save.
+ */
+export const scheduleLastChangeSchema = z.object({
+  at: z.iso.datetime({ offset: true }),
+  /**
+   * Null when the audit row names no user — a system actor, or an account
+   * deleted since. The time is still worth showing on its own.
+   */
+  by: z
+    .object({
+      userId: idSchema,
+      name: z.string(),
+    })
+    .nullable(),
 });
 
 export const exceptionTypeSchema = z.enum(["UNAVAILABLE", "ADDITIONAL_AVAILABILITY"]);

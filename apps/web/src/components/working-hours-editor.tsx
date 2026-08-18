@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { AffectedBooking } from "@bam/contracts";
 import { affectedBookingsOf } from "@/lib/affected-bookings";
-import { ApiError, apiFetch, type AssignedLocation, type WorkingHoursRow } from "@/lib/api-client";
+import {
+  ApiError,
+  apiFetch,
+  type AssignedLocation,
+  type ScheduleLastChange,
+  type WorkingHoursRow,
+} from "@/lib/api-client";
+import { formatRelativeAge } from "@/lib/relative-time";
+import { scheduleModifiedBy } from "@/lib/schedule-modified";
 import {
   END_OF_DAY,
   WEEKDAYS,
@@ -16,10 +24,60 @@ import {
   type WorkingWeek,
 } from "@/lib/working-hours";
 import { AffectedBookingsDialog } from "./affected-bookings-dialog";
+import { useDashboardContext } from "./dashboard-shell";
 import { Button } from "./ui/button";
+import { Callout } from "./ui/callout";
 import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
+
+/**
+ * "Last changed by Réka, 10 minutes ago."
+ *
+ * ## Why this line exists
+ *
+ * Diary delegation made a second editor the *expected* arrangement rather than a
+ * rarity: a provider and their assistant hold equal write power on one diary
+ * (docs/phase-3-4-diary-delegation.md §2.3), and the week is saved as a
+ * whole-set replace with no version check — so whoever saves last silently
+ * reverts the other, and neither of them ever finds out.
+ *
+ * This does not fix that; optimistic concurrency is the fix and is not built.
+ * It makes the other editor **visible**, which is the difference between a
+ * conflict somebody notices the same afternoon and one discovered weeks later as
+ * "my Friday keeps disappearing".
+ *
+ * ## Why it names the person and not only the time
+ *
+ * "Changed 10 minutes ago" is a question only the person who did it can answer.
+ * The name is what lets the reader decide whether to go and ask before saving
+ * over it — and it discloses nothing new, because the Delegates panel further
+ * down this same screen already lists exactly these people.
+ */
+function LastChange({
+  change,
+  selfUserId,
+}: {
+  change: ScheduleLastChange;
+  selfUserId: string | undefined;
+}): React.ReactElement {
+  const t = useTranslations("availability");
+  const locale = useLocale();
+
+  // Read at render rather than held in state: the line re-renders whenever the
+  // query behind it refetches, which is exactly when the answer can have moved.
+  const when = formatRelativeAge(change.at, new Date(), locale);
+
+  return (
+    <p className="text-ink-subtle text-xs">
+      {change.by === null
+        ? t("lastChangedUnknown", { when })
+        : change.by.userId === selfUserId
+          ? t("lastChangedByYou", { when })
+          : t("lastChangedBy", { name: change.by.name, when })}
+    </p>
+  );
+}
 
 /**
  * The week, as a grid.
@@ -46,6 +104,8 @@ export function WorkingHoursEditor({
   timezone: string | null;
 }): React.ReactElement {
   const t = useTranslations("availability");
+  const locale = useLocale();
+  const context = useDashboardContext();
   const queryClient = useQueryClient();
   // Null until seeded, never `{}`. An empty week is a valid set meaning "never
   // working", so it cannot also stand for "not loaded yet" — and saving during
@@ -56,13 +116,27 @@ export function WorkingHoursEditor({
   const [saved, setSaved] = useState(false);
   /** Non-null while the "save anyway?" dialog is open. */
   const [affected, setAffected] = useState<AffectedBooking[] | null>(null);
+  /**
+   * The version of the week this form was seeded from (§2.14).
+   *
+   * Held in state and set in the *same* effect as `week`, never read from
+   * `stored.data` at submit time: a background refetch updates the query data
+   * one render before the effect re-seeds the form, and reading it there would
+   * send the new fingerprint with the old body — which is precisely the stale
+   * whole-set write this exists to refuse.
+   */
+  const [fingerprint, setFingerprint] = useState<string | null>(null);
+  /** Non-null once a save was refused because somebody else got there first. */
+  const [conflict, setConflict] = useState<{ change: ScheduleLastChange | null } | null>(null);
 
   const stored = useQuery({
     queryKey: ["working-hours", providerId],
     queryFn: () =>
-      apiFetch<{ items: WorkingHoursRow[] }>(`/v1/providers/${providerId}/working-hours`, {
-        tenantId,
-      }),
+      apiFetch<{
+        items: WorkingHoursRow[];
+        lastChange: ScheduleLastChange | null;
+        fingerprint: string;
+      }>(`/v1/providers/${providerId}/working-hours`, { tenantId }),
   });
 
   // Where this provider actually works, rather than every location the tenant
@@ -80,23 +154,35 @@ export function WorkingHoursEditor({
   // the provider changes or a save invalidates the query.
   useEffect(() => {
     if (!stored.data) return;
+    // Both, together, from one read — see the note on `fingerprint`.
     setWeek(seedWorkingWeek(stored.data.items));
+    setFingerprint(stored.data.fingerprint);
   }, [stored.data]);
 
   const save = useMutation({
     mutationFn: (acknowledge: boolean) => {
-      if (week === null) throw new Error("unreachable: the form does not render until seeded");
+      if (week === null || fingerprint === null) {
+        throw new Error("unreachable: the form does not render until seeded");
+      }
 
       return apiFetch(`/v1/providers/${providerId}/working-hours`, {
         method: "PUT",
         tenantId,
         // Whole-set replacement: anything this body omits is deleted, which is
-        // why the builder takes the full period and not just its times.
-        body: { ...buildWorkingHoursBody(week), acknowledgeAffectedBookings: acknowledge },
+        // why the builder takes the full period and not just its times. And
+        // `expectedFingerprint` is what makes that safe when somebody else can
+        // edit the same diary (§2.14) — the server refuses the save rather than
+        // letting it revert them.
+        body: {
+          ...buildWorkingHoursBody(week),
+          acknowledgeAffectedBookings: acknowledge,
+          expectedFingerprint: fingerprint,
+        },
       });
     },
     onSuccess: () => {
       setAffected(null);
+      setConflict(null);
       setSaved(true);
       void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
       // The badge on the bookings screen is derived from this schedule, so a
@@ -109,6 +195,16 @@ export function WorkingHoursEditor({
       const stranded = affectedBookingsOf(cause);
       if (stranded !== null) {
         setAffected(stranded);
+        return;
+      }
+
+      // The other 409 on this route, and the opposite answer: a stranded
+      // booking is re-sent acknowledged, while this body may never be re-sent
+      // at all — it would revert somebody's work. `undefined` means "some other
+      // error", so `null` still has to stop the save (§2.14).
+      const movedBy = scheduleModifiedBy(cause);
+      if (movedBy !== undefined) {
+        setConflict({ change: movedBy });
         return;
       }
 
@@ -144,6 +240,44 @@ export function WorkingHoursEditor({
         {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
       </p>
 
+      {stored.data?.lastChange ? (
+        <LastChange change={stored.data.lastChange} selfUserId={context.me?.user.id} />
+      ) : null}
+
+      {/* The save was refused, so nothing on screen is lost — but it is also
+          not saved, and the only way forward is to look at their version first.
+          `role="alert"`: it appears in response to a press, and the button that
+          caused it does not otherwise change. */}
+      {conflict === null ? null : (
+        <Callout tone="action" role="alert">
+          <span className="flex flex-col items-start gap-2">
+            <span>
+              {conflict.change?.by
+                ? t("scheduleMovedBy", {
+                    name: conflict.change.by.name,
+                    when: formatRelativeAge(conflict.change.at, new Date(), locale),
+                  })
+                : t("scheduleMovedUnknown")}
+            </span>
+            <span className="text-xs">{t("scheduleMovedHint")}</span>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => {
+                setConflict(null);
+                setError(null);
+                // Re-seeds the form from their version through the effect above,
+                // which discards what is on screen — which is why the hint says
+                // so before the press rather than after.
+                void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
+              }}
+            >
+              {t("scheduleMovedReload")}
+            </Button>
+          </span>
+        </Callout>
+      )}
+
       {week === null ? (
         <p className="text-sm text-ink-muted">{t("loading")}</p>
       ) : (
@@ -153,6 +287,7 @@ export function WorkingHoursEditor({
             event.preventDefault();
             setError(null);
             setSaved(false);
+            setConflict(null);
             // Unacknowledged: the first attempt is always the one that can be
             // refused, so the list reaches the owner before the change lands.
             save.mutate(false);

@@ -111,6 +111,22 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
     locationId: string;
   }
 
+  /** The version marker a whole-set schedule save must carry (§2.14). */
+  async function fingerprintOf(
+    cookie: string,
+    tenantId: string,
+    providerId: string,
+  ): Promise<string> {
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/providers/${providerId}/working-hours`,
+      headers: as(cookie, tenantId),
+    });
+
+    expect(read.statusCode, read.body).toBe(200);
+    return read.json().fingerprint as string;
+  }
+
   /** A clinic in UTC with two providers, both working Monday 09:00–17:00. */
   async function clinic(label: string): Promise<Clinic> {
     const owner = await signUp(label);
@@ -157,6 +173,9 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
       timezone: "UTC",
     });
 
+    // The whole-set save requires the version it replaces
+    // (docs/phase-3-4-diary-delegation.md §2.14), so every write here reads
+    // first — which is the rule the fingerprint exists to enforce.
     for (const id of [providerId, otherProviderId]) {
       await app.inject({
         method: "PUT",
@@ -174,7 +193,10 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
         method: "PUT",
         url: `/v1/providers/${id}/working-hours`,
         headers: as(owner.cookie, tenantId),
-        payload: { workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }] },
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }],
+          expectedFingerprint: await fingerprintOf(owner.cookie, tenantId, id),
+        },
       });
       expect(hours.statusCode, hours.body).toBe(200);
     }
@@ -707,6 +729,7 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
         payload: {
           workingHours: [{ weekday: 1, startTime: "10:00", endTime: "17:00" }],
           acknowledgeAffectedBookings: true,
+          expectedFingerprint: await fingerprintOf(reka.cookie, site.tenantId, site.providerId),
         },
       });
       expect(writeHours.statusCode, writeHours.body).toBe(200);
@@ -724,7 +747,10 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
         method: "PUT",
         url: `/v1/providers/${site.providerId}/working-hours`,
         headers: as(reka.cookie, site.tenantId),
-        payload: { workingHours: [{ weekday: 1, startTime: "10:00", endTime: "17:00" }] },
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "10:00", endTime: "17:00" }],
+          expectedFingerprint: await fingerprintOf(reka.cookie, site.tenantId, site.providerId),
+        },
       });
 
       expect(refused.statusCode, refused.body).toBe(409);
@@ -744,7 +770,14 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
         method: "PUT",
         url: `/v1/providers/${site.providerId}/working-hours`,
         headers: as(site.owner.cookie, site.tenantId),
-        payload: { workingHours: [{ weekday: 1, startTime: "10:00", endTime: "17:00" }] },
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "10:00", endTime: "17:00" }],
+          expectedFingerprint: await fingerprintOf(
+            site.owner.cookie,
+            site.tenantId,
+            site.providerId,
+          ),
+        },
       });
       expect(asOwner.statusCode, asOwner.body).toBe(409);
       expect(asOwner.json().error.details.affectedBookings[0].customerName).toBe("Walk-in");
@@ -781,7 +814,10 @@ describe.skipIf(!databaseUrl)("diary delegation", () => {
         method: "PUT",
         url: `/v1/providers/${thirdId}/working-hours`,
         headers: as(site.owner.cookie, site.tenantId),
-        payload: { workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }] },
+        payload: {
+          workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }],
+          expectedFingerprint: await fingerprintOf(site.owner.cookie, site.tenantId, thirdId),
+        },
       });
 
       await grant(site, site.providerId, reka.membershipId, ["BOOKINGS"]);

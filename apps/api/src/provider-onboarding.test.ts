@@ -351,8 +351,20 @@ describe.skipIf(!databaseUrl)("provider onboarding", () => {
         .filter(Boolean)
         .join("; ");
 
+      // The whole-set save carries the version it replaces
+      // (docs/phase-3-4-diary-delegation.md §2.14). The trespass below reuses
+      // this body deliberately: a stale fingerprint must never be what refuses
+      // it — `availability:manage:own` is, and the check runs first.
+      const readOwn = await app.inject({
+        method: "GET",
+        url: `/v1/providers/${site.providerId}/working-hours`,
+        headers: as(cookie, site.tenantId),
+      });
+      expect(readOwn.statusCode, readOwn.body).toBe(200);
+
       const hours = {
         workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }],
+        expectedFingerprint: readOwn.json().fingerprint as string,
       };
 
       const own = await app.inject({

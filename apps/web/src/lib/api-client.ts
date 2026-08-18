@@ -373,6 +373,19 @@ export interface WorkingHoursRow {
   active: boolean;
 }
 
+/**
+ * Who last saved a provider's week, from `GET .../working-hours`.
+ *
+ * Null when nothing has been saved since auditing began. Read-only provenance:
+ * it does not stop two people clobbering each other — nothing does yet — it only
+ * makes the other editor visible (docs/phase-3-4-diary-delegation.md §2.14).
+ */
+export interface ScheduleLastChange {
+  at: string;
+  /** Null when the audit row names no user, or that account is gone. */
+  by: { userId: string; name: string } | null;
+}
+
 export interface AvailabilityException {
   id: string;
   providerId: string;

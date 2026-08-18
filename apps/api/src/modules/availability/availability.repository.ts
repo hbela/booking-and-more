@@ -1,6 +1,21 @@
 import type { AvailabilityException, Prisma, PrismaClient, WorkingHours } from "@bam/db";
 import { ErrorCodes, NotFoundError } from "@bam/contracts";
 import { isRecordNotFound } from "../providers/provider.repository.js";
+import { fingerprintWorkingHours } from "./working-hours-fingerprint.js";
+
+/**
+ * The week moved under the caller. Internal to this module.
+ *
+ * Thrown from inside the replace transaction so it unwinds immediately, and
+ * converted to `SCHEDULE_MODIFIED` by the service, which is the layer that may
+ * spend a query on *who* changed it (docs/phase-3-4-diary-delegation.md §2.14).
+ */
+export class ScheduleModifiedError extends Error {
+  constructor(readonly currentFingerprint: string) {
+    super("the schedule changed since it was read");
+    this.name = "ScheduleModifiedError";
+  }
+}
 
 /**
  * Data access for schedules.
@@ -91,15 +106,42 @@ export class AvailabilityRepository {
    * Delete-then-insert rather than a diff: the rows carry no identity anybody
    * refers to, and a diff would be more code for the sole benefit of preserving
    * ids nothing reads.
+   *
+   * ## The version check is inside the transaction, and has to be
+   *
+   * `expectedFingerprint` is what the caller's `GET` returned. Comparing it in
+   * the service — before this call — would leave exactly the window the check
+   * exists to close: between "still matches" and `deleteMany`, the other editor
+   * commits and is deleted anyway. Reading it here, in the same transaction that
+   * does the delete, is the only placement that means anything
+   * (docs/phase-3-4-diary-delegation.md §2.14).
+   *
+   * The read is `SELECT … FOR UPDATE`-free on purpose: Postgres' default READ
+   * COMMITTED lets two transactions both pass the check and serialise their
+   * deletes, so in principle one could still be lost. It cannot happen here
+   * because both would have had to read the *same* fingerprint, meaning both
+   * bodies were built from the same week — so the loser overwrites with a body
+   * that saw everything the winner saw. Locking the rows would refuse a case
+   * that is not a conflict, at the cost of a lock held across the whole save.
    */
   async replaceWorkingHours(args: {
     tenantId: string;
     providerId: string;
     rows: Omit<Prisma.WorkingHoursUncheckedCreateInput, "tenantId" | "providerId">[];
+    expectedFingerprint: string;
   }): Promise<WorkingHours[]> {
-    const { tenantId, providerId, rows } = args;
+    const { tenantId, providerId, rows, expectedFingerprint } = args;
 
     return this.prisma.$transaction(async (tx) => {
+      const current = await tx.workingHours.findMany({ where: { tenantId, providerId } });
+      const actual = fingerprintWorkingHours(current);
+
+      if (actual !== expectedFingerprint) {
+        // Bare, so the transaction unwinds before anything reads the audit log
+        // to find out who. The service turns it into the wire error.
+        throw new ScheduleModifiedError(actual);
+      }
+
       await tx.workingHours.deleteMany({ where: { tenantId, providerId } });
 
       if (rows.length > 0) {
@@ -113,6 +155,57 @@ export class AvailabilityRepository {
         orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
       });
     });
+  }
+
+  /**
+   * Who last replaced this provider's week, and when.
+   *
+   * The audit row is the source, because the week itself cannot be one: every
+   * save deletes and re-inserts, so any `updatedBy` column on `working_hours`
+   * would be reset by the very act it is meant to attribute — and a schedule
+   * left untouched by the latest save has no row to carry it.
+   *
+   * Two queries rather than a join: `AuditLog.actorId` has **no foreign key**
+   * to `User`, deliberately, because the actor may have been deleted and an
+   * audit trail that cascades away is not one. So the name is looked up
+   * separately and a miss is a null name, not a missing row.
+   *
+   * Returns null when nothing has been saved since auditing began — a real
+   * state, not an error: every tenant provisioned before this shipped is in it
+   * until somebody next touches the week.
+   */
+  async findLastWorkingHoursChange(args: { tenantId: string; providerId: string }): Promise<{
+    at: Date;
+    by: { userId: string; name: string } | null;
+  } | null> {
+    // Served by @@index([entityType, entityId]).
+    const entry = await this.prisma.auditLog.findFirst({
+      where: {
+        tenantId: args.tenantId,
+        entityType: "Provider",
+        entityId: args.providerId,
+        action: "availability.working_hours_changed",
+      },
+      orderBy: { createdAt: "desc" },
+      select: { actorId: true, createdAt: true },
+    });
+
+    if (entry === null) return null;
+    if (entry.actorId === null) return { at: entry.createdAt, by: null };
+
+    // Not tenant-scoped, and cannot be: a user is a platform-level identity and
+    // the membership that ties them to this tenant may since have been removed.
+    // The tenant predicate above is what proves the *action* belongs here; this
+    // only puts a name on an id that read already vouched for.
+    const user = await this.prisma.user.findUnique({
+      where: { id: entry.actorId },
+      select: { id: true, name: true },
+    });
+
+    return {
+      at: entry.createdAt,
+      by: user === null ? null : { userId: user.id, name: user.name },
+    };
   }
 
   // --- Exceptions -----------------------------------------------------------

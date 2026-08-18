@@ -378,6 +378,105 @@ accept one and then assigning the second — which is what the two separate acti
 Not silently converted into an assignment. A button that sometimes sends an email and sometimes quietly does
 something else is worse than one that says "assign them from the list instead" — and the list is right there.
 
+## 2.14 Two people on one diary — what protects them, and what does not
+
+**Read this before adding any second editor to anything.** Added 2026-08-18, after the question "how do we
+manage conflict between a provider and her assistant" was asked of the finished feature. The audit below is
+the answer, and one of its four rows is a defect this epic made much more likely to fire.
+
+| conflict | what happens today |
+| --- | --- |
+| both act on the same **booking** | Refused cleanly. The state machine makes terminal terminal — nobody un-cancels, because cancelling releases the capacity reservation and the slot may already be resold ([transitions.ts](../packages/booking-engine/src/transitions.ts)) — the exclusion constraint on `capacity_reservations` decides who got a slot rather than a read-then-write (rule 14), and retryable writes carry an `Idempotency-Key` (rule 16). |
+| an **availability** edit strands a booking | Handled, and this was already the cross-role case: `SCHEDULE_CONFLICTS_BOOKINGS` returns the list once and succeeds on re-send with `acknowledgeAffectedBookings` (phase-3-4 §2.4). A BOOKINGS-blind delegate acknowledges it **without customer names** (§2.12) — deliberate, and it means their acknowledgement is made on less than the provider would have. |
+| both edit the **same week** | **Nothing.** See below. |
+| they simply disagree | Not a software question. §2.3 gives the provider no way to revoke their own assistant, so their recourse is the owner. Stated here because it is a consequence of owner-only staffing that somebody will otherwise report as a bug. |
+
+### 2.14.1 The whole-week save had no concurrency control
+
+**Fixed on 2026-08-18 by §2.14.4.** Kept in the past tense below because the defect is the reason the rest of
+this section exists, and because the shape of it recurs wherever a whole set is replaced.
+
+[`replaceWorkingHours`](../apps/api/src/modules/availability/availability.repository.ts) was a
+delete-then-insert inside a transaction, with no version column, no `If-Match` and no `updatedAt` check. The
+whole-set `PUT` rule (phase-2-3 §2) requires the body be built from a full read of that set, and the editor
+does that — but **nothing checked the read was current**. So: the provider opens her week, the assistant adds
+Friday afternoon and saves, the provider saves her stale form, and Friday afternoon disappears with no error
+and no trace either of them will ever see.
+
+The bug predated this epic. What this epic changed is its probability: before delegation it took two owners
+editing one diary, which is rare. **An assistant is a second editor by design**, so the expected
+configuration became the one that triggers it.
+
+### 2.14.2 The visibility half, built first
+
+Shipped on 2026-08-18, before the fix and deliberately kept after it: `GET …/working-hours` gained
+`lastChange`, and the editor renders *"Last changed by Réka, 10 minutes ago"*.
+
+It prevents nothing, and it is still worth having after §2.14.4: the version check refuses a *collision*,
+while this answers "has anything moved since I last looked" on a screen nobody is mid-save on. Four decisions
+inside it:
+
+- **The audit log is the source, not a column.** The row is already written on every save; a whole-week
+  replace would reset any `updatedBy` we put on `working_hours`, including on the rows the save did not
+  change; and a second source of one fact is a second thing to keep true. It also meant **no migration**.
+- **On the existing `GET`, not an endpoint of its own.** It describes exactly the set being returned, and two
+  requests could disagree — a week from one moment attributed to a save from another.
+- **It is eventually consistent, deliberately.** `request.audit()` is fire-and-forget, because an audit
+  failure must never fail a schedule save. So the line can lag by a moment — which only ever affects
+  attributing *your own* save right after making it, the one case the reader already knows the answer to.
+  The integration test asserts through the API with `vi.waitFor` rather than reaching into the table, so it
+  proves the model the screen actually sees.
+- **`AuditLog.actorId` has no foreign key to `User`**, so the name is a second lookup and a miss renders as a
+  time with no name rather than a missing line. An audit trail that cascades away when an account is deleted
+  is not an audit trail.
+
+### 2.14.3 The fix — a content fingerprint, checked inside the transaction
+
+Built 2026-08-18, immediately after §2.14.2. `GET …/working-hours` returns a `fingerprint`; the `PUT`
+requires it back as `expectedFingerprint`; a mismatch is `SCHEDULE_MODIFIED` (409) carrying the current
+fingerprint and `lastChange`. **Still no migration.** Five decisions, each of which was the second thing
+tried or the thing that made the first wrong:
+
+- **Content, not identity.** The obvious fingerprint is the row ids — every save mints new ones, since the
+  replace is delete-then-insert. It was rejected: two saves producing an *identical* week would then
+  conflict, and refusing somebody because a colleague saved the very hours they are looking at is a dialog
+  about nothing. Hashing the fields also survives a partial-update writer that does not exist yet; an
+  id-based hash would not notice one. Asserted both ways in `working-hours-fingerprint.test.ts`.
+- **Sorted here, not trusted from the query.** The repository orders by `(weekday, startTime)`, which is not
+  a total order — two periods can share both and differ by location. Without sorting the serialised tuples,
+  one week could fingerprint two ways and refuse a caller who did nothing wrong.
+- **Compared inside the replace transaction.** Comparing in the service, before the call, leaves exactly the
+  window the check exists to close: between "still matches" and `deleteMany`, the other editor commits and
+  is deleted anyway. No row lock: two transactions that both pass have by definition read the *same* week,
+  so the loser overwrites a body that saw everything the winner saw.
+- **Required, but refused in the handler rather than by Zod.** `requireScheduleFingerprint` mirrors
+  `requireIdempotencyKey` exactly, and for the reason `idempotencyHeaderSchema` records: Fastify validates
+  the body **before** the preHandler, so a required field would answer a caller with no permission on this
+  diary with a 422 about a missing field instead of a 403. There is a test pinning that ordering. It also
+  earns its own code — `SCHEDULE_FINGERPRINT_REQUIRED` — because "you did not read before writing" is a
+  different fix from "your body is wrong". This is phase-2-3 §2's rule finally enforced by the server
+  instead of trusted to the client.
+- **A different code from `SCHEDULE_CONFLICTS_BOOKINGS`**, though both are 409s on this one route, and the
+  screens must never merge them: that one means "your change costs these appointments, confirm it" and is
+  re-sent acknowledged; this one means "you are about to undo work you have not seen" and may **never** be
+  re-sent as-is. `scheduleModifiedBy` returns `undefined` for "not this error" and `null` for "this error,
+  nobody to name", so a lagging audit trail still stops the save.
+
+On the web side the fingerprint is seeded into state **in the same effect as the week**, never read from the
+query at submit time: a background refetch updates the query one render before the effect re-seeds the form,
+and reading it there would send the new fingerprint with the old body — the precise stale write this refuses.
+The refusal renders as a callout naming the other editor with a Reload button, and the copy says *before* the
+press that reloading replaces what is on screen.
+
+### 2.14.4 The trail exists and nobody can read it
+
+Availability writes have been audited with the acting user since Epic 3
+([availability.routes.ts](../apps/api/src/modules/availability/availability.routes.ts),
+[audit.plugin.ts](../apps/api/src/plugins/audit.plugin.ts)). **There is no audit-viewing UI anywhere in
+`apps/web`** — the `lastChange` line is now the only audit data any user of this product can see. "Who
+changed my Friday, and to what?" still needs database access. Named as a gap (§9.9) rather than solved,
+because a general audit screen is its own piece of work.
+
 ---
 
 # 3. Schema
@@ -595,6 +694,8 @@ row whose diary has none. The real answer is an organization-level default (§10
 | API | `apps/api/src/modules/delegations/` (routes, schemas, service, repository, a schema-parity test); `inviteDelegate` and the acceptance half of `claimInvitation` in `membership.service.ts`; `DELEGATION_TARGET_INELIGIBLE` in [error-codes.ts](../packages/contracts/src/error-codes.ts); both plugins registered in [app.ts](../apps/api/src/app.ts) |
 | Email | `ASSISTANT_INVITED` through `@bam/notification-engine` (type, dedupe, planning, hu+en template, scope labels) and the worker's `dispatchAssistantInvited` + sender branch |
 | Call sites | both availability `GET`s narrowed; the bookings list rewritten onto `providerIdsInScope` and `providerIds`; `customerName` nulled for a bookings-blind caller; `delegations` added to `/v1/me` |
+| Provenance (§2.14.2) | `scheduleLastChangeSchema` and `lastChange` on `GET …/working-hours`; `findLastWorkingHoursChange` in the availability repository; `lib/relative-time.ts` + its test and the `LastChange` line in `working-hours-editor.tsx`; three message keys. No schema change |
+| Version check (§2.14.3) | `working-hours-fingerprint.ts` (`fingerprintWorkingHours`, `requireScheduleFingerprint`) + its unit test; `fingerprint` on the working-hours `GET` **and** `PUT`; `expectedFingerprint` on the body; the in-transaction compare and `ScheduleModifiedError` in the repository, converted to `SCHEDULE_MODIFIED` by the service; `SCHEDULE_MODIFIED` + `SCHEDULE_FINGERPRINT_REQUIRED` in `error-codes.ts`; `lib/schedule-modified.ts` + its test and the conflict callout; four message keys. No schema change |
 | Web | `provider-delegates.tsx`, `lib/delegation.ts`, the two diary pickers, the nav, `MeResponse`, both message catalogues; the **Manage assistant** row action and panel on `providers-screen.tsx` (§2.10.1) |
 
 ## 8.2 Deviations from the plan, and one reversal
@@ -641,6 +742,14 @@ Smaller deviations, in the order they were found:
 move because the panel is the same component with three new optional props, and `messages.test.ts` covers
 the three added keys by parity.
 
+**2026-08-18**, after §2.14.2 and §2.14.3: `pnpm lint`, `pnpm check-types`, `pnpm test` — 23/23 tasks;
+`pnpm db:drift-check` no drift, and **neither change needed a migration**. `@bam/api` 315 passed (was 301):
+`availability.test.ts` gained the provenance case and a six-case `the version check` block, including the one
+pinning that a 403 answers before the missing-version does. `@bam/web` 243 (was 232): `lib/relative-time.ts`
+7 and `lib/schedule-modified.ts` 4. Four suites' fixtures now read before they write — `availability`,
+`delegation`, `booking` and `provider-onboarding` — which is the rule the fingerprint enforces, applied to the
+tests as well.
+
 ## 8.4 Manual walk
 
 **Not yet performed.** [phase-3-4-diary-delegation-manual-test.md](phase-3-4-diary-delegation-manual-test.md)
@@ -671,7 +780,7 @@ shape of it, in order:
    the two that decide diary scope, which shrinks the surface without removing it. A
    `lib/permissions.ts` — or, better, letting `apps/web` depend on `@bam/auth` — is the real fix.
 2. **A provider created after the migration has no delegates** (§6.5). Mitigated with a callout, not solved.
-   §10's first item.
+   §10's second item.
 3. **A role round trip revives every grant** (§2.8). Decided, labelled and tested, not fixed.
 4. **No tenant-wide delegation overview.** Every row is reachable from a provider's panel, which is enough
    and not convenient.
@@ -683,6 +792,16 @@ shape of it, in order:
 7. **`GET /v1/providers` is readable by any member**, so a delegate can enumerate provider names even for
    diaries they do not hold. Unchanged by this work and out of its scope, but the pickers now depend on it,
    which is the first thing that would break if it were narrowed.
+8. **The other three whole-set `PUT`s have no version check** — provider services, provider locations,
+   service translations (phase-2-3 §2). Working hours was fixed (§2.14.3) because delegation put two editors
+   on it by design; the others are still one-owner-at-a-time in practice, and the fingerprint is small enough
+   to lift if that stops being true. `fingerprintWorkingHours` is deliberately named for its table rather
+   than generalised on speculation.
+9. **No audit-viewing UI** (§2.14.4). The `lastChange` line is the only audit data any user can see; the
+   twelve-month trail behind it is reachable only from the database.
+10. **Availability *exceptions* have no version check either.** They are per-row create/update/delete rather
+    than a whole-set replace, so a concurrent edit cannot clobber a set — but two people can still delete and
+    re-add the same day and only the audit log will show it.
 
 ---
 

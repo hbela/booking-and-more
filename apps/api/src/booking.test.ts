@@ -173,11 +173,23 @@ describe.skipIf(!databaseUrl)("bookings", () => {
       payload: { locations: [{ locationId }] },
     });
 
+    // Read before writing: the whole-set save carries the version it replaces
+    // (docs/phase-3-4-diary-delegation.md §2.14).
+    const currentHours = await app.inject({
+      method: "GET",
+      url: `/v1/providers/${providerId}/working-hours`,
+      headers: as(owner.cookie, tenantId),
+    });
+    expect(currentHours.statusCode, currentHours.body).toBe(200);
+
     const hours = await app.inject({
       method: "PUT",
       url: `/v1/providers/${providerId}/working-hours`,
       headers: as(owner.cookie, tenantId),
-      payload: { workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }] },
+      payload: {
+        workingHours: [{ weekday: 1, startTime: "09:00", endTime: "17:00" }],
+        expectedFingerprint: currentHours.json().fingerprint as string,
+      },
     });
     expect(hours.statusCode, hours.body).toBe(200);
 

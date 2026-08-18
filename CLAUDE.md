@@ -39,7 +39,20 @@ cross-tenant grant unrepresentable rather than merely checked; and **§2.12** �
 carries `customerName`, so splitting availability from bookings created a leak that could not exist before.
 §4.3 is why an empty provider set may never be spelled the same way as "no filter", §2.9 why the availability
 `GET`s were narrowed and `POST /v1/slots/search` deliberately was not, and §6.3 why the nav gates Bookings
-and Availability on *data* rather than on a permission. Its
+and Availability on *data* rather than on a permission. **§2.14 is the one to read before adding a second
+editor to anything.** Bookings were already safe under two actors (state machine, exclusion constraint,
+idempotency key), but the whole-week `PUT …/working-hours` had **no concurrency control at all** — a provider
+and their assistant silently reverted each other, a bug that predates delegation and that delegation turned
+from rare into the expected case. Both halves are now built, neither needing a migration: **§2.14.2**
+`lastChange` on the working-hours `GET`, read from the audit log and therefore eventually consistent because
+`request.audit()` is fire-and-forget on purpose; and **§2.14.3** a content fingerprint the `GET` issues and
+the `PUT` must echo, compared *inside* the replace transaction. Read §2.14.3 before touching either — it is
+why the fingerprint hashes content rather than row ids, why `expectedFingerprint` is required but declared
+optional in Zod (Fastify validates the body before the preHandler, so a required field turns a 403 into a
+422 — the same trade `idempotencyHeaderSchema` records), and why `SCHEDULE_MODIFIED` must never be merged
+with `SCHEDULE_CONFLICTS_BOOKINGS` even though both are 409s on that one route: one is re-sent acknowledged
+and the other may never be re-sent at all. **The other three whole-set `PUT`s still have no version check**
+(§9.8). §2.14.4 is why the `lastChange` line is the only audit data anybody using this product can see. Its
 [manual test checklist](docs/phase-3-4-diary-delegation-manual-test.md) is written and **not yet walked** —
 open it before testing delegation by hand, and note its §2 warning that a `PENDING_SUBSCRIPTION` organization
 refuses every write in it ·

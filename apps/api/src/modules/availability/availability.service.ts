@@ -17,7 +17,7 @@ import { definedOnly } from "../../lib/patch.js";
 import { providerNotFound } from "../providers/provider.repository.js";
 import { serviceNotFound } from "../services/service.repository.js";
 import { locationNotFound } from "../locations/location.repository.js";
-import { AvailabilityRepository } from "./availability.repository.js";
+import { AvailabilityRepository, ScheduleModifiedError } from "./availability.repository.js";
 import { ScheduleConflictService } from "./schedule-conflicts.service.js";
 import type {
   CreateExceptionBody,
@@ -104,6 +104,22 @@ export class AvailabilityService {
     return this.repository.listWorkingHours(args);
   }
 
+  /**
+   * Who last saved this week, for the "last changed by" line.
+   *
+   * No `assertProviderExists`: it is only ever issued alongside
+   * `listWorkingHours`, whose check rejects the pair if the diary is not in this
+   * tenant, so repeating it would spend a round trip re-proving the same thing.
+   * It reads only rows already keyed by `tenantId`, so on its own it still
+   * cannot cross a tenant boundary (rule 5).
+   */
+  async lastWorkingHoursChange(args: {
+    tenantId: string;
+    providerId: string;
+  }): Promise<{ at: Date; by: { userId: string; name: string } | null } | null> {
+    return this.repository.findLastWorkingHoursChange(args);
+  }
+
   async setWorkingHours(args: {
     tenantId: string;
     providerId: string;
@@ -116,6 +132,12 @@ export class AvailabilityService {
      * it with `canReadProviderBookings`; the service only obeys.
      */
     mayReadBookings: boolean;
+    /**
+     * The fingerprint the caller's `GET` returned — proof the body was built
+     * from a current read of this same set (docs/phase-3-4-diary-delegation.md
+     * §2.14). Compared inside the replace transaction, not here.
+     */
+    expectedFingerprint: string;
     now: Date;
   }): Promise<WorkingHours[]> {
     const { tenantId, providerId, entries } = args;
@@ -152,10 +174,12 @@ export class AvailabilityService {
       );
     }
 
-    return this.repository.replaceWorkingHours({
-      tenantId,
-      providerId,
-      rows: entries.map((entry) => ({
+    try {
+      return await this.repository.replaceWorkingHours({
+        tenantId,
+        providerId,
+        expectedFingerprint: args.expectedFingerprint,
+        rows: entries.map((entry) => ({
         weekday: entry.weekday,
         startTime: entry.startTime,
         endTime: entry.endTime,
@@ -164,13 +188,34 @@ export class AvailabilityService {
           entry.validFrom === undefined || entry.validFrom === null
             ? null
             : new Date(`${entry.validFrom}T00:00:00Z`),
-        validUntil:
-          entry.validUntil === undefined || entry.validUntil === null
-            ? null
-            : new Date(`${entry.validUntil}T00:00:00Z`),
-        active: entry.active,
-      })),
-    });
+          validUntil:
+            entry.validUntil === undefined || entry.validUntil === null
+              ? null
+              : new Date(`${entry.validUntil}T00:00:00Z`),
+          active: entry.active,
+        })),
+      });
+    } catch (cause) {
+      if (!(cause instanceof ScheduleModifiedError)) throw cause;
+
+      // Only now, once we know there is a conflict to report: the whole point of
+      // the line is naming the person, and looking them up on the happy path
+      // would put an audit query on every save to answer a question nobody
+      // asked. Null-safe — the trail is fire-and-forget, so it may not have
+      // caught up (§2.14.2), and "somebody changed it" is still the right
+      // refusal.
+      const lastChange = await this.repository.findLastWorkingHoursChange({ tenantId, providerId });
+
+      throw new ConflictError(
+        ErrorCodes.SCHEDULE_MODIFIED,
+        "This schedule was changed by somebody else while you were editing it. Reload to see their version before saving yours.",
+        {
+          currentFingerprint: cause.currentFingerprint,
+          lastChange:
+            lastChange === null ? null : { at: lastChange.at.toISOString(), by: lastChange.by },
+        },
+      );
+    }
   }
 
   // -------------------------------------------------------------------------

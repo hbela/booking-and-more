@@ -4,11 +4,19 @@ validate — read its §2.1, §2.3, §2.12 and §2.13 first.
 
 # Phases 3–4 — Diary delegation manual test checklist
 
-**Document version:** 1.0 — written 2026-08-17. **Not yet walked.**
-**Covers:** the Delegates panel → assigning, inviting by email, re-scoping → the two scopes kept apart →
-navigation → revocation → lifecycle → tenant isolation → localization and accessibility → the audit trail.
+**Document version:** 1.1 — written 2026-08-17, extended 2026-08-18 with A10–A23 and Appendix A.
+**Not yet walked.**
+**Covers:** the Delegates panel and its Providers-row entry point → assigning, inviting by email, re-scoping
+→ the two scopes kept apart → who last changed a schedule, and what happens when two people change it at
+once → navigation → revocation → lifecycle → tenant isolation → localization and accessibility → the audit
+trail.
 **Note the model:** the **owner** staffs every diary; the **provider** only reads who assists them; the
 **admin is out entirely**. Record §2.3.
+
+> **If you walk only one thing, walk [Appendix A](#appendix-a--scenario-two-people-one-week).** Every other
+> check in here fails as a bad message or a missing button. A19 is the only one whose failure mode is
+> **silently destroyed work** — it was the real behaviour until 2026-08-18, and the appendix is the
+> regression walk that proves it is gone.
 
 ---
 
@@ -163,6 +171,45 @@ from whichever entry point you prefer — but walk these five once.
       correctly to a screen reader. Same contract as Edit and Assign — it is the same hook.
 - [ ] **A14** An **archived** provider's row offers only Restore, so no Manage assistant. Existing grants on
       an archived diary survive and keep working (record §2.8); this is only about not offering new ones.
+
+### A15–A18 — "Last changed by" (record §2.14.2)
+
+Added 2026-08-18. This is the only place in the product where any user can see audit data at all, and the
+only signal that a provider and their assistant are editing the same week. Two accounts are needed.
+
+- [ ] **A15** A provider whose week has **never been saved** shows **no line at all** — not "changed by
+      nobody". Every diary created before this shipped is in that state.
+- [ ] **A16** Save the week as the owner → the line reads *"You last changed this now."* Reload after a
+      minute → *"…1 minute ago"*. It may take a second to appear after the save: the audit row is written
+      after the response, deliberately (§2.14.2).
+- [ ] **A17** ★ **The one that matters.** As the assistant (AVAILABILITY scope), save Anna's week. Now sign
+      in as **Anna** and open her availability → *"Last changed by ⟨assistant⟩, N minutes ago."* The name,
+      not just the time — that is the whole point.
+- [ ] **A18** In Hungarian the relative time is Hungarian too (*"10 perccel ezelőtt"*). It comes from `Intl`,
+      not from a message key, so this is checking the locale reaches it — not a translation.
+
+### A19–A23 — the version check (record §2.14.3)
+
+Added 2026-08-18, and the most consequential block in this document. Until that date, the sequence in **A19**
+**destroyed data with no error and no trace** — the second person's save silently reverted the first's, and
+neither of them was told. It is fixed; these five checks are the regression walk that proves it, and A19 is
+the one to run first if you only run one.
+
+Full scenario, with its own setup, in **Appendix A** at the end of this document.
+
+- [ ] **A19** ★ Two people edit one week; the second save is **refused**, naming the first.
+- [ ] **A20** The refusal explains itself and offers **Reload their version**, warning first that reloading
+      discards what is on screen.
+- [ ] **A21** After reloading, the same edit **succeeds**. One refusal, not a stuck screen.
+- [ ] **A22** Two saves in a row in **one** window both succeed — an ordinary session never sees this.
+- [ ] **A23** Two windows saving an *identical* week is **not** a conflict.
+
+> **Still a known gap, not a defect to report.** The three other whole-set saves — provider services,
+> provider locations, service translations — have no version check (§9.8). Only working hours was fixed,
+> because only it has two editors by design.
+
+---
+
 
 ## B. Assigning and inviting
 
@@ -360,3 +407,158 @@ known day-2 trap.
 **§K4 is now half-answered.** An invited assistant *is* told, by email. Somebody assigned from the existing
 member list is still told nothing — they find out by noticing a new nav item. Decide whether that asymmetry
 is acceptable while you are looking at both.
+
+---
+
+# Appendix A — Scenario: two people, one week
+
+This is the walk for A19–A23. It is written out in full rather than left as five checklist lines because it
+is the only place in this document where a wrong result means **lost work** rather than a bad message, and
+because it is easy to run it in a way that cannot fail — see §A.2.
+
+## A.0 What you are testing
+
+`PUT …/working-hours` replaces the **entire** week: whatever the body omits is deleted. Two editors on one
+diary is the arrangement diary delegation was built to create (record §2.3), so two stale bodies is the
+normal case, not the exotic one. The guard is a fingerprint the `GET` issues and the `PUT` must echo back;
+the server compares it *inside* the transaction that does the delete (record §2.14.3).
+
+**Before the fix**, the sequence below ended with Réka's Friday afternoon gone, no error shown, and nothing
+on any screen recording that it had ever existed.
+
+## A.1 Setup — about four minutes
+
+Uses the main §3 fixtures. You need **two browser profiles** side by side (or one normal + one private
+window); call them **[O]** for the owner and **[R]** for Réka.
+
+- [ ] **W1** As the owner, give Réka **AVAILABILITY** on Anna's diary: Providers → Anna's row → **Manage
+      assistant** → Add a delegate → Réka → tick **Availability** → Give access.
+- [ ] **W2** **[R]** Sign in as Réka. Her nav now shows **Availability**. Open it; her picker resolves to
+      Anna's diary (it is the only one she holds).
+- [ ] **W3** **[O]** As the owner, open Anna's diary: Providers → Anna's row → **Availability**. The URL
+      carries `?providerId=…`.
+- [ ] **W4** Both windows now show **the same week**, loaded at the same moment. Confirm the working-hours
+      grid matches in both — from here on, do not reload either one until told to.
+
+> ### Do not navigate away in [O]
+>
+> The whole point is that **[O]** is holding a version marker that is about to go stale. A reload — or
+> leaving the availability screen and coming back after more than 30 seconds — refetches it, and the
+> conflict then cannot happen, because [O] would be up to date and *correct* to save.
+>
+> Window switching is safe: `refetchOnWindowFocus` is deliberately `false`
+> ([query-provider.tsx](../apps/web/src/lib/query-provider.tsx)), so clicking between the two browsers does
+> not refetch. Only an explicit reload does.
+
+## A.2 First, prove the guard is actually in play
+
+Skip this and you can walk all five checks against a screen that never sent a fingerprint at all, and read
+five passes out of a mechanism that is not running.
+
+- [ ] **W5** In **[O]**, open DevTools → Network. Save the week once, unchanged. Find the `PUT` to
+      `working-hours` and check the request payload contains **`expectedFingerprint`** with a hex string.
+      The response contains a **`fingerprint`** too.
+      **If `expectedFingerprint` is missing, stop** — the rest of this appendix would pass for the wrong
+      reason. The server answers `400 SCHEDULE_FINGERPRINT_REQUIRED` without it, so a save that *succeeds*
+      while the field is absent means you are on a stale build.
+- [ ] **W6** After that save, reload **[O]** so both windows are level again before starting A19.
+
+## A.3 A19 — the sequence that used to lose data ★
+
+- [ ] **A19.1** **[R]** As Réka, add a **new period on a weekday that currently has none** — Friday
+      13:00–17:00 — and **Save**. It succeeds. Friday now exists on Anna's diary.
+- [ ] **A19.2** **[O]** As the owner — **without reloading** — make a *different* change: alter the existing
+      weekday's end time from 17:00 to 16:00. Do not touch Friday; the owner's window does not know it
+      exists.
+- [ ] **A19.3** **[O]** Press **Save**.
+
+**Expected:** the save is **refused**. A callout appears reading *"Réka … saved this schedule ⟨N minutes
+ago / now⟩, while you were editing it. Nothing you typed has been saved."*
+
+**A failure here is data loss, not cosmetics.** If the save instead succeeds:
+
+- [ ] **A19.4** Reload **[O]** and look at Friday. If Friday 13:00–17:00 is **gone**, you have reproduced the
+      original defect — record it as a blocker, note whether `expectedFingerprint` was in the payload (W5),
+      and stop walking this section.
+
+> **On the name.** If the callout says *"Somebody else saved this schedule…"* rather than naming Réka, that
+> is **not** a failure. The audit row it reads is written fire-and-forget (record §2.14.2), so a refusal
+> raised within a second or so of the other save can legitimately have nobody to name yet. Wait a moment and
+> retry the save; the second refusal should name her. A refusal that *never* names anyone is worth noting.
+
+## A.4 A20 — the way out
+
+- [ ] **A20.1** The callout carries a hint line — *"Reloading replaces what is on screen with their version.
+      Copy anything you need first."* Confirm it is visible **before** you press anything. It is the only
+      warning that the owner's 16:00 edit is about to be discarded.
+- [ ] **A20.2** Press **Reload their version**.
+- [ ] **A20.3** The grid now shows **Réka's Friday 13:00–17:00**, and the end time is back to **17:00** — the
+      owner's unsaved edit is gone. That is intended: there is no merge, and A20.1 said so first.
+- [ ] **A20.4** The *"Last changed by Réka, …"* line (A17) is now visible above the grid.
+
+## A.5 A21 — not a stuck screen
+
+- [ ] **A21.1** **[O]** Make the same edit again — end time 17:00 → 16:00 — and **Save**.
+- [ ] **A21.2** It **succeeds**. One refusal per collision, not a screen that has to be abandoned.
+- [ ] **A21.3** **[R]** Reload Réka's window. She sees the owner's 16:00 *and* still has her Friday. Nothing
+      was lost in either direction — which is the entire point of the feature.
+
+## A.6 A22 — the ordinary case stays ordinary
+
+The failure mode to rule out is a version check that fires on a single user working normally, which would be
+worse than the bug: people learn to click through warnings.
+
+- [ ] **A22.1** **[O]** In one window, save the week. Without reloading, change something else and save
+      again. Both succeed.
+- [ ] **A22.2** Repeat a third time. Still no dialog. The `PUT` hands back the new fingerprint, so a session
+      of repeated saves never goes stale against itself.
+
+## A.7 A23 — an identical week is not a conflict
+
+- [ ] **A23.1** Reload both windows so they are level.
+- [ ] **A23.2** **[R]** Save **without changing anything**. It succeeds.
+- [ ] **A23.3** **[O]** — without reloading — also save **without changing anything**.
+- [ ] **A23.4** It **succeeds**, with no refusal. The fingerprint is over the week's *content*, not over row
+      identity, so Réka's save left nothing for the owner to revert and a dialog would be about nothing
+      (record §2.14.3).
+
+> If A23 *does* refuse, the fingerprint has regressed to hashing row ids — every save mints new ones, so
+> every save would then look like a conflict. That is the specific mistake §2.14.3 exists to prevent.
+
+## A.8 Optional — the same thing without a browser
+
+Faster to re-run, and the one way to see the refusal payload itself. Sign in and take a session cookie from
+DevTools first.
+
+```bash
+# 1. Read the week. Keep the fingerprint — this is the "stale" one.
+curl -s -b "$COOKIE" -H "x-tenant-id: $TENANT" \
+  "$API/v1/providers/$PROVIDER/working-hours" | jq '{fingerprint, lastChange}'
+
+# 2. Somebody else saves. (Any valid save; this one uses the *current* fingerprint.)
+FP=$(curl -s -b "$COOKIE" -H "x-tenant-id: $TENANT" \
+  "$API/v1/providers/$PROVIDER/working-hours" | jq -r .fingerprint)
+curl -s -X PUT -b "$COOKIE" -H "x-tenant-id: $TENANT" -H 'content-type: application/json' \
+  "$API/v1/providers/$PROVIDER/working-hours" \
+  -d "{\"workingHours\":[{\"weekday\":5,\"startTime\":\"13:00\",\"endTime\":\"17:00\"}],\"expectedFingerprint\":\"$FP\"}" | jq .fingerprint
+
+# 3. Now replay step 1's stale fingerprint. Expect 409 SCHEDULE_MODIFIED, with lastChange naming you.
+curl -s -X PUT -b "$COOKIE" -H "x-tenant-id: $TENANT" -H 'content-type: application/json' \
+  "$API/v1/providers/$PROVIDER/working-hours" \
+  -d "{\"workingHours\":[],\"expectedFingerprint\":\"<the one from step 1>\"}" | jq .
+
+# 4. And the missing-version refusal. Expect 400 SCHEDULE_FINGERPRINT_REQUIRED.
+curl -s -X PUT -b "$COOKIE" -H "x-tenant-id: $TENANT" -H 'content-type: application/json' \
+  "$API/v1/providers/$PROVIDER/working-hours" -d '{"workingHours":[]}' | jq .error.code
+```
+
+## A.9 What this scenario does **not** cover
+
+- **The other three whole-set saves** — provider services, provider locations, service translations — have
+  no version check at all (record §9.8). Two owners editing Anna's *services* still clobber each other
+  silently. Out of scope here; worth knowing while you have two windows open.
+- **Availability exceptions.** Per-row create/update/delete rather than a whole-set replace, so there is no
+  set to clobber — but two people can still delete and re-add the same day with only the audit log to show
+  it (record §9.10).
+- **Simultaneous saves within the same millisecond.** Both would have read the same week, so the loser
+  overwrites a body that saw everything the winner saw; there is nothing to observe by hand.

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
 import { buildApp, type AppInstance } from "./app.js";
@@ -140,15 +140,43 @@ describe.skipIf(!databaseUrl)("availability", () => {
     return { ...owner, slug, tenantId, providerId, serviceId, locationId };
   }
 
+  /**
+   * The version marker the whole-set save requires
+   * (docs/phase-3-4-diary-delegation.md §2.14).
+   *
+   * Every helper here reads before it writes, which is the rule the fingerprint
+   * enforces — so a test that wanted to write blind now has to say so
+   * explicitly, by passing `expectedFingerprint` itself.
+   */
+  async function fingerprintOf(site: {
+    cookie: string;
+    tenantId: string;
+    providerId: string;
+  }): Promise<string> {
+    const read = await app.inject({
+      method: "GET",
+      url: `/v1/providers/${site.providerId}/working-hours`,
+      headers: as(site.cookie, site.tenantId),
+    });
+
+    expect(read.statusCode, read.body).toBe(200);
+    return read.json().fingerprint as string;
+  }
+
   async function setHours(
     site: { cookie: string; tenantId: string; providerId: string },
     workingHours: Record<string, unknown>[],
+    overrides: Record<string, unknown> = {},
   ) {
     return app.inject({
       method: "PUT",
       url: `/v1/providers/${site.providerId}/working-hours`,
       headers: as(site.cookie, site.tenantId),
-      payload: { workingHours },
+      payload: {
+        workingHours,
+        expectedFingerprint: await fingerprintOf(site),
+        ...overrides,
+      },
     });
   }
 
@@ -240,6 +268,169 @@ describe.skipIf(!databaseUrl)("availability", () => {
       ]);
     });
 
+    /**
+     * Provenance for the "last changed by" line
+     * (docs/phase-3-4-diary-delegation.md §2.14).
+     *
+     * `vi.waitFor` and not a bare assertion because `request.audit()` is
+     * deliberately fire-and-forget (`audit.plugin.ts`) — the row lands shortly
+     * *after* the PUT responds. That is the feature's real consistency model,
+     * not a test artefact, so the test asserts the same thing the screen sees
+     * rather than reaching past it into the database.
+     */
+    it("reports who last saved the week, and nobody before the first save", async () => {
+      const site = await clinic("hours-provenance");
+
+      const readHours = async () =>
+        app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+        });
+
+      // `clinic` creates the provider but never saves a week, so there is no
+      // audit row to attribute. Null is the honest answer, and every diary that
+      // existed before this shipped is in exactly this state.
+      expect((await readHours()).json().lastChange).toBeNull();
+
+      await setHours(site, MONDAY_MORNING);
+
+      await vi.waitFor(
+        async () => {
+          const lastChange = (await readHours()).json().lastChange as {
+            at: string;
+            by: { userId: string; name: string } | null;
+          } | null;
+
+          expect(lastChange).not.toBeNull();
+          // The acting user, resolved by id and given a name the screen can
+          // print. `signUp` names the account after the label.
+          expect(lastChange!.by).toEqual({ userId: site.id, name: "hours-provenance" });
+          expect(Date.parse(lastChange!.at)).not.toBeNaN();
+        },
+        { timeout: 5000, interval: 100 },
+      );
+    });
+
+    /**
+     * Optimistic concurrency. docs/phase-3-4-diary-delegation.md §2.14.
+     *
+     * The defect this closes: the save replaces the whole set, so a body built
+     * from a stale read silently reverted whoever saved in between — and diary
+     * delegation made a second editor the expected arrangement rather than a
+     * rarity.
+     */
+    describe("the version check", () => {
+      it("refuses a body built from a read that is no longer current", async () => {
+        const site = await clinic("hours-stale");
+
+        // What one editor is holding when the other saves.
+        const stale = await fingerprintOf(site);
+
+        await setHours(site, [{ weekday: 1, startTime: "09:00", endTime: "12:00" }]);
+
+        const clobber = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+          payload: {
+            workingHours: [{ weekday: 3, startTime: "14:00", endTime: "18:00" }],
+            expectedFingerprint: stale,
+          },
+        });
+
+        expect(clobber.statusCode, clobber.body).toBe(409);
+        expect(clobber.json().error.code).toBe(ErrorCodes.SCHEDULE_MODIFIED);
+
+        // And, the point of the whole thing: the first save survived.
+        const after = await app.inject({
+          method: "GET",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+        });
+        expect(after.json().items).toHaveLength(1);
+        expect(after.json().items[0].startTime).toBe("09:00");
+      });
+
+      it("names the other editor in the refusal", async () => {
+        const site = await clinic("hours-stale-who");
+        const stale = await fingerprintOf(site);
+        await setHours(site, MONDAY_MORNING);
+
+        // The audit row is written fire-and-forget, so who-changed-it can lag
+        // the refusal. Retried rather than asserted once, because that lag is
+        // the real behaviour and not a flake (§2.14.2).
+        await vi.waitFor(
+          async () => {
+            const refused = await app.inject({
+              method: "PUT",
+              url: `/v1/providers/${site.providerId}/working-hours`,
+              headers: as(site.cookie, site.tenantId),
+              payload: { workingHours: [], expectedFingerprint: stale },
+            });
+
+            expect(refused.statusCode).toBe(409);
+            expect(refused.json().error.details.lastChange.by).toEqual({
+              userId: site.id,
+              name: "hours-stale-who",
+            });
+          },
+          { timeout: 5000, interval: 100 },
+        );
+      });
+
+      it("accepts a fingerprint that is still current, twice in a row", async () => {
+        const site = await clinic("hours-sequential");
+
+        // The PUT hands back the new version, so a second save needs no GET.
+        const first = await setHours(site, MONDAY_MORNING);
+        expect(first.statusCode, first.body).toBe(200);
+
+        const second = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+          payload: {
+            workingHours: [{ weekday: 2, startTime: "10:00", endTime: "16:00" }],
+            expectedFingerprint: first.json().fingerprint as string,
+          },
+        });
+
+        expect(second.statusCode, second.body).toBe(200);
+        expect(second.json().items[0].weekday).toBe(2);
+      });
+
+      it("treats a re-save of an identical week as no conflict at all", async () => {
+        const site = await clinic("hours-identical");
+        const before = await fingerprintOf(site);
+
+        // Same content, new row ids — the fingerprint is over content, so the
+        // holder of `before` has nothing of anyone's to revert (§2.14.2).
+        await setHours(site, MONDAY_MORNING);
+        await setHours(site, MONDAY_MORNING);
+
+        expect(await fingerprintOf(site)).not.toBe(before);
+
+        const again = await setHours(site, MONDAY_MORNING);
+        expect(again.statusCode, again.body).toBe(200);
+      });
+
+      it("refuses a save that names no version at all", async () => {
+        const site = await clinic("hours-no-fingerprint");
+
+        const blind = await app.inject({
+          method: "PUT",
+          url: `/v1/providers/${site.providerId}/working-hours`,
+          headers: as(site.cookie, site.tenantId),
+          payload: { workingHours: MONDAY_MORNING },
+        });
+
+        expect(blind.statusCode, blind.body).toBe(400);
+        expect(blind.json().error.code).toBe(ErrorCodes.SCHEDULE_FINGERPRINT_REQUIRED);
+      });
+
+    });
+
     it("replaces the whole week rather than appending", async () => {
       const site = await clinic("hours-replace");
 
@@ -306,7 +497,11 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PUT",
         url: `/v1/providers/${theirs.providerId}/working-hours`,
         headers: as(mine.cookie, mine.tenantId),
-        payload: { workingHours: MONDAY_MORNING },
+        // A literal, because there is no honest way to obtain one: the GET that
+        // issues fingerprints 404s for this caller too. The point of the test is
+        // that the diary is invisible, and it must stay a 404 rather than
+        // becoming a hint that the field was the problem.
+        payload: { workingHours: MONDAY_MORNING, expectedFingerprint: "never-read" },
       });
 
       expect(response.statusCode).toBe(404);
@@ -545,10 +740,42 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PUT",
         url: `/v1/providers/${site.providerId}/working-hours`,
         headers: as(member.cookie, site.tenantId),
-        payload: { workingHours: MONDAY_MORNING },
+        payload: {
+          workingHours: MONDAY_MORNING,
+          expectedFingerprint: await fingerprintOf({
+            cookie: member.cookie,
+            tenantId: site.tenantId,
+            providerId: site.providerId,
+          }),
+        },
       });
 
       expect(response.statusCode, response.body).toBe(200);
+    });
+
+    it("answers a caller who may not touch this diary with 403, not with the missing version", async () => {
+      // The ordering §2.14 turns on, and the reason `expectedFingerprint` is
+      // optional in the Zod schema: Fastify validates the body *before* the
+      // preHandler runs, so a required field would send somebody with no
+      // permission on this diary off to look for it instead of telling them.
+      const { site, member } = await withLinkedProvider("hours-403-first");
+
+      const other = await app.inject({
+        method: "POST",
+        url: "/v1/providers",
+        headers: as(site.cookie, site.tenantId),
+        payload: { displayName: "Dr. Nagy Béla" },
+      });
+
+      const refused = await app.inject({
+        method: "PUT",
+        url: `/v1/providers/${other.json().id as string}/working-hours`,
+        headers: as(member.cookie, site.tenantId),
+        payload: { workingHours: MONDAY_MORNING },
+      });
+
+      expect(refused.statusCode, refused.body).toBe(403);
+      expect(refused.json().error.code).toBe(ErrorCodes.FORBIDDEN);
     });
 
     it("refuses a provider editing somebody else's diary", async () => {
@@ -768,7 +995,14 @@ describe.skipIf(!databaseUrl)("availability", () => {
           method: "PUT",
           url: `/v1/providers/${site.providerId}/working-hours`,
           headers: as(assistant.cookie, site.tenantId),
-          payload: { workingHours: [] },
+          payload: {
+            workingHours: [],
+            expectedFingerprint: await fingerprintOf({
+              cookie: assistant.cookie,
+              tenantId: site.tenantId,
+              providerId: site.providerId,
+            }),
+          },
         });
         expect(write.statusCode, write.body).toBe(200);
       });
@@ -844,12 +1078,9 @@ describe.skipIf(!databaseUrl)("availability", () => {
       });
 
       await setHours(site, MONDAY_MORNING);
-      await app.inject({
-        method: "PUT",
-        url: `/v1/providers/${secondId}/working-hours`,
-        headers: as(site.cookie, site.tenantId),
-        payload: { workingHours: [{ weekday: 1, startTime: "10:00", endTime: "12:00" }] },
-      });
+      await setHours({ ...site, providerId: secondId }, [
+        { weekday: 1, startTime: "10:00", endTime: "12:00" },
+      ]);
 
       const slots = await searchSlots(site);
 
@@ -1151,15 +1382,11 @@ describe.skipIf(!databaseUrl)("availability", () => {
     it("lets the same change through once it is acknowledged", async () => {
       const { site } = await bookMondayMorning("strand-ack");
 
-      const acknowledged = await app.inject({
-        method: "PUT",
-        url: `/v1/providers/${site.providerId}/working-hours`,
-        headers: as(site.cookie, site.tenantId),
-        payload: {
-          workingHours: [{ weekday: 1, startTime: "13:00", endTime: "17:00" }],
-          acknowledgeAffectedBookings: true,
-        },
-      });
+      const acknowledged = await setHours(
+        site,
+        [{ weekday: 1, startTime: "13:00", endTime: "17:00" }],
+        { acknowledgeAffectedBookings: true },
+      );
 
       expect(acknowledged.statusCode, acknowledged.body).toBe(200);
       expect(acknowledged.json().items[0].startTime).toBe("13:00");
@@ -1302,7 +1529,9 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PUT",
         url: `/v1/providers/${mine.site.providerId}/working-hours`,
         headers: as(theirs.cookie, theirs.tenantId),
-        payload: { workingHours: [] },
+        // See the note on the other cross-tenant write: no fingerprint is
+        // obtainable, and the answer must stay 404 regardless.
+        payload: { workingHours: [], expectedFingerprint: "never-read" },
       });
 
       expect(crossed.statusCode).toBe(404);
@@ -1344,14 +1573,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       expect((await list())[0]?.outsideSchedule).toBeNull();
 
-      await app.inject({
-        method: "PUT",
-        url: `/v1/providers/${site.providerId}/working-hours`,
-        headers: as(site.cookie, site.tenantId),
-        payload: {
-          workingHours: [{ weekday: 1, startTime: "13:00", endTime: "17:00" }],
-          acknowledgeAffectedBookings: true,
-        },
+      await setHours(site, [{ weekday: 1, startTime: "13:00", endTime: "17:00" }], {
+        acknowledgeAffectedBookings: true,
       });
 
       expect((await list())[0]?.outsideSchedule).toBe("OUTSIDE_WORKING_HOURS");

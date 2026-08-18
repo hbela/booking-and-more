@@ -65,6 +65,36 @@ export const ErrorCodes = {
    */
   SCHEDULE_CONFLICTS_BOOKINGS: "SCHEDULE_CONFLICTS_BOOKINGS",
 
+  /**
+   * The week was saved by somebody else since the caller read it.
+   *
+   * The working-hours `PUT` replaces the whole set, so a body built from a stale
+   * read silently reverts whatever landed in between — and diary delegation made
+   * a second editor the *expected* arrangement rather than a rarity
+   * (docs/phase-3-4-diary-delegation.md §2.14). `details` carries
+   * `currentFingerprint` and `lastChange`, so the screen can say **who** moved it
+   * rather than only that somebody did.
+   *
+   * Deliberately not the same code as `SCHEDULE_CONFLICTS_BOOKINGS`, which is
+   * also a 409 on this route: that one is "your change costs these appointments,
+   * confirm it", and re-sending with an acknowledgement is right. This one is
+   * "you are about to undo work you have not seen", and re-sending the same body
+   * is exactly wrong — the caller has to look first.
+   */
+  SCHEDULE_MODIFIED: "SCHEDULE_MODIFIED",
+
+  /**
+   * A whole-set schedule write arrived without saying which version it replaces.
+   *
+   * Its own code rather than a generic 422, for the reason
+   * `IDEMPOTENCY_KEY_REQUIRED` is: "you did not read before writing" is a
+   * different fix from "your body is malformed", and phase-2-3 §2's rule — a
+   * whole-set body may only be built from a whole-set read — is the thing being
+   * enforced. Optional in the Zod schema so that authorization still answers
+   * first; refused in the handler.
+   */
+  SCHEDULE_FINGERPRINT_REQUIRED: "SCHEDULE_FINGERPRINT_REQUIRED",
+
   // --- Diary delegation -----------------------------------------------------
   /**
    * The member named cannot receive this diary: they are not ACTIVE, their role
