@@ -51,10 +51,10 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 # than as an ENV, it cannot leak into the runtime stage and be mistaken for
 # configuration.
 RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/prisma_generate_does_not_connect \
-    pnpm --filter @bam/api... build
+    pnpm --filter @bam/api... --filter @bam/worker... build
 
 # --- runtime ------------------------------------------------------------------
-FROM node:${NODE_VERSION} AS runtime
+FROM node:${NODE_VERSION} AS api-runtime
 RUN corepack enable
 WORKDIR /app
 
@@ -82,3 +82,35 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "apps/api/dist/server.js"]
+
+# --- worker runtime -----------------------------------------------------------
+#
+# API and worker share almost their entire dependency graph, including the
+# generated Prisma client. Building them from one stage matters on a small
+# deployment host: separate Dockerfiles compile that large client twice in
+# parallel, which can exhaust memory and turn a short typecheck into minutes of
+# swapping. Separate runtime stages still keep both processes isolated.
+FROM node:${NODE_VERSION} AS worker-runtime
+RUN corepack enable
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+USER node
+
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=build --chown=node:node /app/packages ./packages
+COPY --from=build --chown=node:node /app/apps/worker/dist ./apps/worker/dist
+COPY --from=build --chown=node:node /app/apps/worker/package.json ./apps/worker/package.json
+COPY --from=build --chown=node:node /app/apps/worker/node_modules ./apps/worker/node_modules
+
+HEALTHCHECK --interval=60s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "process.exit(0)"
+
+CMD ["node", "apps/worker/dist/worker.js"]
+
+# Preserve the documented no-target build command: the default final image is
+# still the API image.
+FROM api-runtime AS api

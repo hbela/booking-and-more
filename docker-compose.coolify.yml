@@ -164,6 +164,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
+      target: api
     restart: "no"
     # Coolify treats a stopped container as unhealthy and would report a red
     # stack after every successful deploy. This is the documented opt-out.
@@ -180,6 +181,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
+      target: api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -212,7 +214,10 @@ services:
   worker:
     build:
       context: .
-      dockerfile: docker/Dockerfile.worker
+      # Share the backend build stage with api/migrate so the generated Prisma
+      # client is compiled once. The final image remains worker-only.
+      dockerfile: docker/Dockerfile.api
+      target: worker-runtime
     restart: unless-stopped
     depends_on:
       postgres:
