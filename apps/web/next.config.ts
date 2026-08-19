@@ -15,6 +15,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // The monorepo root, so tracing picks up linked workspace packages.
   outputFileTracingRoot: path.resolve(appDir, "../.."),
+  // Next 16.3.1's file tracer follows @swc/helpers' CommonJS conditional
+  // export but can omit its ESM sibling. Node 24 resolves that ESM file while
+  // booting the standalone server, so an otherwise successful image enters a
+  // restart loop with MODULE_NOT_FOUND. Force the narrowly scoped runtime
+  // files into every server trace; paths are relative to this Next.js app.
+  outputFileTracingIncludes: {
+    "/*": ["../../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*"],
+  },
   poweredByHeader: false,
 };
 
