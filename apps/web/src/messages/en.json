@@ -105,7 +105,10 @@
     "linkDiaryPrompt": "Link a diary…",
     "noDiaryToLink": "No unlinked provider to link. Create one on the Providers screen first.",
     "inviteProviderElsewhere": "Inviting a provider? Do it from their row on the <link>Providers</link> screen, so the invitation carries their diary.",
-    "integrations": "Calendar"
+    "integrations": "Calendar",
+    "noOrganizationTitle": "You do not belong to an organization yet",
+    "noOrganizationHint": "This screen belongs to one organization, and your account is not a member of any. If you were expecting access, ask an owner to invite you.",
+    "noOrganizationLink": "Go to the overview"
   },
   "invitation": {
     "title": "Invitation",

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { isLiveSubscription } from "@bam/contracts";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { NoOrganizationPanel } from "./no-organization";
 import { Button, buttonRecipe } from "./ui/button";
 import { Card } from "./ui/card";
 import { ErrorText } from "./ui/field";
@@ -102,6 +103,17 @@ export function SubscriptionScreen(): React.ReactElement {
 
   if (context.isPending || !context.me) {
     return <p className="p-8">{t("loading")}</p>;
+  }
+
+  // Signed in, but there is no organization to scope this screen to. Every
+  // query below is gated on `context.tenantId`, so without this the shell
+  // renders around a body that never fills (see no-organization.tsx).
+  if (context.hasNoOrganization) {
+    return (
+      <DashboardShell context={context}>
+        <NoOrganizationPanel isPlatformAdmin={context.me.user.isPlatformAdmin} />
+      </DashboardShell>
+    );
   }
 
   const subscription = billing.data?.subscription;

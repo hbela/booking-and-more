@@ -105,7 +105,10 @@
     "linkDiaryPrompt": "Naptár hozzárendelése…",
     "noDiaryToLink": "Nincs szabad munkatárs a hozzárendeléshez. Előbb hozzon létre egyet a Munkatársak oldalon.",
     "inviteProviderElsewhere": "Munkatársat hívna meg? Tegye a <link>Munkatársak</link> oldalon, az ő sorából, hogy a meghívó a naptárát is vigye.",
-    "integrations": "Naptár"
+    "integrations": "Naptár",
+    "noOrganizationTitle": "Még nem tartozik egyetlen szervezethez sem",
+    "noOrganizationHint": "Ez a képernyő egy adott szervezethez tartozik, az Ön fiókja pedig egyikhez sem. Ha hozzáférésre számított, kérje meg a szervezet tulajdonosát, hogy hívja meg.",
+    "noOrganizationLink": "Vissza az áttekintéshez"
   },
   "invitation": {
     "title": "Meghívó",

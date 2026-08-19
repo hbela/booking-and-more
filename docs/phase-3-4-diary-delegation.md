@@ -388,13 +388,14 @@ the answer, and one of its four rows is a defect this epic made much more likely
 | --- | --- |
 | both act on the same **booking** | Refused cleanly. The state machine makes terminal terminal — nobody un-cancels, because cancelling releases the capacity reservation and the slot may already be resold ([transitions.ts](../packages/booking-engine/src/transitions.ts)) — the exclusion constraint on `capacity_reservations` decides who got a slot rather than a read-then-write (rule 14), and retryable writes carry an `Idempotency-Key` (rule 16). |
 | an **availability** edit strands a booking | Handled, and this was already the cross-role case: `SCHEDULE_CONFLICTS_BOOKINGS` returns the list once and succeeds on re-send with `acknowledgeAffectedBookings` (phase-3-4 §2.4). A BOOKINGS-blind delegate acknowledges it **without customer names** (§2.12) — deliberate, and it means their acknowledgement is made on less than the provider would have. |
-| both edit the **same week** | **Nothing.** See below. |
+| both edit the **same week** | Refused, since 2026-08-18: a content fingerprint issued by the `GET` and echoed by the `PUT`, compared inside the replace transaction under a lock on the provider row, answering the loser with `SCHEDULE_MODIFIED` (409). **This row read "Nothing" when the audit was written** — §2.14.1 is the defect, §2.14.3 the fix, and they are kept apart because the shape recurs wherever a whole set is replaced. |
 | they simply disagree | Not a software question. §2.3 gives the provider no way to revoke their own assistant, so their recourse is the owner. Stated here because it is a consequence of owner-only staffing that somebody will otherwise report as a bug. |
 
 ### 2.14.1 The whole-week save had no concurrency control
 
-**Fixed on 2026-08-18 by §2.14.4.** Kept in the past tense below because the defect is the reason the rest of
-this section exists, and because the shape of it recurs wherever a whole set is replaced.
+**Fixed on 2026-08-18 by §2.14.3**, and the first version of that fix did not close it either — see the
+lock. Kept in the past tense below because the defect is the reason the rest of this section exists, and
+because the shape of it recurs wherever a whole set is replaced.
 
 [`replaceWorkingHours`](../apps/api/src/modules/availability/availability.repository.ts) was a
 delete-then-insert inside a transaction, with no version column, no `If-Match` and no `updatedAt` check. The
@@ -445,10 +446,25 @@ tried or the thing that made the first wrong:
 - **Sorted here, not trusted from the query.** The repository orders by `(weekday, startTime)`, which is not
   a total order — two periods can share both and differ by location. Without sorting the serialised tuples,
   one week could fingerprint two ways and refuse a caller who did nothing wrong.
-- **Compared inside the replace transaction.** Comparing in the service, before the call, leaves exactly the
-  window the check exists to close: between "still matches" and `deleteMany`, the other editor commits and
-  is deleted anyway. No row lock: two transactions that both pass have by definition read the *same* week,
-  so the loser overwrites a body that saw everything the winner saw.
+- **Compared inside the replace transaction, under a lock on the provider row.** Comparing in the service,
+  before the call, leaves exactly the window the check exists to close: between "still matches" and
+  `deleteMany`, the other editor commits and is deleted anyway. The check shipped that morning with **no row
+  lock**, on the argument that two transactions which both pass have by definition read the *same* week, so
+  the loser overwrites a body that saw everything the winner saw. **That argument was wrong**, and
+  [the code review](code-review-2026-08-18.md) found it the same day as its first P1: two bodies built from
+  the same base are not the same body. Alice adds a Monday period while Bob changes Tuesday; both read `F0`,
+  both pass under READ COMMITTED because neither has committed yet, and the later `deleteMany` erases the
+  earlier replacement. "Both saw the same starting week" says nothing about whether their *edits* agreed —
+  the argument confused the read with the write. So the transaction now opens with
+  `SELECT id FROM providers … FOR UPDATE`. **The provider row, and not the working-hours rows**: an empty
+  week has no row to lock, and delete-then-insert changes their identities anyway, so the set being replaced
+  can never be its own lock target — the row it hangs off is the stable one. With the lock held, competing
+  saves queue, and the second reads the winner's replacement and fails its own fingerprint check instead of
+  overwriting it. The fingerprint stays the *user-facing* conflict detector; the lock is the *serialization
+  mechanism*, and the split is the point. `availability.test.ts` asserts a real race with `Promise.all`
+  rather than a stale-token sequence — exactly one 200 and one 409, and the surviving week is one of the two
+  bodies whole rather than a merge of both. A sequence proves the comparison works and proves nothing about
+  the transaction.
 - **Required, but refused in the handler rather than by Zod.** `requireScheduleFingerprint` mirrors
   `requireIdempotencyKey` exactly, and for the reason `idempotencyHeaderSchema` records: Fastify validates
   the body **before** the preHandler, so a required field would answer a caller with no permission on this

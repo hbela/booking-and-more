@@ -12,6 +12,7 @@ import {
   type LocationFormState,
 } from "./location-fields";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
+import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
@@ -57,6 +58,17 @@ export function LocationsScreen(): React.ReactElement {
   // A signed-out visitor is redirected from an effect, not from render.
   if (context.isPending || !context.me) {
     return <p className="p-8">{t("loading")}</p>;
+  }
+
+  // Signed in, but there is no organization to scope this screen to. Every
+  // query below is gated on `context.tenantId`, so without this the shell
+  // renders around a body that never fills (see no-organization.tsx).
+  if (context.hasNoOrganization) {
+    return (
+      <DashboardShell context={context}>
+        <NoOrganizationPanel isPlatformAdmin={context.me.user.isPlatformAdmin} />
+      </DashboardShell>
+    );
   }
 
   return (

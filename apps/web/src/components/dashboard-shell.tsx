@@ -7,6 +7,7 @@ import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { signOut } from "@/lib/auth-client";
 import { apiFetch, type MeResponse, type TenantSummary } from "@/lib/api-client";
 import { navFor } from "@/lib/dashboard-nav";
+import { hasNoOrganization } from "@/lib/organization-state";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
 
@@ -42,6 +43,12 @@ export interface DashboardContext {
    * the fix is a role change (phase-9-subscription-and-activation.md §2.1).
    */
   awaitingSubscription: boolean;
+  /**
+   * Signed in, and belonging to no organization at all. Decided by
+   * `lib/organization-state.ts`, which records why an empty list is not on its
+   * own enough to say so.
+   */
+  hasNoOrganization: boolean;
 }
 
 export function useDashboardContext(): DashboardContext {
@@ -67,6 +74,10 @@ export function useDashboardContext(): DashboardContext {
     isPending: tenants.isPending || me.isPending,
     can: (permission) => me.data?.permissions.includes(permission) ?? false,
     awaitingSubscription: me.data?.tenant?.status === "PENDING_SUBSCRIPTION",
+    hasNoOrganization: hasNoOrganization({
+      settled: tenants.isSuccess,
+      count: tenants.data?.items.length ?? 0,
+    }),
   };
 }
 
