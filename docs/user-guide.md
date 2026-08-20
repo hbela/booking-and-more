@@ -81,10 +81,10 @@ It lists the three steps ahead — subscribe, configure, take bookings — and c
 
 Open **Subscription** in the sidebar. You will see two plans:
 
-| Plan             | What it's for                                         |
-| ---------------- | ----------------------------------------------------- |
-| **Starter**      | Smaller businesses getting their bookings online      |
-| **Professional** | Busier operations with more providers and more volume |
+| Plan                | What it's for                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Form**            | Dashboard and public booking form for 9,990 Ft/month, excluding VAT                                   |
+| **AI Receptionist** | Form plus AI chat, widget, transcripts, and 2M/400K monthly tokens for 24,990 Ft/month, excluding VAT |
 
 Choose one and press **Send me the payment link**. We email a secure payment page to your address — you can forward it to whoever handles the money, which is why it arrives by email rather than opening straight away.
 

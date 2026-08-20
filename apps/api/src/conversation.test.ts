@@ -140,6 +140,7 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     slug: string;
     providerId: string;
     serviceId: string;
+    ownerCookie: string;
   }
 
   /** A clinic in UTC with one provider working Monday 09:00-17:00. */
@@ -215,7 +216,7 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       update: { plan: "INTERNAL", status: "NOT_APPLICABLE" },
     });
 
-    return { tenantId, slug, providerId, serviceId };
+    return { tenantId, slug, providerId, serviceId, ownerCookie: owner.cookie };
   }
 
   async function startConversation(site: Clinic, channel: "CHAT" | "VOICE" = "CHAT") {
@@ -359,7 +360,9 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       payload: { serviceId: site.serviceId, dateFrom: MONDAY, dateTo: MONDAY },
     });
 
-    const offered = search.json<{ items: { startAt: string }[] }>().items.map((slot) => slot.startAt);
+    const offered = search
+      .json<{ items: { startAt: string }[] }>()
+      .items.map((slot) => slot.startAt);
     expect(offered).not.toContain(firstSlot.startAt);
   });
 
@@ -372,12 +375,20 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     const { conversation, confirmation } = await upToConfirmation(site);
     const url = `/v1/public/conversations/${conversation.id}/actions/${confirmation.actionId}/confirm`;
 
-    const first = await app.inject({ method: "POST", url, headers: { ...conversation.headers, ...key() } });
+    const first = await app.inject({
+      method: "POST",
+      url,
+      headers: { ...conversation.headers, ...key() },
+    });
     expect(first.json<TurnBody>().status).toBe("COMPLETED");
 
     // A double-tap must not be a double booking. A fresh idempotency key, so it
     // is the pending action doing the refusing rather than the key table.
-    const second = await app.inject({ method: "POST", url, headers: { ...conversation.headers, ...key() } });
+    const second = await app.inject({
+      method: "POST",
+      url,
+      headers: { ...conversation.headers, ...key() },
+    });
     expect(second.statusCode).toBe(200);
     expect(second.json<TurnBody>().message.key).toBe("conversation.error.alreadyConfirmed");
 
@@ -503,7 +514,9 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
 
     for (const response of [wrongToken, unknownId]) {
       expect(response.statusCode).toBe(404);
-      expect(response.json<{ error: { code: string } }>().error.code).toBe("CONVERSATION_NOT_FOUND");
+      expect(response.json<{ error: { code: string } }>().error.code).toBe(
+        "CONVERSATION_NOT_FOUND",
+      );
     }
   });
 
@@ -571,22 +584,12 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     expect(output?.estimatedCostMinor).toBe(0);
   });
 
-  it("stops talking once the tenant's allowance is gone", async () => {
+  it("does not offer chat to the Form plan", async () => {
     const site = await clinic("overspent");
     await app.prisma.subscription.upsert({
       where: { tenantId: site.tenantId },
       create: { tenantId: site.tenantId, plan: "STARTER", status: "ACTIVE" },
       update: { plan: "STARTER", status: "ACTIVE" },
-    });
-
-    // Spend the Starter month in one row.
-    await app.prisma.usageAggregate.create({
-      data: {
-        tenantId: site.tenantId,
-        period: `${new Date().getUTCFullYear()}-${`${new Date().getUTCMonth() + 1}`.padStart(2, "0")}`,
-        category: "AI_INPUT_TOKENS",
-        quantity: 2_000_000,
-      },
     });
 
     const availability = await app.inject({
@@ -603,6 +606,59 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     });
 
     expect(response.statusCode).toBe(503);
-    expect(response.json<{ error: { code: string } }>().error.code).toBe("CONVERSATION_UNAVAILABLE");
+    expect(response.json<{ error: { code: string } }>().error.code).toBe(
+      "CONVERSATION_UNAVAILABLE",
+    );
+
+    const settings = await app.inject({
+      method: "GET",
+      url: "/v1/assistant/settings",
+      headers: as(site.ownerCookie, site.tenantId),
+    });
+    expect(settings.statusCode).toBe(403);
+  });
+
+  it("stops an existing conversation after the tenant moves to Form", async () => {
+    const site = await clinic("downgraded");
+    const conversation = await startConversation(site);
+
+    await app.prisma.subscription.update({
+      where: { tenantId: site.tenantId },
+      data: { plan: "STARTER", status: "ACTIVE" },
+    });
+
+    const replay = await app.inject({
+      method: "GET",
+      url: `/v1/public/conversations/${conversation.id}`,
+      headers: conversation.headers,
+    });
+    expect(replay.statusCode).toBe(503);
+    expect(replay.json<{ error: { code: string } }>().error.code).toBe("CONVERSATION_UNAVAILABLE");
+  });
+
+  it("stops AI Receptionist chat once its monthly allowance is gone", async () => {
+    const site = await clinic("ai-overspent");
+    await app.prisma.subscription.update({
+      where: { tenantId: site.tenantId },
+      data: { plan: "PROFESSIONAL", status: "ACTIVE" },
+    });
+    await app.prisma.usageAggregate.create({
+      data: {
+        tenantId: site.tenantId,
+        period: `${new Date().getUTCFullYear()}-${`${new Date().getUTCMonth() + 1}`.padStart(2, "0")}`,
+        category: "AI_INPUT_TOKENS",
+        quantity: 2_000_000,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/public/tenants/${site.slug}/conversations`,
+      payload: { channel: "CHAT", locale: "en", timezone: "UTC" },
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe(
+      "CONVERSATION_UNAVAILABLE",
+    );
   });
 });

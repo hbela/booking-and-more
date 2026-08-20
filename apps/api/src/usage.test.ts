@@ -65,7 +65,9 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
         slug: `usage-${label}`,
         name: `Usage ${label}`,
         status: "ACTIVE",
-        subscription: { create: { plan, status: plan === "INTERNAL" ? "NOT_APPLICABLE" : "ACTIVE" } },
+        subscription: {
+          create: { plan, status: plan === "INTERNAL" ? "NOT_APPLICABLE" : "ACTIVE" },
+        },
       },
     });
 
@@ -137,7 +139,11 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
     await usage.record({ tenantId: spender, category: "VOICE_TRANSCRIPTION", quantity: 3_000 });
 
     await expect(
-      usage.assertAllowed({ tenantId: spender, category: "VOICE_TRANSCRIPTION", requestedQuantity: 1 }),
+      usage.assertAllowed({
+        tenantId: spender,
+        category: "VOICE_TRANSCRIPTION",
+        requestedQuantity: 1,
+      }),
     ).rejects.toThrow();
 
     await expect(
@@ -192,7 +198,7 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
   });
 
   it("does not let concurrent reservations overspend either token ceiling", async () => {
-    const tenantId = await tenantOn("STARTER");
+    const tenantId = await tenantOn("PROFESSIONAL");
     const attempts = await Promise.allSettled(
       Array.from({ length: 3 }, () =>
         usage.reserveAiCall({ tenantId, inputTokens: 1_000_000, outputTokens: 200_000 }),
@@ -201,6 +207,8 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
 
     expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(2);
     expect(attempts.filter((result) => result.status === "rejected")).toHaveLength(1);
-    expect(await app.prisma.usageReservation.count({ where: { tenantId, status: "RESERVED" } })).toBe(2);
+    expect(
+      await app.prisma.usageReservation.count({ where: { tenantId, status: "RESERVED" } }),
+    ).toBe(2);
   });
 });

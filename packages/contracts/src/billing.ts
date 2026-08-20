@@ -18,6 +18,22 @@ export const subscribablePlanSchema = z.enum(["STARTER", "PROFESSIONAL"]);
 export type SubscribablePlan = z.infer<typeof subscribablePlanSchema>;
 
 /**
+ * The launch catalogue mirrored in the product UI and Stripe setup script.
+ *
+ * Stripe remains the authority for what is charged. Keeping the intended
+ * amount here makes a mismatched Price ID visible in review and gives the web
+ * app one typed source for its offer copy. HUF has no fractional minor unit,
+ * so these values are whole forints as well as Stripe `unit_amount` values.
+ */
+export const SUBSCRIPTION_OFFERS: Record<
+  SubscribablePlan,
+  { monthlyAmount: number; currency: "HUF" }
+> = {
+  STARTER: { monthlyAmount: 9_990, currency: "HUF" },
+  PROFESSIONAL: { monthlyAmount: 24_990, currency: "HUF" },
+};
+
+/**
  * Whole days between now and a deadline, floored, never negative.
  *
  * Two behaviours matter and both are deliberate:
@@ -120,6 +136,20 @@ const LIVE_SUBSCRIPTION_STATUSES = new Set<string>([
  */
 export function isLiveSubscription(status: string | null | undefined): boolean {
   return status !== null && status !== undefined && LIVE_SUBSCRIPTION_STATUSES.has(status);
+}
+
+/**
+ * Whether a live subscription includes the AI receptionist.
+ *
+ * INTERNAL remains available for demos and canaries. STARTER is deliberately
+ * form-only; a settings toggle or an old conversation must never turn it back
+ * into a paid AI entitlement.
+ */
+export function hasAssistantEntitlement(
+  plan: string | null | undefined,
+  status: string | null | undefined,
+): boolean {
+  return (plan === "PROFESSIONAL" || plan === "INTERNAL") && isLiveSubscription(status);
 }
 
 /** What a tenant becomes. `null` means "leave it exactly as it is". */

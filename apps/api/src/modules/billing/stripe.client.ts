@@ -122,6 +122,12 @@ export function createStripePaymentLink(options: StripeOptions): PaymentLinkCrea
     const link = await getStripe(options).paymentLinks.create({
       line_items: [{ price: priceId, quantity: 1 }],
 
+      // Prices are tax-exclusive. Stripe Tax calculates any registered VAT
+      // obligation on top instead of silently treating collected VAT as SaaS
+      // revenue. Production rollout still requires the account's registrations
+      // and business origin to be configured and reviewed by an accountant.
+      automatic_tax: { enabled: true },
+
       // **The constraint this whole slice exists for.**
       //
       // Stripe refuses a second checkout on this link, at the moment of

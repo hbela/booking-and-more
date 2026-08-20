@@ -15,6 +15,13 @@ describe("quotaFor", () => {
     expect(quotaFor("PROFESSIONAL", "VOICE_TRANSCRIPTION")).toBe(30_000);
   });
 
+  it("keeps Form tenants out of AI and caps AI Receptionist tenants", () => {
+    expect(quotaFor("STARTER", "AI_INPUT_TOKENS")).toBe(0);
+    expect(quotaFor("STARTER", "AI_OUTPUT_TOKENS")).toBe(0);
+    expect(quotaFor("PROFESSIONAL", "AI_INPUT_TOKENS")).toBe(2_000_000);
+    expect(quotaFor("PROFESSIONAL", "AI_OUTPUT_TOKENS")).toBe(400_000);
+  });
+
   it("leaves the unsold internal plan unmetered", () => {
     expect(quotaFor("INTERNAL", "VOICE_TRANSCRIPTION")).toBeNull();
   });
@@ -95,10 +102,7 @@ describe("the table itself", () => {
 
     for (const [plan, table] of Object.entries(PLAN_QUOTAS)) {
       for (const category of categories) {
-        expect(
-          Object.hasOwn(table, category),
-          `${plan} is missing ${category}`,
-        ).toBe(true);
+        expect(Object.hasOwn(table, category), `${plan} is missing ${category}`).toBe(true);
       }
     }
   });

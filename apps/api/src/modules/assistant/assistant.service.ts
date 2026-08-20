@@ -1,6 +1,7 @@
 import type { PrismaClient, Tenant } from "@bam/db";
 import {
-  isLiveSubscription,
+  ForbiddenError,
+  hasAssistantEntitlement,
   languageSchema,
   NotFoundError,
   quotaFor,
@@ -42,7 +43,9 @@ export class AssistantService {
       (outputLimit === null || outputUsed < outputLimit);
     return {
       available: Boolean(
-        settings?.enabled && isLiveSubscription(subscription?.status) && quotaRemaining,
+        settings?.enabled &&
+        hasAssistantEntitlement(subscription?.plan, subscription?.status) &&
+        quotaRemaining,
       ),
       personaName,
       greeting: `${personaName} · ${tenant.name}`,
@@ -51,6 +54,18 @@ export class AssistantService {
       ),
       branding: { businessName: tenant.name, logoUrl: tenant.logoUrl },
     };
+  }
+
+  /** The authenticated administration boundary for the paid AI feature. */
+  async assertEntitled(tenantId: string): Promise<void> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId },
+      select: { plan: true, status: true },
+    });
+
+    if (!hasAssistantEntitlement(subscription?.plan, subscription?.status)) {
+      throw new ForbiddenError("The AI Receptionist is available on the AI Receptionist plan.");
+    }
   }
 
   async knowledgeContext(tenant: Tenant, locale: string): Promise<string> {

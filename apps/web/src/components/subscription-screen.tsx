@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-import { isLiveSubscription } from "@bam/contracts";
+import { useLocale, useTranslations } from "next-intl";
+import { SUBSCRIPTION_OFFERS, isLiveSubscription, type SubscribablePlan } from "@bam/contracts";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
@@ -11,7 +11,7 @@ import { Button, buttonRecipe } from "./ui/button";
 import { Card } from "./ui/card";
 import { ErrorText } from "./ui/field";
 
-type Plan = "STARTER" | "PROFESSIONAL";
+type Plan = SubscribablePlan;
 
 interface SubscriptionResponse {
   subscription: {
@@ -41,6 +41,7 @@ interface SubscriptionResponse {
  */
 export function SubscriptionScreen(): React.ReactElement {
   const t = useTranslations("dashboard");
+  const locale = useLocale();
   const context = useDashboardContext();
   useSignInRedirect(!context.isPending && !context.me);
 
@@ -247,12 +248,18 @@ export function SubscriptionScreen(): React.ReactElement {
               <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
             )}
 
+            <p className="text-sm text-ink-muted">{t("pricesExcludeVat")}</p>
+
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">{t("choosePlan")}</legend>
 
               {availablePlans.map((option) => (
-                <label key={option} className="flex items-center gap-2 text-sm">
+                <label
+                  key={option}
+                  className="flex items-start gap-3 rounded-lg border border-line p-4 text-sm"
+                >
                   <input
+                    className="mt-1"
                     type="radio"
                     name="plan"
                     value={option}
@@ -261,10 +268,24 @@ export function SubscriptionScreen(): React.ReactElement {
                       setPlan(option);
                     }}
                   />
-                  <span>{planLabel(option, t)}</span>
+                  <span className="grid flex-1 gap-1">
+                    <span className="flex flex-wrap items-baseline justify-between gap-2">
+                      <strong>{planLabel(option, t)}</strong>
+                      <strong>
+                        {formatPlanPrice(option, locale)} {t("perMonth")}
+                      </strong>
+                    </span>
+                    <span className="text-ink-muted">
+                      {option === "STARTER"
+                        ? t("planStarterDescription")
+                        : t("planProfessionalDescription")}
+                    </span>
+                  </span>
                 </label>
               ))}
             </fieldset>
+
+            <p className="text-sm text-ink-muted">{t("assistedSetupOffer")}</p>
 
             <ErrorText>{error}</ErrorText>
 
@@ -287,4 +308,13 @@ function planLabel(plan: string, t: (key: string) => string): string {
   if (plan === "STARTER") return t("planStarter");
   if (plan === "PROFESSIONAL") return t("planProfessional");
   return plan;
+}
+
+function formatPlanPrice(plan: Plan, locale: string): string {
+  const offer = SUBSCRIPTION_OFFERS[plan];
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: offer.currency,
+    maximumFractionDigits: 0,
+  }).format(offer.monthlyAmount);
 }

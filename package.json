@@ -28,6 +28,7 @@
     "db:join-tenant": "pnpm --filter @bam/db db:join-tenant",
     "db:discard-organization": "pnpm --filter @bam/db db:discard-organization",
     "db:explain-availability": "pnpm --filter @bam/db db:explain-availability",
+    "stripe:catalog": "corepack pnpm --filter @bam/api stripe:catalog",
     "guide:publish": "node scripts/publish-user-guide.mjs",
     "post:publish": "node scripts/publish-post.mjs"
   },

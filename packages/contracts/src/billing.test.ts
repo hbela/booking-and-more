@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SUBSCRIPTION_OFFERS,
   daysUntil,
+  hasAssistantEntitlement,
   isLiveSubscription,
   nextTenantStatus,
   planForPrice,
@@ -11,6 +13,23 @@ import {
 } from "./billing.js";
 
 const NOW = new Date("2026-07-30T12:00:00.000Z");
+
+describe("subscription offers", () => {
+  it("publishes the two HUF launch prices", () => {
+    expect(SUBSCRIPTION_OFFERS).toEqual({
+      STARTER: { monthlyAmount: 9_990, currency: "HUF" },
+      PROFESSIONAL: { monthlyAmount: 24_990, currency: "HUF" },
+    });
+  });
+
+  it("entitles only live AI Receptionist and internal tenants", () => {
+    expect(hasAssistantEntitlement("STARTER", "ACTIVE")).toBe(false);
+    expect(hasAssistantEntitlement("PROFESSIONAL", "TRIALING")).toBe(true);
+    expect(hasAssistantEntitlement("PROFESSIONAL", "CANCELED")).toBe(false);
+    expect(hasAssistantEntitlement("INTERNAL", "NOT_APPLICABLE")).toBe(true);
+    expect(hasAssistantEntitlement(undefined, undefined)).toBe(false);
+  });
+});
 
 describe("daysUntil", () => {
   it("counts whole days, floored", () => {

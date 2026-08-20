@@ -23,6 +23,7 @@ function me(overrides: {
       providerId: overrides.providerId ?? null,
     },
     permissions: overrides.permissions ?? [],
+    features: { assistant: false },
     delegations: overrides.delegations ?? [],
   };
 }
@@ -127,8 +128,8 @@ describe("hasPersonalDiary", () => {
     // It decides the top-level Availability nav item, and phase-2-3 §2.7 is
     // explicit that availability belongs to a provider rather than to the
     // organization: an owner reaches one diary at a time from the Providers row.
-    expect(
-      hasPersonalDiary(me({ permissions: ["availability:manage:all"] }), "AVAILABILITY"),
-    ).toBe(false);
+    expect(hasPersonalDiary(me({ permissions: ["availability:manage:all"] }), "AVAILABILITY")).toBe(
+      false,
+    );
   });
 });

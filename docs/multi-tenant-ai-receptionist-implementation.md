@@ -16,7 +16,7 @@ Each eligible tenant receives:
 - FAQ, service, provider, location, and policy answers.
 - Booking, rescheduling, and cancellation through the existing booking engine.
 - Owner/admin settings, transcripts, outcomes, and usage reporting.
-- Starter and Professional plan quotas with automatic fallback to the classic booking form.
+- AI Receptionist plan quotas with automatic fallback to the classic booking form; the Form plan has no chat entitlement.
 
 Keep chat independent from `BookingFlow`; both paths share booking services, holds, constraints, and confirmation behavior without sharing UI state.
 
@@ -60,7 +60,7 @@ Keep chat independent from `BookingFlow`; both paths share booking services, hol
 - Add a dashboard Assistant screen with Settings and Conversations sections, usage/quota display, transcript detail, linked booking/customer, outcome, and filters.
 - Support the existing English and Hungarian catalogs in v1, with each tenant enabling either or both.
 - Make assistant enablement the conjunction of tenant setting, active tenant entitlement, provider configuration, and remaining quota. Any failure hides/disables chat and leaves the classic form working.
-- Restore the previous quota levels: Starter 2M input/400K output tokens monthly, Professional 20M/4M, Internal uncapped. Reserve estimated input plus maximum output atomically before a paid call, then reconcile to provider-reported usage so concurrent requests cannot overspend the ceiling.
+- Enforce the launch entitlements: Form/Starter has no AI tokens, AI Receptionist/Professional has 2M input/400K output tokens monthly, and Internal is uncapped. Reserve estimated input plus maximum output atomically before a paid call, then reconcile to provider-reported usage so concurrent requests cannot overspend the ceiling.
 - Extend worker retention to expire sessions/actions and purge message bodies, structured payloads, and generated summaries after 90 days while retaining non-PII usage aggregates.
 
 ### Verification and Rollout
@@ -73,7 +73,7 @@ Keep chat independent from `BookingFlow`; both paths share booking services, hol
 - Test widget embedding on the existing demo customer site, both locales, mobile layout, iframe messaging, tenant branding, and fallback to the normal booking page.
 - Test owner/admin authorization, transcript pagination/filtering, 90-day purging, and concurrent quota requests.
 - Run the complete monorepo lint, typecheck, test, build, migration drift, and web end-to-end suites.
-- Ship disabled by default, configure Anthropic in staging, enable an Internal tenant as a canary, review tool failures/cost/booking conversion, then allow Starter and Professional owners to enable it.
+- Ship disabled by default, configure Anthropic in staging, enable an Internal tenant as a canary, review tool failures/cost/booking conversion, then allow AI Receptionist/Professional owners to enable it.
 - Preserve the target repository’s current uncommitted provider auto-confirmation work and create the migration against that resulting schema.
 
 ### Assumptions
@@ -97,7 +97,7 @@ The multi-tenant AI receptionist was implemented in `C:\devs\prods\booking-and-m
 - Added tenant-safe prompt composition that fences tenant-authored content as untrusted business data.
 - Added the explicit read, prepare, and confirm tool flow. Live booking, rescheduling, and cancellation writes execute only after a named preview and explicit confirmation, through the existing booking services, holds, constraints, and idempotency behavior.
 - Added public assistant/session/resume/message/action APIs and SSE events for text deltas, tool activity, action previews, completion, and typed errors.
-- Added atomic quota reservation and reconciliation for Starter and Professional limits, with Internal uncapped and safe fallback when quota or provider configuration is unavailable.
+- Added atomic quota reservation and reconciliation; Form/Starter is excluded, AI Receptionist/Professional receives 2M/400K, Internal is uncapped, and the form remains the safe fallback.
 - Added OWNER/ADMIN permissions and APIs for settings, FAQs, conversation lists/details, usage, outcomes, and statistics.
 - Added the standalone `ChatPanel`, localized tenant chat page, session resume, structured slot/action cards, and an always-visible classic booking-form fallback.
 - Added the iframe widget and strict-origin/source `postMessage` handling for open, close, and resize events.

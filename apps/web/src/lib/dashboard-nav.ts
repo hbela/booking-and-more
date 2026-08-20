@@ -118,6 +118,7 @@ const NAV: NavItem[] = [
     key: "assistant",
     alwaysAvailable: false,
     permissions: ["assistant:manage", "conversation:read:all"],
+    requires: (me) => me?.features.assistant === true,
   },
   // PARKED 2026-08-17 — Epic 6 part 1. The route itself is parked as
   // `_integrations` (Next's private-folder convention), so this item would

@@ -114,6 +114,8 @@ export interface MeResponse {
   } | null;
   membership: { id: string; role: string; providerId: string | null } | null;
   permissions: string[];
+  /** Commercial feature flags from the selected tenant's live subscription. */
+  features: { assistant: boolean };
   /**
    * Diaries handed to this membership, and what each grant covers
    * (docs/phase-3-4-diary-delegation.md). Ids only — `GET /v1/me/delegations`

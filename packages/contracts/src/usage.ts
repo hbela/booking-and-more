@@ -65,10 +65,7 @@ export const USAGE_UNITS: Record<UsageCategory, string> = {
  * the MVP, and zero is a stronger statement than a missing row — an attempt to
  * meter it is refused rather than waved through.
  */
-export const PLAN_QUOTAS: Record<
-  QuotaPlan,
-  Record<UsageCategory, number | null>
-> = {
+export const PLAN_QUOTAS: Record<QuotaPlan, Record<UsageCategory, number | null>> = {
   INTERNAL: {
     VOICE_TRANSCRIPTION: null,
     AI_INPUT_TOKENS: null,
@@ -81,8 +78,10 @@ export const PLAN_QUOTAS: Record<
   STARTER: {
     /** PRD §11: 100 voice commands a month, at the 30-second recording cap. */
     VOICE_TRANSCRIPTION: 3_000,
-    AI_INPUT_TOKENS: 2_000_000,
-    AI_OUTPUT_TOKENS: 400_000,
+    // The Form plan has no AI entitlement. Zero makes every paid model call
+    // fail closed even if a caller misses the higher-level feature gate.
+    AI_INPUT_TOKENS: 0,
+    AI_OUTPUT_TOKENS: 0,
     TTS_CHARACTERS: 0,
     REALTIME_AUDIO_SECONDS: 0,
     EMAIL_SENT: null,
@@ -91,8 +90,8 @@ export const PLAN_QUOTAS: Record<
   PROFESSIONAL: {
     /** PRD §11: 1,000 voice commands a month. */
     VOICE_TRANSCRIPTION: 30_000,
-    AI_INPUT_TOKENS: 20_000_000,
-    AI_OUTPUT_TOKENS: 4_000_000,
+    AI_INPUT_TOKENS: 2_000_000,
+    AI_OUTPUT_TOKENS: 400_000,
     TTS_CHARACTERS: 0,
     REALTIME_AUDIO_SECONDS: 0,
     EMAIL_SENT: null,
@@ -109,10 +108,7 @@ export const PLAN_QUOTAS: Record<
  * nobody notices. `planForPrice` in `billing.ts` falls back the same way and for
  * the same reason.
  */
-export function quotaFor(
-  plan: string | null | undefined,
-  category: UsageCategory,
-): number | null {
+export function quotaFor(plan: string | null | undefined, category: UsageCategory): number | null {
   const parsed = quotaPlanSchema.safeParse(plan);
   const table = parsed.success ? PLAN_QUOTAS[parsed.data] : PLAN_QUOTAS.STARTER;
 

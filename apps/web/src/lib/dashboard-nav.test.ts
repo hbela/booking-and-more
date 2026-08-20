@@ -18,12 +18,14 @@ function me(overrides: {
   permissions?: string[];
   providerId?: string | null;
   delegations?: MeResponse["delegations"];
+  assistant?: boolean;
 }): MeResponse {
   return {
     user: { id: "user_1", name: "Test", email: "test@example.test", isPlatformAdmin: false },
     tenant: null,
     membership: { id: "m_1", role: "ASSISTANT", providerId: overrides.providerId ?? null },
     permissions: overrides.permissions ?? [],
+    features: { assistant: overrides.assistant ?? false },
     delegations: overrides.delegations ?? [],
   };
 }
@@ -47,6 +49,8 @@ const OWNER = [
   "booking:read:own",
   "booking:manage:all",
   "booking:manage:own",
+  "assistant:manage",
+  "conversation:read:all",
 ];
 
 const ASSISTANT = [
@@ -77,6 +81,11 @@ describe("navFor", () => {
       "locations",
       "providers",
     ]);
+  });
+
+  it("shows the Assistant only when the subscription includes it", () => {
+    expect(keysFor(me({ permissions: OWNER, assistant: true }))).toContain("assistant");
+    expect(keysFor(me({ permissions: OWNER, assistant: false }))).not.toContain("assistant");
   });
 
   it("keeps Bookings ahead of the catalogue, whoever is looking", () => {

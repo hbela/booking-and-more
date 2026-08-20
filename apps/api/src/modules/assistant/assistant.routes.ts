@@ -16,8 +16,14 @@ import { AssistantService } from "./assistant.service.js";
 
 export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
   const service = new AssistantService(app.prisma);
-  const manage = [app.requireWritableTenant, app.requirePermission(Permissions.ASSISTANT_MANAGE)];
-  const read = [app.requirePermission(Permissions.CONVERSATION_READ_ALL)];
+  const entitled = async (request: { tenant?: { id: string } }) =>
+    service.assertEntitled(request.tenant!.id);
+  const manage = [
+    app.requireWritableTenant,
+    app.requirePermission(Permissions.ASSISTANT_MANAGE),
+    entitled,
+  ];
+  const read = [app.requirePermission(Permissions.CONVERSATION_READ_ALL), entitled];
 
   app.get(
     "/settings",

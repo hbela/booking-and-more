@@ -734,12 +734,13 @@ async function dispatchSubscriptionLink(
   }
 
   const scheduledAtIso = new Date().toISOString();
+  const locale = resolveLocale({ tenantLanguage: tenant.defaultLanguage });
 
   const created = await persistNotification(options.prisma, event.tenantId, {
     type: NotificationTypes.SUBSCRIPTION_LINK,
     channel: NotificationChannels.EMAIL,
     template: "subscription-link",
-    locale: resolveLocale({ tenantLanguage: tenant.defaultLanguage }),
+    locale,
     recipient,
     scheduledAtIso,
     dedupeKey: buildDedupeKey({
@@ -752,7 +753,7 @@ async function dispatchSubscriptionLink(
     payload: {
       organizationName: payload.organizationName ?? tenant.name,
       recipientName: payload.recipientName ?? null,
-      planName: payload.plan ?? "",
+      planName: localizedPlanName(payload.plan, locale),
       paymentUrl: payload.paymentUrl,
     },
   });
@@ -852,7 +853,7 @@ async function dispatchBillingNotice(
     payload: {
       organizationName: tenant.name,
       recipientName: owner.name,
-      planName: payload?.plan ?? "",
+      planName: localizedPlanName(payload?.plan, locale),
       // The screen the email points at is ours, not Stripe's: a portal session
       // expires in minutes and cannot be put in an email
       // (phase-9-customer-portal.md §1.1). The owner signs in and clicks
@@ -950,12 +951,13 @@ async function dispatchSubscriptionConfirmed(
   }
 
   const scheduledAtIso = new Date().toISOString();
+  const locale = resolveLocale({ tenantLanguage: tenant.defaultLanguage });
 
   const created = await persistNotification(options.prisma, event.tenantId, {
     type: NotificationTypes.SUBSCRIPTION_CONFIRMED,
     channel: NotificationChannels.EMAIL,
     template: "subscription-confirmed",
-    locale: resolveLocale({ tenantLanguage: tenant.defaultLanguage }),
+    locale,
     recipient: owner.email,
     scheduledAtIso,
     // **Keyed on the subscription, not the event** — the one notification in
@@ -972,7 +974,7 @@ async function dispatchSubscriptionConfirmed(
     payload: {
       organizationName: tenant.name,
       recipientName: owner.name,
-      planName: payload.plan ?? "",
+      planName: localizedPlanName(payload.plan, locale),
       trial: payload.trial === true,
       renewsAt: payload.renewsAt ?? null,
       // Their dashboard, not Stripe's. The point of this email is that the
@@ -994,6 +996,13 @@ async function dispatchSubscriptionConfirmed(
   });
 
   return { created: 1, duplicate: 0 };
+}
+
+/** Stripe/database identifiers are not customer-facing product names. */
+function localizedPlanName(plan: string | undefined, locale: "en" | "hu"): string {
+  if (plan === "STARTER") return locale === "hu" ? "Űrlap" : "Form";
+  if (plan === "PROFESSIONAL") return locale === "hu" ? "AI recepciós" : "AI Receptionist";
+  return plan ?? "";
 }
 
 /**

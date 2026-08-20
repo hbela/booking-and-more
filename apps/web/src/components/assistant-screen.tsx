@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
-import { Button } from "./ui/button";
+import { Button, ButtonLink } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input, Textarea } from "./ui/input";
 
@@ -45,7 +45,8 @@ export function AssistantScreen(): React.ReactElement {
   useSignInRedirect(!context.isPending && !context.me);
   const client = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
-  const enabled = Boolean(context.tenantId && context.can("conversation:read:all"));
+  const entitled = context.me?.features.assistant === true;
+  const enabled = Boolean(context.tenantId && context.can("conversation:read:all") && entitled);
   const settings = useQuery({
     queryKey: ["assistant-settings", context.tenantId],
     queryFn: () => apiFetch<Settings>("/v1/assistant/settings", { tenantId: context.tenantId }),
@@ -103,6 +104,17 @@ export function AssistantScreen(): React.ReactElement {
     return (
       <DashboardShell context={context}>
         <p>You do not have access to assistant conversations.</p>
+      </DashboardShell>
+    );
+  if (!entitled)
+    return (
+      <DashboardShell context={context}>
+        <Card
+          title="AI Receptionist"
+          description="AI chat, the website widget, transcripts, and the monthly token allowance are included with the AI Receptionist plan."
+        >
+          <ButtonLink href="/dashboard/subscription">View subscription</ButtonLink>
+        </Card>
       </DashboardShell>
     );
   return (

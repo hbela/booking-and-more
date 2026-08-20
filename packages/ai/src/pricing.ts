@@ -23,6 +23,9 @@ interface TokenPrice {
 }
 
 const TOKEN_PRICES: Record<string, TokenPrice> = {
+  // Standard price after the Sonnet 5 launch promotion ends on 2026-08-31.
+  // Recording the durable rate avoids understating the plan's unit economics.
+  "claude-sonnet-5": { input: 300, output: 1_500 },
   "gpt-4o-mini": { input: 15, output: 60 },
   "gpt-4o": { input: 250, output: 1_000 },
   "gpt-4.1-mini": { input: 40, output: 160 },
@@ -53,8 +56,7 @@ export function tokenCostMinor(args: {
 }): number {
   const price = TOKEN_PRICES[args.model] ?? UNKNOWN_TOKEN_PRICE;
 
-  const cents =
-    (args.inputTokens * price.input + args.outputTokens * price.output) / 1_000_000;
+  const cents = (args.inputTokens * price.input + args.outputTokens * price.output) / 1_000_000;
 
   return Math.ceil(cents);
 }
@@ -80,11 +82,7 @@ export function tokenUsage(args: {
   };
 }
 
-export function audioUsage(args: {
-  provider: string;
-  model: string;
-  seconds: number;
-}): AiUsage {
+export function audioUsage(args: { provider: string; model: string; seconds: number }): AiUsage {
   return {
     provider: args.provider,
     model: args.model,

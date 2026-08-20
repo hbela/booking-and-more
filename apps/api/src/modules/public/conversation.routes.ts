@@ -67,10 +67,13 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
     params: { conversationId: string };
     headers: { "x-conversation-token": string };
   }) {
-    return conversations.resolve({
+    const resolved = await conversations.resolve({
       conversationId: request.params.conversationId,
       token: request.headers["x-conversation-token"],
     });
+    const availability = await assistant.publicConfig(resolved.tenant);
+    if (!options.configured || !availability.available) throw conversationUnavailable();
+    return resolved;
   }
 
   app.get(

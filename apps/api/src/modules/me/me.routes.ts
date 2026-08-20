@@ -6,7 +6,14 @@ import {
   permissionsForRole,
   type DelegatedProviderIds,
 } from "@bam/auth";
-import { ErrorCodes, commonErrorResponses, daysUntil, idSchema, isAppError } from "@bam/contracts";
+import {
+  ErrorCodes,
+  commonErrorResponses,
+  daysUntil,
+  hasAssistantEntitlement,
+  idSchema,
+  isAppError,
+} from "@bam/contracts";
 
 /**
  * Invert the actor's permission-indexed grant set back into one row per diary.
@@ -96,6 +103,9 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
               .nullable(),
             /** Effective permissions in the selected tenant. Advisory for the UI. */
             permissions: z.array(z.string()),
+            /** Commercial feature entitlements. Advisory; feature APIs enforce
+             *  the same rule again on every request. */
+            features: z.object({ assistant: z.boolean() }),
             /**
              * Diaries handed to this membership, and what each grant covers
              * (docs/phase-3-4-diary-delegation.md §5.3).
@@ -124,6 +134,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
         tenant: null,
         membership: null,
         permissions: [] as string[],
+        features: { assistant: false },
         delegations: [] as { providerId: string; scopes: string[] }[],
       };
 
@@ -132,6 +143,10 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
       try {
         const { tenant, actor } = await request.resolveTenantContext();
         const membership = actor.membership;
+        const subscription = await app.prisma.subscription.findUnique({
+          where: { tenantId: tenant.id },
+          select: { plan: true, status: true },
+        });
 
         return {
           ...base,
@@ -153,6 +168,9 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
               }
             : null,
           permissions: membership ? [...permissionsForRole(membership.role)] : [],
+          features: {
+            assistant: hasAssistantEntitlement(subscription?.plan, subscription?.status),
+          },
           delegations: delegationsOf(membership?.delegated),
         };
       } catch (error) {
