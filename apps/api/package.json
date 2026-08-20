@@ -15,11 +15,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@bam/ai": "workspace:*",
     "@bam/auth": "workspace:*",
     "@bam/availability-engine": "workspace:*",
     "@bam/booking-engine": "workspace:*",
     "@bam/config": "workspace:*",
     "@bam/contracts": "workspace:*",
+    "@bam/conversation-engine": "workspace:*",
     "@bam/crypto": "workspace:*",
     "@bam/db": "workspace:*",
     "@bam/google-calendar": "workspace:*",

@@ -129,10 +129,7 @@ export function Dashboard(): React.ReactElement {
                   </thead>
                   <tbody>
                     {members.data?.items.map((member) => (
-                      <tr
-                        key={member.id}
-                        className="border-b border-line"
-                      >
+                      <tr key={member.id} className="border-b border-line">
                         <td className="py-2 pr-4">{member.user.name}</td>
                         <td className="py-2 pr-4">{member.user.email}</td>
                         <td className="py-2 pr-4">{member.role}</td>
@@ -203,16 +200,12 @@ function PendingPanel({
             <span
               aria-hidden="true"
               className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
-                step.active
-                  ? "bg-primary text-white"
-                  : "bg-surface-sunken text-ink-subtle"
+                step.active ? "bg-primary text-white" : "bg-surface-sunken text-ink-subtle"
               }`}
             >
               {index + 1}
             </span>
-            <span className={step.active ? "" : "text-ink-subtle"}>
-              {t(step.key)}
-            </span>
+            <span className={step.active ? "" : "text-ink-subtle"}>{t(step.key)}</span>
           </li>
         ))}
       </ol>
@@ -221,14 +214,10 @@ function PendingPanel({
           not the same as none left, so nothing is rendered rather than
           "0 days" (phase-9 §2.2). */}
       {daysRemaining === null ? null : (
-        <p className="text-sm text-ink-muted">
-          {t("daysRemaining", { days: daysRemaining })}
-        </p>
+        <p className="text-sm text-ink-muted">{t("daysRemaining", { days: daysRemaining })}</p>
       )}
 
-      <ButtonLink href="/dashboard/subscription" >
-        {t("subscribeCta")}
-      </ButtonLink>
+      <ButtonLink href="/dashboard/subscription">{t("subscribeCta")}</ButtonLink>
     </Card>
   );
 }
@@ -252,9 +241,7 @@ function PlatformAdminPanel(): React.ReactElement {
     <Card title={t("platformAdminTitle")}>
       <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
 
-      <ButtonLink href="/admin" >
-        {t("platformAdminLink")}
-      </ButtonLink>
+      <ButtonLink href="/admin">{t("platformAdminLink")}</ButtonLink>
     </Card>
   );
 }
@@ -303,7 +290,6 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
               );
             }}
             required
-            
           />
         </Field>
 
@@ -321,7 +307,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
 
         <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending} >
+        <Button type="submit" disabled={mutation.isPending}>
           {t("create")}
         </Button>
       </form>
@@ -424,7 +410,6 @@ function MemberDiary({
             setError(null);
             link.mutate(event.target.value);
           }}
-          
         >
           <option value="">{t("linkDiaryPrompt")}</option>
           {available.map((provider) => (
@@ -453,7 +438,7 @@ function InvitePanel({
 }): React.ReactElement {
   const t = useTranslations("dashboard");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("ASSISTANT");
+  const [role, setRole] = useState("ADMIN");
   const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -507,15 +492,13 @@ function InvitePanel({
             onChange={(event) => {
               setRole(event.target.value);
             }}
-            
           >
-            {/* PROVIDER is deliberately absent, and the API refuses it here
-                too. This panel has no diary to attach, so a provider invited
-                from it joins holding three `:own` permissions that match
-                nothing — able to sign in and do absolutely nothing, with no
-                error to explain it. Providers are invited from their own row,
-                where the diary is unambiguous. */}
-            {["OWNER", "ADMIN", "ASSISTANT"].map((value) => (
+            {/* Operational roles are deliberately absent. This panel has no
+                diary or delegation scopes to attach, so a PROVIDER or
+                ASSISTANT invited here would join unable to do useful work.
+                Both are invited from the relevant row on the Providers
+                screen, where the intended diary is unambiguous. */}
+            {["OWNER", "ADMIN"].map((value) => (
               <option key={value} value={value}>
                 {value}
               </option>
@@ -524,7 +507,7 @@ function InvitePanel({
         </Field>
 
         <Callout>
-          {t.rich("inviteProviderElsewhere", {
+          {t.rich("inviteOperationalRoleElsewhere", {
             link: (chunks) => <CalloutLink href="/dashboard/providers">{chunks}</CalloutLink>,
           })}
         </Callout>

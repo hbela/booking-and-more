@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/navigation";
+import { startConversation } from "@/lib/conversation-client";
+import { Button } from "./ui/button";
 import {
   apiFetch,
   formatMoney,
@@ -37,6 +40,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
   const t = useTranslations("manage");
   const locale = useLocale();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const [mode, setMode] = useState<"view" | "reschedule" | "cancel">("view");
   const [newStartAt, setNewStartAt] = useState("");
@@ -48,6 +52,10 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
     queryKey: ["public-booking", token],
     queryFn: () => apiFetch<PublicBooking>(path),
     retry: false,
+    // Approval happens in the provider's browser. Poll only while this page is
+    // waiting for that cross-browser change, then stop once it is settled.
+    refetchInterval: (query) =>
+      query.state.data === undefined || query.state.data.status === "PENDING" ? 5_000 : false,
   });
 
   const cancelPreview = useQuery({
@@ -104,9 +112,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 px-6 py-10">
       <header>
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-ink-muted text-sm">
-          {t("reference", { reference: data.reference })}
-        </p>
+        <p className="text-ink-muted text-sm">{t("reference", { reference: data.reference })}</p>
       </header>
 
       {error ? (
@@ -138,7 +144,26 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
       {settled ? (
         <p className="text-sm">{t("nothingToDo")}</p>
       ) : mode === "view" ? (
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <Button
+            onClick={() => {
+              void startConversation({
+                tenantSlug: data.tenantSlug,
+                locale,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                managementToken: token,
+              }).then((started) => {
+                const language = locale === "hu" ? "hu" : "en";
+                sessionStorage.setItem(
+                  `bam.chat.${data.tenantSlug}.${language}`,
+                  JSON.stringify({ id: started.conversationId, token: started.sessionToken }),
+                );
+                router.push(`/${data.tenantSlug}/chat`);
+              });
+            }}
+          >
+            {locale === "hu" ? "Kérdezze az asszisztenst" : "Ask the assistant"}
+          </Button>
           <button
             type="button"
             onClick={() => setMode("reschedule")}

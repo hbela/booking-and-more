@@ -308,9 +308,10 @@ export class BookingService {
       const management = createManagementToken();
       const reference = await this.repository.allocateReference(tx, tenantId);
 
-      // Step 5. `requiresApproval` decides whether this is an appointment or a
-      // request for one; either way it holds the slot.
-      const status = initialBookingStatus(plan.service);
+      // Step 5. The service may ask for approval, while the owner may opt this
+      // provider's whole diary into automatic confirmation. Either outcome
+      // still holds the slot.
+      const status = initialBookingStatus(plan.service, plan.provider);
 
       const booking = await this.repository.createBooking(tx, {
         tenantId,

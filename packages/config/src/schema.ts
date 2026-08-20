@@ -330,6 +330,13 @@ const baseEnvSchema = z.object({
 
   // --- Booking defaults (tech-impl §42) ------------------------------------
   BOOKING_HOLD_DURATION_SECONDS: z.coerce.number().int().positive().default(300),
+  /** Optional: absent disables only the public AI receptionist. */
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_CHAT_MODEL: z.string().min(1).default("claude-sonnet-5"),
+  CHAT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(4_096).default(1_024),
+  CONVERSATION_TTL_MINUTES: z.coerce.number().int().positive().default(1_440),
+  CONVERSATION_MAX_TURNS: z.coerce.number().int().positive().max(100).default(40),
+  PENDING_ACTION_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   VOICE_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(30),
   VOICE_AUDIO_RETENTION_ENABLED: z
     .enum(["true", "false"])

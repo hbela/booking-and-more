@@ -67,6 +67,7 @@ export function ProvidersScreen(): React.ReactElement {
   const invite = useEditPanel("provider-invite");
   const assistants = useEditPanel("provider-assistants");
   const [showArchived, setShowArchived] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const canManage = context.can("provider:manage");
   // Staffing a diary is `delegation:manage`, which **only OWNER holds** — not
@@ -75,6 +76,7 @@ export function ProvidersScreen(): React.ReactElement {
   // rather than reusing either of the two above: the gap in the ADMIN row is
   // the decision, and reading it as `provider:manage` would silently close it.
   const canDelegate = context.can("delegation:manage");
+  const canChangeApproval = context.can("tenant:manage");
   // The invite button asks for the permission the *route* asks for, which is
   // not `provider:manage`: what it creates is an invitation granting a
   // membership, and the provider is only the object (phase-9-provider-onboarding
@@ -120,6 +122,24 @@ export function ProvidersScreen(): React.ReactElement {
     queryFn: () =>
       apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && context.can("member:read"),
+  });
+
+  const changeApproval = useMutation({
+    mutationFn: (provider: Provider) =>
+      apiFetch<Provider>(`/v1/providers/${provider.id}/booking-approval`, {
+        method: "PATCH",
+        tenantId: context.tenantId,
+        body: { automatic: !provider.autoConfirmBookings },
+      }),
+    onMutate: () => {
+      setApprovalError(null);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["providers"] });
+    },
+    onError: (cause: unknown) => {
+      setApprovalError(cause instanceof ApiError ? cause.message : t("genericError"));
+    },
   });
 
   const invitedProviderIds = new Set(
@@ -204,6 +224,9 @@ export function ProvidersScreen(): React.ReactElement {
                   <th scope="col" className="py-2 pr-4 font-medium">
                     {t("status")}
                   </th>
+                  <th scope="col" className="py-2 pr-4 font-medium">
+                    {t("approval")}
+                  </th>
                   <th scope="col" className="py-2 font-medium">
                     <span className="sr-only">{t("actions")}</span>
                   </th>
@@ -214,19 +237,19 @@ export function ProvidersScreen(): React.ReactElement {
                   const archived = provider.archivedAt !== null;
 
                   return (
-                    <tr
-                      key={provider.id}
-                      className="border-b border-line"
-                    >
+                    <tr key={provider.id} className="border-b border-line">
                       <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {provider.displayName}
                       </td>
-                      <td className="py-2 pr-4 text-ink-muted">
-                        {provider.timezone}
-                      </td>
+                      <td className="py-2 pr-4 text-ink-muted">{provider.timezone}</td>
                       <td className="py-2 pr-4">
                         {archived ? t("archived") : provider.active ? t("active") : t("inactive")}
                         {archived || provider.onlineBookingEnabled ? "" : ` · ${t("offlineOnly")}`}
+                      </td>
+                      <td className="py-2 pr-4 text-ink-muted">
+                        {provider.autoConfirmBookings
+                          ? t("approvalAutomatic")
+                          : t("approvalManual")}
                       </td>
                       <td className="py-2">
                         {!canManage ? null : archived ? (
@@ -268,6 +291,18 @@ export function ProvidersScreen(): React.ReactElement {
                             <RowLink href={`/dashboard/availability?providerId=${provider.id}`}>
                               {t("availability")}
                             </RowLink>
+                            {!canChangeApproval ? null : (
+                              <RowButton
+                                disabled={changeApproval.isPending}
+                                onClick={() => {
+                                  changeApproval.mutate(provider);
+                                }}
+                              >
+                                {provider.autoConfirmBookings
+                                  ? t("switchToManualApproval")
+                                  : t("switchToAutomaticApproval")}
+                              </RowButton>
+                            )}
                             {/* Giving this person a login. One action, because
                                 the two it replaced — invite, then link the
                                 membership to the diary — lived on different
@@ -358,6 +393,10 @@ export function ProvidersScreen(): React.ReactElement {
         {(providers.data?.items.length ?? 0) > 0 && !noServices ? (
           <Callout>{t("assignHint")}</Callout>
         ) : null}
+
+        {(providers.data?.items.length ?? 0) > 0 ? <Callout>{t("approvalHint")}</Callout> : null}
+
+        <ErrorText>{approvalError}</ErrorText>
 
         {/* One node, referenced by every disabled Invite button, so the reason
             is announced rather than left to be guessed from a grey button. */}
@@ -500,12 +539,11 @@ function InvitePanel({
                 onFocus={(event) => {
                   event.currentTarget.select();
                 }}
-                
               />
             </div>
           </details>
 
-          <Button variant="secondary" type="button" onClick={onClose} >
+          <Button variant="secondary" type="button" onClick={onClose}>
             {t("close")}
           </Button>
         </div>
@@ -531,10 +569,10 @@ function InvitePanel({
           <ErrorText>{error}</ErrorText>
 
           <div className="flex gap-3">
-            <Button type="submit" disabled={send.isPending} >
+            <Button type="submit" disabled={send.isPending}>
               {alreadyInvited ? t("reinvite") : t("sendInvitation")}
             </Button>
-            <Button variant="secondary" type="button" onClick={onClose} >
+            <Button variant="secondary" type="button" onClick={onClose}>
               {t("cancel")}
             </Button>
           </div>
@@ -759,7 +797,6 @@ function CreateProviderPanel({
                 onChange={(event) => {
                   setDefaultLocationId(event.target.value);
                 }}
-                
               >
                 <option value="">{t("noDefaultLocation")}</option>
                 {locations.map((location) => (
@@ -775,7 +812,7 @@ function CreateProviderPanel({
 
         <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending} >
+        <Button type="submit" disabled={mutation.isPending}>
           {t("create")}
         </Button>
       </form>
@@ -839,10 +876,10 @@ function EditProviderPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose} >
+          <Button variant="secondary" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>
@@ -1091,10 +1128,10 @@ function AssignmentsPanel({
           <ErrorText>{error}</ErrorText>
 
           <div className="flex gap-3">
-            <Button type="submit" disabled={save.isPending} >
+            <Button type="submit" disabled={save.isPending}>
               {t("save")}
             </Button>
-            <Button variant="secondary" type="button" onClick={onClose} >
+            <Button variant="secondary" type="button" onClick={onClose}>
               {t("cancel")}
             </Button>
           </div>
@@ -1140,9 +1177,7 @@ function ServiceOverrides({
 
   return (
     <details open={customised} className="ml-6">
-      <summary className="cursor-pointer text-xs text-ink-muted">
-        {t("customise")}
-      </summary>
+      <summary className="cursor-pointer text-xs text-ink-muted">{t("customise")}</summary>
 
       <div className="mt-2 flex flex-col gap-2 border-l border-line pl-3">
         <Field id={`duration-${service.id}`} label={t("customDuration")}>

@@ -308,6 +308,33 @@ describe.skipIf(!databaseUrl)("bookings", () => {
       });
       expect(outbox?.eventType).toBe("BOOKING_REQUESTED");
     });
+
+    it("lets the owner automatically confirm a provider's approval-required services", async () => {
+      const site = await clinic("automatic-approval", { requiresApproval: true });
+
+      const changed = await app.inject({
+        method: "PATCH",
+        url: `/v1/providers/${site.providerId}/booking-approval`,
+        headers: as(site.owner.cookie, site.tenantId),
+        payload: { automatic: true },
+      });
+      expect(changed.statusCode, changed.body).toBe(200);
+      expect(changed.json().autoConfirmBookings).toBe(true);
+
+      const slots = await publicSlots(site);
+      const held = await takeHold(site, slots[0]!);
+      const booked = await confirm(site, held.json().id as string);
+
+      expect(booked.statusCode, booked.body).toBe(201);
+      expect(booked.json().status).toBe("CONFIRMED");
+      expect(booked.headers["cache-control"]).toBe("private, no-store");
+
+      const outbox = await app.prisma.outboxEvent.findFirst({
+        where: { tenantId: site.tenantId, aggregateType: "Booking" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(outbox?.eventType).toBe("BOOKING_CONFIRMED");
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -692,6 +719,7 @@ describe.skipIf(!databaseUrl)("bookings", () => {
       const found = await app.inject({ method: "GET", url: `/v1/public/bookings/${token}` });
       expect(found.statusCode, found.body).toBe(200);
       expect(found.json().reference).toBe(booked.json().reference);
+      expect(found.headers["cache-control"]).toBe("private, no-store");
 
       // The public shape is its own type, not the staff one filtered
       // (CLAUDE.md rule 12). None of the tenant's operational metadata is here.

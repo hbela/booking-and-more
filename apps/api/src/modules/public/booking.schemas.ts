@@ -61,6 +61,7 @@ export const publicBookingStatusSchema = z.enum([
 ]);
 
 export const publicBookingSchema = z.object({
+  tenantSlug: z.string(),
   reference: z.string(),
   status: publicBookingStatusSchema,
   startAt: instantSchema,

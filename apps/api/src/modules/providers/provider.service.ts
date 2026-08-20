@@ -81,6 +81,22 @@ export class ProviderService {
     });
   }
 
+  /**
+   * Owner policy for whether this diary bypasses service approval queues.
+   * A named method keeps it out of the wider administrator-editable PATCH.
+   */
+  async setAutomaticBookingConfirmation(args: {
+    tenantId: string;
+    providerId: string;
+    automatic: boolean;
+  }): Promise<Provider> {
+    return this.providers.update({
+      tenantId: args.tenantId,
+      providerId: args.providerId,
+      data: { autoConfirmBookings: args.automatic },
+    });
+  }
+
   /** Archive. Never a hard delete — bookings will point here from Epic 4 on. */
   async archive(args: { tenantId: string; providerId: string }): Promise<Provider> {
     return this.providers.archive(args);

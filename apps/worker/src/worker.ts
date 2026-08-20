@@ -19,6 +19,7 @@ import {
 } from "./notifications/notification.sweeper.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
 import { startRetentionCleanup } from "./retention/retention-cleanup.js";
+import { startConversationSweeper } from "./conversations/conversation.sweeper.js";
 // PARKED — Epic 6 part 1.
 // import { createCalendarWorker } from "./calendar/calendar.worker.js";
 // import { startCalendarSweeper, type CalendarSweeper } from "./calendar/calendar.sweeper.js";
@@ -233,6 +234,13 @@ async function main(): Promise<void> {
   // PostgreSQL-backed and independent of Redis: secrets still expire while the
   // queue is unavailable. Every policy is bounded and replica-safe.
   const retentionCleanup = startRetentionCleanup({ prisma, logger: log });
+  const conversationSweeper = startConversationSweeper({
+    prisma,
+    logger: log,
+    transcriptRetentionDays: 90,
+    batchSize: 500,
+    intervalMs: 60 * 60 * 1_000,
+  });
 
   const heartbeat = setInterval(() => {
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
@@ -263,6 +271,7 @@ async function main(): Promise<void> {
       try {
         await stripeEvents.stop();
         await retentionCleanup.stop();
+        await conversationSweeper.stop();
 
         // Order matters, in three stages: stop everything that *produces* work,
         // then let the consumers finish what they hold, then drop the queues and

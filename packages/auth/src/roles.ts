@@ -113,6 +113,8 @@ export const Permissions = {
 
   AUDIT_READ: "audit:read",
   USAGE_READ: "usage:read",
+  ASSISTANT_MANAGE: "assistant:manage",
+  CONVERSATION_READ_ALL: "conversation:read:all",
 } as const;
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
@@ -146,6 +148,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.BOOKING_MANAGE_OWN,
     Permissions.AUDIT_READ,
     Permissions.USAGE_READ,
+    Permissions.ASSISTANT_MANAGE,
+    Permissions.CONVERSATION_READ_ALL,
   ],
 
   // Everything operational, but not billing, not tenant settings, and — since
@@ -171,6 +175,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     Permissions.BOOKING_MANAGE_OWN,
     Permissions.AUDIT_READ,
     Permissions.USAGE_READ,
+    Permissions.ASSISTANT_MANAGE,
+    Permissions.CONVERSATION_READ_ALL,
   ],
 
   // Own schedule only. The :own permissions are resource-scoped and always

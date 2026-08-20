@@ -113,6 +113,12 @@ const NAV: NavItem[] = [
     alwaysAvailable: false,
     permissions: ["provider:manage"],
   },
+  {
+    href: "/dashboard/assistant",
+    key: "assistant",
+    alwaysAvailable: false,
+    permissions: ["assistant:manage", "conversation:read:all"],
+  },
   // PARKED 2026-08-17 — Epic 6 part 1. The route itself is parked as
   // `_integrations` (Next's private-folder convention), so this item would
   // 404; the `integrations` message keys stay in en.json and hu.json.

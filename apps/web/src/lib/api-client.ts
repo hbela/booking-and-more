@@ -212,6 +212,8 @@ export interface Provider {
   languages: string[];
   active: boolean;
   onlineBookingEnabled: boolean;
+  /** Owner override: services that normally need approval confirm immediately. */
+  autoConfirmBookings: boolean;
   /** NULL means *inherit*, not zero — the engine takes the most restrictive
    *  value that applies (tech-impl §13.3, `provider.schemas.ts` §4-13). Zero is
    *  a real value meaning "bookable up to the last second". */
@@ -468,6 +470,7 @@ export interface Hold {
  * internal notes, no ids.
  */
 export interface PublicBooking {
+  tenantSlug: string;
   reference: string;
   status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
   startAt: string;

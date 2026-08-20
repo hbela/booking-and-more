@@ -103,12 +103,18 @@ export function checkTransition(
 /**
  * What a freshly confirmed booking starts as.
  *
- * `Service.requiresApproval` has existed since Epic 2 with a comment promising
- * this. A PENDING booking still holds its capacity reservation — the customer
- * asked first, and staff deciding slowly must not cost them the slot.
+ * `Service.requiresApproval` asks for a staff decision, unless the owner has
+ * opted this provider's whole diary into automatic confirmation. A PENDING
+ * booking still holds its capacity reservation — the customer asked first,
+ * and staff deciding slowly must not cost them the slot.
  */
-export function initialBookingStatus(service: { requiresApproval: boolean }): BookingStatus {
-  return service.requiresApproval ? BookingStatuses.PENDING : BookingStatuses.CONFIRMED;
+export function initialBookingStatus(
+  service: { requiresApproval: boolean },
+  provider: { autoConfirmBookings: boolean },
+): BookingStatus {
+  return service.requiresApproval && !provider.autoConfirmBookings
+    ? BookingStatuses.PENDING
+    : BookingStatuses.CONFIRMED;
 }
 
 /** Every status reachable from `from`, for building a staff UI's action list. */

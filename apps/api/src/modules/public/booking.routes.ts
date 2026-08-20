@@ -50,6 +50,7 @@ export const publicBookingRoutes: FastifyPluginAsyncZod = async (app) => {
 
   function toPublicBooking(booking: BookingWithRelations, tenant: Tenant): PublicBooking {
     return {
+      tenantSlug: tenant.slug,
       reference: booking.reference,
       // EXPIRED is an internal outcome — a request nobody acted on. Showing a
       // customer a status the schema does not admit would fail serialization,
@@ -105,6 +106,7 @@ export const publicBookingRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const tenant = await catalogue.resolveTenant(request.params.tenantSlug);
       const key = requireIdempotencyKey(request.headers);
+
       const now = new Date();
 
       const { value } = await withIdempotency(
@@ -200,6 +202,11 @@ export const publicBookingRoutes: FastifyPluginAsyncZod = async (app) => {
       const tenant = await catalogue.resolveTenant(request.params.tenantSlug);
       const key = requireIdempotencyKey(request.headers);
 
+      // This response contains the raw management credential and represents
+      // the booking's current status. Neither browsers nor intermediaries may
+      // retain it.
+      reply.header("Cache-Control", "private, no-store");
+
       const { value } = await withIdempotency(
         app.prisma,
         {
@@ -242,7 +249,11 @@ export const publicBookingRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: publicBookingSchema, ...commonErrorResponses },
       },
     },
-    async (request) => {
+    async (request, reply) => {
+      // The success screen polls this endpoint while approval is outstanding.
+      // A cached PENDING response would leave the customer page stale after
+      // staff (or the automatic policy) confirms the booking.
+      reply.header("Cache-Control", "private, no-store");
       const { booking, tenant } = await fromToken(request.params.managementToken);
       return toPublicBooking(booking, tenant);
     },

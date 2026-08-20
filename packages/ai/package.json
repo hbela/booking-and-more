@@ -1,0 +1,40 @@
+{
+  "name": "@bam/ai",
+  "version": "0.0.0",
+  "private": true,
+  "//": "The one package in the workspace that talks to a model. It is deliberately not an 'engine': it has a runtime dependency and it performs I/O. What it must never gain is Fastify, Prisma or Redis — a provider that can read the database is a provider that can be prompt-injected into reading the wrong tenant's.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "check-types": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@bam/contracts": "workspace:*",
+    "@anthropic-ai/sdk": "^0.68.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@bam/eslint-config": "workspace:*",
+    "@bam/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

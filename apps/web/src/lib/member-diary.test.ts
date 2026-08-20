@@ -23,6 +23,7 @@ function provider(id: string, over: Partial<Provider> = {}): Provider {
     languages: ["hu"],
     active: true,
     onlineBookingEnabled: true,
+    autoConfirmBookings: false,
     minimumNoticeMinutes: null,
     maximumAdvanceDays: null,
     archivedAt: null,
@@ -49,9 +50,9 @@ describe("resolveDiaryState", () => {
   it("reports a linked diary as linked, not archived, when the list was never fetched", () => {
     // The reported bug. A PROVIDER holds `member:read` and not `member:manage`,
     // so the providers query never runs and this is what their own row hits.
-    expect(
-      resolveDiaryState({ member: member({ providerId: "p1" }), providers: null }),
-    ).toEqual({ kind: "linked" });
+    expect(resolveDiaryState({ member: member({ providerId: "p1" }), providers: null })).toEqual({
+      kind: "linked",
+    });
   });
 
   it("reports archived only when a list we hold is missing the diary", () => {

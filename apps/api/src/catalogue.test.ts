@@ -306,6 +306,45 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
       expect(corrected.json().email).toBe("second@example.test");
     });
 
+    it("allows only an owner to change a provider's booking approval policy", async () => {
+      const owner = await owned("approval-owner");
+      const providerId = await createProvider(owner.cookie, owner.tenantId, {
+        displayName: "Approval Owner",
+      });
+      const admin = await signUp("approval-admin");
+
+      const invitation = await app.inject({
+        method: "POST",
+        url: "/v1/members/invitations",
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { email: admin.email, role: "ADMIN" },
+      });
+      const token = (invitation.json().acceptUrl as string).split("/").pop()!;
+      await app.inject({
+        method: "POST",
+        url: "/v1/invitations/accept",
+        headers: as(admin.cookie),
+        payload: { token },
+      });
+
+      const refused = await app.inject({
+        method: "PATCH",
+        url: `/v1/providers/${providerId}/booking-approval`,
+        headers: as(admin.cookie, owner.tenantId),
+        payload: { automatic: true },
+      });
+      expect(refused.statusCode, refused.body).toBe(403);
+
+      const changed = await app.inject({
+        method: "PATCH",
+        url: `/v1/providers/${providerId}/booking-approval`,
+        headers: as(owner.cookie, owner.tenantId),
+        payload: { automatic: true },
+      });
+      expect(changed.statusCode, changed.body).toBe(200);
+      expect(changed.json().autoConfirmBookings).toBe(true);
+    });
+
     it("inherits the tenant's timezone rather than leaving it null", async () => {
       const owner = await owned("tz-inherit");
 

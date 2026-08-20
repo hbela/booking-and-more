@@ -129,6 +129,14 @@ model Tenant {
   notifications        Notification[]
   subscription         Subscription?
   checkoutLink         SubscriptionCheckoutLink?
+  assistantSettings    TenantAssistantSettings?
+  assistantFaqs        TenantAssistantFaq[]
+  conversationSessions ConversationSession[]
+  conversationMessages ConversationMessage[]
+  conversationActions  ConversationPendingAction[]
+  usageEvents           UsageEvent[]
+  usageAggregates       UsageAggregate[]
+  usageReservations     UsageReservation[]
 
   calendarIntegrations  CalendarIntegration[]
   calendarMappings      CalendarMapping[]
@@ -530,6 +538,12 @@ model Provider {
   /// Off means staff can still book this provider, but the public booking page
   /// will not offer them (PRD §9.4).
   onlineBookingEnabled Boolean @default(true) @map("online_booking_enabled")
+
+  /// Owner-controlled override for services that normally require approval.
+  /// False preserves `Service.requiresApproval`; true confirms every public
+  /// booking for this diary immediately, so neither the provider nor a
+  /// delegated assistant has an approval task.
+  autoConfirmBookings Boolean @default(false) @map("auto_confirm_bookings")
 
   /// NULL means inherit — see the section comment above.
   minimumNoticeMinutes Int? @map("minimum_notice_minutes")
@@ -1081,6 +1095,7 @@ model Customer {
   holds         BookingHold[]
   bookings      Booking[]
   notifications Notification[]
+  conversations ConversationSession[]
 
   @@index([tenantId, normalizedEmail])
   @@index([tenantId, normalizedPhone])
@@ -1187,6 +1202,7 @@ model BookingHold {
 
   reservation CapacityReservation?
   bookings    Booking[]
+  conversations ConversationSession[]
 
   @@index([tenantId, providerId, startAt])
   @@index([tenantId, sessionId])
@@ -1263,6 +1279,7 @@ model Booking {
 
   reservation   CapacityReservation?
   notifications Notification[]
+  conversations ConversationSession[]
 
   /// At most one per connected calendar. The copy of this appointment in
   /// somebody's Google Calendar is a *mirror*: the row here is authoritative
@@ -1284,6 +1301,205 @@ model Booking {
 /// worker turns rows into BullMQ jobs once it exists (Epic 5). Until then these
 /// accumulate, which is the correct behaviour — the events are the record that
 /// something needs sending, and nothing about them expires.
+// Tenant AI receptionist ----------------------------------------------------
+
+enum ConversationChannel {
+  CHAT
+  /// Historical compatibility only; public v1 validates CHAT exclusively.
+  VOICE
+  @@map("conversation_channel")
+}
+
+enum ConversationStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+  @@map("conversation_status")
+}
+
+enum MessageSender {
+  CUSTOMER
+  ASSISTANT
+  SYSTEM
+  @@map("message_sender")
+}
+
+enum MessageType {
+  TEXT
+  /// Historical compatibility only; no v1 route writes this value.
+  VOICE
+  STRUCTURED
+  @@map("message_type")
+}
+
+enum PendingActionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  @@map("pending_action_status")
+}
+
+enum UsageCategory {
+  VOICE_TRANSCRIPTION
+  AI_INPUT_TOKENS
+  AI_OUTPUT_TOKENS
+  TTS_CHARACTERS
+  REALTIME_AUDIO_SECONDS
+  EMAIL_SENT
+  BOOKING_CREATED
+  @@map("usage_category")
+}
+
+enum UsageReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+  EXPIRED
+  @@map("usage_reservation_status")
+}
+
+model TenantAssistantSettings {
+  tenantId String @id @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enabled             Boolean  @default(false)
+  personaName         String   @default("Assistant") @map("persona_name")
+  businessDescription String?  @map("business_description") @db.Text
+  supportedLocales    String[] @default(["hu", "en"]) @map("supported_locales")
+  escalationMessage   String?  @map("escalation_message") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@map("tenant_assistant_settings")
+}
+
+model TenantAssistantFaq {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locale String
+  question String
+  answer String @db.Text
+  active Boolean @default(true)
+  sortOrder Int @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@index([tenantId, locale, active, sortOrder])
+  @@map("tenant_assistant_faqs")
+}
+
+model ConversationSession {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId String? @map("customer_id")
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  holdId String? @map("hold_id")
+  hold BookingHold? @relation(fields: [holdId], references: [id], onDelete: SetNull)
+  bookingId String? @map("booking_id")
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  channel ConversationChannel @default(CHAT)
+  locale String
+  timezone String
+  status ConversationStatus @default(ACTIVE)
+  machineState String @map("machine_state")
+  stateJson Json @default("{}") @map("state_json")
+  tokenHash String @unique @map("token_hash")
+  turnCount Int @default(0) @map("turn_count")
+  outcomeSuccessful Boolean? @map("outcome_successful")
+  summary String? @db.Text
+  lastActivityAt DateTime @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  messages ConversationMessage[]
+  pendingActions ConversationPendingAction[]
+  @@index([tenantId, status, lastActivityAt])
+  @@index([status, expiresAt])
+  @@map("conversation_sessions")
+}
+
+model ConversationMessage {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId String @map("session_id")
+  session ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender MessageSender
+  messageType MessageType @default(TEXT) @map("message_type")
+  content String @db.Text
+  structuredContentJson Json? @map("structured_content_json")
+  inputTokens Int? @map("input_tokens")
+  outputTokens Int? @map("output_tokens")
+  redactedAt DateTime? @map("redacted_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([tenantId, sessionId, createdAt])
+  @@map("conversation_messages")
+}
+
+model ConversationPendingAction {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId String @map("session_id")
+  session ConversationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  toolName String @map("tool_name")
+  argumentsJson Json @map("arguments_json")
+  previewJson Json @map("preview_json")
+  status PendingActionStatus @default(PENDING)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@index([tenantId, sessionId, status])
+  @@index([status, expiresAt])
+  @@map("conversation_pending_actions")
+}
+
+model UsageEvent {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category UsageCategory
+  quantity Int
+  unit String
+  provider String?
+  model String?
+  estimatedCostMinor Int @default(0) @map("estimated_cost_minor")
+  metadataJson Json? @map("metadata_json")
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  @@index([tenantId, category, occurredAt])
+  @@map("usage_events")
+}
+
+model UsageAggregate {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period String
+  category UsageCategory
+  quantity Int @default(0)
+  estimatedCostMinor Int @default(0) @map("estimated_cost_minor")
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  @@unique([tenantId, period, category])
+  @@map("usage_aggregates")
+}
+
+model UsageReservation {
+  id String @id @default(cuid(2))
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period String
+  inputTokens Int @map("input_tokens")
+  outputTokens Int @map("output_tokens")
+  status UsageReservationStatus @default(RESERVED)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  settledAt DateTime? @map("settled_at") @db.Timestamptz(3)
+  @@index([tenantId, period, status])
+  @@index([status, expiresAt])
+  @@map("usage_reservations")
+}
+
 model OutboxEvent {
   id String @id @default(cuid(2))
 

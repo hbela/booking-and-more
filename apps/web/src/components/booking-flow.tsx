@@ -12,6 +12,7 @@ import {
   type ApiError,
   type Hold,
   type Paginated,
+  type PublicBooking,
   type PublicBookingCreated,
   type Slot,
 } from "@/lib/api-client";
@@ -130,13 +131,7 @@ function useMonthSlots(args: {
   const range = monthRangeOf(args.month, args.today);
 
   const query = useQuery({
-    queryKey: [
-      "public-slots-month",
-      args.tenantSlug,
-      args.serviceId,
-      args.providerId,
-      args.month,
-    ],
+    queryKey: ["public-slots-month", args.tenantSlug, args.serviceId, args.providerId, args.month],
     queryFn: () =>
       apiFetch<{ items: Slot[] }>(`/v1/public/tenants/${args.tenantSlug}/slots/search`, {
         method: "POST",
@@ -212,6 +207,30 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
     enabled: serviceId !== null,
   });
 
+  /**
+   * Approval happens in a different browser, so invalidating this tab's cache
+   * from the staff mutation is impossible. The management token returned once
+   * at creation is also the customer's read credential; poll with it only
+   * while an approval is outstanding, then stop as soon as the booking settles.
+   */
+  const refreshedBooking = useQuery({
+    queryKey: ["public-booking", booking?.managementToken],
+    queryFn: () =>
+      apiFetch<PublicBooking>(
+        `/v1/public/bookings/${encodeURIComponent(booking!.managementToken)}`,
+        { cache: "no-store" },
+      ),
+    enabled: step === "success" && booking?.status === "PENDING",
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data === undefined || query.state.data.status === "PENDING" ? 5_000 : false,
+  });
+
+  const currentBooking =
+    booking === null || refreshedBooking.data === undefined
+      ? booking
+      : { ...booking, ...refreshedBooking.data };
+
   const service = services.data?.items.find((item) => item.id === serviceId) ?? null;
 
   /**
@@ -270,7 +289,8 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
     providerId,
     month: addMonths(visibleMonth, 2),
     today,
-    enabled: step === "time" && visibleIsEmpty && nextMonth.isSuccess && nextMonth.summaries.size === 0,
+    enabled:
+      step === "time" && visibleIsEmpty && nextMonth.isSuccess && nextMonth.summaries.size === 0,
   });
 
   const nextAvailable = firstAcrossMonths([
@@ -496,9 +516,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                 >
                   <span className="font-medium">{item.displayName}</span>
                   {item.description ? (
-                    <span className="text-ink-muted block text-sm">
-                      {item.description}
-                    </span>
+                    <span className="text-ink-muted block text-sm">{item.description}</span>
                   ) : null}
                 </button>
               </li>
@@ -612,23 +630,29 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
         />
       ) : null}
 
-      {step === "success" && booking ? (
+      {step === "success" && currentBooking ? (
         <Section title={t("booked")}>
           <dl className="border-line flex flex-col gap-2 rounded-xl border p-4">
-            <Row label={t("reference")} value={booking.reference} />
-            <Row label={t("when")} value={formatDateTime(booking.startAt, locale)} />
-            <Row label={t("service")} value={booking.serviceName} />
-            <Row label={t("provider")} value={booking.providerName} />
-            {booking.locationName ? <Row label={t("where")} value={booking.locationName} /> : null}
+            <Row label={t("reference")} value={currentBooking.reference} />
+            <Row label={t("when")} value={formatDateTime(currentBooking.startAt, locale)} />
+            <Row label={t("service")} value={currentBooking.serviceName} />
+            <Row label={t("provider")} value={currentBooking.providerName} />
+            {currentBooking.locationName ? (
+              <Row label={t("where")} value={currentBooking.locationName} />
+            ) : null}
           </dl>
 
-          {booking.status === "PENDING" ? <p className="text-sm">{t("awaitingApproval")}</p> : null}
+          {currentBooking.status === "PENDING" || currentBooking.status === "CONFIRMED" ? (
+            <p role="status" className="text-sm">
+              {currentBooking.status === "PENDING" ? t("awaitingApproval") : t("approvalConfirmed")}
+            </p>
+          ) : null}
 
           <p className="text-sm">
             {t("manageHint")}{" "}
             <a
               className="text-accent font-medium underline underline-offset-2"
-              href={`/booking/manage/${encodeURIComponent(booking.managementToken)}`}
+              href={`/booking/manage/${encodeURIComponent(currentBooking.managementToken)}`}
             >
               {t("manageLink")}
             </a>
@@ -767,9 +791,7 @@ function DetailsStep({
         {/* The API refuses this too — a booking with no contact detail is one
             nobody can confirm or warn about a cancellation. Saying it here
             saves a round trip. */}
-        {contactMissing ? (
-          <p className="text-ink-muted text-sm">{t("contactRequired")}</p>
-        ) : null}
+        {contactMissing ? <p className="text-ink-muted text-sm">{t("contactRequired")}</p> : null}
 
         <button
           type="submit"

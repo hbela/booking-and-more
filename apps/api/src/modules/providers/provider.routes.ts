@@ -16,6 +16,7 @@ import { pageOf } from "../../lib/pagination.js";
 import { MembershipService } from "../memberships/membership.service.js";
 import { ProviderService } from "./provider.service.js";
 import {
+  bookingApprovalBodySchema,
   createProviderBodySchema,
   listProvidersQuerySchema,
   providerLocationResponseSchema,
@@ -37,6 +38,7 @@ export function toProviderResponse(provider: Provider): z.infer<typeof providerR
     languages: provider.languages,
     active: provider.active,
     onlineBookingEnabled: provider.onlineBookingEnabled,
+    autoConfirmBookings: provider.autoConfirmBookings,
     minimumNoticeMinutes: provider.minimumNoticeMinutes,
     maximumAdvanceDays: provider.maximumAdvanceDays,
     archivedAt: provider.archivedAt?.toISOString() ?? null,
@@ -217,6 +219,48 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
         before: toProviderResponse(before),
         after: toProviderResponse(updated),
       });
+
+      return toProviderResponse(updated);
+    },
+  );
+
+  // --- Booking approval policy ---------------------------------------------
+  app.patch(
+    "/:providerId/booking-approval",
+    {
+      // Provider editing is also available to administrators. Choosing whether
+      // requests bypass every provider/assistant approval task is an owner
+      // policy decision, so this deliberately asks for TENANT_MANAGE instead.
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.TENANT_MANAGE)],
+      schema: {
+        tags: ["providers"],
+        summary: "Set automatic booking confirmation for a provider",
+        description:
+          "When automatic is true, bookings for this provider are confirmed immediately even when the service normally requires approval. Only an owner may change this policy.",
+        params: z.object({ providerId: idSchema }),
+        body: bookingApprovalBodySchema,
+        response: { 200: providerResponseSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const tenantId = request.tenant!.id;
+      const { providerId } = request.params;
+      const before = await providers.findByIdOrThrow({ tenantId, providerId });
+      const updated = await service.setAutomaticBookingConfirmation({
+        tenantId,
+        providerId,
+        automatic: request.body.automatic,
+      });
+
+      if (before.autoConfirmBookings !== updated.autoConfirmBookings) {
+        request.audit({
+          action: "provider.booking_approval_updated",
+          entityType: "Provider",
+          entityId: providerId,
+          before: { autoConfirmBookings: before.autoConfirmBookings },
+          after: { autoConfirmBookings: updated.autoConfirmBookings },
+        });
+      }
 
       return toProviderResponse(updated);
     },

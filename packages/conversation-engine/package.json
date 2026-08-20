@@ -1,0 +1,38 @@
+{
+  "name": "@bam/conversation-engine",
+  "version": "0.0.0",
+  "private": true,
+  "//": "@bam/availability-engine is a real runtime dependency here, unlike in @bam/booking-engine where it is dev-only: the date resolver converts a spoken expression against a timezone, and zone.ts is the only place in the codebase allowed to do that arithmetic (CLAUDE.md rule 13). It carries no runtime dependencies of its own, so the 'pure engine' claim survives.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "check-types": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@bam/availability-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@bam/eslint-config": "workspace:*",
+    "@bam/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

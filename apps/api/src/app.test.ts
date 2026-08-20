@@ -209,7 +209,14 @@ describe("api", () => {
       // fails only in a browser, and only on preflight. Every other test here
       // uses inject(), which does not preflight — so `X-Tenant-Id` was missing
       // from the allow-list through all of Epic 1 and nothing noticed.
-      const sent = ["content-type", "authorization", "x-request-id", TENANT_HEADER];
+      const sent = [
+        "content-type",
+        "authorization",
+        "idempotency-key",
+        "x-conversation-token",
+        "x-request-id",
+        TENANT_HEADER,
+      ];
 
       const response = await app.inject({
         method: "OPTIONS",

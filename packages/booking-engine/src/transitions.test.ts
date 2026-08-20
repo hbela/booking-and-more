@@ -122,8 +122,15 @@ describe("capacity", () => {
 });
 
 describe("initialBookingStatus", () => {
-  it("honours Service.requiresApproval", () => {
-    expect(initialBookingStatus({ requiresApproval: true })).toBe("PENDING");
-    expect(initialBookingStatus({ requiresApproval: false })).toBe("CONFIRMED");
+  it("honours Service.requiresApproval unless the provider confirms automatically", () => {
+    expect(initialBookingStatus({ requiresApproval: true }, { autoConfirmBookings: false })).toBe(
+      "PENDING",
+    );
+    expect(initialBookingStatus({ requiresApproval: false }, { autoConfirmBookings: false })).toBe(
+      "CONFIRMED",
+    );
+    expect(initialBookingStatus({ requiresApproval: true }, { autoConfirmBookings: true })).toBe(
+      "CONFIRMED",
+    );
   });
 });

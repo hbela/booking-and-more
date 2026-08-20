@@ -27,6 +27,7 @@ export const providerResponseSchema = z.object({
   languages: z.array(z.string()),
   active: z.boolean(),
   onlineBookingEnabled: z.boolean(),
+  autoConfirmBookings: z.boolean(),
   minimumNoticeMinutes: z.number().int().nullable(),
   maximumAdvanceDays: z.number().int().nullable(),
   archivedAt: z.iso.datetime({ offset: true }).nullable(),
@@ -77,6 +78,11 @@ export const updateProviderBodySchema = z
     maximumAdvanceDays: maximumAdvanceDaysSchema.nullable(),
   })
   .partial();
+
+/** Owner-only policy switch; kept out of the general provider edit schema. */
+export const bookingApprovalBodySchema = z.object({
+  automatic: z.boolean(),
+});
 
 export const listProvidersQuerySchema = paginationQuerySchema.extend({
   /** Archived providers are excluded unless asked for — they exist for history. */

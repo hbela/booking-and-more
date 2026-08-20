@@ -16,6 +16,12 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { type Env } from "@bam/config";
+import {
+  AnthropicIntentInterpreter,
+  DisabledTranscriptionProvider,
+  TemplateResponseComposer,
+  type AiProviders,
+} from "@bam/ai";
 // PARKED — Epic 6 part 1 (see the block near "Calendar integrations" below).
 // import { hasGoogleCalendar } from "@bam/config";
 // import { parseEncryptionKey } from "@bam/crypto";
@@ -57,6 +63,8 @@ import {
 import { bookingRoutes } from "./modules/bookings/booking.routes.js";
 import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
+import { publicConversationRoutes } from "./modules/public/conversation.routes.js";
+import { assistantRoutes } from "./modules/assistant/assistant.routes.js";
 import { trustImmediatePrivateProxy } from "./lib/trusted-proxy.js";
 // PARKED — Epic 6 part 1.
 // import { integrationRoutes } from "./modules/integrations/integration.routes.js";
@@ -121,6 +129,8 @@ export interface BuildAppOptions {
   googleOAuthClient?: GoogleOAuthClient;
   /** Test seam: the Calendar API. Same rules as `googleOAuthClient` above. */
   googleCalendarClient?: GoogleCalendarClient;
+  /** Test seam: deterministic model providers with no network or bill. */
+  aiProviders?: AiProviders;
 }
 
 /**
@@ -200,6 +210,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
       "Content-Type",
       "Authorization",
       "Idempotency-Key",
+      "X-Conversation-Token",
       "X-Request-Id",
       TENANT_HEADER,
     ],
@@ -450,6 +461,30 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // plugin: what a stranger may send is decided by one file whose response
   // schemas are declared separately from the staff ones (CLAUDE.md rule 12).
   await app.register(publicBookingRoutes, { prefix: "/v1/public" });
+
+  const aiProviders = options.aiProviders ?? {
+    interpreter: new AnthropicIntentInterpreter({
+      apiKey: env.ANTHROPIC_API_KEY,
+      chatModel: env.ANTHROPIC_CHAT_MODEL,
+      maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
+    }),
+    transcription: new DisabledTranscriptionProvider(),
+    composer: new TemplateResponseComposer(),
+  };
+
+  await app.register(publicConversationRoutes, {
+    prefix: "/v1/public",
+    providers: aiProviders,
+    conversation: {
+      sessionTtlMinutes: env.CONVERSATION_TTL_MINUTES,
+      maxTurns: env.CONVERSATION_MAX_TURNS,
+      pendingActionTtlSeconds: env.PENDING_ACTION_TTL_SECONDS,
+      maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
+    },
+    configured: options.aiProviders !== undefined || Boolean(env.ANTHROPIC_API_KEY),
+  });
+
+  await app.register(assistantRoutes, { prefix: "/v1/assistant" });
 
   return app;
 }
