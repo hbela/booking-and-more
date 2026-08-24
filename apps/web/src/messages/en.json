@@ -82,7 +82,7 @@
     "planStarterDescription": "Dashboard and public booking form. AI chat is not included.",
     "planProfessionalDescription": "Everything in Form, plus AI chat, the website widget, transcripts, and 2M input / 400K output tokens each month. The booking form stays available when the allowance is used.",
     "perMonth": "/ month",
-    "pricesExcludeVat": "Prices exclude VAT. Any applicable VAT is calculated separately.",
+    "pricesIncludeVat": "Prices include applicable VAT; it is not added on top.",
     "assistedSetupOffer": "Need help getting started? Assisted configuration is available for a one-time 29,990 Ft fee.",
     "sendPaymentLink": "Send me the payment link",
     "paymentLinkSent": "We have emailed the payment link to {email}. You can forward it to whoever handles payments.",

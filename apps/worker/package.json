@@ -23,7 +23,8 @@
     "@bam/notification-engine": "workspace:*",
     "@bam/observability": "workspace:*",
     "bullmq": "^5.81.2",
-    "ioredis": "^5.11.1"
+    "ioredis": "^5.11.1",
+    "stripe": "^22.4.0"
   },
   "devDependencies": {
     "@bam/eslint-config": "workspace:*",

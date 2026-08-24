@@ -248,6 +248,7 @@ describe.skipIf(!databaseUrl)("billing", () => {
       // Still the join key the checkout session carries back (§3.2), even
       // though the link now also stamps `metadata.tenantId` on the subscription.
       expect(url.searchParams.get("client_reference_id")).toBe(owner.tenantId);
+      expect(url.searchParams.get("locale")).toBe("hu");
       expect(body.emailedTo).toBe(owner.email);
 
       // Created for this organization alone, and limited by Stripe to one
@@ -290,6 +291,9 @@ describe.skipIf(!databaseUrl)("billing", () => {
       expect(stripe.created.at(-1)?.returnUrl).toBe(
         "http://localhost:3000/en/dashboard/subscription",
       );
+      expect(
+        new URL(response.json<{ paymentUrl: string }>().paymentUrl).searchParams.get("locale"),
+      ).toBe("en");
     });
 
     it("refuses a plan with no price configured", async () => {

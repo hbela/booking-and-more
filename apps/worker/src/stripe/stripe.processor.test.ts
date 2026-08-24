@@ -117,6 +117,84 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       expect(subscription?.stripeCustomerId).toBe("cus_123");
     });
 
+    it("pins the organization's language onto its Stripe customer", async () => {
+      // The whole reason this call exists: Stripe reads `preferred_locales` off
+      // the customer when it finalizes an invoice, and Checkout populates it
+      // from the *payer's browser*. A Hungarian clinic whose owner forwarded the
+      // payment link to an English-configured laptop got English invoices
+      // forever (docs/phase-9-owner-language-and-return-paths.md §5.3).
+      const calls: { customerId: string; locale: string }[] = [];
+
+      await record("evt_locale", "checkout.session.completed", {
+        client_reference_id: tenantId,
+        customer: "cus_locale",
+        subscription: `sub_locale-${suffix}`,
+        metadata: { plan: "PROFESSIONAL" },
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        setCustomerLocale: (input) => {
+          calls.push(input);
+          return Promise.resolve();
+        },
+      });
+
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+      // `hu`, from the fixture tenant's `defaultLanguage` — not from anything
+      // Stripe told us.
+      expect(calls).toEqual([{ customerId: "cus_locale", locale: "hu" }]);
+    });
+
+    it("still activates when Stripe refuses the language call", async () => {
+      // Best-effort on purpose. The transaction has already committed, so the
+      // customer is bound and paid; throwing here would park the one event a
+      // paying customer is waiting on in the retry loop until the orphan
+      // timeout, to fix the language of a document Stripe has not rendered yet.
+      await record("evt_locale_fails", "checkout.session.completed", {
+        client_reference_id: tenantId,
+        customer: "cus_sad",
+        subscription: `sub_sad-${suffix}`,
+        metadata: { plan: "STARTER" },
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        setCustomerLocale: () => Promise.reject(new Error("stripe is down")),
+      });
+
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+
+      const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+      expect(subscription?.stripeCustomerId).toBe("cus_sad");
+      expect(await prisma.tenant.findUnique({ where: { id: tenantId } })).toMatchObject({
+        subscribeBy: null,
+      });
+    });
+
+    it("asks for no language when the session carries no customer", async () => {
+      // An INTERNAL organization activated by hand has no Stripe customer, and
+      // `customers.update(undefined)` would be a 400 rather than a no-op.
+      let called = false;
+
+      await record("evt_no_customer", "checkout.session.completed", {
+        client_reference_id: tenantId,
+        subscription: `sub_no_customer-${suffix}`,
+        metadata: { plan: "STARTER" },
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        setCustomerLocale: () => {
+          called = true;
+          return Promise.resolve();
+        },
+      });
+
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+      expect(called).toBe(false);
+    });
+
     it("is idempotent — a redelivered completion changes nothing", async () => {
       // Stripe delivers at-least-once, so this happens in production whether or
       // not it is tested. Two subscription rows for one organization would be a

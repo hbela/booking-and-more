@@ -4,10 +4,12 @@ import {
   isLiveSubscription,
   nextTenantStatus,
   planForPrice,
+  resolveAppLocale,
   subscriptionEffect,
   type PlanPrices,
   type SubscribablePlan,
 } from "@bam/contracts";
+import type { CustomerLocaleSetter } from "./stripe.client.js";
 
 /**
  * Turns recorded Stripe events into tenant state.
@@ -46,6 +48,12 @@ export interface StripeProcessorOptions {
   orphanTimeoutMs: number;
   /** Lease duration before another replica may recover an abandoned event. */
   staleClaimSeconds?: number;
+  /**
+   * Pins the organization's language onto its Stripe customer once a checkout
+   * binds one. Absent when Stripe is unconfigured, which is the same shape the
+   * API's optional clients use (rule 4) — billing degrades, nothing crashes.
+   */
+  setCustomerLocale?: CustomerLocaleSetter | undefined;
 }
 
 export interface ProcessSummary {
@@ -303,7 +311,7 @@ async function activate(
 
   const tenant = await options.prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { id: true, status: true },
+    select: { id: true, status: true, defaultLanguage: true },
   });
 
   if (tenant === null) {
@@ -377,6 +385,54 @@ async function activate(
   });
 
   options.logger.info({ tenantId, subscriptionId }, "stripe: checkout bound to organization");
+
+  await pinCustomerLanguage(options, {
+    tenantId,
+    customerId,
+    defaultLanguage: tenant.defaultLanguage,
+  });
+}
+
+/**
+ * Tells Stripe what language this organization's invoices are written in.
+ * docs/phase-9-owner-language-and-return-paths.md §5.3.
+ *
+ * ## Why this runs after the transaction, and why it may fail
+ *
+ * Deliberately best-effort. The transaction above has already committed, so the
+ * organization is bound to its subscription and the money is accounted for; the
+ * only thing left to lose is the language of a document Stripe has not rendered
+ * yet. Throwing here would fail the whole event and retry it — re-running an
+ * idempotent transaction is harmless, but it would let a Stripe outage park
+ * `checkout.session.completed` in the retry loop until
+ * `STRIPE_EVENT_ORPHAN_TIMEOUT_MS`, which is the one event a paying customer is
+ * actually waiting on.
+ *
+ * So the trade is stated plainly: an English invoice is recoverable by an
+ * operator with a one-line `customers.update`, and a delayed activation is a
+ * customer who paid and cannot get in. The warning carries the customer ID
+ * precisely so that repair does not need a search.
+ */
+async function pinCustomerLanguage(
+  options: StripeEventContext,
+  input: { tenantId: string; customerId: string | undefined; defaultLanguage: string | null },
+): Promise<void> {
+  // No customer on the session, or a deployment that is not talking to Stripe.
+  if (input.customerId === undefined || options.setCustomerLocale === undefined) return;
+
+  // `resolveAppLocale` rather than the raw column: `defaultLanguage` is a plain
+  // string that can hold anything, and Stripe rejects a locale it does not know
+  // — which would turn a bad row into a failed billing call.
+  const locale = resolveAppLocale(input.defaultLanguage);
+
+  try {
+    await options.setCustomerLocale({ customerId: input.customerId, locale });
+  } catch (error) {
+    options.logger.warn(
+      { err: error, tenantId: input.tenantId, customerId: input.customerId, locale },
+      "stripe: could not set customer language; invoices for this organization will render in Stripe's default",
+    );
+  }
 }
 
 /**

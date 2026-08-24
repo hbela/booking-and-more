@@ -254,6 +254,9 @@ importers:
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
+      stripe:
+        specifier: ^22.4.0
+        version: 22.4.0(@types/node@24.13.3)
     devDependencies:
       '@bam/eslint-config':
         specifier: workspace:*

@@ -248,7 +248,7 @@ export function SubscriptionScreen(): React.ReactElement {
               <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
             )}
 
-            <p className="text-sm text-ink-muted">{t("pricesExcludeVat")}</p>
+            <p className="text-sm text-ink-muted">{t("pricesIncludeVat")}</p>
 
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">{t("choosePlan")}</legend>

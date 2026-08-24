@@ -149,7 +149,7 @@ Three parts, and each exists because the obvious one-part version does not work:
   it would need a per-request lookup on the edge to answer a question about which of two correct languages
   a page opens in.
 - **`bam.locale` is the visitor's own choice**, written only by the locale switcher. next-intl's
-  `NEXT_LOCALE` cannot serve: it is written as part of resolving *any* request, so after one page view every
+  `NEXT_LOCALE` cannot serve: it is written as part of resolving _any_ request, so after one page view every
   visitor has one and it says nothing about intent. Without a cookie of our own, the tenant's default would
   be reapplied over the top of the customer who had just used the switcher.
 
@@ -173,26 +173,75 @@ beside it would otherwise silently stop following the reader's language.
 from `Tenant.defaultLanguage`. Left unset, Stripe falls back to the customer's `preferred_locales` or the
 browser — which is how an English page was reached from a Hungarian organization.
 
-## 5.2 The payment page: not fixable, and why we are not going to try
+## 5.2 The payment page: fixed through the Payment Link URL
 
-**`paymentLinks.create` has no `locale` parameter.** Checked against the SDK types for the pinned API
-version (`2026-07-29.dahlia`); only `checkout.sessions.create` has one. A Payment Link's hosted page detects
-the buyer's browser language and there is no supported override.
+`paymentLinks.create` has no `locale` parameter, but Stripe now documents `locale` as a supported Payment
+Link URL parameter. The URL returned to the owner and stored for email therefore carries `locale=hu` or
+`locale=en` from `Tenant.defaultLanguage`, alongside `client_reference_id`. This controls both the hosted
+page language and locale-aware number formatting without replacing the durable Payment Link with a
+24-hour Checkout Session.
 
-Three options were considered:
+Browser detection remains Stripe's fallback when the parameter is absent. Explicitly carrying the tenant
+locale is preferable here because the organization selected that language and the invoice/customer locale
+can be configured to match it.
 
-| Option                                   | Verdict                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Leave it to browser detection            | **Chosen.** Correct for almost every real buyer, and zero surface area.                                                                                                                                                                                                                   |
-| Append `?locale=xx` to the link URL      | Rejected. Undocumented, unsupported, and it would fail _silently_ — the page would simply be in the wrong language again, with a line of code claiming otherwise.                                                                                                                         |
-| Replace the link with a Checkout Session | Rejected. It reverses [phase-9-subscription-and-activation.md](phase-9-subscription-and-activation.md) §7 for a cosmetic gain: a Checkout Session expires in 24 hours and the subscribe window is 14 days, so it would need an expiry-and-reissue path built to buy a translated heading. |
+## 5.3 The invoice: fixed on the customer, not on the invoice
 
-So the payment page follows the buyer's browser, and that is the documented behaviour rather than an
-outstanding defect. Note that this is also _usually the better answer_: the link is explicitly forwardable to
-whoever holds the company card, and that person's browser is better evidence of what they read than the
-organization's configured default.
+§5.2's closing line — "the invoice/customer locale can be configured to match it" — turned out to be the
+whole of the remaining problem rather than a footnote to it. It was not configured, and nothing in the
+codebase configured it.
 
-## 5.3 Not a locale problem: the statement descriptor
+Every Stripe customer on the account read `preferred_locales: ["en-US"]` while carrying
+`address.country: "HU"`. That field is what Stripe consults when it finalizes an invoice, and it governs the
+invoice PDF, the hosted invoice page and Stripe's own billing emails — none of which pass through our
+templates, so none of which `next-intl` can reach. The result was `24,990.00 Ft` where a Hungarian invoice
+owes `24 990,00 Ft`, in English.
+
+**The Payment Link locale does not survive the payment.** This is the part that looks fixed and is not:
+`?locale=hu` genuinely localizes the checkout page *including* its number formatting, and it is easy to
+assume the customer Stripe creates at the end of that session inherits it. It does not — Checkout populates
+`preferred_locales` from the payer's **browser**. A Hungarian owner forwarding the link to a colleague on an
+English laptop decided the language of that organization's invoices for the life of the subscription.
+
+So it is written explicitly, from `Tenant.defaultLanguage`, at the one moment we learn the customer ID:
+`activate()` in `stripe.processor.ts`, once `checkout.session.completed` has bound the organization. This is
+the worker's **only** outbound call to Stripe — the poller otherwise consumes `stripe_events` and writes
+PostgreSQL, which is why a Stripe outage cannot stop a recorded payment from activating a tenant. It is kept
+behind a one-function injected seam (`CustomerLocaleSetter`) rather than an exposed client so that stays true
+by construction, and it is omitted entirely when `STRIPE_SECRET_KEY` is unset (rule 4).
+
+**It is deliberately best-effort.** The transaction has already committed, so the organization is bound and
+the money is accounted for. Throwing would fail the event and retry it — harmless in itself, the transaction
+is idempotent — but it would let a Stripe outage park `checkout.session.completed`, the one event a paying
+customer is actually waiting on, in the retry loop until `STRIPE_EVENT_ORPHAN_TIMEOUT_MS`. The trade is
+stated where it happens: an English invoice is recoverable by an operator with a one-line
+`customers.update`, and a delayed activation is a customer who paid and cannot get in. The warning log
+carries the customer ID so that repair needs no search.
+
+### 5.3.1 What a Hungarian VAT invoice needs besides a language
+
+Two more defects surfaced from the same invoices, and neither is about locale:
+
+- **No buyer address.** `billing_address_collection` was left at Stripe's `auto` default, which asks for an
+  address only when a payment method or tax calculation forces it. A card payment produced
+  `customer.address = { country: "HU" }` and nothing else — no street, city or postal code — so every
+  finalized invoice was missing a legally required field, unrepairable afterwards because the payer has gone.
+  It also starves the `automatic_tax` above, which picks a rate from the buyer's location. Now `required`.
+- **No buyer tax ID.** `tax_id_collection` is now enabled, and Stripe renders it as optional for the payer
+  (`required: "never"`). Optional is deliberate: most customers are small clinics paying on a company card,
+  and a mandatory adószám would block the sole traders who have none. A supplied ID is validated against VIES
+  and printed in the invoice PDF header.
+
+### 5.3.2 Two that stay in the Dashboard
+
+Both are account settings with no code component, recorded here because they are printed on every invoice
+and will otherwise be found by a customer:
+
+- `account_name` reads **"MyConnectingAccount"** — a leftover, shown as the merchant name on every invoice
+  and receipt.
+- `account_tax_ids` is null, so our own adószám appears on nothing we issue.
+
+## 5.4 Not a locale problem: the statement descriptor
 
 Stripe's confirmation reads:
 
@@ -210,5 +259,8 @@ symptom arrived alongside the language one and reads like part of it.
 - Unit: `app-url.test.ts` covers the prefix rule in both directions and the unrecognised-locale fallback.
 - Unit: `billing.test.ts` asserts the portal session is created with the tenant's locale and a locale-correct
   `return_url`, and that the payment link is created with an `after_completion` redirect to the same.
+- Integration: `stripe.processor.test.ts` asserts the customer is pinned to the *tenant's* language rather
+  than anything Stripe reported, that a refused language call still activates the organization, and that a
+  session carrying no customer asks for nothing — `customers.update(undefined)` is a 400, not a no-op.
 - Manual: [phase-9-manual-test-checklist.md](phase-9-manual-test-checklist.md) gains an English-organization
   pass — provision with `en`, confirm all five emails and every link in them are English.

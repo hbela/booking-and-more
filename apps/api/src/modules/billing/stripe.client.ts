@@ -96,16 +96,10 @@ export function createStripePortalSession(options: StripeOptions): PortalSession
  * Returned as a plain function for the same reason as the portal creator:
  * `BillingService` should depend on the shape of the call, not on Stripe.
  *
- * **There is deliberately no `locale` here.** `paymentLinks.create` has no such
- * parameter — only `checkout.sessions.create` does — so the hosted payment page
- * follows the buyer's browser and cannot be overridden. That is accepted rather
- * than worked around: the alternatives were an undocumented `?locale=` query
- * parameter that would fail silently, or a Checkout Session, which expires in 24
- * hours against a 14-day subscribe window
- * (docs/phase-9-owner-language-and-return-paths.md §5.2). Browser detection is
- * also arguably the better answer — the link is meant to be forwardable to
- * whoever holds the company card, and that person's browser says more about what
- * they read than the organization's configured default does.
+ * There is no `locale` creation parameter here: `paymentLinks.create` does not
+ * accept one. Stripe does support `locale` on the resulting Payment Link URL,
+ * so `BillingService` adds the tenant's language alongside
+ * `client_reference_id` (docs/phase-9-owner-language-and-return-paths.md §5.2).
  */
 export type PaymentLinkCreator = (input: {
   priceId: string;
@@ -122,11 +116,34 @@ export function createStripePaymentLink(options: StripeOptions): PaymentLinkCrea
     const link = await getStripe(options).paymentLinks.create({
       line_items: [{ price: priceId, quantity: 1 }],
 
-      // Prices are tax-exclusive. Stripe Tax calculates any registered VAT
-      // obligation on top instead of silently treating collected VAT as SaaS
-      // revenue. Production rollout still requires the account's registrations
-      // and business origin to be configured and reviewed by an accountant.
+      // Prices are tax-inclusive: the advertised HUF amount remains the
+      // customer's total while Stripe Tax extracts any applicable VAT from it.
+      // Production rollout still requires the account's registrations and
+      // business origin to be configured and reviewed by an accountant.
       automatic_tax: { enabled: true },
+
+      // **A Hungarian VAT invoice needs a buyer address, and Stripe's default
+      // does not collect one.** Left at `auto`, Checkout asks for an address
+      // only when a payment method or tax calculation forces it, so a card
+      // payment produced `customer.address = { country: "HU" }` and nothing
+      // else — no street, no city, no postal code. Every invoice finalized from
+      // such a customer is missing a legally required field, and it cannot be
+      // repaired afterwards because the payer has gone.
+      //
+      // It also feeds `automatic_tax` above: Stripe Tax picks a rate from the
+      // buyer's location, and a country-only address is the coarsest input it
+      // will accept rather than the right one.
+      billing_address_collection: "required",
+
+      // The buyer's adószám, for the organizations that need one on the
+      // invoice. Optional for the payer — Stripe renders the field as such —
+      // because most of our customers are small clinics paying on a company
+      // card, and a required tax ID would block the sole traders who have none.
+      //
+      // A supplied ID is validated against VIES and printed in the invoice PDF
+      // header, which is the whole reason to collect it here rather than ask
+      // for it in support later.
+      tax_id_collection: { enabled: true },
 
       // **The constraint this whole slice exists for.**
       //

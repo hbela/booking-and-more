@@ -367,7 +367,12 @@ export class BillingService {
       // merely looks the same would be a second link as far as Stripe is
       // concerned, with a second allowance.
       if (existing.plan === input.plan) {
-        return { url: existing.url, trial: existing.trial };
+        // Reapply supported client-side parameters so links stored before a
+        // locale policy change gain it without minting a second Stripe link.
+        return {
+          url: buildPaymentUrl(existing.url, input.tenantId, input.locale),
+          trial: existing.trial,
+        };
       }
 
       // The owner changed their mind before paying. Stop the old link being
@@ -393,7 +398,7 @@ export class BillingService {
       }),
     });
 
-    const url = buildPaymentUrl(created.url, input.tenantId);
+    const url = buildPaymentUrl(created.url, input.tenantId, input.locale);
 
     try {
       await this.prisma.subscriptionCheckoutLink.create({
@@ -444,10 +449,14 @@ export class BillingService {
  * happened to click subscribe, and the point of an emailed link is that it can
  * be forwarded to whoever holds the company card.
  */
-function buildPaymentUrl(link: string, tenantId: string): string {
+function buildPaymentUrl(link: string, tenantId: string, locale: string): string {
   const url = new URL(link);
 
   url.searchParams.set("client_reference_id", tenantId);
+  // Payment Links do not accept locale at creation time, but Stripe documents
+  // `locale` as a URL parameter. Pinning the tenant's language also pins its
+  // locale-aware number formatting instead of depending on the payer's browser.
+  url.searchParams.set("locale", locale);
 
   return url.toString();
 }

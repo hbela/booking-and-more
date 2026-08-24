@@ -5,12 +5,16 @@ loadDotenv({ path: "../../.env", quiet: true });
 
 const APPLY = process.argv.includes("--apply");
 const VERIFY = process.argv.includes("--verify");
+// Stripe accepts HUF charges with two decimal places, so API amounts are in
+// fillér even though prices are normally presented as whole forints. HUF is
+// zero-decimal only for payouts, not for charges.
+const HUF_MINOR_UNITS_PER_FORINT = 100;
 const CATALOG = [
   {
     plan: "STARTER",
     name: "Booking and More — Form",
     description: "Dashboard and public online booking form.",
-    unitAmount: 9_990,
+    amountHuf: 9_990,
     lookupKey: "bam_form_monthly_huf_v1",
   },
   {
@@ -18,15 +22,17 @@ const CATALOG = [
     name: "Booking and More — AI Receptionist",
     description:
       "Online booking form plus AI chat, website widget, transcripts, and monthly AI allowance.",
-    unitAmount: 24_990,
+    amountHuf: 24_990,
     lookupKey: "bam_ai_receptionist_monthly_huf_v1",
   },
 ];
 
+const stripeUnitAmount = (amountHuf) => amountHuf * HUF_MINOR_UNITS_PER_FORINT;
+
 if (!APPLY && !VERIFY) {
   console.log("Dry run — no Stripe objects were changed. Pass --apply to create missing objects.");
   for (const offer of CATALOG) {
-    console.log(`${offer.plan}: ${offer.name}, ${offer.unitAmount} HUF/month, tax exclusive`);
+    console.log(`${offer.plan}: ${offer.name}, ${offer.amountHuf} HUF/month, tax inclusive`);
   }
   process.exit(0);
 }
@@ -54,12 +60,12 @@ if (VERIFY) {
     const matches =
       price.active &&
       price.currency === "huf" &&
-      price.unit_amount === offer.unitAmount &&
+      price.unit_amount === stripeUnitAmount(offer.amountHuf) &&
       price.recurring?.interval === "month" &&
-      price.tax_behavior === "exclusive";
+      price.tax_behavior === "inclusive";
 
     console.log(
-      `${offer.plan}: ${matches ? "valid" : "mismatch"} (${price.unit_amount ?? "unknown"} ${price.currency.toUpperCase()}/${price.recurring?.interval ?? "not recurring"}, tax ${price.tax_behavior ?? "unspecified"})`,
+      `${offer.plan}: ${matches ? "valid" : "mismatch"} (${price.unit_amount === null ? "unknown" : price.unit_amount / HUF_MINOR_UNITS_PER_FORINT} ${price.currency.toUpperCase()}/${price.recurring?.interval ?? "not recurring"}, tax ${price.tax_behavior ?? "unspecified"})`,
     );
     valid &&= matches;
   }
@@ -93,9 +99,9 @@ for (const offer of CATALOG) {
   let price = prices.data.find(
     (candidate) =>
       candidate.currency === "huf" &&
-      candidate.unit_amount === offer.unitAmount &&
+      candidate.unit_amount === stripeUnitAmount(offer.amountHuf) &&
       candidate.recurring?.interval === "month" &&
-      candidate.tax_behavior === "exclusive",
+      candidate.tax_behavior === "inclusive",
   );
 
   if (!price) {
@@ -103,13 +109,24 @@ for (const offer of CATALOG) {
       {
         product: product.id,
         currency: "huf",
-        unit_amount: offer.unitAmount,
+        unit_amount: stripeUnitAmount(offer.amountHuf),
         recurring: { interval: "month" },
-        tax_behavior: "exclusive",
+        tax_behavior: "inclusive",
         lookup_key: offer.lookupKey,
+        // A previous catalogue version may already own this stable key. Stripe
+        // keeps lookup keys unique even when that old price is inactive or no
+        // longer matches the intended amount/recurrence. Move the key to the
+        // replacement instead of making catalogue repair fail halfway through.
+        transfer_lookup_key: true,
         metadata: { bam_plan: offer.plan },
       },
-      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v1` },
+      // v4 corrects PROFESSIONAL from 24,900 to 24,990 Ft. Bump this on every
+      // amount change, and never merely re-run: Stripe **replayed** the v3 key
+      // and returned the 24,900 price it had created hours earlier, so `--apply`
+      // printed a price ID and a success line while changing nothing. It does
+      // not always reject a mismatched replay — treat `--verify` as the only
+      // evidence the catalogue is right, never the exit code of `--apply`.
+      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v4` },
     );
   }
 

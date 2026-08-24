@@ -17,6 +17,7 @@ import {
   startNotificationSweeper,
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
+import { createStripeCustomerLocaleSetter } from "./stripe/stripe.client.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
 import { startRetentionCleanup } from "./retention/retention-cleanup.js";
 import { startConversationSweeper } from "./conversations/conversation.sweeper.js";
@@ -229,6 +230,16 @@ async function main(): Promise<void> {
         : { PROFESSIONAL: env.STRIPE_PRICE_PROFESSIONAL }),
     },
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
+    // The one thing in this worker that calls Stripe rather than reading its
+    // events. Omitted without a key so an unconfigured deployment still
+    // processes everything else (rule 4).
+    ...(env.STRIPE_SECRET_KEY === undefined
+      ? {}
+      : {
+          setCustomerLocale: createStripeCustomerLocaleSetter({
+            secretKey: env.STRIPE_SECRET_KEY,
+          }),
+        }),
   });
 
   // PostgreSQL-backed and independent of Redis: secrets still expire while the
