@@ -12,7 +12,8 @@
     "check-types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "billingo:smoke": "tsx src/billingo/billingo.smoke.ts"
   },
   "dependencies": {
     "@bam/config": "workspace:*",

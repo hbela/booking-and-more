@@ -147,6 +147,24 @@ export const hasRedis = (env: Env): boolean => env.REDIS_URL !== undefined;
 export const hasEmail = (env: Env): boolean =>
   env.RESEND_API_KEY !== undefined && env.EMAIL_FROM !== undefined;
 
+type BillingoEnv = Env & {
+  BILLINGO_API_KEY: string;
+  BILLINGO_BASE_URL: string;
+  BILLINGO_BANK_ACCOUNT_ID: number;
+  BILLINGO_DOCUMENT_BLOCK_ID: number;
+  BILLINGO_VAT_CODE: "AAM";
+  STRIPE_SECRET_KEY: string;
+};
+
+/** The schema guarantees this group is complete and backed by Stripe. */
+export const hasBillingo = (env: Env): env is BillingoEnv =>
+  env.BILLINGO_API_KEY !== undefined &&
+  env.BILLINGO_BASE_URL !== undefined &&
+  env.BILLINGO_BANK_ACCOUNT_ID !== undefined &&
+  env.BILLINGO_DOCUMENT_BLOCK_ID !== undefined &&
+  env.BILLINGO_VAT_CODE !== undefined &&
+  env.STRIPE_SECRET_KEY !== undefined;
+
 /**
  * Whether a provider can connect a Google Calendar.
  * docs/phase-6-google-calendar-part-1.md §2.5.

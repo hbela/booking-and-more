@@ -268,6 +268,18 @@ const baseEnvSchema = z.object({
    */
   STRIPE_EVENT_ORPHAN_TIMEOUT_MS: z.coerce.number().int().positive().default(900_000),
 
+  /**
+   * Billingo Test invoicing. Optional as one complete group: setting only part
+   * of it would accept Stripe money without being able to issue the matching
+   * legal document. The production tax decision is deliberately not encoded
+   * here; this sandbox slice accepts AAM only.
+   */
+  BILLINGO_API_KEY: z.string().min(1).optional(),
+  BILLINGO_BASE_URL: z.string().url().optional(),
+  BILLINGO_BANK_ACCOUNT_ID: z.coerce.number().int().positive().optional(),
+  BILLINGO_DOCUMENT_BLOCK_ID: z.coerce.number().int().positive().optional(),
+  BILLINGO_VAT_CODE: z.literal("AAM").optional(),
+
   /** Outbox dispatcher tuning (tech-impl §12). */
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5_000),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(50),
@@ -434,6 +446,35 @@ const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
         });
       }
     }
+  }
+
+  const billingoKeys = [
+    "BILLINGO_API_KEY",
+    "BILLINGO_BASE_URL",
+    "BILLINGO_BANK_ACCOUNT_ID",
+    "BILLINGO_DOCUMENT_BLOCK_ID",
+    "BILLINGO_VAT_CODE",
+  ] as const;
+  const configuredBillingoKeys = billingoKeys.filter((key) => env[key] !== undefined);
+
+  if (configuredBillingoKeys.length > 0 && configuredBillingoKeys.length < billingoKeys.length) {
+    for (const key of billingoKeys) {
+      if (env[key] === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${key} is required when Billingo invoicing is configured.`,
+        });
+      }
+    }
+  }
+
+  if (configuredBillingoKeys.length > 0 && env.STRIPE_SECRET_KEY === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["STRIPE_SECRET_KEY"],
+      message: "STRIPE_SECRET_KEY is required when Billingo invoicing is configured.",
+    });
   }
 });
 

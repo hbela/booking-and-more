@@ -86,3 +86,63 @@ export function createStripeCustomerLocaleSetter(options: StripeOptions): Custom
     });
   };
 }
+
+export interface StripePaidInvoice {
+  id: string;
+  amountPaidMinor: number;
+  currency: string;
+  customerId: string;
+  subscriptionId: string | null;
+  paidAt: Date;
+  customer: {
+    name: string | null;
+    email: string | null;
+    taxId: string | null;
+    address: {
+      country: string | null;
+      postalCode: string | null;
+      city: string | null;
+      line1: string | null;
+      line2: string | null;
+    };
+  };
+}
+
+export type StripePaidInvoiceLoader = (invoiceId: string) => Promise<StripePaidInvoice>;
+
+/** Retrieves the finalized snapshot Stripe signed, including its buyer data. */
+export function createStripePaidInvoiceLoader(options: StripeOptions): StripePaidInvoiceLoader {
+  return async (invoiceId) => {
+    const invoice = await getStripe(options).invoices.retrieve(invoiceId);
+    const customerId =
+      typeof invoice.customer === "string" ? invoice.customer : (invoice.customer?.id ?? null);
+    if (customerId === null) throw new Error(`Stripe invoice ${invoice.id} has no customer`);
+
+    const subscription = invoice.parent?.subscription_details?.subscription;
+    const subscriptionId =
+      typeof subscription === "string" ? subscription : (subscription?.id ?? null);
+    const paidAt = invoice.status_transitions.paid_at ?? invoice.created;
+    const taxId = invoice.customer_tax_ids?.find((entry) => entry.value !== "")?.value ?? null;
+
+    return {
+      id: invoice.id,
+      amountPaidMinor: invoice.amount_paid,
+      currency: invoice.currency.toUpperCase(),
+      customerId,
+      subscriptionId,
+      paidAt: new Date(paidAt * 1_000),
+      customer: {
+        name: invoice.customer_name,
+        email: invoice.customer_email,
+        taxId,
+        address: {
+          country: invoice.customer_address?.country ?? null,
+          postalCode: invoice.customer_address?.postal_code ?? null,
+          city: invoice.customer_address?.city ?? null,
+          line1: invoice.customer_address?.line1 ?? null,
+          line2: invoice.customer_address?.line2 ?? null,
+        },
+      },
+    };
+  };
+}

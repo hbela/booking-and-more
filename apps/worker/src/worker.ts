@@ -1,4 +1,4 @@
-import { hasRedis, loadEnvOrExit } from "@bam/config";
+import { hasBillingo, hasRedis, loadEnvOrExit } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
 import { createLogger, flushSentry, initSentry } from "@bam/observability";
 // PARKED — Epic 6 part 1 (see the block in `attachQueues` below).
@@ -17,8 +17,13 @@ import {
   startNotificationSweeper,
   type NotificationSweeper,
 } from "./notifications/notification.sweeper.js";
-import { createStripeCustomerLocaleSetter } from "./stripe/stripe.client.js";
+import {
+  createStripeCustomerLocaleSetter,
+  createStripePaidInvoiceLoader,
+} from "./stripe/stripe.client.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
+import { createBillingoClient } from "./billingo/billingo.client.js";
+import { createBillingoInvoiceIssuer } from "./billingo/billingo.invoice.js";
 import { startRetentionCleanup } from "./retention/retention-cleanup.js";
 import { startConversationSweeper } from "./conversations/conversation.sweeper.js";
 // PARKED — Epic 6 part 1.
@@ -240,6 +245,22 @@ async function main(): Promise<void> {
             secretKey: env.STRIPE_SECRET_KEY,
           }),
         }),
+    ...(hasBillingo(env)
+      ? {
+          issueBillingoInvoice: createBillingoInvoiceIssuer({
+            prisma,
+            logger: log,
+            client: createBillingoClient({
+              apiKey: env.BILLINGO_API_KEY,
+              baseUrl: env.BILLINGO_BASE_URL,
+            }),
+            loadStripeInvoice: createStripePaidInvoiceLoader({ secretKey: env.STRIPE_SECRET_KEY }),
+            bankAccountId: env.BILLINGO_BANK_ACCOUNT_ID,
+            documentBlockId: env.BILLINGO_DOCUMENT_BLOCK_ID,
+            vatCode: env.BILLINGO_VAT_CODE,
+          }),
+        }
+      : {}),
   });
 
   // PostgreSQL-backed and independent of Redis: secrets still expire while the

@@ -52,6 +52,11 @@ describe("loadEnv", () => {
       STRIPE_WEBHOOK_SECRET: "",
       STRIPE_PRICE_STARTER: "",
       STRIPE_PRICE_PROFESSIONAL: "",
+      BILLINGO_API_KEY: "",
+      BILLINGO_BASE_URL: "",
+      BILLINGO_BANK_ACCOUNT_ID: "",
+      BILLINGO_DOCUMENT_BLOCK_ID: "",
+      BILLINGO_VAT_CODE: "",
       TRIAL_PERIOD_DAYS: "",
       SENTRY_DSN: "",
       REDIS_URL: "",
@@ -71,6 +76,38 @@ describe("loadEnv", () => {
     expect(env.TRIAL_PERIOD_DAYS).toBe(30);
     expect(env.ONBOARDING_WINDOW_DAYS).toBe(14);
     expect(env.BOOKING_REMINDER_LEAD_HOURS).toBe(24);
+  });
+
+  describe("Billingo", () => {
+    const billingo = {
+      STRIPE_SECRET_KEY: "sk_test_key",
+      STRIPE_WEBHOOK_SECRET: "whsec_test",
+      STRIPE_PRICE_STARTER: "price_starter",
+      STRIPE_PRICE_PROFESSIONAL: "price_professional",
+      BILLINGO_API_KEY: "test-api-key",
+      BILLINGO_BASE_URL: "https://api.billingo.hu/v3",
+      BILLINGO_BANK_ACCOUNT_ID: "123",
+      BILLINGO_DOCUMENT_BLOCK_ID: "456",
+      BILLINGO_VAT_CODE: "AAM",
+    } satisfies NodeJS.ProcessEnv;
+
+    it("accepts the complete sandbox configuration and coerces IDs", () => {
+      const env = load(billingo);
+
+      expect(env.BILLINGO_BANK_ACCOUNT_ID).toBe(123);
+      expect(env.BILLINGO_DOCUMENT_BLOCK_ID).toBe(456);
+      expect(env.BILLINGO_VAT_CODE).toBe("AAM");
+    });
+
+    it("rejects a partial Billingo configuration", () => {
+      expect(() => load({ ...billingo, BILLINGO_DOCUMENT_BLOCK_ID: undefined })).toThrowError(
+        /BILLINGO_DOCUMENT_BLOCK_ID/,
+      );
+    });
+
+    it("rejects production VAT codes in the sandbox slice", () => {
+      expect(() => load({ ...billingo, BILLINGO_VAT_CODE: "27%" })).toThrow(EnvValidationError);
+    });
   });
 
   it("still refuses a half-configured pair when only one side is blank", () => {
@@ -255,9 +292,9 @@ describe("loadEnv", () => {
       // The dangerous half-configuration: consent succeeds, the provider grants
       // access, and only then can the callback not seal what it was handed —
       // a failure after the irreversible step.
-      expect(() =>
-        load({ ...calendar, GOOGLE_TOKEN_ENCRYPTION_KEY: undefined }),
-      ).toThrowError(/GOOGLE_TOKEN_ENCRYPTION_KEY/);
+      expect(() => load({ ...calendar, GOOGLE_TOKEN_ENCRYPTION_KEY: undefined })).toThrowError(
+        /GOOGLE_TOKEN_ENCRYPTION_KEY/,
+      );
     });
 
     it("refuses an encryption key with no redirect URI", () => {

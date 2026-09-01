@@ -10,6 +10,7 @@ import {
   type SubscribablePlan,
 } from "@bam/contracts";
 import type { CustomerLocaleSetter } from "./stripe.client.js";
+import type { BillingoInvoiceIssuer } from "../billingo/billingo.invoice.js";
 
 /**
  * Turns recorded Stripe events into tenant state.
@@ -54,6 +55,8 @@ export interface StripeProcessorOptions {
    * API's optional clients use (rule 4) — billing degrades, nothing crashes.
    */
   setCustomerLocale?: CustomerLocaleSetter | undefined;
+  /** Creates the Hungarian invoice for a positive paid Stripe invoice. */
+  issueBillingoInvoice?: BillingoInvoiceIssuer | undefined;
 }
 
 export interface ProcessSummary {
@@ -250,13 +253,41 @@ async function dispatch(
     case "invoice.payment_failed":
       return notifyPaymentFailed(object, options);
 
-    // The renewal succeeded. `customer.subscription.updated` carries the new
-    // period and the status, so there is nothing here to write — but it is
-    // named rather than left to the default so the next person does not have
-    // to check whether it was forgotten.
-    case "invoice.paid":
-      options.logger.debug({}, "stripe: invoice paid; subscription events carry the state");
-      return;
+    // Subscription events still carry entitlement state; this event owns the
+    // separate financial side effect of issuing the Billingo document.
+    case "invoice.paid": {
+      // A trial starts with a real `invoice.paid` whose amount is zero. It is a
+      // Stripe lifecycle document, not a Hungarian sale to invoice.
+      if (object["amount_paid"] === 0) {
+        options.logger.debug({}, "billingo: zero-value Stripe invoice skipped");
+        return;
+      }
+      if (options.issueBillingoInvoice === undefined) {
+        options.logger.debug({}, "stripe: invoice paid; Billingo is not configured");
+        return;
+      }
+
+      const stripeInvoiceId = asString(object["id"]);
+      if (stripeInvoiceId === undefined) throw new Error("invoice.paid carried no invoice id");
+
+      const subscriptionId = invoiceSubscriptionId(object);
+      if (subscriptionId === undefined) {
+        throw new Error(`Stripe invoice ${stripeInvoiceId} is not attached to a subscription`);
+      }
+
+      const subscription = await findByStripeId(subscriptionId, options);
+      if (subscription.plan === "INTERNAL") {
+        throw new Error(
+          `Stripe invoice ${stripeInvoiceId} resolved to the non-sellable INTERNAL plan`,
+        );
+      }
+      return options.issueBillingoInvoice({
+        tenantId: subscription.tenantId,
+        plan: subscription.plan,
+        stripeInvoiceId,
+        stripeSubscriptionId: subscriptionId,
+      });
+    }
 
     case "subscription_schedule.created":
     case "subscription_schedule.updated":
@@ -1131,4 +1162,15 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/** Dahlia's `parent.subscription_details`, with the legacy field for stored events. */
+function invoiceSubscriptionId(object: Record<string, unknown>): string | undefined {
+  const parent = asRecord(object["parent"]);
+  const details = asRecord(parent?.["subscription_details"]);
+  const current = details?.["subscription"];
+
+  return (
+    asString(current) ?? asString(asRecord(current)?.["id"]) ?? asString(object["subscription"])
+  );
 }

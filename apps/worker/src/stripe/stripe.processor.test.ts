@@ -929,6 +929,95 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
     });
   });
 
+  describe("invoice.paid", () => {
+    it("routes a positive subscription invoice to Billingo", async () => {
+      const subscriptionId = `sub_invoice-${suffix}`;
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "PROFESSIONAL",
+          status: "ACTIVE",
+          stripeSubscriptionId: subscriptionId,
+        },
+      });
+      const calls: Array<{
+        tenantId: string;
+        plan: string;
+        stripeInvoiceId: string;
+        stripeSubscriptionId: string;
+      }> = [];
+
+      await record("evt_invoice", "invoice.paid", {
+        id: `in_paid-${suffix}`,
+        amount_paid: 24_990,
+        parent: { subscription_details: { subscription: subscriptionId } },
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        issueBillingoInvoice: (input) => {
+          calls.push(input);
+          return Promise.resolve();
+        },
+      });
+
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+      expect(calls).toEqual([
+        {
+          tenantId,
+          plan: "PROFESSIONAL",
+          stripeInvoiceId: `in_paid-${suffix}`,
+          stripeSubscriptionId: subscriptionId,
+        },
+      ]);
+    });
+
+    it("skips a zero-value trial invoice without requiring attribution", async () => {
+      let called = false;
+      await record("evt_zero_invoice", "invoice.paid", {
+        id: `in_zero-${suffix}`,
+        amount_paid: 0,
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        issueBillingoInvoice: () => {
+          called = true;
+          return Promise.resolve();
+        },
+      });
+
+      expect(summary).toMatchObject({ processed: 1, failed: 0 });
+      expect(called).toBe(false);
+    });
+
+    it("keeps the Stripe event retryable when Billingo fails", async () => {
+      const subscriptionId = `sub_invoice_retry-${suffix}`;
+      await prisma.subscription.create({
+        data: { tenantId, plan: "STARTER", status: "ACTIVE", stripeSubscriptionId: subscriptionId },
+      });
+      const event = await record("evt_invoice_retry", "invoice.paid", {
+        id: `in_retry-${suffix}`,
+        amount_paid: 9_990,
+        // Stored events from before the pinned Dahlia version used this field.
+        subscription: subscriptionId,
+      });
+
+      const summary = await processStripeEventBatch({
+        ...options(),
+        issueBillingoInvoice: () => Promise.reject(new Error("Billingo unavailable")),
+      });
+
+      expect(summary).toMatchObject({ processed: 0, failed: 1 });
+      await expect(
+        prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } }),
+      ).resolves.toMatchObject({
+        processedAt: null,
+        lastError: "Billingo unavailable",
+      });
+    });
+  });
+
   describe("invoice.payment_failed", () => {
     it("asks for an email without touching access", async () => {
       await prisma.subscription.create({

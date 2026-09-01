@@ -29,6 +29,7 @@
     "db:discard-organization": "pnpm --filter @bam/db db:discard-organization",
     "db:explain-availability": "pnpm --filter @bam/db db:explain-availability",
     "stripe:catalog": "corepack pnpm --filter @bam/api stripe:catalog",
+    "billingo:smoke": "corepack pnpm --filter @bam/worker billingo:smoke",
     "guide:publish": "node scripts/publish-user-guide.mjs",
     "post:publish": "node scripts/publish-post.mjs"
   },
