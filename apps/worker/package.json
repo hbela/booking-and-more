@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "billingo:smoke": "tsx src/billingo/billingo.smoke.ts"
+    "billingo:smoke": "node dist/billingo/billingo.smoke.js"
   },
   "dependencies": {
     "@bam/config": "workspace:*",
