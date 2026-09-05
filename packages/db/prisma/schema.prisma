@@ -1895,6 +1895,12 @@ model SubscriptionCheckoutLink {
   /// in Stripe and replaces this row, rather than leaving two buyable links.
   plan SubscriptionPlan
 
+  /// The immutable Stripe Price used by this link. A catalogue correction
+  /// replaces an unused link even when the customer selected the same plan.
+  /// Nullable only for links created before this field was introduced; those
+  /// legacy links are replaced on their next subscription attempt.
+  stripePriceId String? @map("stripe_price_id")
+
   /// Whether this link was issued with a free trial, so the emailed copy and
   /// the screen can agree about whether anything is charged today.
   trial Boolean @default(false)

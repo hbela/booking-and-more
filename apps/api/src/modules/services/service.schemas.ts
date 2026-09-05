@@ -49,7 +49,7 @@ export const serviceResponseSchema = z.object({
  * the pair is validated here rather than left to the display layer to guess.
  */
 const priceFields = {
-  /** Integer minor units: HUF 12 500 is 1250000. Omit for "price on request". */
+  /** Integer app minor units: HUF 12 500 is 12500. Omit for "price on request". */
   priceMinor: z.number().int().min(0).max(100_000_000).optional(),
   currency: currencySchema.optional(),
 };

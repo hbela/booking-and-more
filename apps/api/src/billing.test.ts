@@ -388,6 +388,42 @@ describe.skipIf(!databaseUrl)("billing", () => {
       ).toBe(1);
     });
 
+    it("replaces a legacy same-plan link whose Stripe Price is unknown", async () => {
+      const owner = await pendingOwner("pricechange");
+
+      const first = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+      expect(first.statusCode).toBe(201);
+
+      const stale = await app.prisma.subscriptionCheckoutLink.update({
+        where: { tenantId: owner.tenantId },
+        data: { stripePriceId: null },
+      });
+
+      const second = await app.inject({
+        method: "POST",
+        url: "/v1/billing/subscribe",
+        headers: { cookie: owner.cookie, "x-tenant-id": owner.tenantId },
+        payload: { plan: "STARTER" },
+      });
+
+      expect(second.statusCode, second.body).toBe(201);
+      expect(second.json<{ paymentUrl: string }>().paymentUrl).not.toBe(
+        first.json<{ paymentUrl: string }>().paymentUrl,
+      );
+      expect(stripe.deactivated).toContain(stale.stripePaymentLinkId);
+      expect(stripe.created.at(-1)?.priceId).toBe(STARTER_PRICE);
+      expect(
+        await app.prisma.subscriptionCheckoutLink.findUniqueOrThrow({
+          where: { tenantId: owner.tenantId },
+        }),
+      ).toMatchObject({ plan: "STARTER", stripePriceId: STARTER_PRICE });
+    });
+
     /**
      * The other half of §2.1: nothing local knows they have paid yet.
      *

@@ -10,7 +10,7 @@ const log = createLogger({ service: "billingo-test", level: "silent", pretty: fa
 function paidInvoice(overrides: Partial<StripePaidInvoice> = {}): StripePaidInvoice {
   return {
     id: "in_paid",
-    amountPaidMinor: 24_990,
+    amountPaidStripeMinor: 2_499_000,
     currency: "HUF",
     customerId: "cus_123",
     subscriptionId: "sub_123",
@@ -94,7 +94,7 @@ function harness(input: { invoice?: StripePaidInvoice; recovered?: boolean } = {
 }
 
 describe("Billingo invoice issuer", () => {
-  it("copies the paid Stripe amount and Budapest payment date into one AAM invoice", async () => {
+  it("converts Stripe fillér to HUF and copies the Budapest payment date", async () => {
     const { issue, client, prisma } = harness();
 
     await issue({
@@ -146,7 +146,7 @@ describe("Billingo invoice issuer", () => {
   });
 
   it("skips a zero-value trial invoice", async () => {
-    const setup = harness({ invoice: paidInvoice({ amountPaidMinor: 0 }) });
+    const setup = harness({ invoice: paidInvoice({ amountPaidStripeMinor: 0 }) });
 
     await setup.issue({
       tenantId: "tenant-1",
@@ -156,6 +156,20 @@ describe("Billingo invoice issuer", () => {
     });
 
     expect(setup.client.findPartners).not.toHaveBeenCalled();
+    expect(setup.client.createDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects a fractional-forint Stripe amount that cannot be mirrored exactly", async () => {
+    const setup = harness({ invoice: paidInvoice({ amountPaidStripeMinor: 2_499_050 }) });
+
+    await expect(
+      setup.issue({
+        tenantId: "tenant-1",
+        plan: "PROFESSIONAL",
+        stripeInvoiceId: "in_paid",
+        stripeSubscriptionId: "sub_123",
+      }),
+    ).rejects.toThrow(/fractional HUF amount/);
     expect(setup.client.createDocument).not.toHaveBeenCalled();
   });
 

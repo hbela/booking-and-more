@@ -89,7 +89,8 @@ export function createStripeCustomerLocaleSetter(options: StripeOptions): Custom
 
 export interface StripePaidInvoice {
   id: string;
-  amountPaidMinor: number;
+  /** Stripe charge amount in the currency's API minor unit (fillér for HUF). */
+  amountPaidStripeMinor: number;
   currency: string;
   customerId: string;
   subscriptionId: string | null;
@@ -126,7 +127,7 @@ export function createStripePaidInvoiceLoader(options: StripeOptions): StripePai
 
     return {
       id: invoice.id,
-      amountPaidMinor: invoice.amount_paid,
+      amountPaidStripeMinor: invoice.amount_paid,
       currency: invoice.currency.toUpperCase(),
       customerId,
       subscriptionId,

@@ -7,6 +7,11 @@ invoice in Billingo Test. Stripe remains the source of truth for the amount;
 Billingo renders and stores the Hungarian invoice. Zero-value trial invoices are
 not sales and are skipped.
 
+Stripe's charge API represents HUF in fillér (`24,990 Ft` is `2499000`), while
+Billingo's document API accepts whole forints. The worker converts exactly once
+at that boundary and rejects fractional-forint totals it cannot mirror without
+rounding.
+
 The Fastify webhook remains deliberately small:
 
 ```text

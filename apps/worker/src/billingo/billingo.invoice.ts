@@ -4,6 +4,12 @@ import type { SubscribablePlan } from "@bam/contracts";
 import type { BillingoClient, BillingoDocument, BillingoPartnerInput } from "./billingo.client.js";
 import type { StripePaidInvoiceLoader, StripePaidInvoice } from "../stripe/stripe.client.js";
 
+// Stripe accepts HUF charges with two decimals and therefore exposes invoice
+// amounts in fillér. Billingo's HUF document API expects whole forints. Keeping
+// this conversion at the integration boundary prevents the same integer from
+// meaning 240.00 Ft in Stripe and 24,000 Ft in Billingo.
+const STRIPE_HUF_MINOR_UNITS_PER_FORINT = 100;
+
 export interface BillingoInvoiceIssuerOptions {
   prisma: PrismaClient;
   logger: Logger;
@@ -37,19 +43,20 @@ export function createBillingoInvoiceIssuer(
         `Stripe invoice ${invoice.id} belongs to subscription ${invoice.subscriptionId}, not ${input.stripeSubscriptionId}`,
       );
     }
-    if (invoice.amountPaidMinor === 0) {
+    if (invoice.amountPaidStripeMinor === 0) {
       options.logger.debug(
         { stripeInvoiceId: invoice.id },
         "billingo: zero-value Stripe invoice skipped",
       );
       return;
     }
-    if (invoice.amountPaidMinor < 0) {
+    if (invoice.amountPaidStripeMinor < 0) {
       throw new Error(`Stripe invoice ${invoice.id} has a negative paid amount`);
     }
     if (invoice.currency !== "HUF") {
       throw new Error(`Stripe invoice ${invoice.id} uses unsupported currency ${invoice.currency}`);
     }
+    const amountPaidHuf = stripeHufMinorToForints(invoice);
 
     const tenant = await options.prisma.tenant.findUniqueOrThrow({
       where: { id: input.tenantId },
@@ -77,7 +84,7 @@ export function createBillingoInvoiceIssuer(
         items: [
           {
             name: planName(input.plan),
-            unit_price: invoice.amountPaidMinor,
+            unit_price: amountPaidHuf,
             unit_price_type: "gross",
             quantity: 1,
             unit: tenant.defaultLanguage === "en" ? "month" : "hó",
@@ -87,7 +94,7 @@ export function createBillingoInvoiceIssuer(
         comment: `Stripe invoice: ${invoice.id}`,
       }));
 
-    await saveInvoice(input.tenantId, partner.id, invoice, document, options);
+    await saveInvoice(input.tenantId, partner.id, invoice, amountPaidHuf, document, options);
     options.logger.info(
       {
         tenantId: input.tenantId,
@@ -188,6 +195,7 @@ async function saveInvoice(
   tenantId: string,
   partnerId: string,
   invoice: StripePaidInvoice,
+  amountPaidHuf: number,
   document: BillingoDocument,
   options: BillingoInvoiceIssuerOptions,
 ): Promise<void> {
@@ -200,10 +208,21 @@ async function saveInvoice(
       stripeInvoiceId: invoice.id,
       billingoDocumentId: document.id,
       billingoInvoiceNumber: document.invoice_number,
-      grossTotalMinor: invoice.amountPaidMinor,
+      // The application's integer-money convention uses whole units for HUF.
+      grossTotalMinor: amountPaidHuf,
       currency: invoice.currency,
     },
   });
+}
+
+function stripeHufMinorToForints(invoice: StripePaidInvoice): number {
+  if (invoice.amountPaidStripeMinor % STRIPE_HUF_MINOR_UNITS_PER_FORINT !== 0) {
+    throw new Error(
+      `Stripe invoice ${invoice.id} has a fractional HUF amount that Billingo cannot mirror exactly`,
+    );
+  }
+
+  return invoice.amountPaidStripeMinor / STRIPE_HUF_MINOR_UNITS_PER_FORINT;
 }
 
 function planName(plan: SubscribablePlan): string {

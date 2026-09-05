@@ -363,10 +363,12 @@ export class BillingService {
         );
       }
 
-      // Unused, same plan: hand back the identical URL. A rebuilt one that
-      // merely looks the same would be a second link as far as Stripe is
-      // concerned, with a second allowance.
-      if (existing.plan === input.plan) {
+      // Unused, same plan and same immutable Stripe Price: hand back the
+      // identical URL. Price is part of the identity here: retaining only the
+      // plan caused links made before a catalogue correction to be reused
+      // forever. In particular, the old Form price represented 99.90 Ft in
+      // Stripe and Checkout rejected it as below HUF's minimum charge.
+      if (existing.plan === input.plan && existing.stripePriceId === input.priceId) {
         // Reapply supported client-side parameters so links stored before a
         // locale policy change gain it without minting a second Stripe link.
         return {
@@ -405,6 +407,7 @@ export class BillingService {
         data: {
           tenantId: input.tenantId,
           plan: input.plan,
+          stripePriceId: input.priceId,
           trial: input.trial,
           stripePaymentLinkId: created.id,
           url,

@@ -22,8 +22,9 @@ export type SubscribablePlan = z.infer<typeof subscribablePlanSchema>;
  *
  * Stripe remains the authority for what is charged. Keeping the intended
  * amount here makes a mismatched Price ID visible in review and gives the web
- * app one typed source for its offer copy. HUF has no fractional minor unit,
- * so these values are whole forints as well as Stripe `unit_amount` values.
+ * app one typed source for its offer copy. These values are whole forints.
+ * Stripe's charge API is a special boundary: it accepts HUF in fillér, so its
+ * `unit_amount` is this value multiplied by 100.
  */
 export const SUBSCRIPTION_OFFERS: Record<
   SubscribablePlan,
