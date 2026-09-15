@@ -5,8 +5,9 @@ import { isTenantPath, routing } from "./i18n/routing";
 import { buildContentSecurityPolicy } from "./lib/security-headers";
 
 // Tenant booking pages use the tenant's configured language, not the
-// visitor's Accept-Language preference. All product-owned screens keep normal
-// next-intl detection. See the routing record in the original proxy design.
+// visitor's Accept-Language preference. Invitation URLs also carry the email's
+// language (unprefixed means Hungarian), so browser detection must not override
+// it. next-intl syncs its locale cookie for subsequent dashboard navigation.
 const withDetection = createMiddleware(routing);
 const withoutDetection = createMiddleware({ ...routing, localeDetection: false });
 
@@ -26,9 +27,11 @@ export function proxy(request: NextRequest) {
   // or rewrite result, so the nonce reaches Next's renderer without giving up
   // locale detection (or the tenant-page exception to that detection).
   const securedRequest = new NextRequest(request, { headers: requestHeaders });
-  const response = isTenantPath(request.nextUrl.pathname)
-    ? withoutDetection(securedRequest)
-    : withDetection(securedRequest);
+  const isInvitationPath = /^\/(?:hu\/|en\/)?invitations\/[^/]+\/?$/.test(request.nextUrl.pathname);
+  const response =
+    isTenantPath(request.nextUrl.pathname) || isInvitationPath
+      ? withoutDetection(securedRequest)
+      : withDetection(securedRequest);
   response.headers.set("Content-Security-Policy", csp);
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set(

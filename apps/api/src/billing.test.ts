@@ -461,6 +461,9 @@ describe.skipIf(!databaseUrl)("billing", () => {
 
       // Still nothing mirrored locally — proving the refusal came from Stripe
       // and not from a row that happened to arrive in time.
+      expect(second.json().error.details).toMatchObject({
+        reason: "SUBSCRIPTION_ACTIVATION_PENDING",
+      });
       expect(await app.prisma.subscription.count({ where: { tenantId: owner.tenantId } })).toBe(0);
 
       // Learned once and remembered, so the next attempt costs no API call.

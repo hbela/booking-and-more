@@ -17,8 +17,11 @@ import {
   type ConversationTurn,
 } from "@/lib/conversation-client";
 import { Button, ButtonLink } from "./ui/button";
+import { renderMessage } from "@/lib/conversation-messages";
+import { ChatCatalogueChoices } from "./chat-catalogue-choices";
 
-type Locale = "en" | "hu";
+type Locale = "en" | "hu" | "de" | "fr";
+const languageNames = { hu: "Magyar", en: "English", de: "Deutsch", fr: "Français" } as const;
 interface Bubble {
   id: string;
   from: "customer" | "assistant";
@@ -26,90 +29,95 @@ interface Bubble {
 }
 const copy = {
   en: {
-    title: "AI receptionist",
+    language: "Language",
+    slot: (ordinal: number) => `I would like option ${ordinal}`,
+    title: "AI Assistant",
     placeholder: "How can we help?",
     send: "Send",
     form: "Use booking form",
     reset: "New conversation",
-    unavailable: "The assistant is unavailable. The booking form still works.",
+    unavailable: "The AI Assistant is unavailable. The booking form still works.",
     confirm: "Confirm",
     decline: "Not now",
     working: "Working…",
     idle: "Ask about services, availability, policies, or book an appointment.",
   },
   hu: {
-    title: "AI recepciós",
+    language: "Nyelv",
+    slot: (ordinal: number) => `A(z) ${ordinal}. időpontot kérem`,
+    title: "AI Asszistens",
     placeholder: "Miben segíthetünk?",
     send: "Küldés",
     form: "Foglalás űrlappal",
     reset: "Új beszélgetés",
-    unavailable: "Az asszisztens most nem elérhető. A foglalási űrlap továbbra is működik.",
+    unavailable: "Az AI Asszistens most nem elérhető. A foglalási űrlap továbbra is működik.",
     confirm: "Megerősítés",
     decline: "Most nem",
     working: "Dolgozom…",
     idle: "Kérdezzen szolgáltatásokról, időpontokról, szabályokról, vagy foglaljon időpontot.",
   },
+  de: {
+    language: "Sprache",
+    slot: (ordinal: number) => `Ich möchte Option ${ordinal}`,
+    title: "KI-Rezeption",
+    placeholder: "Wie können wir helfen?",
+    send: "Senden",
+    form: "Buchungsformular verwenden",
+    reset: "Neues Gespräch",
+    unavailable:
+      "Der Assistent ist derzeit nicht verfügbar. Das Buchungsformular funktioniert weiterhin.",
+    confirm: "Bestätigen",
+    decline: "Jetzt nicht",
+    working: "Einen Moment…",
+    idle: "Fragen Sie nach Leistungen, Terminen oder Richtlinien, oder buchen Sie einen Termin.",
+  },
+  fr: {
+    language: "Langue",
+    slot: (ordinal: number) => `Je souhaite l’option ${ordinal}`,
+    title: "Réceptionniste IA",
+    placeholder: "Comment pouvons-nous vous aider ?",
+    send: "Envoyer",
+    form: "Utiliser le formulaire de réservation",
+    reset: "Nouvelle conversation",
+    unavailable: "L’assistant est indisponible. Le formulaire de réservation reste disponible.",
+    confirm: "Confirmer",
+    decline: "Pas maintenant",
+    working: "Un instant…",
+    idle: "Posez vos questions sur les prestations, les disponibilités ou les conditions, ou réservez un rendez-vous.",
+  },
 } as const;
 
-function renderMessage(message: ConversationTurn["message"], locale: Locale): string {
-  if (message.key === "conversation.answer") return String(message.params?.["answer"] ?? "");
-  const known: Record<string, Record<Locale, string>> = {
-    "conversation.greeting": { en: "Hello! How can I help?", hu: "Üdvözlöm! Miben segíthetek?" },
-    "conversation.ask.service": {
-      en: "Which service would you like?",
-      hu: "Melyik szolgáltatást szeretné?",
-    },
-    "conversation.ask.provider": {
-      en: "Do you prefer a provider?",
-      hu: "Van választott szakembere?",
-    },
-    "conversation.ask.date": { en: "Which day works for you?", hu: "Melyik nap lenne megfelelő?" },
-    "conversation.ask.slot": {
-      en: "Choose one of these available times.",
-      hu: "Válasszon az elérhető időpontok közül.",
-    },
-    "conversation.ask.name": {
-      en: "What name should the booking be under?",
-      hu: "Milyen névre rögzítsük a foglalást?",
-    },
-    "conversation.ask.contact": {
-      en: "Please provide an email address or phone number.",
-      hu: "Kérem, adjon meg e-mail-címet vagy telefonszámot.",
-    },
-    "conversation.confirm.prompt": {
-      en: "Please review and confirm these details.",
-      hu: "Kérem, ellenőrizze és erősítse meg az adatokat.",
-    },
-    "conversation.done": {
-      en: "Your appointment has been created.",
-      hu: "Az időpontfoglalás elkészült.",
-    },
-    "conversation.error.outOfScope": {
-      en: "I can help with this business and its bookings.",
-      hu: "A vállalkozással és a foglalásokkal kapcsolatban tudok segíteni.",
-    },
-    "conversation.error.noSlots": {
-      en: "I could not find an available time in that range.",
-      hu: "Ebben az időszakban nem találtam szabad időpontot.",
-    },
-  };
-  return known[message.key]?.[locale] ?? message.key;
-}
-
-export function ChatPanel({
-  tenantSlug,
-  locale,
-  bookingHref,
-  managementToken,
-  parentOrigin,
-}: {
+interface ChatPanelProps {
   tenantSlug: string;
-  locale: string;
   bookingHref: string;
   managementToken?: string | undefined;
   parentOrigin?: string | undefined;
+}
+
+export function ChatPanel(props: ChatPanelProps): React.ReactElement {
+  const [language, setLanguage] = useState<Locale>("hu");
+  // Each language has its own session; remounting clears pending UI and drafts.
+  return (
+    <ChatConversation
+      key={`${props.tenantSlug}.${language}`}
+      {...props}
+      language={language}
+      onLanguageChange={setLanguage}
+    />
+  );
+}
+
+function ChatConversation({
+  tenantSlug,
+  language,
+  onLanguageChange,
+  bookingHref,
+  managementToken,
+  parentOrigin,
+}: ChatPanelProps & {
+  language: Locale;
+  onLanguageChange: (locale: Locale) => void;
 }): React.ReactElement {
-  const language: Locale = locale === "hu" ? "hu" : "en";
   const t = copy[language];
   const storageKey = `bam.chat.${tenantSlug}.${language}`;
   const [session, setSession] = useState<ConversationSession | null>(null);
@@ -118,6 +126,7 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(true);
   const [available, setAvailable] = useState(true);
+  const [personaName, setPersonaName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const serial = useRef(0);
 
@@ -159,6 +168,8 @@ export function ChatPanel({
     void (async () => {
       try {
         const config = await assistantAvailability(tenantSlug);
+        if (!active) return;
+        setPersonaName(config.personaName);
         if (!active || !config.available) {
           setAvailable(false);
           return;
@@ -204,9 +215,8 @@ export function ChatPanel({
     );
   }, [bubbles, parentOrigin, turn]);
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const text = draft.trim();
+  const sendText = async (value: string) => {
+    const text = value.trim();
     if (!session || !text || busy) return;
     setDraft("");
     setBusy(true);
@@ -231,6 +241,10 @@ export function ChatPanel({
     } finally {
       setBusy(false);
     }
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    return sendText(draft);
   };
   const act = async (card: ConfirmationCard, confirm: boolean) => {
     if (!session) return;
@@ -266,13 +280,33 @@ export function ChatPanel({
     <section
       className="mx-auto flex min-h-[32rem] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm"
       aria-label={t.title}
+      lang={language}
     >
-      <header className="flex items-center justify-between border-b border-line bg-surface-raised px-5 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-raised px-5 py-4">
         <h1 className="flex items-center gap-2 font-semibold">
           <Bot size={20} aria-hidden />
-          {t.title}
+          <span>
+            {t.title}
+            {personaName && personaName !== t.title ? (
+              <span className="block text-xs font-normal text-ink-muted">{personaName}</span>
+            ) : null}
+          </span>
         </h1>
-        <Button variant="ghost" size="sm" onClick={reset}>
+        <label className="flex items-center gap-2 text-sm">
+          <span className="sr-only">{t.language}</span>
+          <select
+            value={language}
+            onChange={(event) => onLanguageChange(event.target.value as Locale)}
+            className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 text-ink"
+          >
+            {Object.entries(languageNames).map(([value, label]) => (
+              <option key={value} value={value} lang={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
           <RefreshCw size={16} aria-hidden />
           {t.reset}
         </Button>
@@ -293,17 +327,18 @@ export function ChatPanel({
           </p>
         ))}
         {busy && available ? <p className="text-sm text-ink-muted">{t.working}</p> : null}
+        <ChatCatalogueChoices
+          services={turn?.message.ui === "SERVICE_LIST" ? turn.services : undefined}
+          providers={turn?.message.ui === "PROVIDER_LIST" ? turn.providers : undefined}
+          locale={language}
+          disabled={busy || !available}
+          onPick={(name) => void sendText(name)}
+        />
         {turn?.slots?.length ? (
           <SlotChoices
             slots={turn.slots}
             locale={language}
-            onPick={(ordinal) =>
-              setDraft(
-                language === "hu"
-                  ? `A(z) ${ordinal}. időpontot kérem`
-                  : `I would like option ${ordinal}`,
-              )
-            }
+            onPick={(ordinal) => setDraft(t.slot(ordinal))}
           />
         ) : null}
         {turn?.confirmation ? (

@@ -52,6 +52,7 @@ export function SubscriptionScreen(): React.ReactElement {
     trial: boolean;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activationPending, setActivationPending] = useState(false);
 
   const billing = useQuery({
     queryKey: ["billing", context.tenantId],
@@ -60,6 +61,10 @@ export function SubscriptionScreen(): React.ReactElement {
         tenantId: context.tenantId,
       }),
     enabled: Boolean(context.tenantId),
+    refetchInterval: (query) =>
+      activationPending && !isLiveSubscription(query.state.data?.subscription?.status)
+        ? 2_000
+        : false,
   });
 
   /**
@@ -98,6 +103,19 @@ export function SubscriptionScreen(): React.ReactElement {
       setSent(result);
     },
     onError: (cause: unknown) => {
+      if (
+        cause instanceof ApiError &&
+        cause.status === 409 &&
+        typeof cause.details === "object" &&
+        cause.details !== null &&
+        "reason" in cause.details &&
+        cause.details.reason === "SUBSCRIPTION_ACTIVATION_PENDING"
+      ) {
+        setActivationPending(true);
+        setError(null);
+        void billing.refetch();
+        return;
+      }
       setError(cause instanceof ApiError ? cause.message : t("genericError"));
     },
   });
@@ -248,7 +266,7 @@ export function SubscriptionScreen(): React.ReactElement {
               <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
             )}
 
-            <p className="text-sm text-ink-muted">{t("pricesIncludeVat")}</p>
+            <p className="text-sm text-ink-muted">{t("pricesTaxExempt")}</p>
 
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">{t("choosePlan")}</legend>
@@ -289,7 +307,13 @@ export function SubscriptionScreen(): React.ReactElement {
 
             <ErrorText>{error}</ErrorText>
 
-            <Button type="submit" disabled={subscribe.isPending}>
+            {activationPending ? (
+              <p role="status" className="text-sm text-ink-muted">
+                {t("subscriptionActivationPending")}
+              </p>
+            ) : null}
+
+            <Button type="submit" disabled={subscribe.isPending || activationPending}>
               {subscribe.isPending
                 ? t("loading")
                 : billing.data?.trialAvailable

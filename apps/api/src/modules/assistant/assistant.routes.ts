@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   assistantFaqInputSchema,
   assistantFaqSchema,
-  assistantSettingsInputSchema,
+  assistantSettingsPatchSchema,
   assistantSettingsSchema,
   conversationDetailSchema,
   conversationListItemSchema,
@@ -42,9 +42,13 @@ export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
         : {
             tenantId: tenant.id,
             enabled: false,
-            personaName: "Assistant",
+            personaName: tenant.defaultLanguage === "hu" ? "Asszisztens" : "Assistant",
             businessDescription: null,
-            supportedLocales: [languageSchema.parse(tenant.defaultLanguage)],
+            businessDescriptionHu: null,
+            businessDescriptionEn: null,
+            businessDescriptionDe: null,
+            businessDescriptionFr: null,
+            supportedLocales: [...languageSchema.options],
             escalationMessage: null,
             updatedAt: new Date(0).toISOString(),
           };
@@ -57,13 +61,17 @@ export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
       preHandler: manage,
       schema: {
         tags: ["assistant"],
-        body: assistantSettingsInputSchema,
+        body: assistantSettingsPatchSchema,
         response: { 200: assistantSettingsSchema, ...commonErrorResponses },
       },
     },
     async (request) => {
       const tenantId = request.tenant!.id;
-      const row = await service.saveSettings(tenantId, request.body);
+      const row = await service.saveSettings(
+        tenantId,
+        request.body,
+        request.tenant!.defaultLanguage,
+      );
       request.audit({
         action: "assistant.settings.updated",
         entityType: "TenantAssistantSettings",
@@ -226,6 +234,10 @@ function toSettings(row: {
   enabled: boolean;
   personaName: string;
   businessDescription: string | null;
+  businessDescriptionHu: string | null;
+  businessDescriptionEn: string | null;
+  businessDescriptionDe: string | null;
+  businessDescriptionFr: string | null;
   supportedLocales: string[];
   escalationMessage: string | null;
   updatedAt: Date;

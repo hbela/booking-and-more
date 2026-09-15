@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { futureMonday } from "./test-support/booking-dates.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { envelope, fakeProviders, type FakeProviders } from "@bam/ai";
 import { loadEnv } from "@bam/config";
@@ -21,7 +22,7 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 const RUN = `cv${randomBytes(4).toString("hex")}`;
 
 /** A Monday far enough ahead to clear any default booking window. */
-const MONDAY = "2026-09-07";
+const MONDAY = futureMonday();
 
 /**
  * The turn payload, as the panel sees it.
@@ -219,11 +220,15 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     return { tenantId, slug, providerId, serviceId, ownerCookie: owner.cookie };
   }
 
-  async function startConversation(site: Clinic, channel: "CHAT" | "VOICE" = "CHAT") {
+  async function startConversation(
+    site: Clinic,
+    channel: "CHAT" | "VOICE" = "CHAT",
+    locale = "en",
+  ) {
     const response = await app.inject({
       method: "POST",
       url: `/v1/public/tenants/${site.slug}/conversations`,
-      payload: { channel, locale: "en", timezone: "UTC" },
+      payload: { channel, locale, timezone: "UTC" },
     });
 
     expect(response.statusCode, response.body).toBe(201);
@@ -271,10 +276,10 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     ai.interpreter.push(
       envelope({
         intent: "SEARCH_SLOTS",
-        parameters: { serviceQuery: "dental check-up", dateExpression: "2026-09-07" },
+        parameters: { serviceQuery: "dental check-up", dateExpression: MONDAY },
       }),
     );
-    const searched = await say(conversation, "I need a dental check-up on the 7th");
+    const searched = await say(conversation, `I need a dental check-up on ${MONDAY}`);
     const offered = searched.slots ?? [];
     expect(offered.length, JSON.stringify(searched)).toBeGreaterThan(0);
 
@@ -466,6 +471,67 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       await app.prisma.availabilityException.count({ where: { tenantId: site.tenantId } }),
     ).toBe(0);
   });
+
+  it("lists Hungarian services and accepts a selected catalogue id", async () => {
+    const site = await clinic("hungarian-list");
+    await app.prisma.serviceTranslation.create({
+      data: { serviceId: site.serviceId, locale: "hu", name: "Konzultáció" },
+    });
+    const conversation = await startConversation(site, "CHAT", "hu");
+    ai.interpreter.push(envelope({ intent: "LIST_SERVICES", parameters: {} }));
+    const listed = await say(conversation, "Kérem a szolgáltatások listáját.");
+    expect(listed.message).toMatchObject({ ui: "SERVICE_LIST" });
+    expect(listed.services).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: site.serviceId, name: "Konzultáció" }),
+      ]),
+    );
+    ai.interpreter.push(
+      envelope({ intent: "GET_SERVICE_DETAILS", parameters: { serviceId: site.serviceId } }),
+    );
+    const selected = await say(conversation, "Konzultáció");
+    expect(selected.state).not.toBe("SELECTING_SERVICE");
+    expect(selected.message.key).not.toBe("conversation.ask.service");
+  });
+
+  it.each(["START", "COMPLETED"])(
+    "answers location questions in %s without changing booking state",
+    async (state) => {
+      const site = await clinic(`address-${state.toLowerCase()}`);
+      await app.prisma.location.createMany({
+        data: [
+          {
+            tenantId: site.tenantId,
+            name: "Central",
+            timezone: "Europe/Budapest",
+            addressLine1: "Test utca 11",
+            postalCode: "2000",
+            city: "Szentendre",
+          },
+          {
+            tenantId: site.tenantId,
+            name: "Private",
+            timezone: "Europe/Budapest",
+            addressLine1: "Hidden address",
+            active: false,
+          },
+        ],
+      });
+      const conversation = await startConversation(site, "CHAT", "hu");
+      if (state === "COMPLETED") {
+        await app.prisma.conversationSession.update({
+          where: { id: conversation.id },
+          data: { machineState: "COMPLETED", status: "COMPLETED" },
+        });
+      }
+      ai.interpreter.push(envelope({ intent: "GET_LOCATION_DETAILS", parameters: {} }));
+      const response = await say(conversation, "Mi a rendelő pontos címe?");
+      expect(response.message.key).toBe("conversation.answer");
+      expect(response.message.params?.["answer"]).toContain("2000 Szentendre, Test utca 11");
+      expect(response.message.params?.["answer"]).not.toContain("Hidden address");
+      expect(response.state).toBe(state);
+    },
+  );
 
   it("asks rather than acts when the model is unsure", async () => {
     const site = await clinic("unsure");

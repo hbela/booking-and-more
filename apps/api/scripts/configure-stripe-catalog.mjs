@@ -9,11 +9,13 @@ const VERIFY = process.argv.includes("--verify");
 // fillér even though prices are normally presented as whole forints. HUF is
 // zero-decimal only for payouts, not for charges.
 const HUF_MINOR_UNITS_PER_FORINT = 100;
+// Stripe stores product descriptions as literal catalog text; the Payment
+// Link locale only translates Stripe's UI. This HUF catalog uses Hungarian.
 const CATALOG = [
   {
     plan: "STARTER",
     name: "Booking and More — Form",
-    description: "Dashboard and public online booking form.",
+    description: "Vezérlőpult és nyilvános online időpontfoglaló űrlap.",
     amountHuf: 9_990,
     lookupKey: "bam_form_monthly_huf_v1",
   },
@@ -21,7 +23,7 @@ const CATALOG = [
     plan: "PROFESSIONAL",
     name: "Booking and More — AI Receptionist",
     description:
-      "Online booking form plus AI chat, website widget, transcripts, and monthly AI allowance.",
+      "Online időpontfoglaló űrlap, AI chat, weboldalba illeszthető widget, beszélgetési naplók és havi AI-használati keret.",
     amountHuf: 24_990,
     lookupKey: "bam_ai_receptionist_monthly_huf_v1",
   },
@@ -32,7 +34,7 @@ const stripeUnitAmount = (amountHuf) => amountHuf * HUF_MINOR_UNITS_PER_FORINT;
 if (!APPLY && !VERIFY) {
   console.log("Dry run — no Stripe objects were changed. Pass --apply to create missing objects.");
   for (const offer of CATALOG) {
-    console.log(`${offer.plan}: ${offer.name}, ${offer.amountHuf} HUF/month, tax inclusive`);
+    console.log(`${offer.plan}: ${offer.name}, ${offer.amountHuf} HUF/month, AAM (no VAT)`);
   }
   process.exit(0);
 }
@@ -62,7 +64,7 @@ if (VERIFY) {
       price.currency === "huf" &&
       price.unit_amount === stripeUnitAmount(offer.amountHuf) &&
       price.recurring?.interval === "month" &&
-      price.tax_behavior === "inclusive";
+      price.tax_behavior === "unspecified";
 
     console.log(
       `${offer.plan}: ${matches ? "valid" : "mismatch"} (${price.unit_amount === null ? "unknown" : price.unit_amount / HUF_MINOR_UNITS_PER_FORINT} ${price.currency.toUpperCase()}/${price.recurring?.interval ?? "not recurring"}, tax ${price.tax_behavior ?? "unspecified"})`,
@@ -91,8 +93,12 @@ for (const offer of CATALOG) {
           ? { tax_code: process.env["STRIPE_SAAS_TAX_CODE"] }
           : {}),
       },
-      { idempotencyKey: `bam-catalog-product-${offer.plan.toLowerCase()}-v1` },
+      { idempotencyKey: `bam-catalog-product-${offer.plan.toLowerCase()}-v2` },
     );
+  }
+
+  if (product.description !== offer.description) {
+    product = await stripe.products.update(product.id, { description: offer.description });
   }
 
   const prices = await stripe.prices.list({ product: product.id, active: true, limit: 100 });
@@ -101,7 +107,7 @@ for (const offer of CATALOG) {
       candidate.currency === "huf" &&
       candidate.unit_amount === stripeUnitAmount(offer.amountHuf) &&
       candidate.recurring?.interval === "month" &&
-      candidate.tax_behavior === "inclusive",
+      candidate.tax_behavior === "unspecified",
   );
 
   if (!price) {
@@ -111,7 +117,7 @@ for (const offer of CATALOG) {
         currency: "huf",
         unit_amount: stripeUnitAmount(offer.amountHuf),
         recurring: { interval: "month" },
-        tax_behavior: "inclusive",
+        tax_behavior: "unspecified",
         lookup_key: offer.lookupKey,
         // A previous catalogue version may already own this stable key. Stripe
         // keeps lookup keys unique even when that old price is inactive or no
@@ -126,7 +132,8 @@ for (const offer of CATALOG) {
       // printed a price ID and a success line while changing nothing. It does
       // not always reject a mismatched replay — treat `--verify` as the only
       // evidence the catalogue is right, never the exit code of `--apply`.
-      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v4` },
+      // v5 removes the inclusive tax behavior for the seller's AAM status.
+      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v5` },
     );
   }
 
@@ -134,5 +141,5 @@ for (const offer of CATALOG) {
 }
 
 console.log(
-  "Review Stripe Tax registrations, business origin, Customer Portal upgrade/downgrade rules, and test mode before copying these IDs to production.",
+  "AAM catalog: keep automatic tax disabled on payment links. Review Customer Portal upgrade/downgrade rules and test mode before copying these IDs to production.",
 );

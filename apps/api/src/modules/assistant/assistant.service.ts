@@ -7,7 +7,19 @@ import {
   quotaFor,
   usagePeriodOf,
 } from "@bam/contracts";
-import type { AssistantFaqInput, AssistantSettingsInput } from "./assistant.schemas.js";
+import type {
+  AssistantFaqInput,
+  AssistantSettingsInput,
+  AssistantSettingsPatch,
+} from "./assistant.schemas.js";
+import { localiseService, PublicCatalogueService } from "../public/catalogue.service.js";
+
+const PROFILE_FIELDS = {
+  hu: "businessDescriptionHu",
+  en: "businessDescriptionEn",
+  de: "businessDescriptionDe",
+  fr: "businessDescriptionFr",
+} as const;
 
 export class AssistantService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -49,9 +61,7 @@ export class AssistantService {
       ),
       personaName,
       greeting: `${personaName} · ${tenant.name}`,
-      supportedLocales: (settings?.supportedLocales ?? [tenant.defaultLanguage]).map((locale) =>
-        languageSchema.parse(locale),
-      ),
+      supportedLocales: [...languageSchema.options],
       branding: { businessName: tenant.name, logoUrl: tenant.logoUrl },
     };
   }
@@ -69,22 +79,48 @@ export class AssistantService {
   }
 
   async knowledgeContext(tenant: Tenant, locale: string): Promise<string> {
-    const [settings, faqs] = await Promise.all([
+    const [settings, faqs, services, locations] = await Promise.all([
       this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: tenant.id } }),
       this.prisma.tenantAssistantFaq.findMany({
         where: { tenantId: tenant.id, active: true, locale },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         take: 50,
       }),
+      new PublicCatalogueService(this.prisma).listServices({ tenantId: tenant.id, limit: 50 }),
+      this.prisma.location.findMany({
+        where: { tenantId: tenant.id, active: true, archivedAt: null },
+        select: {
+          name: true,
+          type: true,
+          addressLine1: true,
+          addressLine2: true,
+          postalCode: true,
+          city: true,
+          countryCode: true,
+        },
+        orderBy: { name: "asc" },
+        take: 25,
+      }),
     ]);
+    const description = localizedBusinessDescription(settings, locale, tenant.defaultLanguage);
     return [
       `Business: ${tenant.name}`,
-      settings?.businessDescription ? `Description: ${settings.businessDescription}` : "",
+      description ? `Description: ${description}` : "",
+      ...locations.map((location) => `Location: ${JSON.stringify(location)}`),
       tenant.contactEmail ? `Email: ${tenant.contactEmail}` : "",
       tenant.contactPhone ? `Phone: ${tenant.contactPhone}` : "",
       tenant.bookingPolicy ? `Booking policy: ${tenant.bookingPolicy}` : "",
       tenant.cancellationPolicy ? `Cancellation policy: ${tenant.cancellationPolicy}` : "",
-      settings?.escalationMessage ? `Escalation: ${settings.escalationMessage}` : "",
+      ...services.slice(0, 50).map((service) => {
+        const localized = localiseService(service, locale);
+        // Public, bookable services only. These remain data inside the AI's
+        // untrusted business-facts block, never instructions or booking rules.
+        return `Service: ${JSON.stringify({
+          id: service.id,
+          name: localized.name,
+          description: localized.description?.slice(0, 2_000) ?? null,
+        })}`;
+      }),
       ...faqs.map((faq) => `Q: ${faq.question}\nA: ${faq.answer}`),
     ]
       .filter(Boolean)
@@ -94,11 +130,33 @@ export class AssistantService {
   getSettings(tenantId: string): Promise<AssistantSettingsRow | null> {
     return this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId } });
   }
-  saveSettings(tenantId: string, input: AssistantSettingsInput): Promise<AssistantSettingsRow> {
+  saveSettings(
+    tenantId: string,
+    patch: AssistantSettingsPatch,
+    locale = "hu",
+  ): Promise<AssistantSettingsRow> {
+    const input = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    ) as Partial<AssistantSettingsInput>;
+    const originalField = PROFILE_FIELDS[languageSchema.parse(locale)];
+    const originalDescription = input[originalField];
+    const data = {
+      ...input,
+      ...(originalDescription !== undefined ? { businessDescription: originalDescription } : {}),
+      ...(input.businessDescription !== undefined && originalDescription === undefined
+        ? { [originalField]: input.businessDescription }
+        : {}),
+    };
     return this.prisma.tenantAssistantSettings.upsert({
       where: { tenantId },
-      create: { tenantId, ...input },
-      update: input,
+      create: {
+        tenantId,
+        enabled: false,
+        personaName: locale === "hu" ? "Asszisztens" : "Assistant",
+        supportedLocales: [...languageSchema.options],
+        ...data,
+      },
+      update: data,
     });
   }
   listFaqs(tenantId: string): Promise<AssistantFaqRow[]> {
@@ -129,6 +187,8 @@ export class AssistantService {
       offset: number;
       status?: string | undefined;
       locale?: string | undefined;
+      from?: string | undefined;
+      to?: string | undefined;
     },
   ): Promise<ConversationListRow[]> {
     return this.prisma.conversationSession.findMany({
@@ -136,6 +196,14 @@ export class AssistantService {
         tenantId,
         ...(query.status ? { status: query.status as never } : {}),
         ...(query.locale ? { locale: query.locale } : {}),
+        ...(query.from || query.to
+          ? {
+              lastActivityAt: {
+                ...(query.from ? { gte: new Date(query.from) } : {}),
+                ...(query.to ? { lt: new Date(query.to) } : {}),
+              },
+            }
+          : {}),
       },
       orderBy: [{ lastActivityAt: "desc" }, { id: "desc" }],
       take: query.limit,
@@ -178,10 +246,30 @@ interface AssistantSettingsRow {
   enabled: boolean;
   personaName: string;
   businessDescription: string | null;
+  businessDescriptionHu: string | null;
+  businessDescriptionEn: string | null;
+  businessDescriptionDe: string | null;
+  businessDescriptionFr: string | null;
   supportedLocales: string[];
   escalationMessage: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export function localizedBusinessDescription(
+  settings: Pick<
+    AssistantSettingsRow,
+    "businessDescription" | (typeof PROFILE_FIELDS)[keyof typeof PROFILE_FIELDS]
+  > | null,
+  locale: string,
+  defaultLanguage: string,
+): string | null {
+  if (!settings) return null;
+  const requestedLocale = languageSchema.safeParse(locale);
+  const originalLocale = languageSchema.safeParse(defaultLanguage);
+  const requested = requestedLocale.success ? settings[PROFILE_FIELDS[requestedLocale.data]] : null;
+  const original = originalLocale.success ? settings[PROFILE_FIELDS[originalLocale.data]] : null;
+  return requested || original || settings.businessDescription || null;
 }
 
 interface AssistantFaqRow {

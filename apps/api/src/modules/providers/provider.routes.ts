@@ -137,12 +137,13 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
   app.post(
     "",
     {
-      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.PROVIDER_MANAGE)],
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.PROVIDER_MANAGE), app.requirePermission(Permissions.MEMBER_MANAGE)],
+      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
       schema: {
         tags: ["providers"],
         summary: "Create a provider",
         description:
-          "A provider is a bookable resource, not an account. Give them a login by linking a membership to this provider (PATCH /v1/members/:membershipId).",
+          "Creates the provider and queues a single-use onboarding invitation to their email. Acceptance sets up their login and links it to their own diary.",
         body: createProviderBodySchema,
         response: { 201: providerResponseSchema, ...commonErrorResponses },
       },
@@ -150,10 +151,27 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
     async (request, reply) => {
       const tenant = request.tenant!;
 
-      const provider = await service.create({
-        tenantId: tenant.id,
-        input: request.body,
-        defaults: { timezone: tenant.defaultTimezone, language: tenant.defaultLanguage },
+      const { provider, invitation } = await app.prisma.$transaction(async (tx) => {
+        const provider = await service.create({
+          tenantId: tenant.id,
+          input: request.body,
+          defaults: { timezone: tenant.defaultTimezone, language: tenant.defaultLanguage },
+        }, tx);
+        const invitation = await memberships.inviteProvider({
+          tenantId: tenant.id,
+          provider,
+          invitedByUserId: request.user!.id,
+          invitedByName: request.user!.name,
+          expiryHours: options.invitationExpiryHours,
+        }, tx);
+        return { provider, invitation };
+      });
+
+      request.audit({
+        action: "membership.invited",
+        entityType: "Invitation",
+        entityId: invitation.invitationId,
+        after: { email: invitation.email, role: "PROVIDER", providerId: provider.id },
       });
 
       request.audit({

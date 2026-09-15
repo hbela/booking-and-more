@@ -96,19 +96,16 @@ describe.skipIf(!databaseUrl)("provider onboarding", () => {
     // names, and a shared one would make two tests fight over one mailbox.
     const providerEmail = `${label}-diary-${RUN}@example.test`;
 
-    const provider = await app.inject({
-      method: "POST",
-      url: "/v1/providers",
-      headers: as(owner.cookie, tenantId),
-      payload: { displayName: "Dr. Kovács Anna", email: providerEmail },
+    // A legacy diary without an invitation, for the manual invite/resend cases.
+    const provider = await app.prisma.provider.create({
+      data: { tenantId, displayName: "Dr. Kovács Anna", email: providerEmail, timezone: "Europe/Budapest" },
     });
-    expect(provider.statusCode, provider.body).toBe(201);
 
     return {
       ...owner,
       slug,
       tenantId,
-      providerId: provider.json().id as string,
+      providerId: provider.id,
       providerEmail,
     };
   }
@@ -133,6 +130,43 @@ describe.skipIf(!databaseUrl)("provider onboarding", () => {
       payload: { token, name, password: "correct-horse-battery-staple" },
     });
   }
+
+  it("creates a provider with an emailed password-setup invitation linked to their diary", async () => {
+    const site = await clinic("automatic");
+    const email = `automatic-new-${RUN}@example.test`;
+    const response = await app.inject({
+      method: "POST", url: "/v1/providers", headers: as(site.cookie, site.tenantId),
+      payload: { displayName: "New Provider", email },
+    });
+    expect(response.statusCode, response.body).toBe(201);
+    const providerId = response.json().id as string;
+    const event = await app.prisma.outboxEvent.findFirstOrThrow({
+      where: { tenantId: site.tenantId, aggregateId: providerId, eventType: "PROVIDER_INVITED" },
+    });
+    const payload = event.payload as { email: string; invitationToken: string };
+    expect(payload.email).toBe(email);
+    expect(payload.invitationToken).toBeTruthy();
+    const lookup = await app.inject({
+      method: "POST", url: "/v1/invitations/lookup", payload: { token: payload.invitationToken },
+    });
+    expect(lookup.json()).toMatchObject({ requiresRegistration: true, providerName: "New Provider" });
+    const accepted = await acceptAndRegister(payload.invitationToken, "New Provider");
+    expect(accepted.statusCode, accepted.body).toBe(201);
+    const membership = await app.prisma.membership.findFirstOrThrow({ where: { tenantId: site.tenantId, providerId } });
+    expect(membership.role).toBe("PROVIDER");
+    expect(accepted.headers["set-cookie"]).toBeTruthy();
+  });
+
+  it("rolls back provider creation when an onboarding invitation cannot be issued", async () => {
+    const site = await clinic("rollback");
+    const response = await app.inject({
+      method: "POST", url: "/v1/providers", headers: as(site.cookie, site.tenantId),
+      payload: { displayName: "Must not remain", email: site.email },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(await app.prisma.provider.count({ where: { tenantId: site.tenantId, email: site.email } })).toBe(0);
+    expect(await app.prisma.outboxEvent.count({ where: { tenantId: site.tenantId, eventType: "PROVIDER_INVITED" } })).toBe(0);
+  });
 
   async function membershipFor(tenantId: string, email: string) {
     return app.prisma.membership.findFirst({

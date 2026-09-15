@@ -23,8 +23,8 @@ import { Section } from "./ui/section";
  *
  * An administrator picks any provider; a provider linked to a diary sees their
  * own; a delegate sees the diaries handed to them
- * (docs/phase-3-4-diary-delegation.md §6.2). The picker appears when there is
- * more than one to choose between, which is now possible without holding
+ * (docs/phase-3-4-diary-delegation.md §6.2). The picker appears even with one
+ * provider, so the member can see whose diary they are managing without holding
  * `:all`. That mirrors the API exactly, but it is still only an affordance: the
  * server re-decides on every request, so editing the URL gets a 403 rather than
  * someone else's schedule.
@@ -139,7 +139,7 @@ export function AvailabilityScreen(): React.ReactElement {
         </Section>
       ) : (
         <>
-          {options.length > 1 ? (
+          {options.length > 0 ? (
             <Section title={t("title")}>
               <Field id="availability-provider" label={t("provider")}>
                 <Select

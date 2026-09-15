@@ -5,13 +5,18 @@ export const assistantSettingsInputSchema = z.object({
   enabled: z.boolean(),
   personaName: z.string().trim().min(1).max(80),
   businessDescription: z.string().trim().max(4_000).nullable(),
-  supportedLocales: z.array(languageSchema).min(1).max(2),
+  businessDescriptionHu: z.string().trim().max(4_000).nullable(),
+  businessDescriptionEn: z.string().trim().max(4_000).nullable(),
+  businessDescriptionDe: z.string().trim().max(4_000).nullable(),
+  businessDescriptionFr: z.string().trim().max(4_000).nullable(),
+  supportedLocales: z.array(languageSchema).min(1).max(4),
   escalationMessage: z.string().trim().max(1_000).nullable(),
 });
 export const assistantSettingsSchema = assistantSettingsInputSchema.extend({
   tenantId: idSchema,
   updatedAt: instantSchema,
 });
+export const assistantSettingsPatchSchema = assistantSettingsInputSchema.partial();
 export const assistantFaqInputSchema = z.object({
   locale: languageSchema,
   question: z.string().trim().min(1).max(500),
@@ -36,6 +41,8 @@ export const conversationListQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   status: z.enum(["ACTIVE", "COMPLETED", "CANCELLED", "EXPIRED"]).optional(),
   locale: languageSchema.optional(),
+  from: instantSchema.optional(),
+  to: instantSchema.optional(),
 });
 export const conversationListItemSchema = z.object({
   id: idSchema,
@@ -69,4 +76,5 @@ export const conversationStatsSchema = z.object({
   outputTokens: z.number().int(),
 });
 export type AssistantSettingsInput = z.infer<typeof assistantSettingsInputSchema>;
+export type AssistantSettingsPatch = z.infer<typeof assistantSettingsPatchSchema>;
 export type AssistantFaqInput = z.infer<typeof assistantFaqInputSchema>;

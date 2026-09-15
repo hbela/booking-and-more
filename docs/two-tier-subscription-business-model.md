@@ -11,7 +11,7 @@ The Stripe/database identifiers remain `STARTER` and `PROFESSIONAL`; customers s
 
 Assisted configuration is an optional service sold separately for 29,990 Ft once. It is not MRR and is invoiced or sold manually during the concierge launch.
 
-Prices include applicable VAT. Stripe Price objects use `tax_behavior=inclusive`, so automatic tax extracts VAT from the advertised amount instead of adding it on top. Production checkout must not open until the Stripe account's business origin, registrations, tax code, invoices, and EU reverse-charge handling have been reviewed with an accountant.
+The seller has declared AAM (alanyi adómentesség). Subscription amounts are charged without VAT, matching Billingo's `AAM` code. New Stripe Price objects use `tax_behavior=unspecified`, and Payment Links explicitly disable automatic tax. Existing inclusive prices cannot have their tax behavior changed; replace them with the catalog script when updating configured Price IDs. Disabling automatic tax also prevents VAT calculation on links using those older prices.
 
 ## Concierge owner onboarding
 

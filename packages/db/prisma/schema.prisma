@@ -1375,6 +1375,10 @@ model TenantAssistantSettings {
   enabled             Boolean  @default(false)
   personaName         String   @default("Assistant") @map("persona_name")
   businessDescription String?  @map("business_description") @db.Text
+  businessDescriptionHu String? @map("business_description_hu") @db.Text
+  businessDescriptionEn String? @map("business_description_en") @db.Text
+  businessDescriptionDe String? @map("business_description_de") @db.Text
+  businessDescriptionFr String? @map("business_description_fr") @db.Text
   supportedLocales    String[] @default(["hu", "en"]) @map("supported_locales")
   escalationMessage   String?  @map("escalation_message") @db.Text
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

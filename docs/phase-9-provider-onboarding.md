@@ -5,6 +5,17 @@ of work", built on the invitation machinery
 
 # Phase 9 — Provider onboarding
 
+## September 2026 update: invitation on creation
+
+Creating a provider now queues the existing password-setup invitation automatically.
+The provider, invitation and `PROVIDER_INVITED` outbox event are committed together;
+invitation failure rolls back creation. Creation requires both provider-management
+and member-management permissions. The existing Invite/Resend action remains for
+legacy providers and missed or expired invitations. After acceptance, providers
+automatically navigate to their own availability dashboard with a fresh session load.
+
+The design history below describes the earlier, separate invitation step.
+
 ## Implementation Record
 
 **Document version:** 1.0 — built 2026-08-04.

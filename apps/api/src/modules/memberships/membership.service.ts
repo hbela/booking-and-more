@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { DelegationScope, PrismaClient } from "@bam/db";
+import type { DelegationScope, Prisma, PrismaClient } from "@bam/db";
 import { canHoldTenantMembership, INVITABLE_ROLES, Roles, type Role } from "@bam/auth";
 import {
   ConflictError,
@@ -287,8 +287,9 @@ export class MembershipService {
    * arbitrary mailbox to a named diary — phase-9-owner-onboarding §2.1's
    * security property, moved one layer up to issuance (§2.4).
    */
-  async inviteProvider(input: InviteProviderInput): Promise<InviteResult & { email: string }> {
+  async inviteProvider(input: InviteProviderInput, transaction?: Prisma.TransactionClient): Promise<InviteResult & { email: string }> {
     const { tenantId, provider } = input;
+    const db = transaction ?? this.prisma;
 
     // Belt and braces: the route resolves the provider without
     // `includeArchived`, so an archived one is already a 404 there. Restated
@@ -315,7 +316,7 @@ export class MembershipService {
     // Both pre-checks exist for the message, not the guarantee — the unique
     // indexes are what hold under concurrency (rule 14). They are separate
     // because each one has a different fix.
-    const holder = await this.prisma.membership.findFirst({
+    const holder = await db.membership.findFirst({
       where: { providerId: provider.id },
       select: { id: true, user: { select: { email: true } } },
     });
@@ -330,7 +331,7 @@ export class MembershipService {
       );
     }
 
-    const existingMember = await this.prisma.membership.findFirst({
+    const existingMember = await db.membership.findFirst({
       where: { tenantId, user: { email } },
       select: { id: true },
     });
@@ -349,7 +350,7 @@ export class MembershipService {
     const expiresAt = new Date(Date.now() + input.expiryHours * 60 * 60 * 1000);
 
     try {
-      const invitation = await this.prisma.$transaction(async (tx) => {
+      const issue = async (tx: Prisma.TransactionClient) => {
         // Superseded, not refused: pressing Invite a second time means "they
         // never got it" — every time (§2.5).
         //
@@ -408,7 +409,8 @@ export class MembershipService {
         });
 
         return created;
-      });
+      };
+      const invitation = transaction ? await issue(transaction) : await this.prisma.$transaction(issue);
 
       return { invitationId: invitation.id, token, expiresAt, email };
     } catch (error) {

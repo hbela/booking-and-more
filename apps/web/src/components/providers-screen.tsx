@@ -409,7 +409,7 @@ export function ProvidersScreen(): React.ReactElement {
 
       {editing && context.tenantId ? (
         <EditProviderPanel
-          key={editing.id}
+          key={`edit-${editing.id}`}
           tenantId={context.tenantId}
           provider={editing}
           panelProps={edit.panelProps}
@@ -426,11 +426,11 @@ export function ProvidersScreen(): React.ReactElement {
         />
       ) : null}
 
-      {/* Keyed on the id so switching rows remounts rather than carrying the
-          previous provider's half-filled invite form across. */}
+      {/* Include the panel type because multiple panels can be open for the
+          same provider. The provider id still resets the form on row changes. */}
       {staffing && context.tenantId ? (
         <ProviderDelegates
-          key={staffing.id}
+          key={`assistants-${staffing.id}`}
           tenantId={context.tenantId}
           providerId={staffing.id}
           providerName={staffing.displayName}
@@ -441,7 +441,7 @@ export function ProvidersScreen(): React.ReactElement {
 
       {inviting && context.tenantId ? (
         <InvitePanel
-          key={inviting.id}
+          key={`invite-${inviting.id}`}
           tenantId={context.tenantId}
           provider={inviting}
           alreadyInvited={invitedProviderIds.has(inviting.id)}
@@ -450,7 +450,7 @@ export function ProvidersScreen(): React.ReactElement {
         />
       ) : null}
 
-      {canManage && context.tenantId ? (
+      {canManage && canInvite && context.tenantId ? (
         <CreateProviderPanel
           tenantId={context.tenantId}
           services={services.data?.items}
@@ -712,12 +712,14 @@ function CreateProviderPanel({
           new Map([...current].map(([id, row]) => [id, { ...row, checked: false }] as const)),
       );
       setDefaultLocationId("");
+      void queryClient.invalidateQueries({ queryKey: ["invitations", tenantId] });
       void queryClient.invalidateQueries({ queryKey: ["providers"] });
       void queryClient.invalidateQueries({ queryKey: ["provider-services"] });
       void queryClient.invalidateQueries({ queryKey: ["provider-locations"] });
     },
     onError: (cause: unknown) => {
       if (cause instanceof AssignmentFailed) {
+        void queryClient.invalidateQueries({ queryKey: ["invitations", tenantId] });
         // The provider list is stale either way — it gained a row.
         void queryClient.invalidateQueries({ queryKey: ["providers"] });
         setError(t("createdButNotAssigned"));
@@ -731,6 +733,7 @@ function CreateProviderPanel({
   return (
     <Card title={t("addProvider")}>
       <p className="text-sm text-ink-muted">{t("addProviderHint")}</p>
+      {mutation.isSuccess ? <p role="status">{t("providerCreatedAndInvited")}</p> : null}
 
       <form
         className="flex flex-col gap-3"

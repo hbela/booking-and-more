@@ -116,11 +116,9 @@ export function createStripePaymentLink(options: StripeOptions): PaymentLinkCrea
     const link = await getStripe(options).paymentLinks.create({
       line_items: [{ price: priceId, quantity: 1 }],
 
-      // Prices are tax-inclusive: the advertised HUF amount remains the
-      // customer's total while Stripe Tax extracts any applicable VAT from it.
-      // Production rollout still requires the account's registrations and
-      // business origin to be configured and reviewed by an accountant.
-      automatic_tax: { enabled: true },
+      // The seller uses AAM (alanyi adomentesseg), matching Billingo's VAT
+      // code. Do not extract VAT from the advertised subscription amount.
+      automatic_tax: { enabled: false },
 
       // **A Hungarian VAT invoice needs a buyer address, and Stripe's default
       // does not collect one.** Left at `auto`, Checkout asks for an address
@@ -130,9 +128,7 @@ export function createStripePaymentLink(options: StripeOptions): PaymentLinkCrea
       // such a customer is missing a legally required field, and it cannot be
       // repaired afterwards because the payer has gone.
       //
-      // It also feeds `automatic_tax` above: Stripe Tax picks a rate from the
-      // buyer's location, and a country-only address is the coarsest input it
-      // will accept rather than the right one.
+      // Billingo still needs the full billing address for AAM invoices.
       billing_address_collection: "required",
 
       // The buyer's adószám, for the organizations that need one on the

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { budapestHour, futureMonday } from "./test-support/booking-dates.js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
@@ -24,7 +25,7 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 const RUN = `av${randomBytes(4).toString("hex")}`;
 
 /** A Monday far enough ahead to clear any default booking window. */
-const MONDAY = "2026-09-07";
+const MONDAY = futureMonday();
 
 describe.skipIf(!databaseUrl)("availability", () => {
   let app: AppInstance;
@@ -564,8 +565,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       const created = await createException(site, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T08:00:00Z`, // 10:00 local
-        endAt: `${MONDAY}T09:00:00Z`, // 11:00 local
+        startAt: budapestHour(MONDAY, 10), // 10:00 local
+        endAt: budapestHour(MONDAY, 11), // 11:00 local
         reason: "Dentist appointment",
       });
 
@@ -581,8 +582,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       await createException(site, {
         type: "ADDITIONAL_AVAILABILITY",
-        startAt: `${MONDAY}T15:00:00Z`, // 17:00 local
-        endAt: `${MONDAY}T17:00:00Z`, // 19:00 local
+        startAt: budapestHour(MONDAY, 17), // 17:00 local
+        endAt: budapestHour(MONDAY, 19), // 19:00 local
       });
 
       expect(localStarts(await searchSlots(site))).toEqual([
@@ -612,8 +613,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       await createException(site, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T07:00:00Z`,
-        endAt: `${MONDAY}T10:00:00Z`,
+        startAt: budapestHour(MONDAY, 9),
+        endAt: budapestHour(MONDAY, 12),
         serviceId: site.serviceId,
       });
 
@@ -631,8 +632,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       const created = await createException(site, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T08:00:00Z`,
-        endAt: `${MONDAY}T09:00:00Z`,
+        startAt: budapestHour(MONDAY, 10),
+        endAt: budapestHour(MONDAY, 11),
       });
       const exceptionId = created.json().id as string;
 
@@ -647,7 +648,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PATCH",
         url: `/v1/availability-exceptions/${exceptionId}`,
         headers: as(site.cookie, site.tenantId),
-        payload: { endAt: `${MONDAY}T10:00:00Z` },
+        payload: { endAt: budapestHour(MONDAY, 12) },
       });
       expect(patched.statusCode, patched.body).toBe(200);
       // The 11:00 slot is now blocked too.
@@ -667,15 +668,15 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       const backwards = await createException(site, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T10:00:00Z`,
-        endAt: `${MONDAY}T09:00:00Z`,
+        startAt: budapestHour(MONDAY, 12),
+        endAt: budapestHour(MONDAY, 11),
       });
       expect(backwards.statusCode).toBe(422);
 
       const created = await createException(site, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T08:00:00Z`,
-        endAt: `${MONDAY}T09:00:00Z`,
+        startAt: budapestHour(MONDAY, 10),
+        endAt: budapestHour(MONDAY, 11),
       });
       const exceptionId = created.json().id as string;
 
@@ -684,7 +685,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PATCH",
         url: `/v1/availability-exceptions/${exceptionId}`,
         headers: as(site.cookie, site.tenantId),
-        payload: { endAt: `${MONDAY}T07:00:00Z` },
+        payload: { endAt: budapestHour(MONDAY, 9) },
       });
       expect(patched.statusCode).toBe(422);
     });
@@ -695,8 +696,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
 
       const created = await createException(theirs, {
         type: "UNAVAILABLE",
-        startAt: `${MONDAY}T08:00:00Z`,
-        endAt: `${MONDAY}T09:00:00Z`,
+        startAt: budapestHour(MONDAY, 10),
+        endAt: budapestHour(MONDAY, 11),
       });
       const exceptionId = created.json().id as string;
 
@@ -882,8 +883,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
         headers: as(member.cookie, site.tenantId),
         payload: {
           type: "UNAVAILABLE",
-          startAt: `${MONDAY}T08:00:00Z`,
-          endAt: `${MONDAY}T09:00:00Z`,
+          startAt: budapestHour(MONDAY, 10),
+          endAt: budapestHour(MONDAY, 11),
         },
       });
       expect(mine.statusCode, mine.body).toBe(201);
@@ -901,8 +902,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
         headers: as(member.cookie, site.tenantId),
         payload: {
           type: "UNAVAILABLE",
-          startAt: `${MONDAY}T08:00:00Z`,
-          endAt: `${MONDAY}T09:00:00Z`,
+          startAt: budapestHour(MONDAY, 10),
+          endAt: budapestHour(MONDAY, 11),
         },
       });
       expect(theirs.statusCode).toBe(403);
@@ -1362,7 +1363,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         payload: {
           providerId: site.providerId,
           serviceId: site.serviceId,
-          startAt: `${MONDAY}T08:00:00.000Z`, // 10:00 Budapest
+          startAt: budapestHour(MONDAY, 10), // 10:00 Budapest
           customer: { fullName: "Nagy Béla", email: `patient-${label}-${RUN}@example.test` },
         },
       });
@@ -1451,8 +1452,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
       await app.prisma.booking.update({
         where: { id: booking.id },
         data: {
-          startAt: new Date("2026-01-05T09:00:00.000Z"),
-          endAt: new Date("2026-01-05T10:00:00.000Z"),
+          startAt: new Date(Date.now() - 2 * 86_400_000),
+          endAt: new Date(Date.now() - 2 * 86_400_000 + 3_600_000),
         },
       });
 
@@ -1484,8 +1485,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
         headers: as(site.cookie, site.tenantId),
         payload: {
           type: "UNAVAILABLE",
-          startAt: `${MONDAY}T06:00:00.000Z`,
-          endAt: `${MONDAY}T10:00:00.000Z`,
+          startAt: budapestHour(MONDAY, 8),
+          endAt: budapestHour(MONDAY, 12),
         },
       });
 
@@ -1507,8 +1508,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
         headers: as(site.cookie, site.tenantId),
         payload: {
           type: "ADDITIONAL_AVAILABILITY",
-          startAt: `${MONDAY}T14:00:00.000Z`,
-          endAt: `${MONDAY}T16:00:00.000Z`,
+          startAt: budapestHour(MONDAY, 16),
+          endAt: budapestHour(MONDAY, 18),
         },
       });
 
@@ -1526,8 +1527,8 @@ describe.skipIf(!databaseUrl)("availability", () => {
         headers: as(site.cookie, site.tenantId),
         payload: {
           type: "UNAVAILABLE",
-          startAt: `${MONDAY}T06:00:00.000Z`,
-          endAt: `${MONDAY}T10:00:00.000Z`,
+          startAt: budapestHour(MONDAY, 8),
+          endAt: budapestHour(MONDAY, 12),
           acknowledgeAffectedBookings: true,
         },
       });
@@ -1537,7 +1538,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         method: "PATCH",
         url: `/v1/availability-exceptions/${created.json().id as string}`,
         headers: as(site.cookie, site.tenantId),
-        payload: { endAt: `${MONDAY}T07:00:00.000Z` },
+        payload: { endAt: budapestHour(MONDAY, 9) },
       });
 
       expect(shrunk.statusCode, shrunk.body).toBe(200);
@@ -1579,7 +1580,7 @@ describe.skipIf(!databaseUrl)("availability", () => {
         payload: {
           providerId: site.providerId,
           serviceId: site.serviceId,
-          startAt: `${MONDAY}T08:00:00.000Z`,
+          startAt: budapestHour(MONDAY, 10),
           customer: { fullName: "Nagy Béla", email: `badge-${RUN}@example.test` },
         },
       });

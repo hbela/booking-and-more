@@ -405,6 +405,13 @@ export class ConversationService {
       });
     }
 
+    if (outcome.message !== undefined) {
+      return this.reply({
+        session: args.session, tenant: args.tenant, collected: args.collected,
+        message: outcome.message, countTurn: true,
+      });
+    }
+
     const collected: StoredState = { ...args.collected, ...outcome.collected };
     if (outcome.slots !== undefined) collected.lastSlots = outcome.slots;
 

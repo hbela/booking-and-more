@@ -1,4 +1,4 @@
-import type { PrismaClient, Provider } from "@bam/db";
+import type { Prisma, PrismaClient, Provider } from "@bam/db";
 import { ErrorCodes, NotFoundError } from "@bam/contracts";
 import { definedOnly } from "../../lib/patch.js";
 import { ProviderRepository } from "./provider.repository.js";
@@ -44,12 +44,12 @@ export class ProviderService {
     tenantId: string;
     input: CreateProviderBody;
     defaults: TenantDefaults;
-  }): Promise<Provider> {
+  }, transaction?: Prisma.TransactionClient): Promise<Provider> {
     const { input, defaults } = args;
 
-    return this.providers.create({
-      tenantId: args.tenantId,
+    return (transaction ?? this.prisma).provider.create({
       data: {
+        tenantId: args.tenantId,
         displayName: input.displayName,
         timezone: input.timezone ?? defaults.timezone,
         languages: input.languages ?? [defaults.language],

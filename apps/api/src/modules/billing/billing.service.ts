@@ -359,7 +359,8 @@ export class BillingService {
 
         throw new ConflictError(
           ErrorCodes.VALIDATION_FAILED,
-          "This organization has already paid. Its subscription is being activated — this usually takes a moment.",
+          "Checkout is complete. The subscription is awaiting activation. Do not start another checkout.",
+          { reason: "SUBSCRIPTION_ACTIVATION_PENDING" },
         );
       }
 

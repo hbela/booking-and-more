@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { futureMonday } from "./test-support/booking-dates.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
@@ -21,7 +22,7 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 const RUN = `dg${randomBytes(4).toString("hex")}`;
 
 /** A Monday far enough ahead to clear any default booking window. */
-const MONDAY = "2026-09-07";
+const MONDAY = futureMonday();
 
 describe.skipIf(!databaseUrl)("diary delegation", () => {
   let app: AppInstance;

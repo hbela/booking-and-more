@@ -5,6 +5,7 @@ import {
   resolveDateExpression,
   type CollectedFields,
   type RefusalKey,
+  type AssistantMessage,
 } from "@bam/conversation-engine";
 import type { PrismaClient, Service, ServiceTranslation, Tenant } from "@bam/db";
 
@@ -49,6 +50,7 @@ export interface ToolContext {
 }
 
 export interface ToolOutcome {
+  message?: AssistantMessage;
   /** Merged into the conversation's collected fields. */
   collected?: Partial<CollectedFields>;
   services?: z.infer<typeof conversationServiceSchema>[];
@@ -88,6 +90,7 @@ export class ConversationTools {
       LIST_SERVICES: (context) => this.listServices(context),
       GET_SERVICE_DETAILS: (context) => this.listServices(context),
       GET_PROVIDER_DETAILS: (context) => this.listProviders(context),
+      GET_LOCATION_DETAILS: (context) => this.locationDetails(context),
       SEARCH_SLOTS: (context) => this.searchSlots(context),
       SELECT_SLOT: (context) => this.selectSlot(context),
       CREATE_BOOKING: (context) => this.prepareBooking(context),
@@ -99,15 +102,41 @@ export class ConversationTools {
 
   // --- Read tools -----------------------------------------------------------
 
+  async locationDetails(context: ToolContext): Promise<ToolOutcome> {
+    const locations = await this.prisma.location.findMany({
+      where: { tenantId: context.tenant.id, active: true, archivedAt: null },
+      orderBy: { name: "asc" }, take: 25,
+    });
+    const answers = locations.map((location) => {
+      if (location.type !== "PHYSICAL") {
+        const remote = location.type === "ONLINE"
+          ? context.locale === "hu" ? "Online konzultáció" : "Online consultation"
+          : context.locale === "hu" ? "Telefonos konzultáció" : "Telephone consultation";
+        return `${location.name}: ${remote}`;
+      }
+      const address = [
+        [location.postalCode, location.city].filter(Boolean).join(" "),
+        location.addressLine1, location.addressLine2, location.countryCode,
+      ].filter(Boolean).join(", ");
+      return address ? `${location.name}: ${address}` : "";
+    }).filter(Boolean);
+    const answer = answers.join("\n") || (context.locale === "hu"
+      ? "A pontos cím nincs megadva. Kérem, érdeklődjön közvetlenül a vállalkozásnál."
+      : "The exact address has not been provided. Please contact the business directly.");
+    return { message: { key: "conversation.answer", params: { answer }, ui: "NONE" } };
+  }
+
   async listServices(context: ToolContext): Promise<ToolOutcome> {
     const rows = await this.catalogue.listServices({ tenantId: context.tenant.id, limit: 25 });
     const query = stringParam(context.parameters, "serviceQuery", "query");
+    const serviceId = stringParam(context.parameters, "serviceId");
 
     const matched =
-      query === undefined ? rows : matchByName(rows, query, (row) => nameOf(row, context.locale));
+      serviceId !== undefined ? rows.filter((row) => row.id === serviceId)
+        : query === undefined ? rows : matchByName(rows, query, (row) => nameOf(row, context.locale));
 
     // Exactly one match is a choice the customer has already made.
-    if (query !== undefined && matched.length === 1) {
+    if ((query !== undefined || serviceId !== undefined) && matched.length === 1) {
       const only = matched[0]!;
       return { collected: { serviceId: only.id }, services: [toServiceView(only, context.locale)] };
     }
@@ -129,9 +158,11 @@ export class ConversationTools {
     });
 
     const query = stringParam(context.parameters, "providerQuery", "query");
-    const matched = query === undefined ? rows : matchByName(rows, query, (row) => row.displayName);
+    const providerId = stringParam(context.parameters, "providerId");
+    const matched = providerId !== undefined ? rows.filter((row) => row.id === providerId)
+      : query === undefined ? rows : matchByName(rows, query, (row) => row.displayName);
 
-    if (query !== undefined && matched.length === 1) {
+    if ((query !== undefined || providerId !== undefined) && matched.length === 1) {
       const only = matched[0]!;
       return {
         collected: { providerId: only.id },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ApiError, apiFetch, type MeResponse } from "@/lib/api-client";
@@ -63,6 +63,7 @@ export function PlatformScreen(): React.ReactElement {
 
   const [search, setSearch] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const provisionFormRef = useRef<HTMLFormElement>(null);
   /**
    * Shown once, after provisioning. Held in state rather than refetched because
    * the server does not store it — only its hash (tech-impl §34.4). Navigating
@@ -83,6 +84,7 @@ export function PlatformScreen(): React.ReactElement {
     mutationFn: (body: Record<string, string>) =>
       apiFetch<ProvisionResponse>("/v1/platform/organizations", { method: "POST", body }),
     onSuccess: (result) => {
+      provisionFormRef.current?.reset();
       setFormError(null);
       setAcceptUrl(result.acceptUrl);
       void queryClient.invalidateQueries({ queryKey: ["platform", "organizations"] });
@@ -162,6 +164,7 @@ export function PlatformScreen(): React.ReactElement {
         <p className="text-sm text-ink-muted">{t("provisionExplanation")}</p>
 
         <form
+          ref={provisionFormRef}
           className="grid gap-4 sm:grid-cols-2"
           onSubmit={(event) => {
             event.preventDefault();

@@ -226,7 +226,9 @@ export function ServicesScreen(): React.ReactElement {
 
       {translating && context.tenantId ? (
         <TranslationsPanel
+          key={`${context.tenantId}-${translating.id}`}
           tenantId={context.tenantId}
+          defaultLanguage={context.me.tenant?.defaultLanguage ?? "hu"}
           service={translating}
           onClose={() => {
             setTranslating(null);
@@ -403,17 +405,18 @@ function EditServicePanel({
 /**
  * Tenant-managed service translations (tech-impl §38).
  *
- * Every supported locale is shown at once and submitted as a whole set, because
- * that is what the API's `PUT` means. A blank name is treated as "no
- * translation" and the locale falls back to the service's own name — which is
- * the behaviour a reader wants anyway.
+ * The original language and saved translations are locked. Preserve saved
+ * translations explicitly: disabled inputs are absent from FormData, while
+ * the API's PUT replaces the whole set.
  */
 function TranslationsPanel({
   tenantId,
+  defaultLanguage,
   service,
   onClose,
 }: {
   tenantId: string;
+  defaultLanguage: string;
   service: Service;
   onClose: () => void;
 }): React.ReactElement {
@@ -426,13 +429,17 @@ function TranslationsPanel({
       const data = new FormData(form);
 
       const translations = LOCALES.flatMap((locale) => {
+        const existing = service.translations.find((entry) => entry.locale === locale);
+        if (existing) return [existing];
+        if (locale === defaultLanguage) return [];
+
         const name = textField(data, `name-${locale}`);
         // A blank name means "no translation for this locale", and the whole
         // entry is dropped rather than stored as an empty string.
         if (name === "") return [];
 
         const description = textField(data, `description-${locale}`);
-        return [{ locale, name, ...(description === "" ? {} : { description }) }];
+        return [{ locale, name, description: description === "" ? null : description }];
       });
 
       return apiFetch(`/v1/services/${service.id}/translations`, {
@@ -462,6 +469,8 @@ function TranslationsPanel({
       >
         {LOCALES.map((locale) => {
           const existing = service.translations.find((entry) => entry.locale === locale);
+          const isOriginal = locale === defaultLanguage;
+          const locked = isOriginal || Boolean(existing);
 
           return (
             <div key={locale} className="flex flex-col gap-2">
@@ -469,9 +478,9 @@ function TranslationsPanel({
                 <Input
                   id={`name-${locale}`}
                   name={`name-${locale}`}
-                  defaultValue={existing?.name ?? ""}
+                  defaultValue={existing?.name ?? (isOriginal ? service.name : "")}
                   placeholder={service.name}
-                  
+                  disabled={locked}
                 />
               </Field>
 
@@ -482,8 +491,8 @@ function TranslationsPanel({
                 <Input
                   id={`description-${locale}`}
                   name={`description-${locale}`}
-                  defaultValue={existing?.description ?? ""}
-                  
+                  defaultValue={existing?.description ?? (isOriginal ? service.description ?? "" : "")}
+                  disabled={locked}
                 />
               </Field>
             </div>

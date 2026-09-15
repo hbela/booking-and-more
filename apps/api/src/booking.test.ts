@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { futureMonday } from "./test-support/booking-dates.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
@@ -21,7 +22,7 @@ const databaseUrl = process.env["TEST_DATABASE_URL"];
 const RUN = `bk${randomBytes(4).toString("hex")}`;
 
 /** A Monday far enough ahead to clear any default booking window. */
-const MONDAY = "2026-09-07";
+const MONDAY = futureMonday();
 
 describe.skipIf(!databaseUrl)("bookings", () => {
   let app: AppInstance;
@@ -860,8 +861,8 @@ describe.skipIf(!databaseUrl)("bookings", () => {
 
       // A one-day horizon puts the test Monday well outside what the public
       // may book. The advance window rather than the notice window only
-      // because the notice field caps at 30 days and the fixture is further
-      // out than that; both are the same rule from opposite ends.
+      // to keep the test independent of the time of day; both windows enforce
+      // the public booking policy.
       await app.inject({
         method: "PATCH",
         url: `/v1/providers/${site.providerId}`,
@@ -1033,9 +1034,11 @@ describe.skipIf(!databaseUrl)("bookings", () => {
   // -------------------------------------------------------------------------
 
   describe("what the outbox carries", () => {
+    // Creating the fixture's provider also emits PROVIDER_INVITED. These
+    // assertions cover all events for bookings, not tenant onboarding events.
     const outboxFor = (tenantId: string) =>
       app.prisma.outboxEvent.findMany({
-        where: { tenantId },
+        where: { tenantId, aggregateType: "Booking" },
         orderBy: { createdAt: "asc" },
       });
 

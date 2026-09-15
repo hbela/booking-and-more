@@ -12,7 +12,7 @@
   button.setAttribute("aria-expanded", "false");
   Object.assign(button.style, { position: "fixed", bottom: "20px", [position]: "20px", zIndex: "2147483646", border: "0", borderRadius: "999px", padding: "13px 18px", background: "#2563eb", color: "white", font: "600 14px system-ui", cursor: "pointer", boxShadow: "0 8px 30px rgba(0,0,0,.2)" });
   const frame = document.createElement("iframe");
-  frame.title = locale === "hu" ? "Foglalási asszisztens" : "Booking assistant";
+  frame.title = locale === "hu" ? "AI Asszistens" : "AI Assistant";
   frame.src = `${hostedOrigin}/${locale}/${encodeURIComponent(tenant)}/chat?parentOrigin=${encodeURIComponent(location.origin)}`;
   frame.setAttribute("allow", "clipboard-write");
   Object.assign(frame.style, { display: "none", position: "fixed", bottom: "76px", [position]: "20px", zIndex: "2147483645", width: "min(420px, calc(100vw - 24px))", height: "min(680px, calc(100vh - 100px))", border: "0", borderRadius: "18px", boxShadow: "0 18px 60px rgba(0,0,0,.28)", background: "white" });

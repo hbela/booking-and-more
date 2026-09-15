@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { getPathname, useRouter } from "@/i18n/navigation";
+import type { Locale } from "@/i18n/routing";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { signOut, useSession } from "@/lib/auth-client";
 import { Field } from "./auth-form";
@@ -60,9 +61,17 @@ type State =
  */
 export function AcceptInvitation({ token }: { token: string }): React.ReactElement {
   const t = useTranslations("invitation");
+  const locale = useLocale() as Locale;
   const router = useRouter();
   const session = useSession();
   const [state, setState] = useState<State>({ kind: "checking" });
+
+  useEffect(() => {
+    if (state.kind !== "accepted" || state.role !== "PROVIDER") return;
+    // A full navigation reads the newly issued session cookie and avoids stale
+    // auth/query caches left by registration or a previously active tenant.
+    window.location.replace(getPathname({ locale, href: "/dashboard/availability" }));
+  }, [state, locale]);
 
   useEffect(() => {
     if (session.isPending) return;
@@ -238,10 +247,7 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
               // (phase-2-3 §2.7) and the thing the email just asked them to
               // fill in. Everybody else lands where they always did.
               //
-              // Still a press rather than an auto-redirect: RegisterForm calls
-              // router.refresh() first precisely because the session cookie
-              // arrives on a response the cached session does not know about,
-              // and navigating on its behalf re-opens that race.
+              // Providers automatically navigate above; keep this as a fallback.
                 router.push(state.role === "PROVIDER" ? "/dashboard/availability" : "/dashboard");
               }}
             >

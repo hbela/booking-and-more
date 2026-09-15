@@ -45,8 +45,8 @@ export function BookingsScreen(): React.ReactElement {
 
   // Three-way since diary delegation: every diary, the caller's own, or the
   // ones handed to them (docs/phase-3-4-diary-delegation.md §6.2). The filter
-  // renders whenever there is more than one to choose between, which no longer
-  // implies `booking:read:all`.
+  // renders even with one provider, so the available diary is always visible.
+  // Having a filter does not imply `booking:read:all`.
   const scope = diaryScopeFor(context.me, "booking:read:all", "BOOKINGS");
   const canSeeEveryone = scope.everyDiary;
 
@@ -125,7 +125,7 @@ export function BookingsScreen(): React.ReactElement {
             />
           </Field>
 
-          {providerOptions.length > 1 ? (
+          {providerOptions.length > 0 ? (
             <Field id="bookings-provider" label={t("provider")}>
               <Select
                 id="bookings-provider"

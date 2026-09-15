@@ -3,25 +3,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import {
-  ApiError,
-  apiFetch,
-  type Invitation,
-  type Member,
-  type Paginated,
-  type Provider,
-} from "@/lib/api-client";
+import { ApiError, apiFetch, type Member, type Paginated, type Provider } from "@/lib/api-client";
 import { resolveDiaryState } from "@/lib/member-diary";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Button, ButtonLink } from "./ui/button";
-import { Callout, CalloutLink } from "./ui/callout";
 import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
 import { Section } from "./ui/section";
+import { BusinessKnowledge } from "./business-knowledge";
 
 /**
- * Dashboard overview: who is here, and who to invite.
+ * Dashboard overview: business knowledge and members.
  *
  * Epic 2 moved the header, tenant switcher and navigation into
  * {@link DashboardShell}, shared with the catalogue screens. What is left here
@@ -45,13 +38,6 @@ export function Dashboard(): React.ReactElement {
     queryKey: ["members", context.tenantId],
     queryFn: () => apiFetch<{ items: Member[] }>("/v1/members", { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && canReadMembers,
-  });
-
-  const invitations = useQuery({
-    queryKey: ["invitations", context.tenantId],
-    queryFn: () =>
-      apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: context.tenantId }),
-    enabled: Boolean(context.tenantId) && canManageMembers,
   });
 
   // Only to name a member's diary in the table, and to offer the unlinked ones
@@ -103,6 +89,16 @@ export function Dashboard(): React.ReactElement {
             />
           ) : null}
 
+          {context.tenantId &&
+          context.me.features.assistant &&
+          context.can("conversation:read:all") ? (
+            <BusinessKnowledge
+              key={context.tenantId}
+              tenantId={context.tenantId}
+              canManage={context.can("assistant:manage")}
+            />
+          ) : null}
+
           {canReadMembers ? (
             <Section title={t("members")}>
               <div className="overflow-x-auto">
@@ -148,16 +144,6 @@ export function Dashboard(): React.ReactElement {
                 </table>
               </div>
             </Section>
-          ) : null}
-
-          {canManageMembers && context.tenantId ? (
-            <InvitePanel
-              tenantId={context.tenantId}
-              invitations={invitations.data?.items ?? []}
-              onInvited={() => {
-                void queryClient.invalidateQueries({ queryKey: ["invitations"] });
-              }}
-            />
           ) : null}
         </>
       )}
@@ -424,124 +410,5 @@ function MemberDiary({
       ) : null}
       <ErrorText>{error}</ErrorText>
     </div>
-  );
-}
-
-function InvitePanel({
-  tenantId,
-  invitations,
-  onInvited,
-}: {
-  tenantId: string;
-  invitations: Invitation[];
-  onInvited: () => void;
-}): React.ReactElement {
-  const t = useTranslations("dashboard");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("ADMIN");
-  const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      apiFetch<{ acceptUrl: string }>("/v1/members/invitations", {
-        method: "POST",
-        tenantId,
-        body: { email, role },
-      }),
-    onSuccess: (result) => {
-      setAcceptUrl(result.acceptUrl);
-      setEmail("");
-      onInvited();
-    },
-    onError: (cause: unknown) => {
-      setError(cause instanceof ApiError ? cause.message : t("genericError"));
-    },
-  });
-
-  return (
-    <Card title={t("invite")}>
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          setAcceptUrl(null);
-          mutation.mutate();
-        }}
-      >
-        <div className="flex-1">
-          <Field id="invite-email" label={t("email")}>
-            <Input
-              id="invite-email"
-              type="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-              }}
-              required
-              className="w-full"
-            />
-          </Field>
-        </div>
-
-        <Field id="invite-role" label={t("role")}>
-          <Select
-            id="invite-role"
-            value={role}
-            onChange={(event) => {
-              setRole(event.target.value);
-            }}
-          >
-            {/* Operational roles are deliberately absent. This panel has no
-                diary or delegation scopes to attach, so a PROVIDER or
-                ASSISTANT invited here would join unable to do useful work.
-                Both are invited from the relevant row on the Providers
-                screen, where the intended diary is unambiguous. */}
-            {["OWNER", "ADMIN"].map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Callout>
-          {t.rich("inviteOperationalRoleElsewhere", {
-            link: (chunks) => <CalloutLink href="/dashboard/providers">{chunks}</CalloutLink>,
-          })}
-        </Callout>
-
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
-          {t("sendInvite")}
-        </button>
-      </form>
-
-      <ErrorText>{error}</ErrorText>
-
-      {acceptUrl ? (
-        <div className="bg-warning-surface text-on-warning-surface rounded-lg p-3 text-sm">
-          {/* Shown once. Only a hash is stored, so this link cannot be recovered
-              later. Epic 5 emails it instead of putting it on screen. */}
-          <p className="font-medium">{t("inviteLinkOnce")}</p>
-          <code className="mt-1 block break-all font-mono text-xs">{acceptUrl}</code>
-        </div>
-      ) : null}
-
-      {invitations.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-sm">
-          {invitations.map((invitation) => (
-            <li key={invitation.id} className="text-ink-muted">
-              {invitation.email} · {invitation.role} · {t("expires")}{" "}
-              {new Date(invitation.expiresAt).toLocaleDateString()}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </Card>
   );
 }
