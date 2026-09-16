@@ -122,8 +122,11 @@ export function DashboardShell({
   return (
     <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 max-w-full">
           <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          {context.me?.tenant ? (
+            <p className="mt-1 text-lg font-medium break-words">{context.me.tenant.name}</p>
+          ) : null}
           {context.me ? (
             <p className="text-sm text-ink-muted">
               {context.me.user.name} · {context.me.user.email}
