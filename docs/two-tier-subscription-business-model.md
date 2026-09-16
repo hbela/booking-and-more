@@ -4,10 +4,10 @@
 
 The Stripe/database identifiers remain `STARTER` and `PROFESSIONAL`; customers see the commercial names below.
 
-| Internal plan  | Customer name   | Monthly price (VAT inclusive) | Entitlement                                                                                 |
-| -------------- | --------------- | ----------------------------: | ------------------------------------------------------------------------------------------- |
-| `STARTER`      | Form            |                      9,990 Ft | Dashboard and public booking form; no AI chat                                               |
-| `PROFESSIONAL` | AI Receptionist |                     24,990 Ft | Form plus chat, widget, transcripts, 2M input and 400K output tokens per UTC calendar month |
+| Internal plan  | Customer name   | Monthly price (AAM, no VAT) | Entitlement                                                                                 |
+| -------------- | --------------- | --------------------------: | ------------------------------------------------------------------------------------------- |
+| `STARTER`      | Form            |                    9,990 Ft | Dashboard and public booking form; no AI chat                                               |
+| `PROFESSIONAL` | AI Receptionist |                   24,990 Ft | Form plus chat, widget, transcripts, 2M input and 400K output tokens per UTC calendar month |
 
 Assisted configuration is an optional service sold separately for 29,990 Ft once. It is not MRR and is invoiced or sold manually during the concierge launch.
 
