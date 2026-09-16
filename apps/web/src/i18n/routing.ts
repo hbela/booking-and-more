@@ -58,10 +58,9 @@ export function isTenantPath(pathname: string): boolean {
 
   if (first === undefined || APP_SEGMENTS.has(first)) return false;
 
-  // Exactly `/{slug}` or `/{slug}/book`. Nothing deeper is a tenant page today,
-  // and matching on the prefix alone would quietly claim any future route under
-  // one — including `/{slug}/book/anything`.
+  // Public tenant entry points, including staff login, carry their own locale.
+  // Match complete paths so future nested routes are not claimed implicitly.
   if (withoutLocale.length === 1) return true;
 
-  return withoutLocale.length === 2 && second === "book";
+  return withoutLocale.length === 2 && ["book", "chat", "sign-in"].includes(second ?? "");
 }

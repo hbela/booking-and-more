@@ -25,6 +25,14 @@
       "statusNotConfigured": "not configured (arrives in Epic 5)"
     }
   },
+  "tenantLogin": {
+    "title": "Staff sign-in · {tenant}",
+    "intro": "Sign in with your existing owner, provider or assistant account for this practice.",
+    "checking": "Checking your access…",
+    "noMembership": "Your account does not have access to this practice. Sign out and use an account invited to this practice.",
+    "failed": "We could not open this practice. Please try again with your staff account.",
+    "useAnotherAccount": "Sign out and use another account"
+  },
   "auth": {
     "signInTitle": "Sign in",
     "signUpTitle": "Create your account",

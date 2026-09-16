@@ -25,6 +25,14 @@
       "statusNotConfigured": "nincs beállítva (az 5. epikban jön)"
     }
   },
+  "tenantLogin": {
+    "title": "Munkatársi belépés · {tenant}",
+    "intro": "Lépjen be a vállalkozáshoz tartozó meglévő tulajdonosi, szolgáltatói vagy asszisztensi fiókjával.",
+    "checking": "Hozzáférés ellenőrzése…",
+    "noMembership": "Ezzel a fiókkal nem fér hozzá ehhez a vállalkozáshoz. Jelentkezzen ki, és használjon ide meghívott fiókot.",
+    "failed": "Nem sikerült megnyitni a vállalkozást. Próbáljon újra belépni a munkatársi fiókjával.",
+    "useAnotherAccount": "Kijelentkezés és másik fiók használata"
+  },
   "auth": {
     "signInTitle": "Bejelentkezés",
     "signUpTitle": "Fiók létrehozása",

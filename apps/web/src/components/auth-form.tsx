@@ -32,7 +32,13 @@ async function landingFor(): Promise<string> {
  * Server-side rules are not duplicated here beyond `minLength`: the API is the
  * authority on password policy, and a second copy in the client would drift.
  */
-export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.ReactElement {
+export function AuthForm({
+  mode,
+  onAuthenticated,
+}: {
+  mode: "sign-in" | "sign-up";
+  onAuthenticated?: () => Promise<void>;
+}): React.ReactElement {
   const t = useTranslations("auth");
   const router = useRouter();
 
@@ -58,6 +64,10 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }): React.React
         return;
       }
 
+      if (onAuthenticated) {
+        await onAuthenticated();
+        return;
+      }
       router.push(mode === "sign-up" ? "/dashboard" : await landingFor());
       router.refresh();
     } catch {
