@@ -468,6 +468,8 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
 
       await createTenant(alice.cookie, `list-a-${RUN}`, "Alice Clinic");
       const bobTenant = await createTenant(bob.cookie, `list-b-${RUN}`, "Bob Clinic");
+      const domain = `list-b-${RUN}.example.test`;
+      await app.prisma.tenant.update({ where: { id: bobTenant }, data: { domain } });
 
       const response = await app.inject({
         method: "GET",
@@ -477,6 +479,7 @@ describe.skipIf(!databaseUrl)("tenancy", () => {
 
       const ids = (response.json().items as { id: string }[]).map((item) => item.id);
       expect(ids).toEqual([bobTenant]);
+      expect(response.json().items[0]).toMatchObject({ domain });
     });
 
     it("refuses to activate a tenant the caller does not belong to", async () => {

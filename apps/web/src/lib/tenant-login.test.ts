@@ -3,6 +3,50 @@ import type { apiFetch } from "./api-client";
 import { enterTenant, TenantLoginDenied } from "./tenant-login";
 
 describe("tenant-specific login", () => {
+  it("matches a normalized domain independently of the tenant slug", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ user: { isPlatformAdmin: false } })
+      .mockResolvedValueOnce({
+        items: [
+          { id: "wrong", slug: "wellness-demo", domain: "other.appointer.hu" },
+          { id: "correct", slug: "wellness", domain: "wellness-demo.appointer.hu" },
+        ],
+      })
+      .mockResolvedValueOnce(undefined);
+    expect(await enterTenant("Wellness-Demo.Appointer.Hu", request as typeof apiFetch)).toBe(
+      "/dashboard",
+    );
+    expect(request).toHaveBeenLastCalledWith("/v1/tenants/correct/activate", { method: "POST" });
+  });
+
+  it.each(["appointer.hu", "wellness-demo.appointer", "other.appointer.hu"])(
+    "does not infer domain membership from a partial or different identifier: %s",
+    async (identifier) => {
+      const request = vi
+        .fn()
+        .mockResolvedValueOnce({ user: { isPlatformAdmin: false } })
+        .mockResolvedValueOnce({
+          items: [{ id: "one", slug: "wellness", domain: "wellness-demo.appointer.hu" }],
+        });
+      await expect(enterTenant(identifier, request as typeof apiFetch)).rejects.toBeInstanceOf(
+        TenantLoginDenied,
+      );
+      expect(request).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("fails closed when an older API omits the domain", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ user: { isPlatformAdmin: false } })
+      .mockResolvedValueOnce({ items: [{ id: "one", slug: "wellness" }] });
+    await expect(
+      enterTenant("wellness-demo.appointer.hu", request as typeof apiFetch),
+    ).rejects.toBeInstanceOf(TenantLoginDenied);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it.each(["OWNER", "PROVIDER", "ASSISTANT"])(
     "activates the requested membership for %s before navigating",
     async (role) => {

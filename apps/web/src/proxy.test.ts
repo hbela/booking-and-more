@@ -20,22 +20,27 @@ describe("web content security policy", () => {
 });
 
 describe("invitation language", () => {
-  it.each(["wellness", "medicare"])("keeps the language of %s staff entry links", (slug) => {
-    const hu = proxy(
-      new NextRequest(`http://localhost:3000/${slug}/sign-in`, {
-        headers: { "accept-language": "en", cookie: "NEXT_LOCALE=en" },
-      }),
-    );
-    expect(hu.headers.get("location")).toBeNull();
-    expect(hu.headers.get("x-middleware-rewrite")).toBe(`http://localhost:3000/hu/${slug}/sign-in`);
-    const en = proxy(
-      new NextRequest(`http://localhost:3000/en/${slug}/sign-in`, {
-        headers: { "accept-language": "hu", cookie: "NEXT_LOCALE=hu" },
-      }),
-    );
-    expect(en.headers.get("location")).toBeNull();
-    expect(en.headers.get("x-middleware-request-x-next-intl-locale")).toBe("en");
-  });
+  it.each(["wellness", "medicare", "wellness-demo.appointer.hu", "medicare-demo.appointer.hu"])(
+    "keeps the language of %s staff entry links",
+    (slug) => {
+      const hu = proxy(
+        new NextRequest(`http://localhost:3000/${slug}/sign-in`, {
+          headers: { "accept-language": "en", cookie: "NEXT_LOCALE=en" },
+        }),
+      );
+      expect(hu.headers.get("location")).toBeNull();
+      expect(hu.headers.get("x-middleware-rewrite")).toBe(
+        `http://localhost:3000/hu/${slug}/sign-in`,
+      );
+      const en = proxy(
+        new NextRequest(`http://localhost:3000/en/${slug}/sign-in`, {
+          headers: { "accept-language": "hu", cookie: "NEXT_LOCALE=hu" },
+        }),
+      );
+      expect(en.headers.get("location")).toBeNull();
+      expect(en.headers.get("x-middleware-request-x-next-intl-locale")).toBe("en");
+    },
+  );
 
   it.each([undefined, "en"])(
     "keeps Hungarian invitations in Hungarian with an English browser and cookie %s",

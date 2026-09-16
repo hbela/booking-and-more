@@ -14,6 +14,7 @@ function toResponse(tenant: Tenant): z.infer<typeof tenantResponseSchema> {
   return {
     id: tenant.id,
     slug: tenant.slug,
+    domain: tenant.domain,
     name: tenant.name,
     status: tenant.status,
     defaultTimezone: tenant.defaultTimezone,

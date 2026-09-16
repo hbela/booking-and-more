@@ -50,6 +50,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Skip API routes, Next internals, and any path containing a dot (static
-  // files). The security policy is for documents; static assets inherit it.
-  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
+  // files), except staff entry points whose organization domain contains dots.
+  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)", "/:tenant/sign-in", "/:locale/:tenant/sign-in"],
 };

@@ -163,6 +163,8 @@ export type DelegationCandidate = DelegationMember & { alreadyDelegated: boolean
 export interface TenantSummary {
   id: string;
   slug: string;
+  /** Missing on older API deployments; domain login then fails closed. */
+  domain?: string | null;
   name: string;
   status: string;
   role: string;

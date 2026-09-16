@@ -34,7 +34,8 @@ for (const tenant of ["wellness", "medicare"]) {
         expect(new Set(hrefs)).toEqual(
           new Set(
             ["book", "chat", "sign-in"].map(
-              (action) => `https://app.booking.appointer.hu${prefix}/${tenant}/${action}`,
+              (action) =>
+                `https://app.booking.appointer.hu${prefix}/${action === "sign-in" ? `${tenant}-demo.appointer.hu` : tenant}/${action}`,
             ),
           ),
         );

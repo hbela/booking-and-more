@@ -1,5 +1,19 @@
 import { expect, test } from "@playwright/test";
 
+test("domain login keeps Hungarian despite an English browser preference", async ({
+  page,
+  context,
+}) => {
+  await context.addCookies([{ name: "NEXT_LOCALE", value: "en", url: "http://127.0.0.1:3100" }]);
+  await page.route("**/v1/me", (route) => route.fulfill({ status: 401, json: {} }));
+  const response = await page.goto("/wellness-demo.appointer.hu/sign-in");
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["content-security-policy"]).toContain("script-src");
+  await expect(page.locator("html")).toHaveAttribute("lang", "hu");
+  await expect(page).toHaveURL(/\/wellness-demo\.appointer\.hu\/sign-in$/);
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+});
+
 test("shared login sends platform administrators to admin without tenant activation", async ({
   page,
 }) => {
@@ -61,9 +75,9 @@ test("wrong-tenant session stays on login and can use another account", async ({
     if (path.endsWith("/activate")) activations++;
     return route.fulfill({ json: {} });
   });
-  await page.goto("/en/medicare/sign-in");
+  await page.goto("/en/medicare-demo.appointer.hu/sign-in");
   await expect(page.getByRole("alert").filter({ hasText: "does not have access" })).toBeVisible();
-  await expect(page).toHaveURL(/\/en\/medicare\/sign-in$/);
+  await expect(page).toHaveURL(/\/en\/medicare-demo\.appointer\.hu\/sign-in$/);
   expect(activations).toBe(0);
   await page.getByRole("button", { name: "Sign out and use another account" }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
@@ -100,6 +114,7 @@ for (const role of ["OWNER", "PROVIDER", "ASSISTANT"]) {
       const tenants = ["wellness", "medicare"].map((slug) => ({
         id: slug,
         slug,
+        domain: `${slug}-demo.appointer.hu`,
         name: slug,
         status: "ACTIVE",
         role,
@@ -147,14 +162,14 @@ for (const role of ["OWNER", "PROVIDER", "ASSISTANT"]) {
         }
         return route.fulfill({ json: { items: [] } });
       });
-      await page.goto("/en/medicare/sign-in");
+      await page.goto("/en/medicare-demo.appointer.hu/sign-in");
       if (!existingSession) {
         await page.getByLabel("Email", { exact: true }).fill("staff@example.test");
         await page.getByLabel("Password", { exact: true }).fill("test-password-only");
         await page.getByRole("button", { name: "Sign in", exact: true }).click();
       }
       await expect.poll(() => activationStarted).toBe(true);
-      await expect(page).toHaveURL(/\/en\/medicare\/sign-in$/);
+      await expect(page).toHaveURL(/\/en\/medicare-demo\.appointer\.hu\/sign-in$/);
       await expect(page.getByRole("status")).toContainText("Checking your access");
       release();
       await expect(page).toHaveURL(/\/en\/dashboard$/);

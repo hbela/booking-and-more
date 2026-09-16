@@ -86,6 +86,7 @@ export const updateTenantBodySchema = z
 export const tenantResponseSchema = z.object({
   id: idSchema,
   slug: z.string(),
+  domain: z.string().nullable(),
   name: z.string(),
   status: tenantStatusSchema,
   defaultTimezone: z.string(),
