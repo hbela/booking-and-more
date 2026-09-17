@@ -482,7 +482,6 @@
     "language": "Language"
   },
   "manage": {
-    "askAssistant": "Ask the assistant",
     "loading": "Loading…",
     "notFound": "This booking link is not valid. It may have expired.",
     "title": "Your appointment",
