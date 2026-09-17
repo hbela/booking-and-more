@@ -24,7 +24,7 @@ import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
-import { Input } from "./ui/input";
+import { Input, Textarea } from "./ui/input";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
 
@@ -487,9 +487,13 @@ function TranslationsPanel({
               <Field
                 id={`description-${locale}`}
                 label={`${locale.toUpperCase()} — ${t("description")}`}
+                hint={t("serviceDescriptionHint")}
               >
-                <Input
+                <Textarea
                   id={`description-${locale}`}
+                  aria-describedby={`description-${locale}-hint`}
+                  rows={5}
+                  maxLength={4000}
                   name={`description-${locale}`}
                   defaultValue={existing?.description ?? (isOriginal ? service.description ?? "" : "")}
                   disabled={locked}

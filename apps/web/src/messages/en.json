@@ -151,6 +151,7 @@
     "locations": "Locations",
     "name": "Name",
     "description": "Description",
+    "serviceDescriptionHint": "Write a short description first, then put --- on its own line before the detailed description. Short Description: and Long Description: headings also work.",
     "email": "Email",
     "timezone": "Time zone",
     "type": "Type",
@@ -432,6 +433,7 @@
       "success": "Done"
     },
     "chooseService": "What would you like to book?",
+    "longDescription": "Long Description",
     "chooseProvider": "Who would you like to see?",
     "chooseTime": "Pick a time",
     "anyProvider": "Anyone available",

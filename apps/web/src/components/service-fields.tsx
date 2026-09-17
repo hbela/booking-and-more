@@ -129,9 +129,14 @@ export function ServiceFields({
       </Field>
       <p className="text-xs text-ink-subtle">{t("slugHint")}</p>
 
-      <Field id={`${idPrefix}-description`} label={t("description")}>
+      <Field
+        id={`${idPrefix}-description`}
+        label={t("description")}
+        hint={t("serviceDescriptionHint")}
+      >
         <Textarea
           id={`${idPrefix}-description`}
+          aria-describedby={`${idPrefix}-description-hint`}
           value={state.description}
           onChange={(event) => {
             onChange({ description: event.target.value });

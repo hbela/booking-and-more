@@ -32,6 +32,7 @@ import {
 import { firstAcrossMonths, type DayWithSlots } from "@/lib/next-available";
 import type { DateOnly } from "@bam/availability-engine";
 import { BookingCalendar } from "./booking-calendar";
+import { ServiceDescription } from "./service-description";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ErrorText } from "./ui/field";
 import { ThemeToggle } from "./ui/theme-toggle";
@@ -459,7 +460,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
           {services.data?.items.length === 0 ? <p>{t("noServices")}</p> : null}
           <ul className="flex flex-col gap-2">
             {services.data?.items.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className="border-line rounded-xl border">
                 <button
                   type="button"
                   onClick={() => {
@@ -467,7 +468,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(null);
                     setStep("provider");
                   }}
-                  className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
+                  className="hover:bg-accent-surface w-full rounded-xl p-4 text-left transition-colors"
                 >
                   <span className="font-medium">{item.name}</span>
                   <span className="text-ink-muted block text-sm">
@@ -477,10 +478,11 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                       : ""}
                     {item.requiresApproval ? ` · ${t("needsApproval")}` : ""}
                   </span>
-                  {item.description ? (
-                    <span className="mt-1 block text-sm">{item.description}</span>
-                  ) : null}
                 </button>
+                <ServiceDescription
+                  description={item.description}
+                  longDescriptionLabel={t("longDescription")}
+                />
               </li>
             ))}
           </ul>

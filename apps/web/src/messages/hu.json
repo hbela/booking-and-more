@@ -151,6 +151,7 @@
     "locations": "Helyszínek",
     "name": "Név",
     "description": "Leírás",
+    "serviceDescriptionHint": "Először írjon rövid leírást, majd egy külön sorba írt --- után a részletes leírást. A Rövid leírás: és Részletes leírás: címsorok is használhatók.",
     "email": "E-mail cím",
     "timezone": "Időzóna",
     "type": "Típus",
@@ -432,6 +433,7 @@
       "success": "Kész"
     },
     "chooseService": "Mit szeretne foglalni?",
+    "longDescription": "Részletes leírás",
     "chooseProvider": "Kihez szeretne jönni?",
     "chooseTime": "Válasszon időpontot",
     "anyProvider": "Bárki, aki ráér",
