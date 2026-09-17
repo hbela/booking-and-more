@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
-import { startConversation } from "@/lib/conversation-client";
+import { assistantAvailability } from "@/lib/conversation-client";
+import { ChatPanel } from "./chat-panel";
 import { Button } from "./ui/button";
 import {
   apiFetch,
@@ -40,7 +40,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
   const t = useTranslations("manage");
   const locale = useLocale();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const [showAssistant, setShowAssistant] = useState(false);
 
   const [mode, setMode] = useState<"view" | "reschedule" | "cancel">("view");
   const [newStartAt, setNewStartAt] = useState("");
@@ -56,6 +56,12 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
     // waiting for that cross-browser change, then stop once it is settled.
     refetchInterval: (query) =>
       query.state.data === undefined || query.state.data.status === "PENDING" ? 5_000 : false,
+  });
+
+  const assistant = useQuery({
+    queryKey: ["public-assistant", booking.data?.tenantSlug],
+    queryFn: () => assistantAvailability(booking.data!.tenantSlug),
+    enabled: Boolean(booking.data?.tenantSlug),
   });
 
   const cancelPreview = useQuery({
@@ -145,25 +151,15 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
         <p className="text-sm">{t("nothingToDo")}</p>
       ) : mode === "view" ? (
         <div className="flex flex-wrap gap-3">
-          <Button
-            onClick={() => {
-              void startConversation({
-                tenantSlug: data.tenantSlug,
-                locale,
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                managementToken: token,
-              }).then((started) => {
-                const language = locale === "hu" ? "hu" : "en";
-                sessionStorage.setItem(
-                  `bam.chat.${data.tenantSlug}.${language}`,
-                  JSON.stringify({ id: started.conversationId, token: started.sessionToken }),
-                );
-                router.push(`/${data.tenantSlug}/chat`);
-              });
-            }}
-          >
-            {locale === "hu" ? "Kérdezze az asszisztenst" : "Ask the assistant"}
-          </Button>
+          {assistant.data?.available ? (
+            <Button
+              aria-expanded={showAssistant}
+              aria-controls="booking-assistant"
+              onClick={() => setShowAssistant((shown) => !shown)}
+            >
+              {t("askAssistant")}
+            </Button>
+          ) : null}
           <button
             type="button"
             onClick={() => setMode("reschedule")}
@@ -178,6 +174,17 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
           >
             {t("cancel")}
           </button>
+        </div>
+      ) : null}
+
+      {showAssistant && !settled && mode === "view" ? (
+        <div id="booking-assistant">
+          <ChatPanel
+            tenantSlug={data.tenantSlug}
+            bookingHref={`/booking/manage/${encodeURIComponent(token)}`}
+            managementToken={token}
+            initialLanguage={locale === "hu" ? "hu" : "en"}
+          />
         </div>
       ) : null}
 

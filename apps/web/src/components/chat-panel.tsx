@@ -91,11 +91,12 @@ interface ChatPanelProps {
   tenantSlug: string;
   bookingHref: string;
   managementToken?: string | undefined;
+  initialLanguage?: Locale | undefined;
   parentOrigin?: string | undefined;
 }
 
 export function ChatPanel(props: ChatPanelProps): React.ReactElement {
-  const [language, setLanguage] = useState<Locale>("hu");
+  const [language, setLanguage] = useState<Locale>(props.initialLanguage ?? "hu");
   // Each language has its own session; remounting clears pending UI and drafts.
   return (
     <ChatConversation
@@ -154,13 +155,14 @@ function ChatConversation({
         ...(token ? { managementToken: token } : {}),
       });
       const nextSession = { id: started.conversationId, token: started.sessionToken };
-      sessionStorage.setItem(storageKey, JSON.stringify(nextSession));
+      // Booking management sessions stay in memory, separate from general chat.
+      if (!managementToken) sessionStorage.setItem(storageKey, JSON.stringify(nextSession));
       setAvailable(true);
       setError(null);
       setSession(nextSession);
       absorb(started);
     },
-    [absorb, language, storageKey, tenantSlug],
+    [absorb, language, managementToken, storageKey, tenantSlug],
   );
 
   useEffect(() => {
@@ -175,7 +177,7 @@ function ChatConversation({
           return;
         }
         setAvailable(true);
-        const stored = sessionStorage.getItem(storageKey);
+        const stored = managementToken ? null : sessionStorage.getItem(storageKey);
         if (stored) {
           const existing = JSON.parse(stored) as ConversationSession;
           const replay = await replayConversation(existing);
@@ -262,13 +264,13 @@ function ChatConversation({
     }
   };
   const reset = () => {
-    sessionStorage.removeItem(storageKey);
+    if (!managementToken) sessionStorage.removeItem(storageKey);
     setSession(null);
     setTurn(null);
     setBubbles([]);
     setError(null);
     setBusy(true);
-    void begin()
+    void begin(managementToken)
       .catch((cause: unknown) => {
         if (isAssistantUnavailable(cause)) setAvailable(false);
         else setError(cause instanceof ApiError ? cause.message : String(cause));
