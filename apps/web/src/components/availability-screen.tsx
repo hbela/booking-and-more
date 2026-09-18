@@ -21,10 +21,10 @@ import { Section } from "./ui/section";
  *
  * ## Who can edit what
  *
- * An administrator picks any provider; a provider linked to a diary sees their
+ * An administrator opens a provider from the Providers list; a linked provider sees their
  * own; a delegate sees the diaries handed to them
- * (docs/phase-3-4-diary-delegation.md §6.2). The picker appears even with one
- * provider, so the member can see whose diary they are managing without holding
+ * (docs/phase-3-4-diary-delegation.md §6.2). Only assistants get the picker, even with one
+ * provider, so they can see whose diary they are managing without holding
  * `:all`. That mirrors the API exactly, but it is still only an affordance: the
  * server re-decides on every request, so editing the URL gets a 403 rather than
  * someone else's schedule.
@@ -34,8 +34,8 @@ import { Section } from "./ui/section";
  * From a provider's row on the Providers screen, which passes `?providerId=`.
  * There is no top-level Availability nav item for them any more: a diary belongs
  * to a provider, and the nav implied it belonged to the organization (§2.7). The
- * parameter only seeds the picker — it is an opening position, not a lock, so
- * the picker still switches between diaries without a navigation.
+ * parameter selects that diary. Assistants can switch their delegated diaries
+ * with the picker; providers remain on their own diary.
  *
  * ## Why the provider record is fetched separately
  *
@@ -52,6 +52,7 @@ export function AvailabilityScreen(): React.ReactElement {
 
   const scope = diaryScopeFor(context.me, "availability:manage:all", "AVAILABILITY");
   const canManageAll = scope.everyDiary;
+  const canSelectProvider = context.me?.membership?.role === "ASSISTANT";
 
   // Seeded from the URL, then owned by the picker. `useState`'s initialiser
   // rather than an effect: an effect would paint the first provider's diary
@@ -78,12 +79,15 @@ export function AvailabilityScreen(): React.ReactElement {
   // not an authorisation, and honouring one outside the scope would render a
   // screen whose every request 403s.
   const inScope = selected !== null && options.some((entry) => entry.id === selected);
-  const providerId = inScope
-    ? selected
-    : (options[0]?.id ??
-      // Before the list resolves, a member with exactly one diary already knows
-      // which it is. Avoids a blank frame on the commonest path of all.
-      (scope.providerIds.length === 1 ? scope.providerIds[0]! : null));
+  const providerId =
+    context.me?.membership?.role === "PROVIDER"
+      ? scope.ownProviderId
+      : inScope
+        ? selected
+        : (options[0]?.id ??
+          // Before the list resolves, a member with exactly one diary already knows
+          // which it is. Avoids a blank frame on the commonest path of all.
+          (scope.providerIds.length === 1 ? scope.providerIds[0]! : null));
 
   const provider = useQuery({
     queryKey: ["provider", providerId],
@@ -139,7 +143,7 @@ export function AvailabilityScreen(): React.ReactElement {
         </Section>
       ) : (
         <>
-          {options.length > 0 ? (
+          {canSelectProvider && options.length > 0 ? (
             <Section title={t("title")}>
               <Field id="availability-provider" label={t("provider")}>
                 <Select

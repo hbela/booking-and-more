@@ -158,8 +158,8 @@
   color-scheme: light;
 
   --surface: #fff;
-  --surface-raised: var(--color-slate-50);
-  --surface-sunken: var(--color-slate-100);
+  --surface-raised: #f9fafc;
+  --surface-sunken: #f2f4f9;
 
   /* Two different jobs, two different bars.
      `--line` separates things — card edges, row dividers, rules. Decorative, so
@@ -170,44 +170,42 @@
      come close to. These values clear 3:1 against both the plain and the raised
      surface. They look heavier than a fashionable hairline border; that is the
      requirement, not an accident. */
-  --line: var(--color-slate-200);
+  --line: #e3e7ef;
   --line-strong: oklch(0.64 0.028 262);
 
-  --ink: var(--color-slate-900);
-  --ink-muted: var(--color-slate-600);
-  --ink-subtle: var(--color-slate-500);
+  --ink: #121926;
+  --ink-muted: #4b5566;
+  --ink-subtle: #677286;
 
-  /* brand-600 on white is 5.93:1. brand-500 is 3.95:1 — it looks usable and is
-     not, so it never carries text (phase-11 §2.3). */
-  --primary: var(--color-brand-600);
-  --primary-hover: var(--color-brand-700);
+  /* Cobalt Day values from docs/guides/design.md. Keep the stronger control
+     border above: the guide's pale decorative outline cannot also meet its
+     3:1 control-boundary requirement. Contrast is verified by the test suite. */
+  --primary: #1f5cd4;
+  --primary-hover: #1248b1;
   --on-primary: #fff;
-  --primary-surface: var(--color-brand-50);
-  --on-primary-surface: var(--color-brand-800);
+  --primary-surface: #e0eafd;
+  --on-primary-surface: #0f398d;
 
-  --accent: var(--color-accent-600);
-  --accent-hover: var(--color-accent-700);
+  --accent: #1f5cd4;
+  --accent-hover: #1248b1;
   --on-accent: #fff;
-  --accent-surface: var(--color-accent-50);
-  --on-accent-surface: var(--color-accent-800);
+  --accent-surface: #e0eafd;
+  --on-accent-surface: #0f398d;
 
-  /* Chromas are trimmed to the sRGB gamut rather than rounded to nicer numbers.
-     An out-of-gamut oklch is clipped by the browser, so the stored value would
-     stop describing what renders and the contrast test would assert against a
-     colour nobody sees. */
-  --danger: oklch(0.505 0.205 27);
-  --danger-surface: oklch(0.955 0.022 27);
-  --on-danger-surface: oklch(0.36 0.14 27);
+  /* Semantic feedback colors from the same guide. */
+  --danger: #be0214;
+  --danger-surface: #ffebe8;
+  --on-danger-surface: #76080c;
 
-  --success: oklch(0.5 0.12 155);
-  --success-surface: oklch(0.96 0.04 155);
-  --on-success-surface: oklch(0.36 0.085 155);
+  --success: #0b7643;
+  --success-surface: #defae6;
+  --on-success-surface: #04361f;
 
-  --warning: oklch(0.5 0.1 75);
-  --warning-surface: oklch(0.965 0.03 80);
+  --warning: #845a0f;
+  --warning-surface: #fef2dd;
   --on-warning-surface: oklch(0.4 0.075 75);
 
-  --focus-ring: var(--color-brand-600);
+  --focus-ring: #1f5cd4;
 }
 
 /* Dark, chosen by the operating system.

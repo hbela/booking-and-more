@@ -45,12 +45,17 @@ export function BookingsScreen(): React.ReactElement {
 
   // Three-way since diary delegation: every diary, the caller's own, or the
   // ones handed to them (docs/phase-3-4-diary-delegation.md §6.2). The filter
-  // renders even with one provider, so the available diary is always visible.
-  // Having a filter does not imply `booking:read:all`.
+  // is offered only to assistants, including those with one delegated diary.
   const scope = diaryScopeFor(context.me, "booking:read:all", "BOOKINGS");
   const canSeeEveryone = scope.everyDiary;
 
-  const [providerId, setProviderId] = useState<string>("");
+  const canSelectProvider = context.me?.membership?.role === "ASSISTANT";
+  const [selectedProviderId, setProviderId] = useState<string>("");
+  const providerId = canSelectProvider
+    ? selectedProviderId
+    : context.me?.membership?.role === "PROVIDER"
+      ? (scope.ownProviderId ?? "")
+      : "";
   const [status, setStatus] = useState<string>("");
   const [from, setFrom] = useState(() => new Date().toISOString().slice(0, 10));
   const [to, setTo] = useState(() => {
@@ -66,8 +71,7 @@ export function BookingsScreen(): React.ReactElement {
     // Fetched for a delegate too: an ASSISTANT holds `tenant:read`, and without
     // names the filter would offer opaque ids. The options are narrowed to the
     // scope below — the list supplies labels, never reach.
-    enabled:
-      Boolean(context.tenantId) && (canSeeEveryone || scope.providerIds.length > 0),
+    enabled: Boolean(context.tenantId) && (canSeeEveryone || scope.providerIds.length > 0),
   });
 
   const providerOptions = (providers.data?.items ?? []).filter(
@@ -112,7 +116,6 @@ export function BookingsScreen(): React.ReactElement {
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
-              
             />
           </Field>
           <Field id="bookings-to" label={t("to")}>
@@ -121,17 +124,15 @@ export function BookingsScreen(): React.ReactElement {
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
-              
             />
           </Field>
 
-          {providerOptions.length > 0 ? (
+          {canSelectProvider && providerOptions.length > 0 ? (
             <Field id="bookings-provider" label={t("provider")}>
               <Select
                 id="bookings-provider"
                 value={providerId}
                 onChange={(event) => setProviderId(event.target.value)}
-                
               >
                 {/* Sending no providerId is already correct for a delegate: the
                     server returns the union of the diaries they hold, so "all"
@@ -151,7 +152,6 @@ export function BookingsScreen(): React.ReactElement {
               id="bookings-status"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
-              
             >
               <option value="">{t("anyStatus")}</option>
               {(["PENDING", "CONFIRMED", "COMPLETED", "NO_SHOW", "CANCELLED"] as const).map(
@@ -387,7 +387,8 @@ function ActionButton({
   disabled: boolean;
 }): React.ReactElement {
   return (
-    <Button variant="secondary"
+    <Button
+      variant="secondary"
       type="button"
       onClick={onClick}
       disabled={disabled}

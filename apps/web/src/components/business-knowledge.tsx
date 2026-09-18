@@ -11,13 +11,15 @@ import { Input, Select, Textarea } from "./ui/input";
 const LANGUAGES = ["hu", "en", "de", "fr"] as const;
 const LANGUAGE_LABELS = { hu: "hungarian", en: "english", de: "german", fr: "french" } as const;
 const PROFILE_FIELDS = {
-  hu: "businessDescriptionHu", en: "businessDescriptionEn",
-  de: "businessDescriptionDe", fr: "businessDescriptionFr",
+  hu: "businessDescriptionHu",
+  en: "businessDescriptionEn",
+  de: "businessDescriptionDe",
+  fr: "businessDescriptionFr",
 } as const;
 
 interface Faq {
   id: string;
-  locale: typeof LANGUAGES[number];
+  locale: (typeof LANGUAGES)[number];
   question: string;
   answer: string;
 }
@@ -47,8 +49,7 @@ export function BusinessKnowledge({
   const client = useQueryClient();
   const settings = useQuery({
     queryKey: ["assistant-settings", tenantId],
-    queryFn: () =>
-      apiFetch<CompanyProfile>("/v1/assistant/settings", { tenantId }),
+    queryFn: () => apiFetch<CompanyProfile>("/v1/assistant/settings", { tenantId }),
   });
   const faqs = useQuery({
     queryKey: ["assistant-faqs", tenantId],
@@ -78,7 +79,7 @@ export function BusinessKnowledge({
     onSuccess: () => void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] }),
   });
   return (
-    <div className="grid gap-6">
+    <div className="grid items-start gap-6 lg:grid-cols-2">
       <Card title={t("title")} description={t("hint")}>
         {settings.error || save.isError ? <ErrorText>{t("error")}</ErrorText> : null}
         {settings.data ? (
@@ -145,7 +146,9 @@ export function BusinessKnowledge({
               {t("language")}
               <Select name="locale" defaultValue={locale}>
                 {LANGUAGES.map((language) => (
-                  <option key={language} value={language}>{t(LANGUAGE_LABELS[language])}</option>
+                  <option key={language} value={language}>
+                    {t(LANGUAGE_LABELS[language])}
+                  </option>
                 ))}
               </Select>
             </label>
@@ -174,9 +177,7 @@ export function BusinessKnowledge({
               className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
             >
               <div>
-                <span className="text-xs text-ink-muted">
-                  {t(LANGUAGE_LABELS[faq.locale])}
-                </span>
+                <span className="text-xs text-ink-muted">{t(LANGUAGE_LABELS[faq.locale])}</span>
                 <p className="font-semibold">{faq.question}</p>
                 <p className="text-sm text-ink-muted">{faq.answer}</p>
               </div>

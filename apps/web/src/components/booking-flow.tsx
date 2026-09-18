@@ -36,6 +36,8 @@ import { ServiceDescription } from "./service-description";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ErrorText } from "./ui/field";
 import { ThemeToggle } from "./ui/theme-toggle";
+import { Brand } from "./brand";
+import { ArrowRight, CalendarDays, Check, Clock3 } from "lucide-react";
 
 /**
  * The public booking flow. tech-impl §30, §16.
@@ -426,13 +428,19 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
     // the one screen that belongs to the tenant rather than to us, and
     // `book/page.tsx` wraps it in the element that will one day carry their
     // colour (phase-11 §2.2).
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
-      <header className="border-line flex items-start justify-between gap-4 border-b pb-5">
+    <main className="mx-auto flex min-h-screen max-w-[720px] flex-col gap-8 px-4 py-6 sm:px-6 sm:py-10">
+      <div className="border-b border-line pb-6">
+        <Brand />
+      </div>
+      <header className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <h1 className="font-display text-ink text-2xl font-bold tracking-tight">
+          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-accent-surface text-on-accent-surface">
+            <CalendarDays size={24} aria-hidden="true" />
+          </div>
+          <h1 className="font-display text-ink text-3xl font-bold tracking-tight sm:text-4xl">
             {tenant.data.name}
           </h1>
-          <p className="text-ink-muted text-sm">{t("subtitle")}</p>
+          <p className="mt-3 text-ink-muted text-base">{t("subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           {/* The page opens in the tenant's language (see book/page.tsx). This is
@@ -452,15 +460,24 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
       </header>
 
       <Steps current={step} />
+      {service && step !== "service" && step !== "success" ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-surface px-6 py-4 text-on-accent-surface">
+          <span className="font-semibold">{service.name}</span>
+          <span className="flex items-center gap-2 text-sm tabular-nums">
+            <Clock3 size={16} aria-hidden="true" />
+            {t("minutes", { count: service.durationMinutes })}
+          </span>
+        </div>
+      ) : null}
 
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {step === "service" ? (
         <Section title={t("chooseService")}>
           {services.data?.items.length === 0 ? <p>{t("noServices")}</p> : null}
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-4">
             {services.data?.items.map((item) => (
-              <li key={item.id} className="border-line rounded-xl border">
+              <li key={item.id} className="border-line-strong overflow-hidden rounded-xl border">
                 <button
                   type="button"
                   onClick={() => {
@@ -468,10 +485,13 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(null);
                     setStep("provider");
                   }}
-                  className="hover:bg-accent-surface w-full rounded-xl p-4 text-left transition-colors"
+                  className="hover:bg-accent-surface w-full rounded-xl p-5 text-left transition-colors"
                 >
-                  <span className="font-medium">{item.name}</span>
-                  <span className="text-ink-muted block text-sm">
+                  <span className="flex items-center justify-between gap-4 font-semibold">
+                    {item.name}
+                    <ArrowRight size={18} aria-hidden="true" className="shrink-0 text-accent" />
+                  </span>
+                  <span className="text-ink-muted mt-2 block text-sm">
                     {t("minutes", { count: item.durationMinutes })}
                     {item.priceMinor !== null && item.currency
                       ? ` · ${formatMoney(item.priceMinor, item.currency, locale)}`
@@ -501,7 +521,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                   setProviderId(null);
                   setStep("time");
                 }}
-                className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
+                className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
               >
                 <span className="font-medium">{t("anyProvider")}</span>
               </button>
@@ -514,7 +534,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(item.id);
                     setStep("time");
                   }}
-                  className="border-line hover:border-accent hover:bg-accent-surface w-full rounded-xl border p-4 text-left transition-colors"
+                  className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
                 >
                   <span className="font-medium">{item.displayName}</span>
                   {item.description ? (
@@ -571,7 +591,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                           type="button"
                           disabled={takeHold.isPending}
                           onClick={() => takeHold.mutate(slot)}
-                          className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 w-full rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-60"
+                          className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 w-full rounded-full border px-3 py-2 text-sm transition-colors disabled:opacity-60"
                         >
                           <time dateTime={slot.startAt}>{formatTime(slot.startAt, locale)}</time>
                         </button>
@@ -902,40 +922,45 @@ function Steps({ current }: { current: Step }): React.ReactElement {
     // only the visual echo of that, exactly as the dashboard nav's underline is
     // the echo of `aria-current="page"`. The number is rendered decorative
     // because the step's name is already the list item's text.
-    <ol className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm">
-      {order.map((step, position) => {
-        const done = position < index;
-        const currentStep = position === index;
+    <div className="rounded-xl border border-line bg-surface-raised p-4">
+      <ol className="grid grid-cols-5 gap-2 text-sm">
+        {order.map((step, position) => {
+          const done = position < index;
+          const currentStep = position === index;
 
-        return (
-          <li
-            key={step}
-            aria-current={currentStep ? "step" : undefined}
-            className="flex items-center gap-2"
-          >
-            <span
-              aria-hidden="true"
-              className={cn(
-                "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                done && "bg-accent border-accent text-on-accent",
-                currentStep && "border-accent text-accent border-2",
-                !done && !currentStep && "border-line-strong text-ink-subtle",
-              )}
+          return (
+            <li
+              key={step}
+              aria-current={currentStep ? "step" : undefined}
+              className="flex min-w-0 flex-col items-center gap-2 text-center"
             >
-              {done ? "✓" : position + 1}
-            </span>
-            <span className={currentStep ? "text-ink font-semibold" : "text-ink-muted"}>
-              {t(`step.${step}`)}
-            </span>
-            {position < order.length - 1 ? (
-              <span aria-hidden="true" className="text-ink-subtle ml-1">
-                ›
+              <span
+                aria-hidden="true"
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                  done && "bg-accent border-accent text-on-accent",
+                  currentStep && "border-accent text-accent border-2",
+                  !done && !currentStep && "border-line-strong text-ink-subtle",
+                )}
+              >
+                {done ? <Check size={16} /> : position + 1}
               </span>
-            ) : null}
-          </li>
-        );
-      })}
-    </ol>
+              <span
+                className={cn(
+                  "sr-only sm:not-sr-only",
+                  currentStep ? "text-ink font-semibold" : "text-ink-muted",
+                )}
+              >
+                {t(`step.${step}`)}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      <p aria-hidden="true" className="mt-3 text-center text-sm font-semibold sm:hidden">
+        {t(`step.${current}`)}
+      </p>
+    </div>
   );
 }
 
@@ -947,8 +972,8 @@ function Section({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <section className="border-line bg-surface flex flex-col gap-4 rounded-xl border p-6">
-      <h2 className="font-display text-ink text-lg font-semibold">{title}</h2>
+    <section className="border-line bg-surface flex flex-col gap-6 rounded-xl border p-4 sm:p-6">
+      <h2 className="font-display text-ink text-xl font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -974,7 +999,7 @@ function BackButton({
     <button
       type="button"
       onClick={onClick}
-      className="text-accent hover:text-accent-hover self-start text-sm font-medium underline underline-offset-2"
+      className="text-accent hover:text-accent-hover inline-flex min-h-11 items-center self-start text-sm font-medium underline underline-offset-2"
     >
       {label}
     </button>

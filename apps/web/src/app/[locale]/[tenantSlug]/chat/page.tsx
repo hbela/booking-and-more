@@ -15,7 +15,7 @@ export default async function TenantChatPage({
   setRequestLocale(locale);
   const parentOrigin = safeOrigin((await searchParams).parentOrigin);
   return (
-    <main className="min-h-screen bg-canvas p-3 sm:p-6">
+    <main className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-10">
       <ChatPanel
         tenantSlug={tenantSlug}
         bookingHref={`/${tenantSlug}/book`}

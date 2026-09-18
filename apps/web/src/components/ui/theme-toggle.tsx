@@ -66,7 +66,7 @@ export function ThemeToggle(): React.ReactElement {
         onChange={(event) => {
           apply(event.target.value as Choice);
         }}
-        className="border-line-strong text-ink rounded-md border bg-transparent px-2 py-1"
+        className="border-line-strong text-ink min-h-11 rounded-lg border bg-surface px-3 py-2"
       >
         <option value="system">{t("themeSystem")}</option>
         <option value="light">{t("themeLight")}</option>

@@ -10,6 +10,7 @@ import { navFor } from "@/lib/dashboard-nav";
 import { hasNoOrganization } from "@/lib/organization-state";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
+import { Brand } from "./brand";
 
 /**
  * Everything the staff screens share: which tenant we are in, who is signed in,
@@ -120,15 +121,21 @@ export function DashboardShell({
   const queryClient = useQueryClient();
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <div className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 sm:px-10 sm:py-8">
+      <div className="border-b border-line pb-6">
+        <Brand />
+      </div>
+      <header className="flex flex-wrap items-start justify-between gap-6">
         <div className="min-w-0 max-w-full">
-          <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          <p className="mb-2 text-sm font-medium text-ink-muted">{t("title")}</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            {t(navFor(context.me).find((item) => item.href === pathname)?.key ?? "overview")}
+          </h1>
           {context.me?.tenant ? (
-            <p className="mt-1 text-lg font-medium break-words">{context.me.tenant.name}</p>
+            <p className="mt-3 text-lg font-medium break-words">{context.me.tenant.name}</p>
           ) : null}
           {context.me ? (
-            <p className="text-sm text-ink-muted">
+            <p className="mt-1 break-words text-sm text-ink-muted">
               {context.me.user.name} · {context.me.user.email}
               {context.me.membership ? ` · ${context.me.membership.role}` : ""}
             </p>
@@ -159,7 +166,7 @@ export function DashboardShell({
                     void queryClient.invalidateQueries();
                   });
                 }}
-                className="rounded-md border border-line-strong bg-transparent px-3 py-1.5"
+                className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 py-2"
               >
                 {context.tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
@@ -177,7 +184,7 @@ export function DashboardShell({
                 router.push("/sign-in");
               });
             }}
-            className="rounded-md border border-line-strong px-3 py-1.5 text-sm"
+            className="min-h-11 rounded-lg border border-line-strong px-4 py-2 text-sm hover:bg-surface-raised"
           >
             {t("signOut")}
           </button>
@@ -190,7 +197,7 @@ export function DashboardShell({
           target somebody is already reaching for. */}
       {context.tenantId && !context.isPending ? (
         <nav aria-label={t("sections")}>
-          <ul className="flex flex-wrap gap-1 border-b border-line">
+          <ul className="flex flex-wrap gap-1 border-b border-line bg-surface-raised px-2 pt-2">
             {/* Already filtered — both gates live in lib/dashboard-nav.ts, so
                 this maps and does not decide. */}
             {navFor(context.me).map((item) => {
@@ -207,7 +214,7 @@ export function DashboardShell({
                     <span
                       aria-disabled="true"
                       aria-describedby={GATE_HINT_ID}
-                      className="inline-block cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm text-ink-subtle"
+                      className="inline-flex min-h-11 items-center cursor-not-allowed border-b-2 border-transparent px-3 py-3 text-sm text-ink-subtle"
                     >
                       {t(item.key)}
                     </span>
@@ -222,9 +229,9 @@ export function DashboardShell({
                     // aria-current is what a screen reader announces; the
                     // underline is only its visual echo.
                     aria-current={current ? "page" : undefined}
-                    className={`inline-block border-b-2 px-3 py-2 text-sm ${
+                    className={`inline-flex min-h-11 items-center border-b-2 px-3 py-3 text-sm ${
                       current
-                        ? "border-primary font-medium"
+                        ? "border-primary bg-surface font-semibold text-primary"
                         : "border-transparent text-ink-muted hover:text-ink"
                     }`}
                   >
@@ -245,7 +252,7 @@ export function DashboardShell({
         </nav>
       ) : null}
 
-      {children}
+      <div className="flex min-w-0 flex-col gap-8">{children}</div>
     </div>
   );
 }

@@ -12,6 +12,9 @@ import { ErrorText, Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
 import { Section } from "./ui/section";
 import { BusinessKnowledge } from "./business-knowledge";
+import { ArrowUpRight, CalendarDays, Clock3, Bot } from "lucide-react";
+import { Link } from "@/i18n/navigation";
+import { navFor } from "@/lib/dashboard-nav";
 
 /**
  * Dashboard overview: business knowledge and members.
@@ -82,6 +85,39 @@ export function Dashboard(): React.ReactElement {
         )
       ) : (
         <>
+          {!context.awaitingSubscription ? (
+            <div className="grid gap-4 sm:grid-cols-3">
+              {navFor(context.me)
+                .filter((item) => ["bookings", "availability", "assistant"].includes(item.key))
+                .map((item) => {
+                  const Glyph =
+                    item.key === "bookings"
+                      ? CalendarDays
+                      : item.key === "availability"
+                        ? Clock3
+                        : Bot;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className="group flex min-h-36 flex-col justify-between gap-6 rounded-xl border border-line bg-surface-raised p-6 transition-colors hover:border-primary hover:bg-primary-surface"
+                    >
+                      <span className="flex items-center justify-between gap-4">
+                        <span className="flex size-11 items-center justify-center rounded-xl bg-primary-surface text-on-primary-surface">
+                          <Glyph size={22} aria-hidden="true" />
+                        </span>
+                        <ArrowUpRight
+                          size={20}
+                          aria-hidden="true"
+                          className="text-ink-muted group-hover:text-primary"
+                        />
+                      </span>
+                      <span className="font-display text-lg font-semibold">{t(item.key)}</span>
+                    </Link>
+                  );
+                })}
+            </div>
+          ) : null}
           {context.awaitingSubscription && context.me.tenant ? (
             <PendingPanel
               organizationName={context.me.tenant.name}
@@ -100,10 +136,10 @@ export function Dashboard(): React.ReactElement {
           ) : null}
 
           {canReadMembers ? (
-            <Section title={t("members")}>
+            <Section title={t("members")} variant="card">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-md text-left text-sm">
-                  <thead className="border-b border-line">
+                  <thead className="border-b border-line bg-surface-sunken">
                     <tr>
                       <th scope="col" className="py-2 pr-4 font-medium">
                         {t("name")}
@@ -125,7 +161,10 @@ export function Dashboard(): React.ReactElement {
                   </thead>
                   <tbody>
                     {members.data?.items.map((member) => (
-                      <tr key={member.id} className="border-b border-line">
+                      <tr
+                        key={member.id}
+                        className="h-14 border-b border-line hover:bg-surface-raised"
+                      >
                         <td className="py-2 pr-4">{member.user.name}</td>
                         <td className="py-2 pr-4">{member.user.email}</td>
                         <td className="py-2 pr-4">{member.role}</td>

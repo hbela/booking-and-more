@@ -19,6 +19,7 @@ import {
 import { Button, ButtonLink } from "./ui/button";
 import { renderMessage } from "@/lib/conversation-messages";
 import { ChatCatalogueChoices } from "./chat-catalogue-choices";
+import { Brand } from "./brand";
 
 type Locale = "en" | "hu" | "de" | "fr";
 const languageNames = { hu: "Magyar", en: "English", de: "Deutsch", fr: "Français" } as const;
@@ -127,6 +128,7 @@ function ChatConversation({
   const [busy, setBusy] = useState(true);
   const [available, setAvailable] = useState(true);
   const [personaName, setPersonaName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const serial = useRef(0);
 
@@ -170,6 +172,7 @@ function ChatConversation({
         const config = await assistantAvailability(tenantSlug);
         if (!active) return;
         setPersonaName(config.personaName);
+        setBusinessName(config.branding.businessName);
         if (!active || !config.available) {
           setAvailable(false);
           return;
@@ -277,108 +280,142 @@ function ChatConversation({
   };
 
   return (
-    <section
-      className="mx-auto flex min-h-[32rem] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm"
-      aria-label={t.title}
-      lang={language}
-    >
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-raised px-5 py-4">
-        <h1 className="flex items-center gap-2 font-semibold">
-          <Bot size={20} aria-hidden />
-          <span>
-            {t.title}
-            {personaName && personaName !== t.title ? (
-              <span className="block text-xs font-normal text-ink-muted">{personaName}</span>
-            ) : null}
-          </span>
-        </h1>
-        <label className="flex items-center gap-2 text-sm">
-          <span className="sr-only">{t.language}</span>
-          <select
-            value={language}
-            onChange={(event) => onLanguageChange(event.target.value as Locale)}
-            className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 text-ink"
-          >
-            {Object.entries(languageNames).map(([value, label]) => (
-              <option key={value} value={value} lang={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
-          <RefreshCw size={16} aria-hidden />
-          {t.reset}
-        </Button>
-      </header>
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5" aria-live="polite">
-        {!available ? (
-          <p className="rounded-lg border border-line p-4 text-sm">{t.unavailable}</p>
-        ) : null}
-        {bubbles.length === 0 && available ? (
-          <p className="text-sm text-ink-muted">{t.idle}</p>
-        ) : null}
-        {bubbles.map((bubble) => (
-          <p
-            key={bubble.id}
-            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${bubble.from === "customer" ? "self-end bg-primary text-on-primary" : "self-start bg-surface-raised text-ink"}`}
-          >
-            {bubble.text}
-          </p>
-        ))}
-        {busy && available ? <p className="text-sm text-ink-muted">{t.working}</p> : null}
-        <ChatCatalogueChoices
-          services={turn?.message.ui === "SERVICE_LIST" ? turn.services : undefined}
-          providers={turn?.message.ui === "PROVIDER_LIST" ? turn.providers : undefined}
-          locale={language}
-          disabled={busy || !available}
-          onPick={(name) => void sendText(name)}
-        />
-        {turn?.slots?.length ? (
-          <SlotChoices
-            slots={turn.slots}
-            locale={language}
-            onPick={(ordinal) => setDraft(t.slot(ordinal))}
-          />
-        ) : null}
-        {turn?.confirmation ? (
-          <Confirmation
-            card={turn.confirmation}
-            locale={language}
-            busy={busy}
-            onConfirm={() => void act(turn.confirmation!, true)}
-            onDecline={() => void act(turn.confirmation!, false)}
-          />
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
+    <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6">
+        <Brand />
+        {businessName ? (
+          <span className="text-sm font-medium text-ink-muted">{businessName}</span>
         ) : null}
       </div>
-      <footer className="border-t border-line p-4">
-        <form className="flex gap-2" onSubmit={(event) => void submit(event)}>
-          <label className="sr-only" htmlFor="chat-message">
-            {t.placeholder}
+      <section
+        className="flex min-h-[min(40rem,80dvh)] w-full flex-col overflow-hidden rounded-xl border border-line bg-surface"
+        aria-label={t.title}
+        lang={language}
+      >
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-surface-raised p-4 sm:p-6">
+          <h1 className="flex items-center gap-3 font-display text-xl font-semibold">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-surface text-on-primary-surface">
+              <Bot size={22} aria-hidden />
+            </span>
+            <span>
+              {t.title}
+              {personaName && personaName !== t.title ? (
+                <span className="mt-1 block font-sans text-sm font-normal text-ink-muted">
+                  {personaName}
+                </span>
+              ) : null}
+            </span>
+          </h1>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-sm text-ink-muted">{t.language}</span>
+            <select
+              value={language}
+              onChange={(event) => onLanguageChange(event.target.value as Locale)}
+              className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 text-ink"
+            >
+              {Object.entries(languageNames).map(([value, label]) => (
+                <option key={value} value={value} lang={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </label>
-          <input
-            id="chat-message"
-            maxLength={2000}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            disabled={!available || busy}
-            placeholder={t.placeholder}
-            className="min-h-11 flex-1 rounded-lg border border-line-strong bg-transparent px-3"
-          />
-          <Button type="submit" disabled={!available || busy || !draft.trim()} aria-label={t.send}>
-            <Send size={17} aria-hidden />
+          <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
+            <RefreshCw size={16} aria-hidden />
+            {t.reset}
           </Button>
-        </form>
-        <ButtonLink href={bookingHref} variant="secondary" className="mt-3 w-full">
-          {t.form}
-        </ButtonLink>
-      </footer>
-    </section>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
+          {!available ? (
+            <p
+              role="status"
+              className="rounded-xl border border-line bg-surface-raised p-6 leading-relaxed"
+            >
+              {t.unavailable}
+            </p>
+          ) : null}
+          {bubbles.length === 0 && available ? (
+            <div className="my-auto flex flex-col items-center gap-4 px-4 py-10 text-center">
+              <span className="flex size-16 items-center justify-center rounded-full bg-primary-surface text-on-primary-surface">
+                <Bot size={28} aria-hidden />
+              </span>
+              <p className="font-display text-2xl font-semibold">{t.placeholder}</p>
+              <p className="max-w-sm leading-relaxed text-ink-muted">{t.idle}</p>
+            </div>
+          ) : null}
+          {bubbles.map((bubble) => (
+            <p
+              key={bubble.id}
+              className={`max-w-[90%] whitespace-pre-wrap break-words rounded-xl px-4 py-3 text-base leading-relaxed sm:max-w-[85%] ${bubble.from === "customer" ? "self-end rounded-br-sm bg-primary text-on-primary" : "self-start rounded-bl-sm bg-surface-raised text-ink"}`}
+            >
+              {bubble.text}
+            </p>
+          ))}
+          {busy && available ? <p className="text-sm text-ink-muted">{t.working}</p> : null}
+          <ChatCatalogueChoices
+            services={turn?.message.ui === "SERVICE_LIST" ? turn.services : undefined}
+            providers={turn?.message.ui === "PROVIDER_LIST" ? turn.providers : undefined}
+            locale={language}
+            disabled={busy || !available}
+            onPick={(name) => void sendText(name)}
+          />
+          {turn?.slots?.length ? (
+            <SlotChoices
+              slots={turn.slots}
+              locale={language}
+              onPick={(ordinal) => setDraft(t.slot(ordinal))}
+            />
+          ) : null}
+          {turn?.confirmation ? (
+            <Confirmation
+              card={turn.confirmation}
+              locale={language}
+              busy={busy}
+              onConfirm={() => void act(turn.confirmation!, true)}
+              onDecline={() => void act(turn.confirmation!, false)}
+            />
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <footer className="border-t border-line bg-surface-raised p-4 sm:p-6">
+          <form
+            className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
+            onSubmit={(event) => void submit(event)}
+          >
+            <label className="col-span-2 mb-1 text-sm font-medium" htmlFor="chat-message">
+              {t.placeholder}
+            </label>
+            <input
+              id="chat-message"
+              maxLength={2000}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={!available || busy}
+              placeholder={t.placeholder}
+              className="min-h-12 min-w-0 rounded-lg border border-line-strong bg-surface px-4"
+            />
+            <Button
+              type="submit"
+              disabled={!available || busy || !draft.trim()}
+              aria-label={t.send}
+            >
+              <Send size={17} aria-hidden />
+            </Button>
+          </form>
+          <ButtonLink
+            href={bookingHref}
+            variant="ghost"
+            className="mt-3 w-full underline-offset-4 hover:underline"
+          >
+            {t.form}
+          </ButtonLink>
+        </footer>
+      </section>
+    </div>
   );
 }
 
