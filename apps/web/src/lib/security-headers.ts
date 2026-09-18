@@ -1,10 +1,10 @@
-const API_ORIGIN = new URL(
-  process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001",
-).origin;
+const API_ORIGIN = new URL(process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001")
+  .origin;
 
 export function buildContentSecurityPolicy(nonce: string, production: boolean): string {
   return [
     "default-src 'self'",
+    "worker-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${production ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",

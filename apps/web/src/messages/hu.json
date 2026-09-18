@@ -671,5 +671,16 @@
     "addFaq": "Kérdés hozzáadása",
     "delete": "Törlés",
     "empty": "Még nincsenek gyakori kérdések."
+  },
+  "pwa": {
+    "install": "Alkalmaz?s telep?t?se",
+    "installFailed": "A telep?t?s nem indult el. A b?ng?sz? men?j?b?l is megpr?b?lhatja.",
+    "iosHelp": "iPhone vagy iPad k?sz?l?ken nyissa meg ezt az oldalt Safariban, koppintson a Megoszt?s gombra, majd v?lassza a F?k?perny?h?z ad?s lehet?s?get. Ha megjelenik, kapcsolja be a megnyit?st webalkalmaz?sk?nt.",
+    "androidHelp": "A b?ng?sz? men?j?ben v?lassza az Alkalmaz?s telep?t?se vagy a Hozz?ad?s a kezd?k?perny?h?z lehet?s?get. Ha egyik sem ?rhet? el, haszn?lja tov?bb a Booking and More weboldalt.",
+    "desktopHelp": "Haszn?lja a b?ng?sz? c?msor?ban l?that? telep?t?si ikont, vagy v?lassza a men?ben az alkalmaz?s telep?t?s?t. Ha nem jelenik meg ilyen lehet?s?g, a weboldal tov?bbra is haszn?lhat?.",
+    "otherHelp": "A b?ng?sz? men?j?ben keresse a Hozz?ad?s a Dockhoz, az Alkalmaz?s telep?t?se vagy a F?k?perny?h?z ad?s lehet?s?get. Nem minden b?ng?sz? t?mogatja a telep?t?st; a weboldal tov?bbra is m?k?dik.",
+    "offlineTitle": "Nincs internetkapcsolat",
+    "offlineDescription": "A munkafel?let megnyit?s?hoz kapcsol?djon az internethez. Az id?pontok megtekint?se ?s m?dos?t?sa csak online ?rhet? el.",
+    "retry": "?jrapr?b?lkoz?s"
   }
 }

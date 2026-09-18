@@ -7,6 +7,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { QueryProvider } from "@/lib/query-provider";
 import { ThemeScript } from "@/components/theme-script";
+import { StaffPwa } from "@/components/staff-pwa";
 import "../globals.css";
 
 /**
@@ -46,6 +47,8 @@ export async function generateMetadata({
     description: t("tagline"),
     manifest: "/manifest.webmanifest",
     applicationName: t("appName"),
+    icons: { icon: "/icon.svg", apple: "/pwa/apple-touch-icon.png" },
+    appleWebApp: { capable: true, title: "Booking and More", statusBarStyle: "default" },
   };
 }
 
@@ -108,7 +111,9 @@ export default async function LocaleLayout({
           reported. */}
       <body suppressHydrationWarning>
         <NextIntlClientProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <StaffPwa>{children}</StaffPwa>
+          </QueryProvider>
         </NextIntlClientProvider>
       </body>
     </html>

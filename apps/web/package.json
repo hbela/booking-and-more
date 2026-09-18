@@ -11,7 +11,8 @@
     "check-types": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "pwa:icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
     "@bam/availability-engine": "workspace:*",
@@ -30,12 +31,13 @@
   "devDependencies": {
     "@bam/eslint-config": "workspace:*",
     "@bam/tsconfig": "workspace:*",
-    "@tailwindcss/postcss": "^4.3.3",
     "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "eslint": "catalog:",
+    "sharp": "0.35.3",
     "tailwindcss": "^4.3.3",
     "typescript": "catalog:",
     "vitest": "catalog:"

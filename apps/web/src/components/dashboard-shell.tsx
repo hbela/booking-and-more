@@ -11,6 +11,7 @@ import { hasNoOrganization } from "@/lib/organization-state";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
 import { Brand } from "./brand";
+import { InstallApp } from "./staff-pwa";
 
 /**
  * Everything the staff screens share: which tenant we are in, who is signed in,
@@ -151,6 +152,7 @@ export function DashboardShell({
         <div className="flex flex-wrap items-end gap-3">
           <LocaleSwitcher label={common("language")} />
           <ThemeToggle />
+          <InstallApp />
 
           {context.tenants.length > 1 ? (
             <label htmlFor="tenant" className="flex items-center gap-2 text-sm">
