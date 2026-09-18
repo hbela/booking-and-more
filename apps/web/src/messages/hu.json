@@ -673,14 +673,14 @@
     "empty": "Még nincsenek gyakori kérdések."
   },
   "pwa": {
-    "install": "Alkalmaz?s telep?t?se",
-    "installFailed": "A telep?t?s nem indult el. A b?ng?sz? men?j?b?l is megpr?b?lhatja.",
-    "iosHelp": "iPhone vagy iPad k?sz?l?ken nyissa meg ezt az oldalt Safariban, koppintson a Megoszt?s gombra, majd v?lassza a F?k?perny?h?z ad?s lehet?s?get. Ha megjelenik, kapcsolja be a megnyit?st webalkalmaz?sk?nt.",
-    "androidHelp": "A b?ng?sz? men?j?ben v?lassza az Alkalmaz?s telep?t?se vagy a Hozz?ad?s a kezd?k?perny?h?z lehet?s?get. Ha egyik sem ?rhet? el, haszn?lja tov?bb a Booking and More weboldalt.",
-    "desktopHelp": "Haszn?lja a b?ng?sz? c?msor?ban l?that? telep?t?si ikont, vagy v?lassza a men?ben az alkalmaz?s telep?t?s?t. Ha nem jelenik meg ilyen lehet?s?g, a weboldal tov?bbra is haszn?lhat?.",
-    "otherHelp": "A b?ng?sz? men?j?ben keresse a Hozz?ad?s a Dockhoz, az Alkalmaz?s telep?t?se vagy a F?k?perny?h?z ad?s lehet?s?get. Nem minden b?ng?sz? t?mogatja a telep?t?st; a weboldal tov?bbra is m?k?dik.",
+    "install": "Alkalmazás telepítése",
+    "installFailed": "A telepítés nem indult el. A böngésző menüjéből is megpróbálhatja.",
+    "iosHelp": "iPhone vagy iPad készüléken nyissa meg ezt az oldalt Safariban, koppintson a Megosztás gombra, majd válassza a Főképernyőhöz adás lehetőséget. Ha megjelenik, kapcsolja be a megnyitást webalkalmazásként.",
+    "androidHelp": "A böngésző menüjében válassza az Alkalmazás telepítése vagy a Hozzáadás a kezdőképernyőhöz lehetőséget. Ha egyik sem érhető el, használja tovább a Booking and More weboldalt.",
+    "desktopHelp": "Használja a böngésző címsorában látható telepítési ikont, vagy válassza a menüben az alkalmazás telepítését. Ha nem jelenik meg ilyen lehetőség, a weboldal továbbra is használható.",
+    "otherHelp": "A böngésző menüjében keresse a Hozzáadás a Dockhoz, az Alkalmazás telepítése vagy a Főképernyőhöz adás lehetőséget. Nem minden böngésző támogatja a telepítést; a weboldal továbbra is működik.",
     "offlineTitle": "Nincs internetkapcsolat",
-    "offlineDescription": "A munkafel?let megnyit?s?hoz kapcsol?djon az internethez. Az id?pontok megtekint?se ?s m?dos?t?sa csak online ?rhet? el.",
-    "retry": "?jrapr?b?lkoz?s"
+    "offlineDescription": "A munkafelület megnyitásához kapcsolódjon az internethez. Az időpontok megtekintése és módosítása csak online érhető el.",
+    "retry": "Újrapróbálkozás"
   }
 }
