@@ -1,15 +1,19 @@
 /**
- * Pushes docs/user-guide.md to the portfolio site (my-blog).
+ * Pushes a docs/user-guide*.md to the portfolio site (my-blog), per language.
  *
- *   1. Copies the cover image, and any `assets/screenshots/*` the guide
+ *   1. Copies the cover image, and any `assets/screenshots/<lang>/*` the guide
  *      references, into the portfolio's `public/<slug>/` directory. Both repos
  *      are local; commit those files in my-blog and redeploy it to ship them.
  *   2. POSTs the manifest + markdown to the portfolio's import API, which
  *      upserts the Project row and revalidates its pages.
  *
- * The guide is the single source of truth. Edit `docs/user-guide.md`, run this,
- * read the result — never the other way round, and never by pasting into the
- * portfolio's admin form.
+ * One slug per language — the portfolio has no native bilingual model
+ * (mirrors the sunshine-dental repo's convention):
+ *   en → booking-and-more   hu → booking-and-more-hu
+ *
+ * The guide is the single source of truth. Edit `docs/user-guide.md` (or
+ * `.hu.md`), run this, read the result — never the other way round, and never
+ * by pasting into the portfolio's admin form.
  *
  * Deliberately plain `.mjs` with no imports beyond node: the repo root has no
  * runtime dependencies of its own, and a publish script is not a reason to give
@@ -22,9 +26,10 @@
  *                           target* — the local and deployed values differ
  *   PORTFOLIO_PUBLIC_DIR    default ../my-blog/public
  *
- * Run: pnpm guide:publish            # push, leave published as the manifest says
- *      pnpm guide:publish --dry-run  # show what would be sent, send nothing
- *      pnpm guide:publish --draft    # push as a draft instead of live
+ * Run: pnpm guide:publish                    # English (default)
+ *      pnpm guide:publish -- --lang hu        # Hungarian
+ *      pnpm guide:publish -- --dry-run        # show what would be sent, send nothing
+ *      pnpm guide:publish -- --draft          # push as a draft instead of live
  */
 import { readFileSync, copyFileSync, mkdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -57,7 +62,39 @@ function loadEnv() {
 }
 loadEnv();
 
-const SLUG = "booking-and-more";
+// --- Language → manifest + guide file --------------------------------------
+const byLang = {
+  en: {
+    slug: "booking-and-more",
+    guideFile: "user-guide.md",
+    title: "booking-and-more",
+    excerpt:
+      "A multi-tenant appointment-booking platform for clinics, salons and studios: a public booking page customers use without an account, and a staff dashboard for services, providers, working hours and the day's appointments — with each business kept entirely separate from every other.",
+  },
+  hu: {
+    slug: "booking-and-more-hu",
+    guideFile: "user-guide.hu.md",
+    title: "booking-and-more (magyar)",
+    excerpt:
+      "Többbérlős időpontfoglaló platform klinikáknak, szalonoknak és stúdióknak: egy nyilvános foglalási oldal, amit az ügyfelek fiók nélkül használnak, és egy munkatársi irányítópult a szolgáltatásokhoz, szolgáltatókhoz, munkarendhez és a napi foglalásokhoz — minden vállalkozás teljesen elkülönítve a többitől.",
+  },
+};
+
+function parseLang() {
+  let lang = "en";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--lang" || args[i] === "-l") lang = args[i + 1] ?? lang;
+    else if (args[i]?.startsWith("--lang=")) lang = args[i].slice("--lang=".length);
+  }
+  if (!(lang in byLang)) {
+    throw new Error(`Unknown --lang "${lang}". Use one of: ${Object.keys(byLang).join(", ")}`);
+  }
+  return lang;
+}
+
+const LANG = parseLang();
+const { slug: SLUG, guideFile, title, excerpt } = byLang[LANG];
+
 const API_URL = process.env.PORTFOLIO_API_URL || "http://localhost:3000";
 const SECRET = process.env.PORTFOLIO_IMPORT_SECRET;
 const PUBLIC_DIR = process.env.PORTFOLIO_PUBLIC_DIR || "../my-blog/public";
@@ -69,17 +106,16 @@ const PUBLIC_DIR = process.env.PORTFOLIO_PUBLIC_DIR || "../my-blog/public";
  */
 const manifest = {
   slug: SLUG,
-  title: "booking-and-more",
+  title,
   brandIcon: "B",
   docTheme: true,
   published: !asDraft,
   technologies: "Next.js, Fastify, PostgreSQL, Prisma, BullMQ, Stripe, Better Auth, TypeScript",
-  excerpt:
-    "A multi-tenant appointment-booking platform for clinics, salons and studios: a public booking page customers use without an account, and a staff dashboard for services, providers, working hours and the day's appointments — with each business kept entirely separate from every other.",
+  excerpt,
   image: `/${SLUG}/cover.jpg`,
 };
 
-/** Cover art and any other fixed assets, as [source, destination name]. */
+/** Cover art and any other fixed assets, as [source, destination name]. Shared across languages — there is no localized cover. */
 const ASSETS = [["apps/web/public/hero-booking.jpg", "cover.jpg"]];
 
 async function main() {
@@ -91,9 +127,9 @@ async function main() {
     );
   }
 
-  const guidePath = join(repoRoot, "docs", "user-guide.md");
+  const guidePath = join(repoRoot, "docs", guideFile);
   if (!existsSync(guidePath)) {
-    throw new Error(`Missing ${guidePath}`);
+    throw new Error(`Missing ${guidePath} — author the ${LANG} guide first.`);
   }
   const content = readFileSync(guidePath, "utf8");
 
@@ -122,21 +158,25 @@ async function main() {
     copied.push(destName);
   }
 
-  // The import API rewrites `assets/screenshots/x.png` to `/<slug>/x.png`, so
-  // whatever the guide references has to land in the portfolio's public dir
-  // under the same name.
+  // The import API does a literal string replace of `assets/screenshots/` with
+  // `/<slug>/` and nothing more — so `assets/screenshots/en/x.png` in the guide
+  // becomes `/<slug>/en/x.png` on the page, `<lang>` segment and all. The copy
+  // destination has to mirror that exactly, or the browser requests a path
+  // nothing on disk answers to.
   const referenced = new Set();
-  for (const match of content.matchAll(/assets\/screenshots\/([\w.-]+)/g)) {
-    referenced.add(match[1]);
+  for (const match of content.matchAll(/assets\/screenshots\/([\w.-]+\/[\w.-]+)/g)) {
+    referenced.add(match[1]); // e.g. "en/dashboard-home.png"
   }
-  for (const name of referenced) {
-    const from = join(repoRoot, "docs", "assets", "screenshots", name);
+  for (const relPath of referenced) {
+    const from = join(repoRoot, "docs", "assets", "screenshots", relPath);
     if (!existsSync(from)) {
-      missing.push(`docs/assets/screenshots/${name}`);
+      missing.push(`docs/assets/screenshots/${relPath}`);
       continue;
     }
-    copyFileSync(from, join(destDir, name));
-    copied.push(name);
+    const dest = join(destDir, relPath);
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSync(from, dest);
+    copied.push(relPath);
   }
 
   if (missing.length) {
@@ -149,6 +189,7 @@ async function main() {
 
   console.log(
     `\n→ ${dryRun ? "WOULD POST" : "POST"} ${endpoint}\n` +
+      `   lang:      ${LANG}\n` +
       `   slug:      ${manifest.slug}\n` +
       `   title:     ${manifest.title}\n` +
       `   image:     ${manifest.image}\n` +

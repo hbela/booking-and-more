@@ -20,7 +20,7 @@ It is built for **clinics, salons and studios** — anywhere people book time wi
 
 A page at your own address — `yourbusiness.example.com/your-slug/book` — that anyone can open without an account. In five short steps they choose a service, choose who they want to see, pick a time from a real calendar, leave their details, and they're booked. They get an email straight away with a link they can use to change or cancel.
 
-![The public booking page: a five-step wizard on step one, listing four services with durations and prices](assets/screenshots/public-booking-service.png)
+![The public booking page: a five-step wizard on step one, listing four services with durations and prices](assets/screenshots/en/public-booking-service.png)
 
 ### 2. The staff dashboard 💻
 
@@ -125,7 +125,7 @@ flowchart LR
 
 A service is one bookable thing: a check-up, a cut and colour, a 50-minute session.
 
-![The Services screen listing four services with their duration, price and settings](assets/screenshots/dashboard-services.png)
+![The Services screen listing four services with their duration, price and settings](assets/screenshots/en/dashboard-services.png)
 
 | Field                        | What it does                                                                                                                      |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -162,7 +162,7 @@ Two different questions, and both are available:
 
 A location is one of your sites. There are four kinds:
 
-![The Locations screen listing two sites with their addresses](assets/screenshots/dashboard-locations.png)
+![The Locations screen listing two sites with their addresses](assets/screenshots/en/dashboard-locations.png)
 
 | Type           | Use it for                             |
 | -------------- | -------------------------------------- |
@@ -185,7 +185,7 @@ For physical sites, fill in the address, postal code, city and country. **Map co
 
 A provider is somebody appointments are booked with. Note that **creating a provider does not give them a login** — that's a separate step, covered further down.
 
-![The Providers screen listing three providers with the services and locations assigned to each](assets/screenshots/dashboard-providers.png)
+![The Providers screen listing three providers with the services and locations assigned to each](assets/screenshots/en/dashboard-providers.png)
 
 | Field                  | What it does                                                                                             |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -217,7 +217,7 @@ So there is no organization-wide availability screen. A provider with a login op
 
 The top half of the screen is an ordinary week. For each day, add one or more periods.
 
-![The weekly working hours editor: Monday with two periods, 09:00 to 13:00 and 14:00 to 17:30, leaving a lunch break](assets/screenshots/dashboard-availability.png)
+![The weekly working hours editor: Monday with two periods, 09:00 to 13:00 and 14:00 to 17:30, leaving a lunch break](assets/screenshots/en/dashboard-availability.png)
 
 **Add a second period to a day to leave a break in the middle** — 09:00–12:30 and 13:30–17:00 gives you a lunch hour that nobody can book into. A day with no periods is simply closed.
 
@@ -261,7 +261,7 @@ Nothing is silently overwritten. **Reload their version** replaces what's on scr
 
 There are two different ways somebody gets access, and picking the right one matters.
 
-![The Overview screen: the member list and the Invite someone form with a role selector](assets/screenshots/dashboard-home.png)
+![The Overview screen: the member list and the Invite someone form with a role selector](assets/screenshots/en/dashboard-home.png)
 
 ### Inviting a provider
 
@@ -342,7 +342,7 @@ A provider can always see who assists on their own diary — they just can't cha
 
 Your page lives at your business's own address and needs no account. Five steps:
 
-![The When step: a month calendar with dots on bookable days, beside the list of free times for the selected day](assets/screenshots/public-booking-when.png)
+![The When step: a month calendar with dots on bookable days, beside the list of free times for the selected day](assets/screenshots/en/public-booking-when.png)
 
 ```mermaid
 flowchart LR
@@ -399,7 +399,7 @@ Your **cancellation policy**, if you've set one, is printed on the confirmation 
 
 **Dashboard → Bookings.** This is the screen your team lives in.
 
-![The Bookings screen: date, provider and status filters above a list of appointments, each with customer, provider, reference, price and status](assets/screenshots/dashboard-bookings.png)
+![The Bookings screen: date, provider and status filters above a list of appointments, each with customer, provider, reference, price and status](assets/screenshots/en/dashboard-bookings.png)
 
 Filter by **date range**, by **provider** — _"Everyone"_, or _"All my providers"_ if you're an assistant with several diaries — and by **status**.
 
