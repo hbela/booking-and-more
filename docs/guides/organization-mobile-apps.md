@@ -4,19 +4,29 @@ Each organization places two linked QR images on **its own website**: Patient ap
 
 Scanning on another screen, or tapping a card on the phone, opens an installation page with the organization's public name. Installation requires browser confirmation; a QR code cannot silently install an app. The page offers a native prompt when available, Android and iPhone/iPad instructions, and a continue-without-installing link. Open links in the system browser if a QR scanner or social app uses an embedded browser.
 
+Installation pages keep the installation guide available even when opened inside an installed app. Standalone display mode does not identify which organization or audience was installed. If the patient QR opens inside the staff app, copy the QR link into Chrome on Android or Safari on iPhone/iPad before installing. On Android, restart an installation test by opening Settings > Apps > See all apps, selecting the installed staff web app, and choosing Uninstall. Then reopen the patient QR link in Chrome; use its installation menu if no native prompt appears.
+
 ## Add cards to another organization's website
 
 Replace `wellness-demo` with the organization's configured **slug**, and the app origin if hosting elsewhere. The organization's website domain can differ from the application origin. No login token, patient identifier, or secret belongs in these URLs.
 
 ```html
 <a href="https://app.booking.appointer.hu/wellness-demo/install/patient">
-  <img width="256" height="256" alt="Install Wellness Demo patient app"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/patient/qr?locale=hu">
+  <img
+    width="256"
+    height="256"
+    alt="Install Wellness Demo patient app"
+    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/patient/qr?locale=hu"
+  />
   Patient app — scan or tap to open installation
 </a>
 <a href="https://app.booking.appointer.hu/wellness-demo/install/staff">
-  <img width="256" height="256" alt="Install Wellness Demo staff app"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu">
+  <img
+    width="256"
+    height="256"
+    alt="Install Wellness Demo staff app"
+    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu"
+  />
   Staff app — scan or tap to open installation
 </a>
 ```

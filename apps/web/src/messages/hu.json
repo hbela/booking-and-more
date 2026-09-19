@@ -702,6 +702,7 @@
   "pwa": {
     "install": "Alkalmazás telepítése",
     "installInstructions": "Telepítési útmutató",
+    "openInBrowser": "Ha ez az oldal egy telepített alkalmazásban vagy QR-kód-olvasóban nyílt meg, nyissa meg ugyanezt a hivatkozást Androidon Chrome-ban, iPhone/iPad készüléken Safariban. A QR-kód hivatkozását át is másolhatja a böngészőbe. A munkatársi alkalmazás telepítése nem jelenti a páciensalkalmazás telepítését.",
     "promptUnavailable": "A böngésző nem ajánlott fel telepítési ablakot. Lehet, hogy az alkalmazás már telepítve van, vagy ebben a böngészőablakban nem érhető el a telepítés.",
     "installFailed": "A telepítés nem indult el. A böngésző menüjéből is megpróbálhatja.",
     "iosHelp": "iPhone vagy iPad készüléken nyissa meg ezt az oldalt Safariban, koppintson a Megosztás gombra, majd válassza a Főképernyőhöz adás lehetőséget. Ha megjelenik, kapcsolja be a megnyitást webalkalmazásként.",

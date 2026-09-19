@@ -702,6 +702,7 @@
   "pwa": {
     "install": "Install app",
     "installInstructions": "How to install",
+    "openInBrowser": "If this page opened inside an installed app or a QR scanner, open the same link in Chrome on Android or Safari on iPhone/iPad. You can also copy the QR link and paste it into that browser. An installed staff app does not mean the patient app is installed.",
     "promptUnavailable": "Your browser has not offered an installation prompt. This can happen if the app is already installed or installation is unavailable in this browser window.",
     "installFailed": "Installation could not start. You can also install using your browser menu.",
     "iosHelp": "On iPhone or iPad, open this page in Safari, tap Share, then Add to Home Screen. Enable Open as Web App if offered.",

@@ -89,3 +89,39 @@ test("QR endpoints serve images and reject unsupported audiences", async ({ requ
   expect(await response.text()).toContain("<svg");
   expect((await request.get("/api/pwa/wellness-demo/admin/qr")).status()).toBe(404);
 });
+
+for (const mode of ["android-standalone", "ios-standalone", "ios-browser"] as const) {
+  test(`patient QR installation guidance remains available in ${mode}`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript((mode) => {
+      Object.defineProperty(navigator, "userAgent", {
+        value: mode.startsWith("ios") ? "iPhone Safari" : "Android Chrome",
+      });
+      if (mode === "ios-standalone") {
+        Object.defineProperty(navigator, "standalone", { value: true });
+      }
+      if (mode === "android-standalone") {
+        const matchMedia = window.matchMedia.bind(window);
+        window.matchMedia = (query) => {
+          const result = matchMedia(query);
+          if (query === "(display-mode: standalone)") {
+            Object.defineProperty(result, "matches", { value: true });
+          }
+          return result;
+        };
+      }
+    }, mode);
+    await page.route("**/v1/public/tenants/wellness-demo", (route) =>
+      route.fulfill({ json: { id: "tenant-1", name: "Wellness Demo", slug: "wellness-demo" } }),
+    );
+    await page.goto("/en/wellness-demo/install/patient");
+    await page.getByRole("button", { name: "How to install", exact: true }).click();
+    const help = page.getByRole("region", { name: "How to install" });
+    await expect(help).toBeFocused();
+    await expect(help).toContainText(
+      mode === "ios-browser" ? "has not offered an installation prompt" : "inside an installed app",
+    );
+    await expect(help).toContainText(mode.startsWith("ios") ? "Safari" : "browser menu");
+    await expect(page.locator('a[href="/en/wellness-demo/book"]')).toBeVisible();
+  });
+}

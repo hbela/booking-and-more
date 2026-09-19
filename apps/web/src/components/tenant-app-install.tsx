@@ -50,7 +50,8 @@ export function TenantAppInstall({
           <p className="leading-relaxed text-ink-muted">
             {t(audience === "staff" ? "staffDescription" : "patientDescription")}
           </p>
-          <InstallApp />
+          <InstallApp showWhenInstalled />
+          <p className="text-sm leading-relaxed text-ink-muted">{pwa("openInBrowser")}</p>
           <p className="text-sm leading-relaxed text-ink-muted">{t("confirmation")}</p>
           <div className="rounded-xl bg-surface-raised p-4">
             <h2 className="font-semibold">Android · Chrome</h2>

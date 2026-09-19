@@ -108,7 +108,11 @@ export function StaffPwa({ children }: { children: React.ReactNode }): React.Rea
   );
 }
 
-export function InstallApp(): React.ReactElement | null {
+export function InstallApp({
+  showWhenInstalled = false,
+}: {
+  showWhenInstalled?: boolean;
+} = {}): React.ReactElement | null {
   const t = useTranslations("pwa");
   const { event, installed, clear } = useContext(InstallContext);
   const [help, setHelp] = useState(false);
@@ -134,9 +138,10 @@ export function InstallApp(): React.ReactElement | null {
             : "other",
     );
   }, []);
-  if (installed) return null;
+  // Standalone describes this window, not which tenant/audience app is installed.
+  if (installed && !showWhenInstalled) return null;
   async function install() {
-    if (!event) {
+    if (!event || installed) {
       setHelp(true);
       helpPanel.current?.focus();
       return;
@@ -164,7 +169,7 @@ export function InstallApp(): React.ReactElement | null {
         aria-controls="pwa-install-help"
       >
         <Download size={18} aria-hidden="true" />
-        {t(event || busy ? "install" : "installInstructions")}
+        {t((event && !installed) || busy ? "install" : "installInstructions")}
       </Button>
       {help ? (
         <div
@@ -175,7 +180,7 @@ export function InstallApp(): React.ReactElement | null {
           className="max-w-sm rounded-lg border border-line bg-surface-raised p-4 text-sm leading-relaxed"
           role="region"
         >
-          <p className="mb-2 font-medium">{t("promptUnavailable")}</p>
+          <p className="mb-2 font-medium">{t(installed ? "openInBrowser" : "promptUnavailable")}</p>
           {failed ? <p className="mb-2">{t("installFailed")}</p> : null}
           <p>
             {t(
