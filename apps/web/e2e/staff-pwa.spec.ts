@@ -17,8 +17,12 @@ for (const [path, staffTitle, patientTitle, installLabel] of [
     await expect(page.getByRole("heading", { name: patientTitle, exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "iPhone / iPad · Safari" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Android · Chrome" })).toBeVisible();
-    const install = page.getByRole("button", { name: installLabel, exact: true });
-    await expect(install).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: path === "/en" ? "How to install" : "Telepítési útmutató",
+        exact: true,
+      }),
+    ).toBeVisible();
     await page.evaluate(() => {
       const event = new Event("beforeinstallprompt", { cancelable: true });
       Object.assign(event, {
@@ -30,7 +34,7 @@ for (const [path, staffTitle, patientTitle, installLabel] of [
       });
       window.dispatchEvent(event);
     });
-    await install.click();
+    await page.getByRole("button", { name: installLabel, exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-install-prompted", "true");
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
@@ -223,8 +227,7 @@ test("staff dashboard offers installation without changing tenant or role", asyn
   });
   await page.goto("/en/dashboard");
   const install = page.getByRole("button", { name: "Install app" });
-  await expect(install).toBeVisible();
-  await install.click();
+  await page.getByRole("button", { name: "How to install" }).click();
   await expect(page.locator("#pwa-install-help")).toBeVisible();
   await page.evaluate(() => {
     const event = new Event("beforeinstallprompt", { cancelable: true });
@@ -282,7 +285,7 @@ test("mobile installation guidance and offline view fit a narrow viewport", asyn
   );
   await mockOrganizations(page);
   await page.goto("/en/dashboard");
-  await page.getByRole("button", { name: "Install app" }).click();
+  await page.getByRole("button", { name: "How to install" }).click();
   await expect(page.locator("#pwa-install-help")).toContainText("Add to Home Screen");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,

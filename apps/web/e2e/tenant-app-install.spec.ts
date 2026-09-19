@@ -60,6 +60,26 @@ test("unknown organization offers no install action", async ({ page }) => {
   await page.goto("/en/missing/install/staff");
   await expect(page.locator('main [role="alert"]')).toBeVisible();
   await expect(page.getByRole("button", { name: "Install app" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "How to install" })).toHaveCount(0);
+});
+
+test("without a native prompt the instructions are explicit, focused and in view", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.route("**/v1/public/tenants/wellness-demo", (route) =>
+    route.fulfill({ json: { id: "tenant-1", name: "Wellness Demo", slug: "wellness-demo" } }),
+  );
+  await page.goto("/en/wellness-demo/install/staff");
+  const instructions = page.getByRole("button", { name: "How to install", exact: true });
+  await instructions.click();
+  const help = page.getByRole("region", { name: "How to install" });
+  await expect(help).toBeFocused();
+  await expect(help).toBeInViewport();
+  await expect(help).toContainText("has not offered an installation prompt");
+  await expect(help).toContainText("brave://apps");
+  await instructions.click();
+  await expect(help).toBeVisible();
 });
 
 test("QR endpoints serve images and reject unsupported audiences", async ({ request }) => {

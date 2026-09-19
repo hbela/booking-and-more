@@ -701,10 +701,12 @@
   },
   "pwa": {
     "install": "Alkalmazás telepítése",
+    "installInstructions": "Telepítési útmutató",
+    "promptUnavailable": "A böngésző nem ajánlott fel telepítési ablakot. Lehet, hogy az alkalmazás már telepítve van, vagy ebben a böngészőablakban nem érhető el a telepítés.",
     "installFailed": "A telepítés nem indult el. A böngésző menüjéből is megpróbálhatja.",
     "iosHelp": "iPhone vagy iPad készüléken nyissa meg ezt az oldalt Safariban, koppintson a Megosztás gombra, majd válassza a Főképernyőhöz adás lehetőséget. Ha megjelenik, kapcsolja be a megnyitást webalkalmazásként.",
     "androidHelp": "A böngésző menüjében válassza az Alkalmazás telepítése vagy a Hozzáadás a kezdőképernyőhöz lehetőséget. Ha egyik sem érhető el, használja tovább a Booking and More weboldalt.",
-    "desktopHelp": "Használja a böngésző címsorában látható telepítési ikont, vagy válassza a menüben az alkalmazás telepítését. Ha nem jelenik meg ilyen lehetőség, a weboldal továbbra is használható.",
+    "desktopHelp": "Brave-ben nyissa meg a menü → Mentés és megosztás (Save and Share) → Telepítés lehetőséget. A meglévő telepítések ellenőrzéséhez írja a címsorba: brave://apps. Chrome-ban vagy Edge-ben keresse a Telepítés lehetőséget a menüben vagy a címsorban. Az Alkalmazás megnyitása lehetőség egy már telepített alkalmazást indít el. Ha egyik sem látható, a weboldal továbbra is használható.",
     "otherHelp": "A böngésző menüjében keresse a Hozzáadás a Dockhoz, az Alkalmazás telepítése vagy a Főképernyőhöz adás lehetőséget. Nem minden böngésző támogatja a telepítést; a weboldal továbbra is működik.",
     "offlineTitle": "Nincs internetkapcsolat",
     "offlineDescription": "A munkafelület megnyitásához kapcsolódjon az internethez. Az időpontok megtekintése és módosítása csak online érhető el.",

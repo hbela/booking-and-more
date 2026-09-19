@@ -115,6 +115,13 @@ export function InstallApp(): React.ReactElement | null {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [platform, setPlatform] = useState("other");
+  const helpPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (help) {
+      helpPanel.current?.focus({ preventScroll: true });
+      helpPanel.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [help]);
   useEffect(() => {
     const ua = navigator.userAgent;
     setPlatform(
@@ -130,7 +137,8 @@ export function InstallApp(): React.ReactElement | null {
   if (installed) return null;
   async function install() {
     if (!event) {
-      setHelp((value) => !value);
+      setHelp(true);
+      helpPanel.current?.focus();
       return;
     }
     setBusy(true);
@@ -156,14 +164,18 @@ export function InstallApp(): React.ReactElement | null {
         aria-controls="pwa-install-help"
       >
         <Download size={18} aria-hidden="true" />
-        {t("install")}
+        {t(event || busy ? "install" : "installInstructions")}
       </Button>
       {help ? (
         <div
           id="pwa-install-help"
+          ref={helpPanel}
+          tabIndex={-1}
+          aria-label={t("installInstructions")}
           className="max-w-sm rounded-lg border border-line bg-surface-raised p-4 text-sm leading-relaxed"
-          role="status"
+          role="region"
         >
+          <p className="mb-2 font-medium">{t("promptUnavailable")}</p>
           {failed ? <p className="mb-2">{t("installFailed")}</p> : null}
           <p>
             {t(
