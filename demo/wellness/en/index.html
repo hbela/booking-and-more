@@ -10,6 +10,7 @@
     />
     <title>Wellness · A little time for you.</title>
     <link rel="stylesheet" href="../styles.css" />
+    <script src="/patient-qr.js" defer></script>
   </head>
   <body class="wellness">
     <a class="skip" href="#main">Skip to content</a>
@@ -41,7 +42,11 @@
             <div class="actions">
               <a class="button" href="https://app.booking.appointer.hu/en/wellness-demo/book"
                 >Book an appointment <span aria-hidden="true">↗</span></a
-              ><a class="button secondary" href="https://app.booking.appointer.hu/en/wellness-demo/chat"
+              ><a
+                class="button secondary"
+                data-chat-link
+                hidden
+                href="https://app.booking.appointer.hu/en/wellness-demo/chat"
                 >AI Assistant <span aria-hidden="true">↗</span></a
               >
             </div>
@@ -95,24 +100,41 @@
         <section class="mobile-apps" aria-labelledby="mobile-apps-title">
           <h2 id="mobile-apps-title">Wellness Demo on your phone</h2>
           <p>
-            Scan the right QR code, or tap it on this phone. Confirm installation on the page that
-            opens. On iPhone, use Safari’s Add to Home Screen option.
+            Scan or tap a patient QR code to open booking or chat directly. No installation is
+            needed. Staff can install their separate app.
           </p>
           <div class="mobile-app-grid">
             <a
               class="mobile-app-card"
-              href="https://app.booking.appointer.hu/en/wellness-demo/install/patient"
+              href="https://app.booking.appointer.hu/en/wellness-demo/book"
             >
-              <h3>Patient app</h3>
+              <h3>Book an appointment</h3>
               <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/patient/qr?locale=en"
+                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=en"
                 width="256"
                 height="256"
-                alt="QR code for the Wellness Demo patient app installation page"
+                alt="QR code for Wellness Demo booking"
                 loading="lazy"
               />
               <p>Book appointments directly with Wellness Demo. No staff account is needed.</p>
-              <span class="button">Open installation page</span>
+              <span class="button">Open booking</span>
+            </a>
+            <a
+              class="mobile-app-card"
+              data-chat-link
+              hidden
+              href="https://app.booking.appointer.hu/en/wellness-demo/chat"
+            >
+              <h3>Chat booking</h3>
+              <img
+                data-chat-qr
+                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=en"
+                width="256"
+                height="256"
+                alt="QR code for Wellness Demo chat"
+              />
+              <p>Book with the AI assistant. No installation or staff account is needed.</p>
+              <span class="button">Open chat</span>
             </a>
             <a
               class="mobile-app-card"

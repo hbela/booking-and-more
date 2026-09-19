@@ -1,6 +1,6 @@
 import type { PrismaClient, Provider, Service, ServiceTranslation, Tenant } from "@bam/db";
 import { tenantAcceptsWrites } from "@bam/auth";
-import { ErrorCodes, NotFoundError } from "@bam/contracts";
+import { ErrorCodes, hasAssistantEntitlement, NotFoundError } from "@bam/contracts";
 import { decodeCursor, takeFor } from "../../lib/pagination.js";
 import { providerNotFound } from "../providers/provider.repository.js";
 import { serviceNotFound } from "../services/service.repository.js";
@@ -29,6 +29,14 @@ import { serviceNotFound } from "../services/service.repository.js";
  */
 export class PublicCatalogueService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async appFeatures(tenantId: string) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId },
+      select: { plan: true, status: true },
+    });
+    return { assistant: hasAssistantEntitlement(subscription?.plan, subscription?.status) };
+  }
 
   /**
    * Find a tenant by its public slug.

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import QRCode from "qrcode";
-import { tenantAppManifest, validTenantApp } from "./tenant-pwa";
+import { tenantAppManifest, tenantQrTarget, validTenantApp } from "./tenant-pwa";
 import { GET as manifest } from "../app/api/pwa/[tenantSlug]/[audience]/manifest/route";
 import { GET as qr } from "../app/api/pwa/[tenantSlug]/[audience]/qr/route";
 
@@ -70,7 +70,7 @@ describe("organization installations", () => {
     ).toBe(404);
     expect(fetcher).not.toHaveBeenCalled();
   });
-  it("encodes the public installation link, not proxy origin or request credentials", async () => {
+  it("encodes direct booking, not proxy origin, installation or request credentials", async () => {
     vi.stubEnv("APP_BASE_URL", "https://app.booking.appointer.hu");
     const encoder = vi.spyOn(QRCode, "toString");
     const response = await qr(
@@ -80,10 +80,71 @@ describe("organization installations", () => {
       params("patient"),
     );
     expect(encoder).toHaveBeenCalledWith(
-      "https://app.booking.appointer.hu/en/wellness-demo/install/patient",
+      "https://app.booking.appointer.hu/en/wellness-demo/book",
       expect.objectContaining({ margin: 4, type: "svg" }),
     );
     expect(response.headers.get("content-type")).toBe("image/svg+xml");
     expect(await response.text()).toContain("<svg");
+  });
+  it.each(["hu", "en"] as const)(
+    "keeps staff installation and patient direct links separate in %s",
+    (locale) => {
+      const prefix = locale === "en" ? "/en" : "";
+      expect(tenantQrTarget(tenant.slug, "book", locale)).toBe(`${prefix}/wellness-demo/book`);
+      expect(tenantQrTarget(tenant.slug, "patient", locale)).toBe(`${prefix}/wellness-demo/book`);
+      expect(tenantQrTarget(tenant.slug, "chat", locale)).toBe(`${prefix}/wellness-demo/chat`);
+      expect(tenantQrTarget(tenant.slug, "staff", locale)).toBe(
+        `${prefix}/wellness-demo/install/staff`,
+      );
+    },
+  );
+  it.each([false, undefined])(
+    "refuses chat QR generation without entitlement (%s)",
+    async (assistant) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(Response.json({ ...tenant, features: { assistant } })),
+      );
+      const encoder = vi.spyOn(QRCode, "toString");
+      const response = await qr(
+        new NextRequest("https://app.test/api/pwa/wellness-demo/chat/qr"),
+        params("chat"),
+      );
+      expect(response.status).toBe(404);
+      expect(encoder).not.toHaveBeenCalled();
+    },
+  );
+  it("generates a direct chat QR for an entitled tenant without forwarding credentials", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(Response.json({ ...tenant, features: { assistant: true } }));
+    vi.stubGlobal("fetch", fetcher);
+    vi.stubEnv("APP_BASE_URL", "https://public.example.test");
+    const encoder = vi.spyOn(QRCode, "toString");
+    const response = await qr(
+      new NextRequest("https://internal.test/qr?locale=en&plan=STARTER", {
+        headers: { cookie: "session=secret" },
+      }),
+      params("chat"),
+    );
+    expect(response.status).toBe(200);
+    expect(encoder).toHaveBeenCalledWith(
+      "https://public.example.test/en/wellness-demo/chat",
+      expect.any(Object),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.stringContaining("/v1/public/tenants/wellness-demo"),
+      { cache: "no-store", signal: expect.any(AbortSignal) },
+    );
+  });
+  it("fails closed when the subscription lookup is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    expect((await qr(new NextRequest("https://app.test/qr"), params("chat"))).status).toBe(503);
+  });
+  it("keeps booking QR available without the assistant entitlement", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    expect((await qr(new NextRequest("https://app.test/qr"), params("book"))).status).toBe(200);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

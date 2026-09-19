@@ -1155,6 +1155,27 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
   // -------------------------------------------------------------------------
 
   describe("the public catalogue", () => {
+    it("exposes chat QR entitlement on Professional and removes it on Starter", async () => {
+      const clinic = await configuredClinic("public-qr");
+      for (const [plan, assistant] of [
+        ["PROFESSIONAL", true],
+        ["STARTER", false],
+      ] as const) {
+        await app.prisma.subscription.upsert({
+          where: { tenantId: clinic.tenantId },
+          create: { tenantId: clinic.tenantId, plan, status: "ACTIVE" },
+          update: { plan, status: "ACTIVE" },
+        });
+        const response = await app.inject({
+          method: "GET",
+          url: `/v1/public/tenants/${clinic.slug}`,
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().features).toEqual({ assistant });
+        expect(response.json()).not.toHaveProperty("subscription");
+      }
+    });
+
     async function publicServices(slug: string, query = "") {
       const response = await app.inject({
         method: "GET",

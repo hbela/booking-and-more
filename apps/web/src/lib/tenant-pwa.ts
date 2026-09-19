@@ -1,5 +1,16 @@
 export type AppAudience = "staff" | "patient";
 export type AppLocale = "hu" | "en";
+export type QrAudience = AppAudience | "book" | "chat";
+
+export function validTenantQr(slug: string, audience: string): audience is QrAudience {
+  return validTenantApp(slug, "staff") && ["staff", "patient", "book", "chat"].includes(audience);
+}
+
+export function tenantQrTarget(slug: string, audience: QrAudience, locale: AppLocale) {
+  if (audience === "staff") return tenantAppPaths(slug, audience, locale).install;
+  const prefix = locale === "en" ? "/en" : "";
+  return `${prefix}/${slug}/${audience === "chat" ? "chat" : "book"}`;
+}
 
 export function validTenantApp(slug: string, audience: string): audience is AppAudience {
   return (

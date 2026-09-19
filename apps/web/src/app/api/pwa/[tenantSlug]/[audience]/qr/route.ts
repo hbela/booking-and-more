@@ -1,17 +1,24 @@
 import { type NextRequest } from "next/server";
 import QRCode from "qrcode";
-import { tenantAppPaths, validTenantApp } from "@/lib/tenant-pwa";
+import { tenantQrTarget, validTenantQr } from "@/lib/tenant-pwa";
+import { publicAppTenant } from "@/lib/public-app-tenant";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ tenantSlug: string; audience: string }> },
 ) {
   const { tenantSlug, audience } = await params;
-  if (!validTenantApp(tenantSlug, audience)) return new Response(null, { status: 404 });
+  if (!validTenantQr(tenantSlug, audience)) return new Response(null, { status: 404 });
+  if (audience === "chat") {
+    const result = await publicAppTenant(tenantSlug);
+    if ("status" in result) return new Response(null, { status: result.status });
+    if (result.tenant.features?.assistant !== true)
+      return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
   const locale = request.nextUrl.searchParams.get("locale") === "en" ? "en" : "hu";
   // Pin the public origin behind Coolify; local development uses the request URL.
   const origin = process.env["APP_BASE_URL"] ?? request.nextUrl.origin;
-  const target = new URL(tenantAppPaths(tenantSlug, audience, locale).install, origin).href;
+  const target = new URL(tenantQrTarget(tenantSlug, audience, locale), origin).href;
   const svg = await QRCode.toString(target, {
     type: "svg",
     errorCorrectionLevel: "M",

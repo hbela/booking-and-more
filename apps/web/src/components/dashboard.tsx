@@ -12,6 +12,7 @@ import { ErrorText, Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
 import { Section } from "./ui/section";
 import { BusinessKnowledge } from "./business-knowledge";
+import { PatientQrCodes } from "./patient-qr-codes";
 import { ArrowUpRight, CalendarDays, Clock3, Bot } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { navFor } from "@/lib/dashboard-nav";
@@ -122,6 +123,13 @@ export function Dashboard(): React.ReactElement {
             <PendingPanel
               organizationName={context.me.tenant.name}
               daysRemaining={context.me.tenant.daysRemaining}
+            />
+          ) : null}
+
+          {!context.awaitingSubscription && context.me.tenant ? (
+            <PatientQrCodes
+              slug={context.me.tenant.slug}
+              assistant={context.me.features.assistant}
             />
           ) : null}
 

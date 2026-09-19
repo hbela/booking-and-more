@@ -2,7 +2,7 @@
 
 One installation per web origin opens `/dashboard` and uses the existing staff session, language preference, active organization, and permissions. Install from the home page or dashboard's **Install app** control, including before sign-in. The home page explains owner account creation, staff invitations, and patient booking links, and shows Android and iPhone/iPad instructions. Supporting browsers offer their native prompt; other browsers show instructions, including Safari's Add to Home Screen. Standalone mode hides the control.
 
-Organization-specific staff and patient installations are described in [organization mobile apps](organization-mobile-apps.md). The generic installation described here remains available. Push notifications, offline appointments, queued writes, and background synchronization are not included. A root manifest scope accommodates Hungarian and English staff paths; it is not an authorization boundary. Installation never grants permissions or extends a session's expiry.
+Organization-specific staff installation and direct patient booking/chat QR codes are described in [organization QR codes](organization-mobile-apps.md). The generic installation described here remains available. Push notifications, offline appointments, queued writes, and background synchronization are not included. A root manifest scope accommodates Hungarian and English staff paths; it is not an authorization boundary. Installation never grants permissions or extends a session's expiry.
 
 ## Offline behavior
 

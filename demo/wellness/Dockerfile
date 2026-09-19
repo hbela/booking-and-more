@@ -1,6 +1,6 @@
 # Build context: demo/wellness. Deploy independently from the app.
 FROM nginx:1.31-alpine
-COPY index.html styles.css /usr/share/nginx/html/
+COPY index.html styles.css patient-qr.js /usr/share/nginx/html/
 COPY en /usr/share/nginx/html/en
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -383,3 +383,6 @@ footer p {
     grid-template-columns: 1fr;
   }
 }
+[hidden] {
+  display: none !important;
+}

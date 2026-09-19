@@ -54,15 +54,17 @@ export const publicCatalogueRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) => {
       const tenant = await catalogue.resolveTenant(request.params.tenantSlug);
-      const [locations, languages] = await Promise.all([
+      const [locations, languages, features] = await Promise.all([
         catalogue.listLocations(tenant.id),
         catalogue.availableLocales(tenant),
+        catalogue.appFeatures(tenant.id),
       ]);
 
       return {
         id: tenant.id,
         slug: tenant.slug,
         name: tenant.name,
+        features,
         defaultTimezone: tenant.defaultTimezone,
         defaultLanguage: tenant.defaultLanguage,
         languages,

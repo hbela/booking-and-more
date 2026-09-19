@@ -12,17 +12,20 @@ for (const locale of ["hu", "en"] as const) {
       await page.route("**/v1/me", (route) => route.fulfill({ status: 401, json: {} }));
       const prefix = locale === "en" ? "/en" : "";
       await page.goto(`${prefix}/wellness-demo/install/${audience}`);
+      if (audience === "patient") {
+        await expect(page).toHaveURL(`${prefix}/wellness-demo/book`);
+        await expect(page.getByRole("button", { name: "How to install", exact: true })).toHaveCount(
+          0,
+        );
+        return;
+      }
       await expect(page.getByText("Wellness Demo", { exact: true })).toBeVisible();
       await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
       await expect(page.locator('link[rel="manifest"]')).toHaveAttribute(
         "href",
         `/api/pwa/wellness-demo/${audience}/manifest?locale=${locale}`,
       );
-      await expect(
-        page.locator(
-          `a[href="${prefix}/wellness-demo/${audience === "staff" ? "sign-in" : "book"}"]`,
-        ),
-      ).toBeVisible();
+      await expect(page.locator(`a[href="${prefix}/wellness-demo/sign-in"]`)).toBeVisible();
       await expect(page.getByRole("heading", { name: "iPhone / iPad · Safari" })).toBeVisible();
       await page.evaluate(async () => {
         await navigator.serviceWorker.ready;
@@ -91,7 +94,7 @@ test("QR endpoints serve images and reject unsupported audiences", async ({ requ
 });
 
 for (const mode of ["android-standalone", "ios-standalone", "ios-browser"] as const) {
-  test(`patient QR installation guidance remains available in ${mode}`, async ({ page }) => {
+  test(`legacy patient QR opens booking directly in ${mode}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addInitScript((mode) => {
       Object.defineProperty(navigator, "userAgent", {
@@ -115,13 +118,7 @@ for (const mode of ["android-standalone", "ios-standalone", "ios-browser"] as co
       route.fulfill({ json: { id: "tenant-1", name: "Wellness Demo", slug: "wellness-demo" } }),
     );
     await page.goto("/en/wellness-demo/install/patient");
-    await page.getByRole("button", { name: "How to install", exact: true }).click();
-    const help = page.getByRole("region", { name: "How to install" });
-    await expect(help).toBeFocused();
-    await expect(help).toContainText(
-      mode === "ios-browser" ? "has not offered an installation prompt" : "inside an installed app",
-    );
-    await expect(help).toContainText(mode.startsWith("ios") ? "Safari" : "browser menu");
-    await expect(page.locator('a[href="/en/wellness-demo/book"]')).toBeVisible();
+    await expect(page).toHaveURL("/en/wellness-demo/book");
+    await expect(page.getByRole("button", { name: "How to install", exact: true })).toHaveCount(0);
   });
 }

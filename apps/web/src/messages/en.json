@@ -9,6 +9,14 @@
     "themeLight": "Light",
     "themeDark": "Dark"
   },
+  "patientQr": {
+    "title": "Patient QR codes",
+    "description": "Download these QR codes for your website or printed materials. Scanning opens the page directly; patients do not need to install an app.",
+    "book": "Booking",
+    "chat": "Chat",
+    "image": "QR code: {destination}",
+    "download": "Download {destination} QR"
+  },
   "tenantApp": {
     "staffTitle": "Install the staff app",
     "patientTitle": "Install the patient app",
@@ -33,7 +41,7 @@
     "patientLink": "Open the booking link or scan the QR code provided by your clinic, or tap Book on its website. Ask the clinic for its link if you do not have it.",
     "patientBook": "Choose a service, provider and time, then enter your contact details and confirm. You can also use the clinic’s AI chat when available.",
     "patientManage": "Keep your confirmation and booking-management link so you can review, change or cancel your appointment.",
-    "patientInstallNote": "Visit your organization's own website and scan or tap its Patient app QR code to install its booking app on your phone.",
+    "patientInstallNote": "Scan or tap your organization's booking QR code to open its booking page. Chat QR codes are also available with the Professional subscription. No app installation is needed.",
     "installTitle": "Install the staff app on your phone",
     "installDescription": "Add Booking and More to your home screen for easy access. The same app works for owners, providers and assistants; no app-store download is needed.",
     "onlineNote": "An internet connection is required to view or change appointments. When disconnected, the staff app shows an offline notice. You can also keep using Booking and More in your browser.",

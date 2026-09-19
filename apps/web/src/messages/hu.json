@@ -9,6 +9,14 @@
     "themeLight": "Világos",
     "themeDark": "Sötét"
   },
+  "patientQr": {
+    "title": "Páciens QR-kódok",
+    "description": "Töltse le a QR-kódokat weboldalához vagy nyomtatott anyagaihoz. Beolvasáskor közvetlenül az oldal nyílik meg; a pácienseknek nem kell alkalmazást telepíteniük.",
+    "book": "Időpontfoglalás",
+    "chat": "Chat",
+    "image": "QR-kód: {destination}",
+    "download": "{destination} QR-kód letöltése"
+  },
   "tenantApp": {
     "staffTitle": "Munkatársi alkalmazás telepítése",
     "patientTitle": "Páciensalkalmazás telepítése",
@@ -33,7 +41,7 @@
     "patientLink": "Nyissa meg a rendelőtől kapott foglalási hivatkozást, olvassa be a QR-kódot, vagy koppintson a weboldalán a Foglalás gombra. Ha nincs meg a hivatkozás, kérje el a rendelőtől.",
     "patientBook": "Válasszon szolgáltatást, szolgáltatót és időpontot, adja meg elérhetőségeit, majd erősítse meg a foglalást. Ha elérhető, a rendelő AI-chatjét is használhatja.",
     "patientManage": "Őrizze meg a visszaigazolást és a foglaláskezelő hivatkozást, hogy megtekinthesse, módosíthassa vagy lemondhassa időpontját.",
-    "patientInstallNote": "Keresse fel szolgáltatója saját weboldalát, és olvassa be vagy koppintson a Páciensek alkalmazása QR-kódra a foglalási alkalmazás telepítéséhez.",
+    "patientInstallNote": "Olvassa be vagy koppintson szolgáltatója időpontfoglalási QR-kódjára az oldal megnyitásához. Professional előfizetéssel chat QR-kód is elérhető. Alkalmazás telepítése nem szükséges.",
     "installTitle": "Telepítse a munkatársi alkalmazást telefonjára",
     "installDescription": "Adja a Booking and More alkalmazást a kezdőképernyőhöz a gyors eléréshez. Ugyanaz az alkalmazás használható tulajdonosként, szolgáltatóként és asszisztensként; nincs szükség alkalmazásbolti letöltésre.",
     "onlineNote": "Az időpontok megtekintéséhez és módosításához internetkapcsolat szükséges. Kapcsolat nélkül a munkatársi alkalmazás tájékoztató üzenetet mutat. A Booking and More továbbra is használható böngészőből is.",

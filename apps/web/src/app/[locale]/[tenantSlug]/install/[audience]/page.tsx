@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import type { Metadata } from "next";
 import { validTenantApp, tenantAppPaths, type AppAudience, type AppLocale } from "@/lib/tenant-pwa";
@@ -15,6 +15,7 @@ function checked(params: Params): { tenantSlug: string; audience: AppAudience; l
 }
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { locale, tenantSlug, audience } = checked(await params);
+  if (audience === "patient") return { robots: { index: false, follow: false } };
   return {
     title: `${tenantSlug} · ${audience === "staff" ? "Staff" : "Patients"}`,
     manifest: tenantAppPaths(tenantSlug, audience, locale).manifest,
@@ -24,6 +25,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 }
 export default async function InstallPage({ params }: { params: Promise<Params> }) {
   const { locale, tenantSlug, audience } = checked(await params);
+  // Previously printed patient QR codes encoded the installation URL.
+  if (audience === "patient") redirect(tenantAppPaths(tenantSlug, audience, locale).launch);
   setRequestLocale(locale);
   return <TenantAppInstall tenantSlug={tenantSlug} audience={audience} locale={locale} />;
 }

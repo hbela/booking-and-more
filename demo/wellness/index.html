@@ -10,6 +10,7 @@
     />
     <title>Wellness · Idő önmagára.</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="/patient-qr.js" defer></script>
   </head>
   <body class="wellness">
     <a class="skip" href="#main">Ugrás a tartalomra</a>
@@ -43,6 +44,8 @@
                 >Időpontot foglalok <span aria-hidden="true">↗</span></a
               ><a
                 class="button secondary"
+                data-chat-link
+                hidden
                 href="https://app.booking.appointer.hu/wellness-demo/chat"
                 >AI Asszistens <span aria-hidden="true">↗</span></a
               >
@@ -100,27 +103,43 @@
         <section class="mobile-apps" aria-labelledby="mobile-apps-title">
           <h2 id="mobile-apps-title">Wellness Demo a telefonján</h2>
           <p>
-            Olvassa be a megfelelő QR-kódot, vagy koppintson rá ezen a telefonon. A megnyíló oldalon
-            erősítse meg a telepítést. iPhone-on a Safari „Főképernyőhöz adás” menüpontját
-            használja.
+            Olvassa be vagy koppintson a páciens QR-kódra: közvetlenül az időpontfoglalás vagy a
+            chat nyílik meg, telepítés nélkül. A munkatársak külön alkalmazást telepíthetnek.
           </p>
           <div class="mobile-app-grid">
-            <a
-              class="mobile-app-card"
-              href="https://app.booking.appointer.hu/wellness-demo/install/patient"
-            >
-              <h3>Páciensalkalmazás</h3>
+            <a class="mobile-app-card" href="https://app.booking.appointer.hu/wellness-demo/book">
+              <h3>Időpontfoglalás</h3>
               <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/patient/qr?locale=hu"
+                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=hu"
                 width="256"
                 height="256"
-                alt="QR-kód a Wellness Demo páciensalkalmazás telepítési oldalához"
+                alt="QR-kód a Wellness Demo időpontfoglalásához"
                 loading="lazy"
               />
               <p>
                 Időpontfoglalás közvetlenül a Wellness Demo oldalán. Munkatársi fiók nem szükséges.
               </p>
-              <span class="button">Telepítési oldal megnyitása</span>
+              <span class="button">Időpontfoglalás megnyitása</span>
+            </a>
+            <a
+              class="mobile-app-card"
+              data-chat-link
+              hidden
+              href="https://app.booking.appointer.hu/wellness-demo/chat"
+            >
+              <h3>Foglalás chaten</h3>
+              <img
+                data-chat-qr
+                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=hu"
+                width="256"
+                height="256"
+                alt="QR-kód a Wellness Demo chathez"
+              />
+              <p>
+                Foglaljon az AI-asszisztens segítségével. Telepítés és munkatársi fiók nem
+                szükséges.
+              </p>
+              <span class="button">Chat megnyitása</span>
             </a>
             <a
               class="mobile-app-card"

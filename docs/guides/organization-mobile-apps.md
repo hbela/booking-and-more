@@ -1,50 +1,67 @@
-# Organization website mobile apps
+# Organization QR codes and staff app
 
-Each organization places two linked QR images on **its own website**: Patient app and Staff app. There is no organization picker on the Booking and More homepage. Wellness Demo's Hungarian and English websites include these cards as the working example.
+Patient QR codes open the organization's booking or chat page directly. Patients do not install an app. Staff retain their separate installation QR and existing sign-in flow.
 
-Scanning on another screen, or tapping a card on the phone, opens an installation page with the organization's public name. Installation requires browser confirmation; a QR code cannot silently install an app. The page offers a native prompt when available, Android and iPhone/iPad instructions, and a continue-without-installing link. Open links in the system browser if a QR scanner or social app uses an embedded browser.
+## Subscription options
 
-Installation pages keep the installation guide available even when opened inside an installed app. Standalone display mode does not identify which organization or audience was installed. If the patient QR opens inside the staff app, copy the QR link into Chrome on Android or Safari on iPhone/iPad before installing. On Android, restart an installation test by opening Settings > Apps > See all apps, selecting the installed staff web app, and choosing Uninstall. Then reopen the patient QR link in Chrome; use its installation menu if no native prompt appears.
+The dashboard's **Patient QR codes** section provides SVG downloads in the current language:
 
-## Add cards to another organization's website
+| Subscription | Patient QR codes                     |
+| ------------ | ------------------------------------ |
+| Starter      | Booking (`/book`)                    |
+| Professional | Booking (`/book`) and Chat (`/chat`) |
 
-Replace `wellness-demo` with the organization's configured **slug**, and the app origin if hosting elsewhere. The organization's website domain can differ from the application origin. No login token, patient identifier, or secret belongs in these URLs.
+Chat uses the existing live assistant entitlement, including Professional trials and entitled internal organizations. It is independent of temporary AI quota exhaustion or the assistant's enabled setting; the chat page continues to handle those conditions. A downgrade removes the chat download and prevents new chat QR generation. Already printed codes cannot be revoked, so the chat API continues enforcing access on every request.
+
+The public catalogue exposes only `features.assistant`, not subscription or billing details. The chat QR endpoint checks this flag server-side and returns 404 when not entitled, or 503 when the lookup fails. A client-supplied plan cannot enable chat.
+
+## Website links
+
+Replace `wellness-demo` with the organization's slug. Do not put login tokens or patient data in QR URLs.
 
 ```html
-<a href="https://app.booking.appointer.hu/wellness-demo/install/patient">
+<a href="https://app.booking.appointer.hu/wellness-demo/book">
   <img
     width="256"
     height="256"
-    alt="Install Wellness Demo patient app"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/patient/qr?locale=hu"
+    alt="Book an appointment"
+    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=hu"
   />
-  Patient app — scan or tap to open installation
+  Book an appointment — no installation needed
+</a>
+<!-- Show this card only when the chat QR is available for the subscription. -->
+<a href="https://app.booking.appointer.hu/wellness-demo/chat">
+  <img
+    width="256"
+    height="256"
+    alt="Chat booking"
+    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=hu"
+  />
+  Chat booking — no installation needed
 </a>
 <a href="https://app.booking.appointer.hu/wellness-demo/install/staff">
   <img
     width="256"
     height="256"
-    alt="Install Wellness Demo staff app"
+    alt="Install the staff app"
     src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu"
   />
-  Staff app — scan or tap to open installation
+  Staff app — open installation
 </a>
 ```
 
-For English, prefix installation links with `/en` and use `locale=en` on QR images. Preserve the white margin and render the QR at least 192 pixels wide. Allow the application origin in the website's image CSP if it has one. Explain beside the cards that the phone asks for confirmation and that Safari uses Share → Add to Home Screen.
+For English, prefix page links with `/en` and use `locale=en` on QR images. Preserve the white margin and display codes at least 192 pixels wide. Allow the application origin in the website's image CSP.
 
-## Launch and access
+Wellness Demo includes both languages. Its `patient-qr.js` reveals chat links only after the entitlement-checked QR image loads; failures leave chat hidden. Include that script and the `[hidden]` CSS rule when reusing the example.
 
-Patient apps launch the organization's existing booking page. Staff apps launch its sign-in route, which uses the existing organization membership check and activation flow before opening the dashboard. Owners, providers, and assistants keep their existing permissions. A QR link grants no access. Sessions, language, and theme still use the existing same-origin storage; separate app IDs do not isolate cookies or accounts.
+## Compatibility
 
-Manifests use stable organization IDs plus audience, with localized organization/role names and existing calendar-plus icons. Changing language or organization slug does not change the app ID. Root scope accommodates shared dashboard and locale paths. Browsers differ in how they handle multiple installed apps with overlapping scopes; simultaneous staff/patient or multiple-organization installations need device verification. The generic Booking and More staff installation remains available.
+The legacy `/api/pwa/{slug}/patient/qr` now encodes `/book`. Old printed codes pointing to `/{slug}/install/patient` redirect to `/book`, preserving the URL's language. Existing patient manifests remain available for previously installed apps, but no patient installation is offered by these QR flows.
 
-Internet access is required for booking and business operations. The existing worker caches only static staff offline pages and their assets. Patient booking/chat and APIs remain network-only; installation adds no offline appointment access.
+Staff installations keep their existing manifest IDs, sign-in routes and permissions. Installation grants no access. Android may open same-origin links inside an already installed staff app; patient pages still open directly without requiring another installation. Internet access remains required.
 
 ## Deployment and verification
 
-Deploy the web application and the changed organization website. Set the web service's `APP_BASE_URL` to its public HTTPS origin so QR images behind Coolify encode the public address. Both Compose configurations now pass this existing setting to web. The manifest route also needs the existing `NEXT_PUBLIC_API_BASE_URL` to reach public organization branding. Organizations unavailable in the public catalogue cannot create a new installation through these pages.
+Deploy the **API**, **web app**, and **organization website**. Deploy the API first so the public entitlement flag is available; chat QR generation fails closed against an older API. No database migration or new environment variables are required. Keep the web service's existing `APP_BASE_URL` set to the public HTTPS origin and `NEXT_PUBLIC_API_BASE_URL` pointing at the API.
 
-Check each live QR with a phone camera, then inspect the confirmation name, home-screen icon, launch destination, and staff membership enforcement. Test Android Chrome, iPhone/iPad Safari, and desktop Chrome/Edge. Browser tests simulate prompt events and verify page routing/layout; they do not confirm OS installation. Physical-device installation and overlapping-scope behavior remain manual checks.
-
-See [staff PWA](staff-pwa.md) for worker updates, cache policy, and rollback. To withdraw organization installation, remove its website cards and installation endpoints; already-installed home-screen apps require user removal. Do not change existing app IDs during an ordinary update.
+Verify Starter shows only booking, Professional shows booking and chat, and staff installation remains available. Scan both newly generated and old printed patient codes on Android and iPhone: they should open the relevant page directly. See [staff PWA](staff-pwa.md) for staff installation, worker updates and cache policy.

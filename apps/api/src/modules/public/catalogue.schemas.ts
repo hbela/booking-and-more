@@ -30,6 +30,7 @@ export const publicTenantSchema = z.object({
   id: idSchema,
   slug: z.string(),
   name: z.string(),
+  features: z.object({ assistant: z.boolean() }),
   defaultTimezone: z.string(),
   defaultLanguage: z.string(),
   /** Every locale this tenant can actually serve: its own, plus any locale a
