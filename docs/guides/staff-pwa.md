@@ -1,12 +1,12 @@
 # Booking and More staff PWA
 
-One installation per web origin opens `/dashboard` and uses the existing staff session, language preference, active organization, and permissions. Install from the dashboard's **Install app** control. Supporting browsers offer their native prompt; other browsers show instructions, including Safari's Add to Home Screen. Standalone mode hides the control.
+One installation per web origin opens `/dashboard` and uses the existing staff session, language preference, active organization, and permissions. Install from the home page or dashboard's **Install app** control, including before sign-in. The home page explains owner account creation, staff invitations, and patient booking links, and shows Android and iPhone/iPad instructions. Supporting browsers offer their native prompt; other browsers show instructions, including Safari's Add to Home Screen. Standalone mode hides the control.
 
-Customer-specific installations, push notifications, offline appointments, queued writes, and background synchronization are not part of this release. A root manifest scope accommodates Hungarian and English staff paths; it is not an authorization boundary. Installation never grants permissions or extends a session's expiry.
+Organization-specific staff and patient installations are described in [organization mobile apps](organization-mobile-apps.md). The generic installation described here remains available. Push notifications, offline appointments, queued writes, and background synchronization are not included. A root manifest scope accommodates Hungarian and English staff paths; it is not an authorization boundary. Installation never grants permissions or extends a session's expiry.
 
 ## Offline behavior
 
-The production-only registration runs on dashboard and sign-in paths, including tenant/domain sign-in. HTTPS is required outside localhost. `/sw.js` has root scope but intercepts only staff document navigation and an exact allowlist of offline assets. Public booking/chat, management links, APIs, non-GET requests, and Next.js data requests pass through without caching or fallback substitution.
+The production-only registration runs on the home page, organization installation pages, dashboard and sign-in paths, including tenant/domain sign-in. HTTPS is required outside localhost. `/sw.js` has root scope but intercepts only staff document navigation and an exact allowlist of offline assets. Public booking/chat, management links, APIs, non-GET requests, and Next.js data requests pass through without caching or fallback substitution.
 
 The `bam-staff-offline-v1` cache contains exactly:
 

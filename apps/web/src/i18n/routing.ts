@@ -62,5 +62,12 @@ export function isTenantPath(pathname: string): boolean {
   // Match complete paths so future nested routes are not claimed implicitly.
   if (withoutLocale.length === 1) return true;
 
+  if (
+    withoutLocale.length === 3 &&
+    second === "install" &&
+    ["staff", "patient"].includes(withoutLocale[2] ?? "")
+  )
+    return true;
+
   return withoutLocale.length === 2 && ["book", "chat", "sign-in"].includes(second ?? "");
 }

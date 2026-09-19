@@ -1,5 +1,44 @@
 import { expect, test, type Page } from "@playwright/test";
 
+for (const [path, staffTitle, patientTitle, installLabel] of [
+  ["/en", "For owners and staff", "For patients and customers", "Install app"],
+  [
+    "/hu",
+    "Tulajdonosoknak és munkatársaknak",
+    "Pácienseknek és ügyfeleknek",
+    "Alkalmazás telepítése",
+  ],
+] as const) {
+  test(`home page explains mobile access before sign-in: ${path}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.route("**/v1/me", (route) => route.fulfill({ status: 401, json: {} }));
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: staffTitle, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: patientTitle, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "iPhone / iPad · Safari" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Android · Chrome" })).toBeVisible();
+    const install = page.getByRole("button", { name: installLabel, exact: true });
+    await expect(install).toBeVisible();
+    await page.evaluate(() => {
+      const event = new Event("beforeinstallprompt", { cancelable: true });
+      Object.assign(event, {
+        prompt: () => {
+          document.documentElement.dataset.installPrompted = "true";
+          return Promise.resolve();
+        },
+        userChoice: Promise.resolve({ outcome: "dismissed" }),
+      });
+      window.dispatchEvent(event);
+    });
+    await install.click();
+    await expect(page.locator("html")).toHaveAttribute("data-install-prompted", "true");
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("mobile-home.png"), fullPage: true });
+  });
+}
+
 async function mockOrganizations(page: Page) {
   const tenants = [
     { id: "tenant-1", name: "Wellness Demo", slug: "wellness-demo", status: "ACTIVE" },

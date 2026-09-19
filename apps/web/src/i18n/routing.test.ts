@@ -14,6 +14,11 @@ import { isTenantPath, routing } from "./routing";
  */
 
 describe("isTenantPath", () => {
+  it("keeps organization installation links in their explicit language", () => {
+    expect(isTenantPath("/wellness-demo/install/staff")).toBe(true);
+    expect(isTenantPath("/en/wellness-demo/install/patient")).toBe(true);
+    expect(isTenantPath("/wellness-demo/install/admin")).toBe(false);
+  });
   it("claims a tenant's booking page, prefixed or not", () => {
     expect(isTenantPath("/medicare")).toBe(true);
     expect(isTenantPath("/medicare/book")).toBe(true);

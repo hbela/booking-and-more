@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   oxc: { jsx: { runtime: "automatic" } },
   test: {
     // Bundle next-intl so Vite resolves its Next.js extensionless imports when

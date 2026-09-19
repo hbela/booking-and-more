@@ -22,6 +22,8 @@ export function StaffPwa({ children }: { children: React.ReactNode }): React.Rea
   const pathname = usePathname();
   const staff =
     /^\/dashboard(?:\/|$)/.test(pathname) || /^\/(?:[^/]+\/)?sign-in\/?$/.test(pathname);
+  const installationSurface =
+    staff || pathname === "/" || /^\/[^/]+\/install\/(staff|patient)$/.test(pathname);
   const t = useTranslations("pwa");
   const [offline, setOffline] = useState(false);
   const [installed, setInstalled] = useState(false);
@@ -29,7 +31,7 @@ export function StaffPwa({ children }: { children: React.ReactNode }): React.Rea
   const notice = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    if (!staff) return;
+    if (!installationSurface) return;
     const media = window.matchMedia("(display-mode: standalone)");
     const sync = () => setOffline(!navigator.onLine);
     const appearance = () =>
@@ -69,7 +71,7 @@ export function StaffPwa({ children }: { children: React.ReactNode }): React.Rea
       window.removeEventListener("appinstalled", complete);
       media.removeEventListener("change", appearance);
     };
-  }, [staff]);
+  }, [installationSurface]);
 
   const blocked = staff && offline;
   useEffect(() => {
