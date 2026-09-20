@@ -37,6 +37,7 @@ import type { BillingoInvoiceIssuer } from "../billingo/billingo.invoice.js";
  */
 
 export interface StripeProcessorOptions {
+  billingMode?: "test" | "live";
   prisma: PrismaClient;
   logger: Logger;
   batchSize: number;
@@ -198,6 +199,17 @@ async function processOne(
   event: ClaimedStripeEvent,
   options: StripeProcessorOptions,
 ): Promise<void> {
+  const payload = event.payload as Record<string, unknown>;
+  if (
+    options.billingMode !== undefined &&
+    payload["livemode"] !== (options.billingMode === "live")
+  ) {
+    options.logger.warn(
+      { eventId: event.id },
+      "stripe: quarantined mismatched or missing billing mode",
+    );
+    return;
+  }
   const object = extractObject(event.payload);
 
   try {

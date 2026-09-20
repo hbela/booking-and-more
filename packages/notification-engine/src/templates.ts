@@ -679,7 +679,8 @@ const CALENDAR_DISCONNECTED_COPY: Record<
     subject: (organization) => `${organization} — Google Calendar disconnected`,
     body: {
       greeting: (name) => `Dear ${name},`,
-      intro: (account) => `The calendar connection to your Google account ${account} has stopped working.`,
+      intro: (account) =>
+        `The calendar connection to your Google account ${account} has stopped working.`,
       whoseDiary: (provider) => `It was filling ${provider}'s diary.`,
       safe: "Your bookings are safe. The platform is the record of your appointments; only the copy in Google Calendar has stopped updating.",
       whatStopped:

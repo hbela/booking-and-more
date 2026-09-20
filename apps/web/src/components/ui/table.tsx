@@ -9,7 +9,8 @@ import { cn } from "@/lib/cn";
  * (middle-click opens a tab, a screen reader says "link"); {@link RowButton}
  * acts on the current screen and must be a button.
  */
-const ROW_ACTION = "border-line-strong text-ink hover:bg-surface-raised rounded-md border px-2 py-1 text-xs";
+const ROW_ACTION =
+  "border-line-strong text-ink hover:bg-surface-raised rounded-md border px-2 py-1 text-xs";
 
 export function RowLink({
   href,

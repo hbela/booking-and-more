@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "stripe:catalog": "node scripts/configure-stripe-catalog.mjs"
+    "stripe:catalog": "node scripts/configure-stripe-catalog.mjs",
+    "db:backfill-pii": "node scripts/backfill-customer-pii.mjs",
+    "billing:transition-test": "node scripts/transition-test-billing.mjs"
   },
   "dependencies": {
     "@bam/ai": "workspace:*",
@@ -33,7 +35,7 @@
     "@fastify/rate-limit": "^11.1.0",
     "@fastify/swagger": "^9.8.1",
     "@scalar/fastify-api-reference": "^1.38.0",
-    "fastify": "^5.10.0",
+    "fastify": "^5.12.1",
     "fastify-plugin": "^5.1.0",
     "fastify-type-provider-zod": "^7.0.0",
     "ioredis": "^5.11.1",

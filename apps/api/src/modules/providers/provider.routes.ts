@@ -137,7 +137,11 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
   app.post(
     "",
     {
-      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.PROVIDER_MANAGE), app.requirePermission(Permissions.MEMBER_MANAGE)],
+      preHandler: [
+        app.requireWritableTenant,
+        app.requirePermission(Permissions.PROVIDER_MANAGE),
+        app.requirePermission(Permissions.MEMBER_MANAGE),
+      ],
       config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
       schema: {
         tags: ["providers"],
@@ -152,18 +156,24 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
       const tenant = request.tenant!;
 
       const { provider, invitation } = await app.prisma.$transaction(async (tx) => {
-        const provider = await service.create({
-          tenantId: tenant.id,
-          input: request.body,
-          defaults: { timezone: tenant.defaultTimezone, language: tenant.defaultLanguage },
-        }, tx);
-        const invitation = await memberships.inviteProvider({
-          tenantId: tenant.id,
-          provider,
-          invitedByUserId: request.user!.id,
-          invitedByName: request.user!.name,
-          expiryHours: options.invitationExpiryHours,
-        }, tx);
+        const provider = await service.create(
+          {
+            tenantId: tenant.id,
+            input: request.body,
+            defaults: { timezone: tenant.defaultTimezone, language: tenant.defaultLanguage },
+          },
+          tx,
+        );
+        const invitation = await memberships.inviteProvider(
+          {
+            tenantId: tenant.id,
+            provider,
+            invitedByUserId: request.user!.id,
+            invitedByName: request.user!.name,
+            expiryHours: options.invitationExpiryHours,
+          },
+          tx,
+        );
         return { provider, invitation };
       });
 

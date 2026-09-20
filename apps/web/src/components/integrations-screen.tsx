@@ -79,8 +79,7 @@ export function IntegrationsScreen(): React.ReactElement {
   const canManageProviders = context.can("provider:manage");
   const providers = useQuery({
     queryKey: ["providers", context.tenantId],
-    queryFn: () =>
-      apiFetch<Paginated<Provider>>("/v1/providers", { tenantId: context.tenantId }),
+    queryFn: () => apiFetch<Paginated<Provider>>("/v1/providers", { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && canManageProviders,
   });
 
@@ -424,9 +423,13 @@ function HealthDetail({ health }: { health: IntegrationHealth }): React.ReactEle
       // anything for it to be attempted again.
       return <Callout tone="danger">{t("failedDetail", { count: health.failed })}</Callout>;
     case "syncing":
-      return <p className="text-sm text-ink-muted">{t("syncingDetail", { count: health.queued })}</p>;
+      return (
+        <p className="text-sm text-ink-muted">{t("syncingDetail", { count: health.queued })}</p>
+      );
     case "healthy":
-      return <p className="text-sm text-ink-muted">{t("healthyDetail", { count: health.synced })}</p>;
+      return (
+        <p className="text-sm text-ink-muted">{t("healthyDetail", { count: health.synced })}</p>
+      );
     case "disconnected":
       return <p className="text-sm text-ink-muted">{t("disconnectedDetail")}</p>;
   }

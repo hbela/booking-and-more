@@ -1,3 +1,6 @@
+import { writeHeartbeat, clearHeartbeat } from "./heartbeat.js";
+import { reportProcessingHealth } from "./processing-health.js";
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
 import { hasBillingo, hasRedis, loadEnvOrExit } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
 import { createLogger, flushSentry, initSentry } from "@bam/observability";
@@ -204,6 +207,10 @@ async function attachQueues(prisma: ReturnType<typeof createPrismaClient>): Prom
 
 async function main(): Promise<void> {
   const prisma = createPrismaClient({ databaseUrl: env.DATABASE_URL });
+  bindCustomerPii(
+    prisma,
+    createCustomerPii(env.CUSTOMER_PII_ENCRYPTION_KEY, env.CUSTOMER_PII_BLIND_INDEX_KEY),
+  );
 
   let running: RunningQueues | undefined;
 
@@ -221,6 +228,7 @@ async function main(): Promise<void> {
   // activated, and only their confirmation email waits
   // (docs/phase-9-subscription-and-activation.md §3.3).
   const stripeEvents = startStripePoller({
+    billingMode: env.BILLING_MODE,
     prisma,
     logger: log,
     intervalMs: env.OUTBOX_POLL_INTERVAL_MS,
@@ -274,7 +282,20 @@ async function main(): Promise<void> {
     intervalMs: 60 * 60 * 1_000,
   });
 
+  writeHeartbeat();
+  let checkingProgress = false;
   const heartbeat = setInterval(() => {
+    writeHeartbeat();
+    if (!checkingProgress) {
+      checkingProgress = true;
+      void reportProcessingHealth(prisma, log)
+        .catch(() => {
+          log.error("worker: unable to inspect processing health");
+        })
+        .finally(() => {
+          checkingProgress = false;
+        });
+    }
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
   }, HEARTBEAT_MS);
 
@@ -297,6 +318,7 @@ async function main(): Promise<void> {
 
     log.info({ signal }, "worker: shutting down");
     clearInterval(heartbeat);
+    clearHeartbeat();
     clearInterval(keepAlive);
 
     void (async () => {

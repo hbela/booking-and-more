@@ -15,7 +15,7 @@ narrowed from clinic-wide to delegated-only, and a migration backfills the assig
 behaviour intact.
 **Depends on:** [phase-2-3-owner-management.md](phase-2-3-owner-management.md) §2.7 (availability
 belongs to the provider — the line this feature bends, deliberately, and only by the provider's own
-act) and §2 (the whole-set `PUT` rule, which this deliberately does *not* invoke) ·
+act) and §2 (the whole-set `PUT` rule, which this deliberately does _not_ invoke) ·
 [phase-3-availability-engine.md](phase-3-availability-engine.md) (what is being delegated, half) ·
 [phase-4-booking-engine.md](phase-4-booking-engine.md) (the other half) ·
 [phase-3-4-schedule-conflicts.md](phase-3-4-schedule-conflicts.md) §2.2 (the affected-bookings payload,
@@ -37,10 +37,10 @@ The consequence is visible in the `ASSISTANT` row of `ROLE_PERMISSIONS`
 nothing about availability. So the front desk can cancel any appointment in the clinic — including for
 providers they have nothing to do with — and cannot move a single working hour for the provider they
 work beside every day. Both halves are wrong, in opposite directions, for the same reason: the model
-has no way to say *which* diaries.
+has no way to say _which_ diaries.
 
 A grant is also the only shape that makes phase-2-3 §2.7 survive. That record puts availability in the
-provider's hands and stops the owner's form at a *default* location precisely so the owner cannot fill
+provider's hands and stops the owner's form at a _default_ location precisely so the owner cannot fill
 in somebody else's week. Delegation does not reverse that; it is the provider exercising it.
 
 ## 1.1 What this deliberately does not do
@@ -69,14 +69,14 @@ cancel an appointment for a provider nobody has connected them to.
 
 So the role changes:
 
-| | before | after |
-| --- | --- | --- |
-| `booking:read:all` | ✓ | — |
-| `booking:manage:all` | ✓ | — |
-| `booking:read:delegated` | — | ✓ |
-| `booking:manage:delegated` | — | ✓ |
-| `availability:manage:delegated` | — | ✓ |
-| `tenant:read`, `member:read` | ✓ | ✓ |
+|                                 | before | after |
+| ------------------------------- | ------ | ----- |
+| `booking:read:all`              | ✓      | —     |
+| `booking:manage:all`            | ✓      | —     |
+| `booking:read:delegated`        | —      | ✓     |
+| `booking:manage:delegated`      | —      | ✓     |
+| `availability:manage:delegated` | —      | ✓     |
+| `tenant:read`, `member:read`    | ✓      | ✓     |
 
 `OWNER` and `ADMIN` deliberately do **not** gain the `:delegated` permissions. They hold `:all`, which
 subsumes them, and a role holding both makes a branch of `canForProvider` that can never be reached —
@@ -94,14 +94,14 @@ who cannot open the morning's list. So the migration writes a grant from every n
 every ACTIVE `ASSISTANT` membership, and behaviour on deploy day is unchanged.
 
 The scope is `{BOOKINGS}` **only**, and that is the load-bearing line. An `ASSISTANT` never held
-`availability:manage:all`, so granting `AVAILABILITY` here would *widen* access under cover of a
+`availability:manage:all`, so granting `AVAILABILITY` here would _widen_ access under cover of a
 compatibility backfill — the kind of change that is invisible in a diff titled "no behaviour change".
 A backfill may reproduce yesterday exactly; it may never round up.
 
 Two exclusions:
 
 - **Archived providers are skipped.** They take no new bookings, and a grant manufactured here would sit
-  on every Delegates panel forever. Note the deliberate asymmetry with §2.8: an *existing* grant
+  on every Delegates panel forever. Note the deliberate asymmetry with §2.8: an _existing_ grant
   survives archiving. Skipping is about not inventing rows, not about what archiving means.
 - **The membership that _is_ the diary is skipped.** It already holds the `:own` permissions. A grant
   would add nothing, and a row that grants nothing is the first place somebody looks when access
@@ -144,7 +144,7 @@ which is `canForProvider` with `{ all: DELEGATION_MANAGE, own: AVAILABILITY_MANA
 key**, so an assistant cannot enumerate the others. Knowing who else holds a diary is not part of running it.
 
 This is the smallest thing phase-2-3 §2.7 can survive on. That record puts availability in the provider's
-hands, and the owner now chooses who else touches it; being *told* who that is, on the screen where their
+hands, and the owner now chooses who else touches it; being _told_ who that is, on the screen where their
 own week lives, is the difference between a decision made for them and one made behind them.
 
 An ADMIN sees nothing here at all, which is consistent: they cannot decide it either.
@@ -166,7 +166,7 @@ comparing tenants.
 it: it is handed a permission and finds the ids indexed by it. The word `BOOKINGS` appears in exactly one
 table, `DELEGATION_SCOPE_PERMISSIONS`, so adding a scope later is an edit there and nowhere else
 (rule 10). It is also what keeps `canManageIntegration` closed: that rule is simply never given a
-`delegated` key, so no scope can reach it. A connected Google Calendar is a *setting*, not a day's work,
+`delegated` key, so no scope can reach it. A connected Google Calendar is a _setting_, not a day's work,
 and `policy.test.ts` already asserts an assistant cannot touch one — that assertion is left untouched on
 purpose, as the pin holding this decision in place.
 
@@ -174,11 +174,11 @@ purpose, as the pin holding this decision in place.
 
 Three candidates:
 
-| candidate | verdict |
-| --- | --- |
-| two booleans `manages_availability` / `manages_bookings` | Every new scope is a migration *and* an edit to every read path and response schema. `(false, false)` is a representable non-grant. Worst: the policy layer wants set membership, so a boolean pair forces a translation at every call site — which is `DELEGATION_SCOPE_PERMISSIONS`, now duplicated. |
-| a join table | Three tables for a two-element set, and the hot path — "load every grant for this membership" — becomes a join on every request. |
-| **`DelegationScope[]`** | Matches the existing idiom for a small closed set read on every load and never queried in reverse (`Provider.languages`, `CalendarIntegration.scopes`). An *enum* rather than `TEXT[]` because the set is closed and the schema already reaches for enums when it is. Round-trips 1:1 with the request body. |
+| candidate                                                | verdict                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| two booleans `manages_availability` / `manages_bookings` | Every new scope is a migration _and_ an edit to every read path and response schema. `(false, false)` is a representable non-grant. Worst: the policy layer wants set membership, so a boolean pair forces a translation at every call site — which is `DELEGATION_SCOPE_PERMISSIONS`, now duplicated.       |
+| a join table                                             | Three tables for a two-element set, and the hot path — "load every grant for this membership" — becomes a join on every request.                                                                                                                                                                             |
+| **`DelegationScope[]`**                                  | Matches the existing idiom for a small closed set read on every load and never queried in reverse (`Provider.languages`, `CalendarIntegration.scopes`). An _enum_ rather than `TEXT[]` because the set is closed and the schema already reaches for enums when it is. Round-trips 1:1 with the request body. |
 
 Accepted cost: there is no useful index for "which memberships hold AVAILABILITY on provider X". Nothing
 asks that — every read is keyed by `(tenant_id, membership_id)` or `(tenant_id, provider_id)` and filters
@@ -190,7 +190,7 @@ and confer nothing — a revocation wearing a grant's clothes. `prisma migrate d
 constraints, so this does not disturb `db:drift-check` (rule 1).
 
 **No composite `(tenant_id, provider_id)` foreign key**, though it is the structurally stronger answer to
-"can a row name a provider in another tenant". `migrate diff` *does* model foreign keys, so an FK the
+"can a row name a provider in another tenant". `migrate diff` _does_ model foreign keys, so an FK the
 datamodel does not imply reads as drift and breaks the single most important step in CI. What closes the
 hole instead is that every read is tenant-keyed (§4.4) and every downstream lookup is tenant-scoped by
 rule 5, so a mis-tenanted row would name a provider that 404s.
@@ -203,7 +203,7 @@ is the commonest mistake in a two-admin organization, and a `POST` that 409s on 
 "create or update?" branch into the UI for no gain.
 
 This is **not** the whole-set `PUT` that phase-2-3 §2 constrains, and the distinction matters because
-that rule is otherwise absolute. §2's rule is that a body which *replaces a set* may only be built from a
+that rule is otherwise absolute. §2's rule is that a body which _replaces a set_ may only be built from a
 full read of that same set — it exists because two people editing different rows of one list clobber each
 other. Here the resource in the URL is a single grant and the body describes only that grant. Offering
 the delegate list as one whole-set `PUT` is precisely what §2's reasoning says not to do.
@@ -224,16 +224,16 @@ loading it there rather than stamping it into a session at sign-in.
 
 ## 2.8 A grant survives a role change, a suspension and an archive
 
-| event | grant rows | effect |
-| --- | --- | --- |
-| membership SUSPENDED | survive | delegate is locked out by the existing status throw; un-suspending restores the provider's configuration rather than silently discarding it |
-| membership removed | cascade away | the grant is to a membership, not a person (rule 9) |
-| role changed away from ASSISTANT | **survive, and confer nothing** | see below |
-| provider archived | survive, and keep working | an archived diary still owns bookings the front desk must cancel |
-| tenant SUSPENDED / CLOSED | survive | grant and revoke are refused by `requireWritableTenant`; reads still work |
+| event                            | grant rows                      | effect                                                                                                                                      |
+| -------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| membership SUSPENDED             | survive                         | delegate is locked out by the existing status throw; un-suspending restores the provider's configuration rather than silently discarding it |
+| membership removed               | cascade away                    | the grant is to a membership, not a person (rule 9)                                                                                         |
+| role changed away from ASSISTANT | **survive, and confer nothing** | see below                                                                                                                                   |
+| provider archived                | survive, and keep working       | an archived diary still owns bookings the front desk must cancel                                                                            |
+| tenant SUSPENDED / CLOSED        | survive                         | grant and revoke are refused by `requireWritableTenant`; reads still work                                                                   |
 
 The role-change row is the one that was actually decided rather than fallen into. A stale grant is inert
-because eligibility is a *permission* question (§2.11): the new role holds no `:delegated` permission, so
+because eligibility is a _permission_ question (§2.11): the new role holds no `:delegated` permission, so
 `can()` fails before the set is ever consulted. Deleting the rows instead would mean an admin's temporary
 role change silently destroys configuration belonging to the **provider**, who was never asked — and the
 provider is the one this whole feature exists to give a say.
@@ -259,7 +259,7 @@ change, so it belongs in the manual walk rather than only in a diff.
 
 `POST /v1/slots/search` **stays** on `TENANT_READ`, and that is not an inconsistency. A receptionist with
 a grant on one provider still has to answer "when could somebody see me this week", and a search that
-silently omits providers returns a *wrong* answer rather than a narrower one — the worst failure mode
+silently omits providers returns a _wrong_ answer rather than a narrower one — the worst failure mode
 available, because it looks like a full answer. What it exposes is free/busy, strictly less than the
 public booking page already shows a stranger. The write stays closed: `POST /v1/bookings` asks
 `canManageProviderBookings` about the body's provider, so finding a slot on an undelegated diary and
@@ -271,7 +271,7 @@ On the **availability screen**, below Working hours and Exceptions — and the r
 owner-only staffing, which is worth noting because it originally rested on the provider being the granter.
 
 A `PROVIDER` holds no `provider:manage`, so the navigation filter removes the Providers screen for them
-entirely (phase-9-provider-onboarding §2.9). They no longer *decide* who assists them, but they do read it
+entirely (phase-9-provider-onboarding §2.9). They no longer _decide_ who assists them, but they do read it
 (§2.3.1), and this is the one screen they reach for their own diary. Putting the panel on Providers would
 put it somewhere they cannot go.
 
@@ -283,7 +283,7 @@ cannot read it either.
 This section originally added "so there is no new navigation and no second entry point", and the owner's
 route was the existing `?providerId=` link on each Providers row. **That was wrong in use**, and the first
 attempt to staff a diary by hand is what showed it: the owner opens a provider's diary, scrolls past Working
-hours and Exceptions, and finds Delegates at the foot of a screen whose subject is *time*. Staffing is not a
+hours and Exceptions, and finds Delegates at the foot of a screen whose subject is _time_. Staffing is not a
 property of a diary — that is §2.3's whole argument, and the placement said the opposite.
 
 So a **Manage assistant** row action on Providers opens the same panel, beside Edit / Assign / Availability /
@@ -318,7 +318,7 @@ was the goal:
 Splitting availability from bookings created a leak that could not exist before, because nobody could
 hold one without the other. `affectedBookingSchema`
 ([schedule-conflicts.ts:38](../packages/contracts/src/schedule-conflicts.ts#L38)) carries
-`customerName`, and `SCHEDULE_CONFLICTS_BOOKINGS` is raised by a *working hours* save. So an
+`customerName`, and `SCHEDULE_CONFLICTS_BOOKINGS` is raised by a _working hours_ save. So an
 AVAILABILITY-only delegate saving a week would receive customer names for bookings on a diary whose
 bookings they may not read.
 
@@ -384,12 +384,12 @@ something else is worse than one that says "assign them from the list instead" �
 manage conflict between a provider and her assistant" was asked of the finished feature. The audit below is
 the answer, and one of its four rows is a defect this epic made much more likely to fire.
 
-| conflict | what happens today |
-| --- | --- |
-| both act on the same **booking** | Refused cleanly. The state machine makes terminal terminal — nobody un-cancels, because cancelling releases the capacity reservation and the slot may already be resold ([transitions.ts](../packages/booking-engine/src/transitions.ts)) — the exclusion constraint on `capacity_reservations` decides who got a slot rather than a read-then-write (rule 14), and retryable writes carry an `Idempotency-Key` (rule 16). |
-| an **availability** edit strands a booking | Handled, and this was already the cross-role case: `SCHEDULE_CONFLICTS_BOOKINGS` returns the list once and succeeds on re-send with `acknowledgeAffectedBookings` (phase-3-4 §2.4). A BOOKINGS-blind delegate acknowledges it **without customer names** (§2.12) — deliberate, and it means their acknowledgement is made on less than the provider would have. |
-| both edit the **same week** | Refused, since 2026-08-18: a content fingerprint issued by the `GET` and echoed by the `PUT`, compared inside the replace transaction under a lock on the provider row, answering the loser with `SCHEDULE_MODIFIED` (409). **This row read "Nothing" when the audit was written** — §2.14.1 is the defect, §2.14.3 the fix, and they are kept apart because the shape recurs wherever a whole set is replaced. |
-| they simply disagree | Not a software question. §2.3 gives the provider no way to revoke their own assistant, so their recourse is the owner. Stated here because it is a consequence of owner-only staffing that somebody will otherwise report as a bug. |
+| conflict                                   | what happens today                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| both act on the same **booking**           | Refused cleanly. The state machine makes terminal terminal — nobody un-cancels, because cancelling releases the capacity reservation and the slot may already be resold ([transitions.ts](../packages/booking-engine/src/transitions.ts)) — the exclusion constraint on `capacity_reservations` decides who got a slot rather than a read-then-write (rule 14), and retryable writes carry an `Idempotency-Key` (rule 16). |
+| an **availability** edit strands a booking | Handled, and this was already the cross-role case: `SCHEDULE_CONFLICTS_BOOKINGS` returns the list once and succeeds on re-send with `acknowledgeAffectedBookings` (phase-3-4 §2.4). A BOOKINGS-blind delegate acknowledges it **without customer names** (§2.12) — deliberate, and it means their acknowledgement is made on less than the provider would have.                                                            |
+| both edit the **same week**                | Refused, since 2026-08-18: a content fingerprint issued by the `GET` and echoed by the `PUT`, compared inside the replace transaction under a lock on the provider row, answering the loser with `SCHEDULE_MODIFIED` (409). **This row read "Nothing" when the audit was written** — §2.14.1 is the defect, §2.14.3 the fix, and they are kept apart because the shape recurs wherever a whole set is replaced.            |
+| they simply disagree                       | Not a software question. §2.3 gives the provider no way to revoke their own assistant, so their recourse is the owner. Stated here because it is a consequence of owner-only staffing that somebody will otherwise report as a bug.                                                                                                                                                                                        |
 
 ### 2.14.1 The whole-week save had no concurrency control
 
@@ -411,9 +411,9 @@ configuration became the one that triggers it.
 ### 2.14.2 The visibility half, built first
 
 Shipped on 2026-08-18, before the fix and deliberately kept after it: `GET …/working-hours` gained
-`lastChange`, and the editor renders *"Last changed by Réka, 10 minutes ago"*.
+`lastChange`, and the editor renders _"Last changed by Réka, 10 minutes ago"_.
 
-It prevents nothing, and it is still worth having after §2.14.4: the version check refuses a *collision*,
+It prevents nothing, and it is still worth having after §2.14.4: the version check refuses a _collision_,
 while this answers "has anything moved since I last looked" on a screen nobody is mid-save on. Four decisions
 inside it:
 
@@ -424,7 +424,7 @@ inside it:
   requests could disagree — a week from one moment attributed to a save from another.
 - **It is eventually consistent, deliberately.** `request.audit()` is fire-and-forget, because an audit
   failure must never fail a schedule save. So the line can lag by a moment — which only ever affects
-  attributing *your own* save right after making it, the one case the reader already knows the answer to.
+  attributing _your own_ save right after making it, the one case the reader already knows the answer to.
   The integration test asserts through the API with `vi.waitFor` rather than reaching into the table, so it
   proves the model the screen actually sees.
 - **`AuditLog.actorId` has no foreign key to `User`**, so the name is a second lookup and a miss renders as a
@@ -439,7 +439,7 @@ fingerprint and `lastChange`. **Still no migration.** Five decisions, each of wh
 tried or the thing that made the first wrong:
 
 - **Content, not identity.** The obvious fingerprint is the row ids — every save mints new ones, since the
-  replace is delete-then-insert. It was rejected: two saves producing an *identical* week would then
+  replace is delete-then-insert. It was rejected: two saves producing an _identical_ week would then
   conflict, and refusing somebody because a colleague saved the very hours they are looking at is a dialog
   about nothing. Hashing the fields also survives a partial-update writer that does not exist yet; an
   id-based hash would not notice one. Asserted both ways in `working-hours-fingerprint.test.ts`.
@@ -449,19 +449,19 @@ tried or the thing that made the first wrong:
 - **Compared inside the replace transaction, under a lock on the provider row.** Comparing in the service,
   before the call, leaves exactly the window the check exists to close: between "still matches" and
   `deleteMany`, the other editor commits and is deleted anyway. The check shipped that morning with **no row
-  lock**, on the argument that two transactions which both pass have by definition read the *same* week, so
+  lock**, on the argument that two transactions which both pass have by definition read the _same_ week, so
   the loser overwrites a body that saw everything the winner saw. **That argument was wrong**, and
   [the code review](code-review-2026-08-18.md) found it the same day as its first P1: two bodies built from
   the same base are not the same body. Alice adds a Monday period while Bob changes Tuesday; both read `F0`,
   both pass under READ COMMITTED because neither has committed yet, and the later `deleteMany` erases the
-  earlier replacement. "Both saw the same starting week" says nothing about whether their *edits* agreed —
+  earlier replacement. "Both saw the same starting week" says nothing about whether their _edits_ agreed —
   the argument confused the read with the write. So the transaction now opens with
   `SELECT id FROM providers … FOR UPDATE`. **The provider row, and not the working-hours rows**: an empty
   week has no row to lock, and delete-then-insert changes their identities anyway, so the set being replaced
   can never be its own lock target — the row it hangs off is the stable one. With the lock held, competing
   saves queue, and the second reads the winner's replacement and fails its own fingerprint check instead of
-  overwriting it. The fingerprint stays the *user-facing* conflict detector; the lock is the *serialization
-  mechanism*, and the split is the point. `availability.test.ts` asserts a real race with `Promise.all`
+  overwriting it. The fingerprint stays the _user-facing_ conflict detector; the lock is the _serialization
+  mechanism_, and the split is the point. `availability.test.ts` asserts a real race with `Promise.all`
   rather than a stale-token sequence — exactly one 200 and one 409, and the surviving week is one of the two
   bodies whole rather than a merge of both. A sequence proves the comparison works and proves nothing about
   the transaction.
@@ -481,7 +481,7 @@ tried or the thing that made the first wrong:
 On the web side the fingerprint is seeded into state **in the same effect as the week**, never read from the
 query at submit time: a background refetch updates the query one render before the effect re-seeds the form,
 and reading it there would send the new fingerprint with the old body — the precise stale write this refuses.
-The refusal renders as a callout naming the other editor with a Reload button, and the copy says *before* the
+The refusal renders as a callout naming the other editor with a Reload button, and the copy says _before_ the
 press that reloading replaces what is on screen.
 
 ### 2.14.4 The trail exists and nobody can read it
@@ -500,7 +500,7 @@ because a general audit screen is its own piece of work.
 ## 3.1 The model
 
 `ProviderDelegation` in [schema.prisma](../packages/db/prisma/schema.prisma), placed with the provider
-cluster rather than with availability: it states *who runs* a diary, not anything about time.
+cluster rather than with availability: it states _who runs_ a diary, not anything about time.
 
 Foreign keys, and why each is what it is:
 
@@ -534,7 +534,7 @@ invisible.
 
 ## 4.2 `canForProvider`, three branches
 
-`:all` → `:own` → `:delegated`, in that order, with `delegated` an *optional* key so a rule that is not
+`:all` → `:own` → `:delegated`, in that order, with `delegated` an _optional_ key so a rule that is not
 delegable simply omits it (§2.4). The delegated branch re-asserts `isMemberOf`, which looks redundant
 beside `can()` and is not: `can()` returns true unconditionally for a platform admin without comparing
 tenants, so without it a membership resolved for another tenant could supply the set. A platform admin
@@ -568,14 +568,14 @@ member does not pay for it either.
 
 ## 5.1 Routes
 
-| method | path | who | body → result |
-| --- | --- | --- | --- |
-| `GET` | `/v1/providers/:providerId/delegations` | owner, or that provider | who assists on this diary |
-| `GET` | `/v1/providers/:providerId/delegations/candidates` | owner | eligible members, with `alreadyDelegated` |
-| `PUT` | `/v1/providers/:providerId/delegations/:membershipId` | owner | `{ scopes }` → assign or re-scope |
-| `DELETE` | `/v1/providers/:providerId/delegations/:membershipId` | owner | 204 |
-| `POST` | `/v1/providers/:providerId/delegations/invitation` | owner | `{ email, scopes }` → emailed invitation (§2.13) |
-| `GET` | `/v1/me/delegations` | any member | whose diaries do I assist on, in this tenant |
+| method   | path                                                  | who                     | body → result                                    |
+| -------- | ----------------------------------------------------- | ----------------------- | ------------------------------------------------ |
+| `GET`    | `/v1/providers/:providerId/delegations`               | owner, or that provider | who assists on this diary                        |
+| `GET`    | `/v1/providers/:providerId/delegations/candidates`    | owner                   | eligible members, with `alreadyDelegated`        |
+| `PUT`    | `/v1/providers/:providerId/delegations/:membershipId` | owner                   | `{ scopes }` → assign or re-scope                |
+| `DELETE` | `/v1/providers/:providerId/delegations/:membershipId` | owner                   | 204                                              |
+| `POST`   | `/v1/providers/:providerId/delegations/invitation`    | owner                   | `{ email, scopes }` → emailed invitation (§2.13) |
+| `GET`    | `/v1/me/delegations`                                  | any member              | whose diaries do I assist on, in this tenant     |
 
 Everything but the first read is a plain `requirePermission(DELEGATION_MANAGE)` guard, because the answer
 does not depend on which diary is in the URL (§2.3). The first read does, so it asks
@@ -617,7 +617,7 @@ sink (rule 6).
 §2.10. The owner gets **Assign an existing member** and **Invite someone new**, scope checkboxes on every
 row, and Revoke. The provider gets the same list rendered as text.
 
-Read-only means *text*, not disabled checkboxes: a disabled control invites the reader to work out how to
+Read-only means _text_, not disabled checkboxes: a disabled control invites the reader to work out how to
 enable it, and there is nothing they can do. Their empty state says so too — "ask the organization owner if
 you need help managing it" rather than the owner's "nobody manages this diary but the provider", because the
 two readers have different next actions and only one of them can act.
@@ -649,7 +649,7 @@ same is true of a `PROVIDER` holding `booking:read:own` whose membership names n
 
 So **a permission is no longer a sufficient gate for these two items, and data is the second one**. Three
 of the four booking and availability permissions authorise nothing by themselves; holding one says only
-that the caller *could* be given a diary. `NavItem.requires` asks whether they have been.
+that the caller _could_ be given a diary. `NavItem.requires` asks whether they have been.
 
 The two items differ in which question they ask, deliberately. Bookings uses `hasAnyDiary`, so an
 administrator sees it — the whole organization's day is genuinely their screen. Availability uses
@@ -667,7 +667,7 @@ Both `hu.json` and `en.json` or neither — `messages.test.ts` asserts exact key
 
 ## 6.5 The day-2 trap
 
-A provider created *after* the migration has no delegates, and the front desk silently loses them. The
+A provider created _after_ the migration has no delegates, and the front desk silently loses them. The
 backfill fixes yesterday; nothing fixes tomorrow — and because the backfill makes deploy day invisible,
 this arrives weeks later, when nobody connects "the receptionist cannot see Dr. Nagy" to a migration.
 
@@ -679,22 +679,22 @@ row whose diary has none. The real answer is an organization-level default (§10
 
 # 7. Safeguards worth naming
 
-| escalation | closed by |
-| --- | --- |
-| a delegate hands the diary on | they hold no `delegation:manage` (§2.3) |
-| an administrator staffs a diary | `delegation:manage` is OWNER-only, asserted over the whole role table (§2.3) |
-| a provider staffs their own diary | the same permission; they may read the list and nothing else (§2.3.1) |
-| an assistant enumerates a diary's other assistants | `canReadProviderDelegates` has no delegated key (§2.3.1) |
-| an invitation grants a membership but no diary | both rows are written in one transaction, or neither (§2.13) |
-| an invited assistant lands on an archived diary | the diary is re-read inside the acceptance transaction (§2.13) |
+| escalation                                          | closed by                                                                                    |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| a delegate hands the diary on                       | they hold no `delegation:manage` (§2.3)                                                      |
+| an administrator staffs a diary                     | `delegation:manage` is OWNER-only, asserted over the whole role table (§2.3)                 |
+| a provider staffs their own diary                   | the same permission; they may read the list and nothing else (§2.3.1)                        |
+| an assistant enumerates a diary's other assistants  | `canReadProviderDelegates` has no delegated key (§2.3.1)                                     |
+| an invitation grants a membership but no diary      | both rows are written in one transaction, or neither (§2.13)                                 |
+| an invited assistant lands on an archived diary     | the diary is re-read inside the acceptance transaction (§2.13)                               |
 | a grant in one tenant decides a resource in another | the set hangs off the membership (§2.4), and `canForProvider` re-asserts `isMemberOf` (§4.2) |
-| an assistant with no grants lists the whole tenant | `providerIdsInScope` returns `{ kind: "some", [] }`, refused explicitly (§4.3) |
-| a BOOKINGS grant edits a schedule | `DELEGATION_SCOPE_PERMISSIONS` maps BOOKINGS to booking permissions only (§2.4) |
-| an AVAILABILITY grant reads customer names | `customerName` nulled unless `canReadProviderBookings` (§2.12) |
-| an assistant connects a Google Calendar | `canManageIntegration` is never given a delegated key (§2.4) |
-| a role change silently restores access | it does, and it is deliberate, labelled and tested (§2.8) |
-| a grant is created for another tenant's diary | tenant-scoped lookups, 404 (§5.2) |
-| a compatibility backfill widens access | `{BOOKINGS}` only (§2.2) |
+| an assistant with no grants lists the whole tenant  | `providerIdsInScope` returns `{ kind: "some", [] }`, refused explicitly (§4.3)               |
+| a BOOKINGS grant edits a schedule                   | `DELEGATION_SCOPE_PERMISSIONS` maps BOOKINGS to booking permissions only (§2.4)              |
+| an AVAILABILITY grant reads customer names          | `customerName` nulled unless `canReadProviderBookings` (§2.12)                               |
+| an assistant connects a Google Calendar             | `canManageIntegration` is never given a delegated key (§2.4)                                 |
+| a role change silently restores access              | it does, and it is deliberate, labelled and tested (§2.8)                                    |
+| a grant is created for another tenant's diary       | tenant-scoped lookups, 404 (§5.2)                                                            |
+| a compatibility backfill widens access              | `{BOOKINGS}` only (§2.2)                                                                     |
 
 ---
 
@@ -702,21 +702,21 @@ row whose diary has none. The real answer is an organization-level default (§10
 
 ## 8.1 What was built
 
-| Area | Files |
-| --- | --- |
-| Schema | `ProviderDelegation` + `DelegationScope`, and `Invitation.delegatedProviderId` + `delegatedScopes`, in [schema.prisma](../packages/db/prisma/schema.prisma). Five migrations: `..101441_provider_delegations` (with the CHECK), `..101500_backfill_provider_delegations`, `..152753_invitation_carries_delegation` (with its own CHECK), `..154619_assistant_invited_notification`, `..160500_drop_delegated_diary_pending_index` (§2.13.2) |
-| Authorization | [roles.ts](../packages/auth/src/roles.ts) — four permissions, the rewritten `ASSISTANT` row, `DELEGATION_SCOPE_PERMISSIONS`, `roleCanReceiveDelegation`; [policy.ts](../packages/auth/src/policy.ts) — `DelegatedProviderIds`, `delegatedProviderIdsFrom`, the three-branch `canForProvider`, `canManageDelegations`, `canReadProviderDelegates`, `providerIdsInScope` |
-| Request context | [tenant-context.plugin.ts](../apps/api/src/plugins/tenant-context.plugin.ts) — one conditional query, after the status throw |
-| API | `apps/api/src/modules/delegations/` (routes, schemas, service, repository, a schema-parity test); `inviteDelegate` and the acceptance half of `claimInvitation` in `membership.service.ts`; `DELEGATION_TARGET_INELIGIBLE` in [error-codes.ts](../packages/contracts/src/error-codes.ts); both plugins registered in [app.ts](../apps/api/src/app.ts) |
-| Email | `ASSISTANT_INVITED` through `@bam/notification-engine` (type, dedupe, planning, hu+en template, scope labels) and the worker's `dispatchAssistantInvited` + sender branch |
-| Call sites | both availability `GET`s narrowed; the bookings list rewritten onto `providerIdsInScope` and `providerIds`; `customerName` nulled for a bookings-blind caller; `delegations` added to `/v1/me` |
-| Provenance (§2.14.2) | `scheduleLastChangeSchema` and `lastChange` on `GET …/working-hours`; `findLastWorkingHoursChange` in the availability repository; `lib/relative-time.ts` + its test and the `LastChange` line in `working-hours-editor.tsx`; three message keys. No schema change |
+| Area                    | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema                  | `ProviderDelegation` + `DelegationScope`, and `Invitation.delegatedProviderId` + `delegatedScopes`, in [schema.prisma](../packages/db/prisma/schema.prisma). Five migrations: `..101441_provider_delegations` (with the CHECK), `..101500_backfill_provider_delegations`, `..152753_invitation_carries_delegation` (with its own CHECK), `..154619_assistant_invited_notification`, `..160500_drop_delegated_diary_pending_index` (§2.13.2)                                                                    |
+| Authorization           | [roles.ts](../packages/auth/src/roles.ts) — four permissions, the rewritten `ASSISTANT` row, `DELEGATION_SCOPE_PERMISSIONS`, `roleCanReceiveDelegation`; [policy.ts](../packages/auth/src/policy.ts) — `DelegatedProviderIds`, `delegatedProviderIdsFrom`, the three-branch `canForProvider`, `canManageDelegations`, `canReadProviderDelegates`, `providerIdsInScope`                                                                                                                                         |
+| Request context         | [tenant-context.plugin.ts](../apps/api/src/plugins/tenant-context.plugin.ts) — one conditional query, after the status throw                                                                                                                                                                                                                                                                                                                                                                                   |
+| API                     | `apps/api/src/modules/delegations/` (routes, schemas, service, repository, a schema-parity test); `inviteDelegate` and the acceptance half of `claimInvitation` in `membership.service.ts`; `DELEGATION_TARGET_INELIGIBLE` in [error-codes.ts](../packages/contracts/src/error-codes.ts); both plugins registered in [app.ts](../apps/api/src/app.ts)                                                                                                                                                          |
+| Email                   | `ASSISTANT_INVITED` through `@bam/notification-engine` (type, dedupe, planning, hu+en template, scope labels) and the worker's `dispatchAssistantInvited` + sender branch                                                                                                                                                                                                                                                                                                                                      |
+| Call sites              | both availability `GET`s narrowed; the bookings list rewritten onto `providerIdsInScope` and `providerIds`; `customerName` nulled for a bookings-blind caller; `delegations` added to `/v1/me`                                                                                                                                                                                                                                                                                                                 |
+| Provenance (§2.14.2)    | `scheduleLastChangeSchema` and `lastChange` on `GET …/working-hours`; `findLastWorkingHoursChange` in the availability repository; `lib/relative-time.ts` + its test and the `LastChange` line in `working-hours-editor.tsx`; three message keys. No schema change                                                                                                                                                                                                                                             |
 | Version check (§2.14.3) | `working-hours-fingerprint.ts` (`fingerprintWorkingHours`, `requireScheduleFingerprint`) + its unit test; `fingerprint` on the working-hours `GET` **and** `PUT`; `expectedFingerprint` on the body; the in-transaction compare and `ScheduleModifiedError` in the repository, converted to `SCHEDULE_MODIFIED` by the service; `SCHEDULE_MODIFIED` + `SCHEDULE_FINGERPRINT_REQUIRED` in `error-codes.ts`; `lib/schedule-modified.ts` + its test and the conflict callout; four message keys. No schema change |
-| Web | `provider-delegates.tsx`, `lib/delegation.ts`, the two diary pickers, the nav, `MeResponse`, both message catalogues; the **Manage assistant** row action and panel on `providers-screen.tsx` (§2.10.1) |
+| Web                     | `provider-delegates.tsx`, `lib/delegation.ts`, the two diary pickers, the nav, `MeResponse`, both message catalogues; the **Manage assistant** row action and panel on `providers-screen.tsx` (§2.10.1)                                                                                                                                                                                                                                                                                                        |
 
 ## 8.2 Deviations from the plan, and one reversal
 
-**The reversal.** The feature shipped on 2026-08-17 with the provider, the owner *or* the admin able to
+**The reversal.** The feature shipped on 2026-08-17 with the provider, the owner _or_ the admin able to
 staff a diary, and was changed the same day to owner-only, with the provider reading and the admin excluded
 (§2.3). What made it necessary was not a defect but a use: the first attempt to bring in an assistant
 revealed that it took two people and two screens and sent no email, and simplifying who decides was the
@@ -728,7 +728,7 @@ Smaller deviations, in the order they were found:
    silently hiding a nav item. Half-migrating the literals is worse than not starting — the file would agree
    with three call sites and not the other twenty — so it stays a gap (§9.1) rather than a partial change.
 2. **`lib/delegation.ts` exports `hasPersonalDiary` as well as `diaryScopeFor`, and the whole nav decision
-   moved to `lib/dashboard-nav.ts`.** Neither was planned. The nav condition is *not* "may reach a diary"
+   moved to `lib/dashboard-nav.ts`.** Neither was planned. The nav condition is _not_ "may reach a diary"
    but "has one of their own", because reading `:all` as "has a diary" would give administrators the
    top-level Availability item that phase-2-3 §2.7 removed — and gating Bookings on
    `booking:read:delegated` alone put a permanently-403ing link in front of every assistant (§6.3).
@@ -815,7 +815,7 @@ shape of it, in order:
    than generalised on speculation.
 9. **No audit-viewing UI** (§2.14.4). The `lastChange` line is the only audit data any user can see; the
    twelve-month trail behind it is reachable only from the database.
-10. **Availability *exceptions* have no version check either.** They are per-row create/update/delete rather
+10. **Availability _exceptions_ have no version check either.** They are per-row create/update/delete rather
     than a whole-set replace, so a concurrent edit cannot clobber a set — but two people can still delete and
     re-add the same day and only the audit log will show it.
 

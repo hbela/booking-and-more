@@ -20,3 +20,9 @@ export {
   sealToken,
   type SealedToken,
 } from "./token-cipher.js";
+export {
+  createCustomerPii,
+  bindCustomerPii,
+  customerPiiFor,
+  type CustomerPii,
+} from "./customer-pii.js";

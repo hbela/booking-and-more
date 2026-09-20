@@ -27,7 +27,12 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "env": ["DATABASE_URL", "TEST_DATABASE_URL"]
+      "env": [
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "CUSTOMER_PII_ENCRYPTION_KEY",
+        "CUSTOMER_PII_BLIND_INDEX_KEY"
+      ]
     },
     "test:watch": {
       "cache": false,
@@ -36,6 +41,13 @@
     "dev": {
       "cache": false,
       "persistent": true,
+      "passThroughEnv": [
+        "CUSTOMER_PII_ENCRYPTION_KEY",
+        "CUSTOMER_PII_BLIND_INDEX_KEY",
+        "LAUNCH_ACCESS_MODE",
+        "LAUNCH_OWNER_EMAIL_ALLOWLIST",
+        "STRIPE_WEBHOOK_SECRET"
+      ],
       "dependsOn": ["^build"]
     },
 
@@ -53,11 +65,21 @@
     },
     "@bam/db#test": {
       "dependsOn": ["^build", "@bam/db#build"],
-      "env": ["DATABASE_URL", "TEST_DATABASE_URL"]
+      "env": [
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "CUSTOMER_PII_ENCRYPTION_KEY",
+        "CUSTOMER_PII_BLIND_INDEX_KEY"
+      ]
     },
     "@bam/worker#test": {
       "dependsOn": ["^build", "@bam/api#test", "@bam/db#test"],
-      "env": ["DATABASE_URL", "TEST_DATABASE_URL"]
+      "env": [
+        "DATABASE_URL",
+        "TEST_DATABASE_URL",
+        "CUSTOMER_PII_ENCRYPTION_KEY",
+        "CUSTOMER_PII_BLIND_INDEX_KEY"
+      ]
     },
     "db:generate": {
       "cache": false

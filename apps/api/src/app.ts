@@ -15,6 +15,8 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import { verificationEmailSender } from "./lib/verification-email.js";
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
 import { type Env } from "@bam/config";
 import {
   AnthropicIntentInterpreter,
@@ -86,6 +88,8 @@ export type AppInstance = FastifyInstance<
 >;
 
 export interface BuildAppOptions {
+  /** Delivery seam; production defaults to the configured Resend sender. */
+  sendVerificationEmail?: (input: { user: { email: string }; url: string }) => Promise<void>;
   env: Env;
   /** Silence logs in tests. */
   logger?: boolean;
@@ -262,6 +266,11 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     logQueries: env.NODE_ENV === "development" && env.LOG_LEVEL === "trace",
   });
 
+  bindCustomerPii(
+    app.prisma,
+    createCustomerPii(env.CUSTOMER_PII_ENCRYPTION_KEY, env.CUSTOMER_PII_BLIND_INDEX_KEY),
+  );
+
   await app.register(openApiPlugin, {
     apiBaseUrl: env.API_BASE_URL,
     exposeUi: !isProduction,
@@ -273,6 +282,11 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   //   tenant-context  resolves *where* you are, and your standing there
   //   authorization   decides *whether* you may
   await app.register(authPlugin, {
+    sendVerificationEmail:
+      options.sendVerificationEmail ??
+      (env.RESEND_API_KEY && env.EMAIL_FROM
+        ? verificationEmailSender(env.RESEND_API_KEY, env.EMAIL_FROM)
+        : undefined),
     secret: env.BETTER_AUTH_SECRET,
     baseUrl: env.API_BASE_URL,
     appUrl: env.APP_BASE_URL,
@@ -300,7 +314,11 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   });
 
   await app.register(meRoutes, { prefix: "/v1/me" });
-  await app.register(tenantRoutes, { prefix: "/v1/tenants" });
+  await app.register(tenantRoutes, {
+    prefix: "/v1/tenants",
+    mode: env.LAUNCH_ACCESS_MODE,
+    ownerEmails: env.LAUNCH_OWNER_EMAIL_ALLOWLIST,
+  });
   await app.register(membershipRoutes, {
     prefix: "/v1/members",
     invitationExpiryHours: env.INVITATION_EXPIRY_HOURS,
@@ -326,6 +344,8 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   // write, and a PENDING_SUBSCRIPTION tenant accepts none, so gating it would
   // make the state unescapable (phase-9 §2.4). See billing.routes.ts.
   await app.register(billingRoutes, {
+    mode: env.LAUNCH_ACCESS_MODE,
+    ownerEmails: env.LAUNCH_OWNER_EMAIL_ALLOWLIST,
     prefix: "/v1/billing",
     // A plan is its price. Links are built from these per organization rather
     // than held in config as four permanent URLs — the change that made it
@@ -368,6 +388,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
       prefix: "/v1/webhooks",
       stripeSecretKey: env.STRIPE_SECRET_KEY,
       webhookSecret: env.STRIPE_WEBHOOK_SECRET,
+      billingMode: env.BILLING_MODE,
     });
   }
 

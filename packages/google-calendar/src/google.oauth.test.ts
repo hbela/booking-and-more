@@ -138,7 +138,10 @@ describe("exchangeCode", () => {
 
     const message = await createGoogleOAuthClient(config)
       .exchangeCode("4/0Acode")
-      .then(() => "", (error: Error) => `${error.message} ${JSON.stringify(error)}`);
+      .then(
+        () => "",
+        (error: Error) => `${error.message} ${JSON.stringify(error)}`,
+      );
 
     expect(message).not.toContain(config.clientSecret);
   });

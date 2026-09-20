@@ -22,7 +22,7 @@ trail.
 
 # 1. What this walk is for
 
-The automated suite covers the *rules* thoroughly: 65 assertions in `policy.test.ts` over the pure policy
+The automated suite covers the _rules_ thoroughly: 65 assertions in `policy.test.ts` over the pure policy
 functions, 25 in `delegation.test.ts` over real HTTP, 10 over the web scope helper, 7 over the navigation,
 and the email template in both locales. Repeating those by hand is wasted effort.
 
@@ -56,13 +56,13 @@ Skip these unless something else looks wrong — each is asserted and would fail
 
 # 2. Preconditions
 
-| Thing | State | Note |
-| --- | --- | --- |
-| `pnpm dev` | running | 3 apps + a `tsc --watch` per library |
-| Database | migrated | five migrations, `..101441_provider_delegations` through `..160500_drop_delegated_diary_pending_index` |
-| An organization | **`ACTIVE` or `TRIAL`** | see the warning below — this is the one that will waste an hour |
-| Worker | **running** | §B2 sends a real email through it. Everything else works without it |
-| `RESEND_API_KEY`, `EMAIL_FROM` | set, **and the worker restarted since** | it memoises its email provider at boot (phase-9-owner-onboarding-emails §2) |
+| Thing                          | State                                   | Note                                                                                                   |
+| ------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `pnpm dev`                     | running                                 | 3 apps + a `tsc --watch` per library                                                                   |
+| Database                       | migrated                                | five migrations, `..101441_provider_delegations` through `..160500_drop_delegated_diary_pending_index` |
+| An organization                | **`ACTIVE` or `TRIAL`**                 | see the warning below — this is the one that will waste an hour                                        |
+| Worker                         | **running**                             | §B2 sends a real email through it. Everything else works without it                                    |
+| `RESEND_API_KEY`, `EMAIL_FROM` | set, **and the worker restarted since** | it memoises its email provider at boot (phase-9-owner-onboarding-emails §2)                            |
 
 > ### The organization must accept writes
 >
@@ -114,7 +114,7 @@ Sign in as the owner and build this. It takes about five minutes and everything 
 - [ ] **S1** One service, 60 minutes, no approval required.
 - [ ] **S2** One location.
 - [ ] **S3** **Two** providers — call them **Anna** and **Béla**. Two is not optional: almost every check
-      below is "the granted diary and *not* the other one", and one provider cannot show that.
+      below is "the granted diary and _not_ the other one", and one provider cannot show that.
 - [ ] **S4** Both offer the service and work at the location.
 - [ ] **S5** Both have working hours on the same weekday, 09:00–17:00.
 - [ ] **S6** One confirmed booking on Anna at 09:00 and one on Béla at 10:00, on that weekday. Use the
@@ -134,14 +134,14 @@ Sign in as the owner and build this. It takes about five minutes and everything 
 - [ ] **A1** As the owner: Providers → Anna's row → the availability link. The URL carries `?providerId=`.
 - [ ] **A2** The page shows **three** panels in order: Working hours, Exceptions, **Delegates**. Delegates
       last, because it is the least frequent thing anyone does here.
-- [ ] **A3** With nobody assigned the panel shows the action-toned callout: *"Nobody manages this diary but
-      the provider. Front-desk staff cannot see its bookings until somebody is added here."* **Read it as a
+- [ ] **A3** With nobody assigned the panel shows the action-toned callout: _"Nobody manages this diary but
+      the provider. Front-desk staff cannot see its bookings until somebody is added here."_ **Read it as a
       stranger.** It is the whole mitigation for the day-2 trap (record §6.5), and if it does not prompt
       anybody to act, that trap is still open.
 - [ ] **A4** As the **provider** (Anna's account): `/dashboard/availability` with no query string lands on
       her own diary and the Delegates panel is there — **as a list, with no controls at all**. No Assign, no
-      Invite, no checkboxes, no Revoke. Her empty state is the other one: *"Nobody assists on your diary yet.
-      Ask the organization owner…"*, because she cannot fix it herself.
+      Invite, no checkboxes, no Revoke. Her empty state is the other one: _"Nobody assists on your diary yet.
+      Ask the organization owner…"_, because she cannot fix it herself.
 - [ ] **A5** As the provider, the scope column is **plain text**, not disabled checkboxes. A disabled control
       invites the reader to work out how to enable it.
 - [ ] **A6** As the provider, try `/dashboard/availability?providerId=<béla>` by hand → the working-hours
@@ -155,12 +155,12 @@ Sign in as the owner and build this. It takes about five minutes and everything 
 
 ### A10–A14 — the Providers row action (record §2.10.1)
 
-Added 2026-08-18. The availability screen is the *provider's* route to the panel; this is the **owner's**,
+Added 2026-08-18. The availability screen is the _provider's_ route to the panel; this is the **owner's**,
 and it is the one an owner actually finds. Everything in §B and §H works identically from here, so walk §B
 from whichever entry point you prefer — but walk these five once.
 
 - [ ] **A10** As the owner: Providers → Anna's row shows **Manage assistant** between Deactivate and Archive.
-      Pressing it opens the same Delegates panel below the table, titled *"Assistants for Dr …"* — the name
+      Pressing it opens the same Delegates panel below the table, titled _"Assistants for Dr …"_ — the name
       matters, because the table has several rows and the panel is one.
 - [ ] **A11** ★ As an **ADMIN**: the row action is **absent**, while Edit, Assign, Availability, Deactivate
       and Archive are all still there. Same reason as A7, and this is the easier one to get wrong — every
@@ -179,13 +179,13 @@ only signal that a provider and their assistant are editing the same week. Two a
 
 - [ ] **A15** A provider whose week has **never been saved** shows **no line at all** — not "changed by
       nobody". Every diary created before this shipped is in that state.
-- [ ] **A16** Save the week as the owner → the line reads *"You last changed this now."* Reload after a
-      minute → *"…1 minute ago"*. It may take a second to appear after the save: the audit row is written
+- [ ] **A16** Save the week as the owner → the line reads _"You last changed this now."_ Reload after a
+      minute → _"…1 minute ago"_. It may take a second to appear after the save: the audit row is written
       after the response, deliberately (§2.14.2).
 - [ ] **A17** ★ **The one that matters.** As the assistant (AVAILABILITY scope), save Anna's week. Now sign
-      in as **Anna** and open her availability → *"Last changed by ⟨assistant⟩, N minutes ago."* The name,
+      in as **Anna** and open her availability → _"Last changed by ⟨assistant⟩, N minutes ago."_ The name,
       not just the time — that is the whole point.
-- [ ] **A18** In Hungarian the relative time is Hungarian too (*"10 perccel ezelőtt"*). It comes from `Intl`,
+- [ ] **A18** In Hungarian the relative time is Hungarian too (_"10 perccel ezelőtt"_). It comes from `Intl`,
       not from a message key, so this is checking the locale reaches it — not a translation.
 
 ### A19–A23 — the version check (record §2.14.3)
@@ -202,14 +202,13 @@ Full scenario, with its own setup, in **Appendix A** at the end of this document
       discards what is on screen.
 - [ ] **A21** After reloading, the same edit **succeeds**. One refusal, not a stuck screen.
 - [ ] **A22** Two saves in a row in **one** window both succeed — an ordinary session never sees this.
-- [ ] **A23** Two windows saving an *identical* week is **not** a conflict.
+- [ ] **A23** Two windows saving an _identical_ week is **not** a conflict.
 
 > **Still a known gap, not a defect to report.** The three other whole-set saves — provider services,
 > provider locations, service translations — have no version check (§9.8). Only working hours was fixed,
 > because only it has two editors by design.
 
 ---
-
 
 ## B. Assigning and inviting
 
@@ -228,8 +227,8 @@ Full scenario, with its own setup, in **Appendix A** at the end of this document
       grant's clothes, and the database refuses it outright.
 - [ ] **B6** Assign somebody **Bookings** only. The row appears with Bookings ticked and Availability clear.
 - [ ] **B7** Tick **Availability** on that row. It saves in place — no dialog, no second form.
-- [ ] **B8** Untick both on an existing row → refused with *"A delegate needs at least one of the two. Use
-      Revoke to remove their access entirely."* and the row is unchanged. The destructive act has to be
+- [ ] **B8** Untick both on an existing row → refused with _"A delegate needs at least one of the two. Use
+      Revoke to remove their access entirely."_ and the row is unchanged. The destructive act has to be
       named.
 - [ ] **B9** Assign a second person to the same diary. **Two assistants on one diary** is the normal case.
 - [ ] **B10** Assign the first person **Béla's** diary too. **One assistant, several providers** — the
@@ -249,13 +248,13 @@ This is the path that fixes the two-screens-and-no-email problem, and the one wi
 - [ ] **BB4** The email **names the provider** they are being asked to assist, and does **not** greet them as
       that provider. It also lists what the invitation covers, matching the scopes you ticked.
 - [ ] **BB5** Open the link in a private window → set a name and password → accept. They land signed in.
-- [ ] **BB6** ★ **Both rows exist, or neither.** In the database: an ACTIVE `ASSISTANT` membership *and* a
+- [ ] **BB6** ★ **Both rows exist, or neither.** In the database: an ACTIVE `ASSISTANT` membership _and_ a
       `provider_delegations` row for that diary with the right scopes. An assistant with a membership and no
       assignment sees nothing at all and looks exactly like a permissions bug (record §2.13).
 - [ ] **BB7** Their nav immediately reflects the scopes — Bookings, Availability, or both.
 - [ ] **BB8** Reopen the same link → "This invitation link is not valid."
-- [ ] **BB9** Invite somebody who is **already a member** → refused with *"That person is already a member.
-      Assign them from the list instead of inviting them."* Not silently converted into an assignment.
+- [ ] **BB9** Invite somebody who is **already a member** → refused with _"That person is already a member.
+      Assign them from the list instead of inviting them."_ Not silently converted into an assignment.
 - [ ] **BB10** Invite the same new address again for the **same** diary → the first link stops working and
       only the newest is live.
 - [ ] **BB11** _The rule that surprised the implementation._ Invite the same new address for **Béla's** diary
@@ -292,7 +291,7 @@ Give Éva **Availability only** on Anna. Sign in as her.
 - [ ] **D4** ★ **The check this feature's worst bug hides behind.** As Éva, change Anna's hours to start at
       10:00 — stranding the 09:00 booking. The affected-bookings dialog appears. **It must list the
       appointment with its time, service and reference, and with no customer name.**
-- [ ] **D5** The dialog is still *usable* without the name — you can tell which appointment it means and
+- [ ] **D5** The dialog is still _usable_ without the name — you can tell which appointment it means and
       decide. If it is not, the redaction is too aggressive and §2.12 needs revisiting.
 - [ ] **D6** Confirm the same save as the **owner**: the identical dialog **does** show the customer's name.
       Same screen, same action, different reader — that is the whole point.
@@ -319,8 +318,8 @@ Restore Réka's grants: Bookings on **both** Anna and Béla.
 - [ ] **F1** A **brand-new assistant with no grants**: nav is **Overview only**.
 - [ ] **F2** `/dashboard/bookings` by hand → the screen loads and the list is refused. Advisory, as
       designed — note whether the refusal reads like a bug to a normal user.
-- [ ] **F3** `/dashboard/availability` by hand → *"No diaries have been delegated to you yet. A provider can
-      hand you theirs from their own availability screen."* **Not** the "your account is not linked to a
+- [ ] **F3** `/dashboard/availability` by hand → _"No diaries have been delegated to you yet. A provider can
+      hand you theirs from their own availability screen."_ **Not** the "your account is not linked to a
       provider" message, which would send them after the wrong thing.
 - [ ] **F4** As the **owner**: still **no** top-level Availability item. It belongs to a provider, and an
       owner reaches one at a time from the Providers row (phase-2-3 §2.7). This is the check most likely to
@@ -357,8 +356,8 @@ Restore Réka's grants: Bookings on **both** Anna and Béla.
       **This is deliberate and is the most surprising behaviour in the feature** (§2.8) — confirm you agree
       with it while looking at it, because the alternative is an admin's temporary role change destroying
       the provider's decision.
-- [ ] **I3** With Réka on a role that cannot receive diaries, the Delegates panel labels her row *"Role no
-      longer accepts diaries"*. The stale state is visible where it can be fixed.
+- [ ] **I3** With Réka on a role that cannot receive diaries, the Delegates panel labels her row _"Role no
+      longer accepts diaries"_. The stale state is visible where it can be fixed.
 - [ ] **I4** _Archiving._ Archive Béla (Providers → Delete). Réka's grant on him survives and she can still
       reach his bookings — an archived diary still owns appointments somebody has to cancel.
 - [ ] **I5** Restore Béla. Nothing needed re-granting.
@@ -371,7 +370,7 @@ Restore Réka's grants: Bookings on **both** Anna and Béla.
 - [ ] **J2** Switch tenants with the header switcher. In the second organization she reaches nothing; in the
       first her grants are intact. One person, two memberships, two independent sets (§2.4).
 - [ ] **J3** `select action, entity_type, entity_id, before_json, after_json from audit_logs where
-      entity_type = 'ProviderDelegation' order by created_at;` — a `delegation.granted` then a
+entity_type = 'ProviderDelegation' order by created_at;` — a `delegation.granted` then a
       `delegation.rescoped` for a re-scope, and a `delegation.revoked` for each revoke.
 - [ ] **J4** ★ **No email address or member name appears anywhere in those rows** — ids only. The audit
       scrubber does not cover a member's details and these rows live for twelve months (rule 6).
@@ -404,7 +403,7 @@ transaction is built around: both rows or neither, because an assistant with a m
 looks exactly like a permissions bug. And §A3 is still the only thing standing between this design and its
 known day-2 trap.
 
-**§K4 is now half-answered.** An invited assistant *is* told, by email. Somebody assigned from the existing
+**§K4 is now half-answered.** An invited assistant _is_ told, by email. Somebody assigned from the existing
 member list is still told nothing — they find out by noticing a new nav item. Decide whether that asymmetry
 is acceptable while you are looking at both.
 
@@ -421,7 +420,7 @@ because it is easy to run it in a way that cannot fail — see §A.2.
 `PUT …/working-hours` replaces the **entire** week: whatever the body omits is deleted. Two editors on one
 diary is the arrangement diary delegation was built to create (record §2.3), so two stale bodies is the
 normal case, not the exotic one. The guard is a fingerprint the `GET` issues and the `PUT` must echo back;
-the server compares it *inside* the transaction that does the delete (record §2.14.3).
+the server compares it _inside_ the transaction that does the delete (record §2.14.3).
 
 **Before the fix**, the sequence below ended with Réka's Friday afternoon gone, no error shown, and nothing
 on any screen recording that it had ever existed.
@@ -444,7 +443,7 @@ window); call them **[O]** for the owner and **[R]** for Réka.
 >
 > The whole point is that **[O]** is holding a version marker that is about to go stale. A reload — or
 > leaving the availability screen and coming back after more than 30 seconds — refetches it, and the
-> conflict then cannot happen, because [O] would be up to date and *correct* to save.
+> conflict then cannot happen, because [O] would be up to date and _correct_ to save.
 >
 > Window switching is safe: `refetchOnWindowFocus` is deliberately `false`
 > ([query-provider.tsx](../apps/web/src/lib/query-provider.tsx)), so clicking between the two browsers does
@@ -459,7 +458,7 @@ five passes out of a mechanism that is not running.
       `working-hours` and check the request payload contains **`expectedFingerprint`** with a hex string.
       The response contains a **`fingerprint`** too.
       **If `expectedFingerprint` is missing, stop** — the rest of this appendix would pass for the wrong
-      reason. The server answers `400 SCHEDULE_FINGERPRINT_REQUIRED` without it, so a save that *succeeds*
+      reason. The server answers `400 SCHEDULE_FINGERPRINT_REQUIRED` without it, so a save that _succeeds_
       while the field is absent means you are on a stale build.
 - [ ] **W6** After that save, reload **[O]** so both windows are level again before starting A19.
 
@@ -467,13 +466,13 @@ five passes out of a mechanism that is not running.
 
 - [ ] **A19.1** **[R]** As Réka, add a **new period on a weekday that currently has none** — Friday
       13:00–17:00 — and **Save**. It succeeds. Friday now exists on Anna's diary.
-- [ ] **A19.2** **[O]** As the owner — **without reloading** — make a *different* change: alter the existing
+- [ ] **A19.2** **[O]** As the owner — **without reloading** — make a _different_ change: alter the existing
       weekday's end time from 17:00 to 16:00. Do not touch Friday; the owner's window does not know it
       exists.
 - [ ] **A19.3** **[O]** Press **Save**.
 
-**Expected:** the save is **refused**. A callout appears reading *"Réka … saved this schedule ⟨N minutes
-ago / now⟩, while you were editing it. Nothing you typed has been saved."*
+**Expected:** the save is **refused**. A callout appears reading _"Réka … saved this schedule ⟨N minutes
+ago / now⟩, while you were editing it. Nothing you typed has been saved."_
 
 **A failure here is data loss, not cosmetics.** If the save instead succeeds:
 
@@ -481,26 +480,26 @@ ago / now⟩, while you were editing it. Nothing you typed has been saved."*
       original defect — record it as a blocker, note whether `expectedFingerprint` was in the payload (W5),
       and stop walking this section.
 
-> **On the name.** If the callout says *"Somebody else saved this schedule…"* rather than naming Réka, that
+> **On the name.** If the callout says _"Somebody else saved this schedule…"_ rather than naming Réka, that
 > is **not** a failure. The audit row it reads is written fire-and-forget (record §2.14.2), so a refusal
 > raised within a second or so of the other save can legitimately have nobody to name yet. Wait a moment and
-> retry the save; the second refusal should name her. A refusal that *never* names anyone is worth noting.
+> retry the save; the second refusal should name her. A refusal that _never_ names anyone is worth noting.
 
 ## A.4 A20 — the way out
 
-- [ ] **A20.1** The callout carries a hint line — *"Reloading replaces what is on screen with their version.
-      Copy anything you need first."* Confirm it is visible **before** you press anything. It is the only
+- [ ] **A20.1** The callout carries a hint line — _"Reloading replaces what is on screen with their version.
+      Copy anything you need first."_ Confirm it is visible **before** you press anything. It is the only
       warning that the owner's 16:00 edit is about to be discarded.
 - [ ] **A20.2** Press **Reload their version**.
 - [ ] **A20.3** The grid now shows **Réka's Friday 13:00–17:00**, and the end time is back to **17:00** — the
       owner's unsaved edit is gone. That is intended: there is no merge, and A20.1 said so first.
-- [ ] **A20.4** The *"Last changed by Réka, …"* line (A17) is now visible above the grid.
+- [ ] **A20.4** The _"Last changed by Réka, …"_ line (A17) is now visible above the grid.
 
 ## A.5 A21 — not a stuck screen
 
 - [ ] **A21.1** **[O]** Make the same edit again — end time 17:00 → 16:00 — and **Save**.
 - [ ] **A21.2** It **succeeds**. One refusal per collision, not a screen that has to be abandoned.
-- [ ] **A21.3** **[R]** Reload Réka's window. She sees the owner's 16:00 *and* still has her Friday. Nothing
+- [ ] **A21.3** **[R]** Reload Réka's window. She sees the owner's 16:00 _and_ still has her Friday. Nothing
       was lost in either direction — which is the entire point of the feature.
 
 ## A.6 A22 — the ordinary case stays ordinary
@@ -518,11 +517,11 @@ worse than the bug: people learn to click through warnings.
 - [ ] **A23.1** Reload both windows so they are level.
 - [ ] **A23.2** **[R]** Save **without changing anything**. It succeeds.
 - [ ] **A23.3** **[O]** — without reloading — also save **without changing anything**.
-- [ ] **A23.4** It **succeeds**, with no refusal. The fingerprint is over the week's *content*, not over row
+- [ ] **A23.4** It **succeeds**, with no refusal. The fingerprint is over the week's _content_, not over row
       identity, so Réka's save left nothing for the owner to revert and a dialog would be about nothing
       (record §2.14.3).
 
-> If A23 *does* refuse, the fingerprint has regressed to hashing row ids — every save mints new ones, so
+> If A23 _does_ refuse, the fingerprint has regressed to hashing row ids — every save mints new ones, so
 > every save would then look like a conflict. That is the specific mistake §2.14.3 exists to prevent.
 
 ## A.8 Optional — the same thing without a browser
@@ -555,7 +554,7 @@ curl -s -X PUT -b "$COOKIE" -H "x-tenant-id: $TENANT" -H 'content-type: applicat
 ## A.9 What this scenario does **not** cover
 
 - **The other three whole-set saves** — provider services, provider locations, service translations — have
-  no version check at all (record §9.8). Two owners editing Anna's *services* still clobber each other
+  no version check at all (record §9.8). Two owners editing Anna's _services_ still clobber each other
   silently. Out of scope here; worth knowing while you have two windows open.
 - **Availability exceptions.** Per-row create/update/delete rather than a whole-set replace, so there is no
   set to clobber — but two people can still delete and re-add the same day with only the audit log to show

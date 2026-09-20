@@ -128,10 +128,7 @@ export const providerDelegationRoutes: FastifyPluginAsyncZod<
   app.put(
     "/providers/:providerId/delegations/:membershipId",
     {
-      preHandler: [
-        app.requireWritableTenant,
-        app.requirePermission(Permissions.DELEGATION_MANAGE),
-      ],
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.DELEGATION_MANAGE)],
       schema: {
         tags: ["delegations"],
         summary: "Hand this diary to a member, or change what their grant covers",
@@ -175,10 +172,7 @@ export const providerDelegationRoutes: FastifyPluginAsyncZod<
   app.delete(
     "/providers/:providerId/delegations/:membershipId",
     {
-      preHandler: [
-        app.requireWritableTenant,
-        app.requirePermission(Permissions.DELEGATION_MANAGE),
-      ],
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.DELEGATION_MANAGE)],
       schema: {
         tags: ["delegations"],
         summary: "Take this diary back",
@@ -219,10 +213,7 @@ export const providerDelegationRoutes: FastifyPluginAsyncZod<
   app.post(
     "/providers/:providerId/delegations/invitation",
     {
-      preHandler: [
-        app.requireWritableTenant,
-        app.requirePermission(Permissions.DELEGATION_MANAGE),
-      ],
+      preHandler: [app.requireWritableTenant, app.requirePermission(Permissions.DELEGATION_MANAGE)],
       // The same budget as every other invitation route: the same act.
       config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
       schema: {

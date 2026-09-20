@@ -1,8 +1,8 @@
 "use client";
 
-import type { ErrorEnvelope, UncoveredReasonCode } from "@bam/contracts";
+import { API_BASE_URL } from "@/lib/api-origin";
 
-const API_BASE_URL = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+import type { ErrorEnvelope, UncoveredReasonCode } from "@bam/contracts";
 
 /**
  * Typed error carrying the API's machine-readable code and request ID.

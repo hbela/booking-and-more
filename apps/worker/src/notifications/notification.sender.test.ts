@@ -1,3 +1,6 @@
+import { createHash, randomBytes } from "node:crypto";
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
+const testPii = createCustomerPii("11".repeat(32), "22".repeat(32));
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { createLogger } from "@bam/observability";
@@ -38,15 +41,33 @@ function provider(
 describe.skipIf(!databaseUrl)("notification sender", () => {
   let prisma: PrismaClient;
   let tenantId: string;
+  let ownerToken: string;
+  let ownerInvitationId: string;
 
   beforeEach(async () => {
     prisma ??= createPrismaClient({ databaseUrl: databaseUrl! });
+    bindCustomerPii(prisma, testPii);
 
     const unique = `${suffix}-${Math.random().toString(36).slice(2, 8)}`;
     const tenant = await prisma.tenant.create({
       data: { slug: `sender-${unique}`, name: "Sender Clinic", defaultLanguage: "en" },
     });
     tenantId = tenant.id;
+    ownerToken = randomBytes(32).toString("base64url");
+    const inviter = await prisma.user.create({
+      data: { name: "Sender Operator", email: `sender-${unique}@example.test` },
+    });
+    const invitation = await prisma.invitation.create({
+      data: {
+        tenantId,
+        email: "owner@example.test",
+        role: "OWNER",
+        tokenHash: createHash("sha256").update(ownerToken).digest("hex"),
+        expiresAt: new Date(Date.now() + 3_600_000),
+        invitedByUserId: inviter.id,
+      },
+    });
+    ownerInvitationId = invitation.id;
   });
 
   afterAll(async () => {
@@ -67,7 +88,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
         payload: {
           organizationName: "Wellness Kft",
           ownerName: "Kovács Anna",
-          acceptUrl: "http://localhost:3000/invitations/tok123",
+          acceptUrl: `http://localhost:3000/en/invitations/${ownerToken}`,
           expiresAt: new Date().toISOString(),
         },
         ...overrides,
@@ -88,7 +109,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     expect(outcome).toBe("SENT");
     expect(fake.sent).toHaveLength(1);
     expect(fake.sent[0]?.to).toBe("owner@example.test");
-    expect(fake.sent[0]?.html).toContain("http://localhost:3000/invitations/tok123");
+    expect(fake.sent[0]?.html).toContain(`http://localhost:3000/en/invitations/${ownerToken}`);
 
     const settled = await prisma.notification.findUniqueOrThrow({
       where: { id: notification.id },
@@ -96,6 +117,50 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     expect(settled.status).toBe("SENT");
     expect(settled.providerMessageId).toBe("resend_abc");
     expect(settled.sentAt).not.toBeNull();
+  });
+
+  it.each(["REVOKED", "ACCEPTED", "EXPIRED"] as const)(
+    "does not deliver a queued owner invitation that became %s",
+    async (status) => {
+      const notification = await createNotification();
+      await prisma.invitation.update({ where: { id: ownerInvitationId }, data: { status } });
+      const fake = provider({ ok: true, providerMessageId: "unexpected" });
+      expect(
+        await sendNotification({ tenantId, notificationId: notification.id }, options(fake)),
+      ).toBe("SKIPPED");
+      expect(fake.sent).toHaveLength(0);
+      expect(
+        await prisma.notification.findUniqueOrThrow({ where: { id: notification.id } }),
+      ).toMatchObject({ status: "SKIPPED", lastError: "owner invitation is no longer valid" });
+    },
+  );
+
+  it("rejects an expired pending owner invitation before email delivery", async () => {
+    const notification = await createNotification();
+    await prisma.invitation.update({
+      where: { id: ownerInvitationId },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+    const fake = provider({ ok: true, providerMessageId: "unexpected" });
+    expect(
+      await sendNotification({ tenantId, notificationId: notification.id }, options(fake)),
+    ).toBe("SKIPPED");
+    expect(fake.sent).toHaveLength(0);
+  });
+
+  it("does not send an invitation token belonging to another tenant", async () => {
+    const other = await prisma.tenant.create({
+      data: { slug: `other-${ownerInvitationId}`, name: "Other tenant" },
+    });
+    const notification = await createNotification({ tenantId: other.id });
+    const fake = provider({ ok: true, providerMessageId: "unexpected" });
+    expect(
+      await sendNotification(
+        { tenantId: other.id, notificationId: notification.id },
+        options(fake),
+      ),
+    ).toBe("SKIPPED");
+    expect(fake.sent).toHaveLength(0);
   });
 
   /**
@@ -146,7 +211,7 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
     const settled = await prisma.notification.findUniqueOrThrow({
       where: { id: notification.id },
     });
-    expect(JSON.stringify(settled.payload)).not.toContain("tok123");
+    expect(JSON.stringify(settled.payload)).not.toContain(ownerToken);
   });
 
   it("claims exactly once when two workers race the same job", async () => {
@@ -421,8 +486,8 @@ describe.skipIf(!databaseUrl)("notification sender", () => {
           // The CHECK constraint refuses a cancelled booking that does not say
           // when — phase-4 §3.2.
           ...(cancelled ? { cancelledAt: new Date() } : {}),
-          customerNameSnapshot: "Nagy Béla",
-          customerEmailSnapshot: `patient-${unique}@example.test`,
+          customerNameSnapshot: testPii.seal("Nagy Béla"),
+          customerEmailSnapshot: testPii.seal(`patient-${unique}@example.test`),
           serviceNameSnapshot: "Fogtisztítás",
           priceMinorSnapshot: 15_000,
           currencySnapshot: "HUF",

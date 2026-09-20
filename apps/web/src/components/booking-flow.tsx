@@ -1,5 +1,7 @@
 "use client";
 
+import { API_BASE_URL } from "@/lib/api-origin";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -339,7 +341,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
       const current = holdRef.current;
       if (!current) return;
 
-      const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+      const base = API_BASE_URL;
       void fetch(
         `${base}/v1/public/tenants/${tenantSlug}/holds/${current.id}?sessionId=${encodeURIComponent(sessionId)}`,
         { method: "DELETE", credentials: "include", keepalive: true },

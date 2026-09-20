@@ -102,7 +102,6 @@ export function ProviderFields({
           required
           minLength={2}
           maxLength={160}
-          
         />
       </Field>
 
@@ -115,7 +114,6 @@ export function ProviderFields({
           }}
           rows={3}
           maxLength={4000}
-          
         />
       </Field>
 
@@ -132,7 +130,6 @@ export function ProviderFields({
               onChange({ email: event.target.value });
             }}
             required
-            
           />
         </Field>
 
@@ -145,7 +142,6 @@ export function ProviderFields({
               onChange({ phone: event.target.value });
             }}
             maxLength={40}
-            
           />
         </Field>
       </div>
@@ -161,7 +157,6 @@ export function ProviderFields({
             onChange({ timezone: event.target.value });
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
-          
         />
       </Field>
       {zones.length === 0 ? null : (

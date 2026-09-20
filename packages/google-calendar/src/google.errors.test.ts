@@ -34,9 +34,7 @@ describe("classifyGoogleFailure", () => {
     // opposites.
     it("retries a rate limit", () => {
       expect(kind({ status: 403, reason: "rateLimitExceeded" })).toBe(GoogleFailureKinds.RETRY);
-      expect(kind({ status: 403, reason: "userRateLimitExceeded" })).toBe(
-        GoogleFailureKinds.RETRY,
-      );
+      expect(kind({ status: 403, reason: "userRateLimitExceeded" })).toBe(GoogleFailureKinds.RETRY);
     });
 
     it("never retries a permission failure", () => {

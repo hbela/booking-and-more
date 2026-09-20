@@ -84,6 +84,37 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       data: { id: `${id}-${suffix}`, type, payload: { data: { object } }, eventCreatedAt },
     });
 
+  it("quarantines a sandbox event in a live worker without activating its tenant", async () => {
+    const event = await record("evt_wrong_mode", "checkout.session.completed", {
+      client_reference_id: tenantId,
+      customer: "cus_wrong",
+      subscription: "sub_wrong",
+    });
+    await prisma.stripeEvent.update({
+      where: { id: event.id },
+      data: {
+        payload: {
+          livemode: false,
+          data: {
+            object: {
+              client_reference_id: tenantId,
+              customer: "cus_wrong",
+              subscription: "sub_wrong",
+            },
+          },
+        },
+      },
+    });
+    await processStripeEventBatch({ ...options(), billingMode: "live" });
+    expect((await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } })).status).toBe(
+      "PENDING_SUBSCRIPTION",
+    );
+    expect(await prisma.subscription.findUnique({ where: { tenantId } })).toBeNull();
+    expect(
+      (await prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } })).processedAt,
+    ).not.toBeNull();
+  });
+
   describe("checkout.session.completed", () => {
     it("binds the organization to its Stripe identifiers and clears the deadline", async () => {
       // Suffixed, like every other Stripe id here: `stripe_subscription_id` is

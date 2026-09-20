@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import { randomBytes } from "node:crypto";
 import { futureMonday } from "./test-support/booking-dates.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -67,6 +68,9 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
         APP_BASE_URL: "http://localhost:3000",
         API_BASE_URL: "http://localhost:3001",
         DATABASE_URL: databaseUrl!,
+        CUSTOMER_PII_ENCRYPTION_KEY: "11".repeat(32),
+        CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
+        LAUNCH_ACCESS_MODE: "public",
         BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
       },
       loadDotenvFile: false,
@@ -342,7 +346,8 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     // Rule 15: the snapshot is what the customer was told, taken at confirmation.
     expect(booking?.serviceNameSnapshot).toBe("Dental check-up");
     expect(booking?.priceMinorSnapshot).toBe(15_000);
-    expect(booking?.customerNameSnapshot).toBe("Nagy Péter");
+    expect(booking?.customerNameSnapshot).toMatch(/^v1\./u);
+    expect(customerPiiFor(app.prisma).open(booking!.customerNameSnapshot)).toBe("Nagy Péter");
   });
 
   it("rejects the excluded voice channel", async () => {

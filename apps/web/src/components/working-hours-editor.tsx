@@ -338,7 +338,7 @@ export function WorkingHoursEditor({
           <ErrorText>{error}</ErrorText>
           {saved ? <p className="text-success text-sm font-medium">{t("saved")}</p> : null}
 
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {t("save")}
           </Button>
 
@@ -393,7 +393,6 @@ function PeriodRow({
             onChange({ startTime: event.target.value });
           }}
           required
-          
         />
         <span className="text-sm">–</span>
         <Input
@@ -432,9 +431,7 @@ function PeriodRow({
       </div>
 
       <details open={scoped}>
-        <summary className="cursor-pointer text-xs text-ink-muted">
-          {t("periodOptions")}
-        </summary>
+        <summary className="cursor-pointer text-xs text-ink-muted">{t("periodOptions")}</summary>
 
         <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
           <Field id="period-location" label={t("location")}>
@@ -443,7 +440,6 @@ function PeriodRow({
               onChange={(event) => {
                 onChange({ locationId: event.target.value === "" ? null : event.target.value });
               }}
-              
             >
               <option value="">{t("anyLocation")}</option>
               {locations.map((location) => (
@@ -464,7 +460,6 @@ function PeriodRow({
               onChange={(event) => {
                 onChange({ validFrom: event.target.value === "" ? null : event.target.value });
               }}
-              
             />
           </Field>
 
@@ -475,7 +470,6 @@ function PeriodRow({
               onChange={(event) => {
                 onChange({ validUntil: event.target.value === "" ? null : event.target.value });
               }}
-              
             />
           </Field>
 

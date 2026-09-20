@@ -32,7 +32,7 @@ that there was nothing, while the Providers and Availability screens went on sho
 full Mon–Fri week. Feeding the production values back through the engine reproduces it exactly: 0 slots on
 every day at `advance: 1`, and 29 slots per weekday at the inherited 180.
 
-It read as *totally* dead rather than intermittently dead because 2026-08-15 was a **Saturday**. A one-day
+It read as _totally_ dead rather than intermittently dead because 2026-08-15 was a **Saturday**. A one-day
 horizon from a Saturday is Saturday–Sunday, both outside Mon–Fri hours, so nothing was bookable at all.
 Tested on a Tuesday it would have offered Tuesday and Wednesday and nothing beyond — a far louder clue.
 
@@ -42,7 +42,7 @@ Three things were wrong beyond the data:
    blank inherits 180 days or that `1` means tomorrow. Both catalogue forms now state the horizon in words
    as it is typed, carry the default as a placeholder, and warn below seven days
    (`advanceNote` in `apps/web/src/lib/catalogue-form.ts`, with the incident in its docblock).
-2. **The diagnostic buried it.** `db:explain-availability` printed the effective advance *after* the
+2. **The diagnostic buried it.** `db:explain-availability` printed the effective advance _after_ the
    schedule, as a footnote to a healthy-looking provider. The booking window is now computed and reported
    **first**, measured in the provider's own zone, and when the requested date falls outside it the script
    says so and stops — because no schedule below can change that answer.
@@ -59,7 +59,7 @@ Three things were wrong beyond the data:
 The request was for `react-big-calendar`, "as in `booking-for-all`". Two things argued against copying it.
 
 **The predecessor is a thin reference.** Its customer calendar is a read-only week view fed by a single
-`GET /available-events` that pulls *every* unbooked slot for the next twelve months into one query key with
+`GET /available-events` that pulls _every_ unbooked slot for the next twelve months into one query key with
 no date in it — `onNavigate` moves the viewport and refetches nothing, because there is nothing to refetch.
 It hardcodes 08:00–20:00 while the org's own `availabilityStartHour` sits unused in the database, forces the
 time gutter to English regardless of language, and carries ~200 lines of `!important` hex CSS in an inline
@@ -79,8 +79,8 @@ and `moment` are all absent, deliberately, because rule 13 routes zone work thro
 
 ## 2.2 One month per request — reversing "never widen the search"
 
-The comment this replaces argued the opposite, and said so at length: *"widening every search would make the
-engine do fourteen days of work to answer a question about one."* It is reversed here because **the question
+The comment this replaces argued the opposite, and said so at length: _"widening every search would make the
+engine do fourteen days of work to answer a question about one."_ It is reversed here because **the question
 changed** — the step now asks which days of a month hold anything — and because measurement did not support
 the fear:
 
@@ -89,7 +89,7 @@ the fear:
   provider) whether `dateFrom === dateTo` or spans 31 days. Widening multiplies only the rows two
   range-scoped queries return and an in-memory grid walk. A month past `maximumAdvanceDays` returns `[]`
   from `bookingWindow` before the walk begins, so paging forward is nearly free.
-- **Request *count* falls**, which is what the 30/minute public limit actually counts. Guess-and-check spent
+- **Request _count_ falls**, which is what the 30/minute public limit actually counts. Guess-and-check spent
   one search per date tried plus a lookahead per empty one; the calendar spends one per month viewed, cached
   by react-query for a minute.
 - **The payload is the part that grew.** Measured against a local fixture — one provider, Mon–Fri
@@ -118,7 +118,7 @@ route breaks silently. All 254 API tests pass with it registered, webhook suite 
 
 ## 2.3 An empty month asks the next month, not a wider range
 
-The obvious lookahead — search the following 62 days — is *larger* than the month it supplements (~5,900
+The obvious lookahead — search the following 62 days — is _larger_ than the month it supplements (~5,900
 slots, ~1.2 MB raw), and the case that triggers it is a busy tenant, not a quiet one. Instead the page fires
 the **next month's own query, with the same key shape**, and then the one after, capped at
 `LOOKAHEAD_MONTHS = 2`.
@@ -146,7 +146,7 @@ Three rules, each of which is a lie avoided:
 ## 2.5 `aria-disabled`, never `disabled`
 
 Every unbookable day is `aria-disabled="true"` and remains focusable. A real `disabled` button is skipped by
-some screen-reader browse modes, and a reader who cannot reach the empty days cannot work out *why* the
+some screen-reader browse modes, and a reader who cannot reach the empty days cannot work out _why_ the
 month looks sparse — the emptiness becomes invisible, which is the failure this whole phase is about.
 
 The rest of the grid follows the WAI-ARIA date-picker pattern: `role="grid"`, one `<button>` per day inside
@@ -210,20 +210,20 @@ The availability dot is a **shape** — present or absent — so nothing here de
 
 # 3. Delivered
 
-| File | |
-|---|---|
-| `apps/api/src/app.ts` | `@fastify/compress`, responses only |
-| `apps/web/src/lib/month-availability.ts` | all calendar arithmetic, pure — months, the grid, slot summaries, keyboard motion |
-| `apps/web/src/lib/month-availability.test.ts` | 43 cases |
-| `apps/web/src/lib/next-available.ts` | shrunk to the empty-month escape hatch; `localDayOf` moved out, `addDaysToDateOnly` deleted as a duplicate of the engine's `addDays` |
-| `apps/web/src/components/booking-calendar.tsx` | the grid: presentational, keyboard, ARIA. No queries |
-| `apps/web/src/components/booking-flow.tsx` | the "When" step, `useMonthSlots`, the UTC-today fix |
-| `apps/web/src/messages/{en,hu}.json` | 2 keys removed, 1 Hungarian value corrected, 10 added |
+| File                                           |                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/api/src/app.ts`                          | `@fastify/compress`, responses only                                                                                                  |
+| `apps/web/src/lib/month-availability.ts`       | all calendar arithmetic, pure — months, the grid, slot summaries, keyboard motion                                                    |
+| `apps/web/src/lib/month-availability.test.ts`  | 43 cases                                                                                                                             |
+| `apps/web/src/lib/next-available.ts`           | shrunk to the empty-month escape hatch; `localDayOf` moved out, `addDaysToDateOnly` deleted as a duplicate of the engine's `addDays` |
+| `apps/web/src/components/booking-calendar.tsx` | the grid: presentational, keyboard, ARIA. No queries                                                                                 |
+| `apps/web/src/components/booking-flow.tsx`     | the "When" step, `useMonthSlots`, the UTC-today fix                                                                                  |
+| `apps/web/src/messages/{en,hu}.json`           | 2 keys removed, 1 Hungarian value corrected, 10 added                                                                                |
 
 The native `<input type="date">` is **gone rather than kept alongside**. Two co-equal controls for one value
 is what the old suggestion chips' own docblock argued against — the page must keep one idea of the day being
 shown — and a native picker opens its own calendar popup, which would have put two calendars on screen. It
-also cannot express *which days have anything*, which is the only question being asked. Typed entry is
+also cannot express _which days have anything_, which is the only question being asked. Typed entry is
 covered by PageUp/PageDown and Shift with them.
 
 ---

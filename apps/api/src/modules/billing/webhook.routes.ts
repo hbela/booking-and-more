@@ -30,6 +30,7 @@ import { getStripe } from "./stripe.client.js";
 export interface WebhookRoutesOptions {
   stripeSecretKey: string;
   webhookSecret: string;
+  billingMode: "test" | "live";
 }
 
 export const stripeWebhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = async (
@@ -72,7 +73,7 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = 
 
       const stripe = getStripe({ secretKey: options.stripeSecretKey });
 
-      let event: { id: string; type: string; created: number };
+      let event: { id: string; type: string; created: number; livemode: boolean };
 
       try {
         // Throws on a bad signature, a replayed timestamp, or a tampered body.
@@ -86,6 +87,11 @@ export const stripeWebhookRoutes: FastifyPluginAsyncZod<WebhookRoutesOptions> = 
         // unverified body is attacker-controlled, and this endpoint is public.
         request.log.warn({ err: error }, "stripe: signature verification failed");
         throw new UnauthenticatedError("Invalid Stripe signature.");
+      }
+
+      if (event.livemode !== (options.billingMode === "live")) {
+        request.log.warn({ eventId: event.id }, "stripe: ignored event from another billing mode");
+        return reply.status(200).send({ received: true });
       }
 
       try {

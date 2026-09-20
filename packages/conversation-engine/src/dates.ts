@@ -71,8 +71,7 @@ export interface ResolvedDateRange {
 export type DateRefusal = "UNRECOGNISED_DATE" | "UNRECOGNISED_TIME";
 
 export type DateResolution =
-  | { ok: true; range: ResolvedDateRange }
-  | { ok: false; reason: DateRefusal; expression: string };
+  { ok: true; range: ResolvedDateRange } | { ok: false; reason: DateRefusal; expression: string };
 
 // ---------------------------------------------------------------------------
 // Vocabulary
@@ -225,7 +224,8 @@ export function resolveDateExpression(args: {
   const today = dateOnlyAt(args.now.getTime(), args.timezone);
   const phrase = normalize(`${args.dateExpression ?? ""} ${args.timeExpression ?? ""}`);
 
-  const time = args.timeExpression === undefined ? undefined : resolveTime(normalize(args.timeExpression));
+  const time =
+    args.timeExpression === undefined ? undefined : resolveTime(normalize(args.timeExpression));
 
   if (args.timeExpression !== undefined && time === undefined) {
     return { ok: false, reason: "UNRECOGNISED_TIME", expression: args.timeExpression };
@@ -319,11 +319,10 @@ function withTime(range: ResolvedDateRange, time: Daypart | undefined): Resolved
  * twice that day. Both are worth saying out loud on the two mornings a year they
  * occur, and both are invisible to anything that adds an offset by hand.
  */
-export function instantFor(args: {
-  date: DateOnly;
-  minuteOfDay: MinuteOfDay;
-  timezone: string;
-}): { epochMs: number; resolution: WallClockResolution } {
+export function instantFor(args: { date: DateOnly; minuteOfDay: MinuteOfDay; timezone: string }): {
+  epochMs: number;
+  resolution: WallClockResolution;
+} {
   const [year, month, day] = args.date.split("-").map(Number) as [number, number, number];
 
   return resolveWallClock(

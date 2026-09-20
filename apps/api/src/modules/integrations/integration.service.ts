@@ -22,10 +22,7 @@ import {
   resolveAppLocale,
 } from "@bam/contracts";
 
-import {
-  IntegrationRepository,
-  type IntegrationWithCalendars,
-} from "./integration.repository.js";
+import { IntegrationRepository, type IntegrationWithCalendars } from "./integration.repository.js";
 import { returnPathSchema } from "./integration.schemas.js";
 
 /**
@@ -178,9 +175,7 @@ export class IntegrationService {
     }
 
     const state = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(
-      input.now.getTime() + this.options.stateTtlMinutes * 60 * 1_000,
-    );
+    const expiresAt = new Date(input.now.getTime() + this.options.stateTtlMinutes * 60 * 1_000);
 
     await this.repository.createOauthState({
       tenantId: input.tenantId,
@@ -534,10 +529,7 @@ export class IntegrationService {
    * that refreshed silently would leave the database holding a token it had
    * already replaced, and the next process to read the row would refresh again.
    */
-  private async accessTokenFor(
-    integration: IntegrationWithCalendars,
-    now: Date,
-  ): Promise<string> {
+  private async accessTokenFor(integration: IntegrationWithCalendars, now: Date): Promise<string> {
     const { google, oauth } = this.requireClient();
 
     if (
@@ -563,7 +555,9 @@ export class IntegrationService {
 
     let refreshed: GoogleTokenSet;
     try {
-      refreshed = await oauth.refresh(openToken(integration.sealedRefreshToken, google.encryptionKey));
+      refreshed = await oauth.refresh(
+        openToken(integration.sealedRefreshToken, google.encryptionKey),
+      );
     } catch (error) {
       throw await this.translateGoogleFailure(integration, error);
     }

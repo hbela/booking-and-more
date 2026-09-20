@@ -35,6 +35,9 @@ describe.skipIf(!databaseUrl)("bookings", () => {
         APP_BASE_URL: "http://localhost:3000",
         API_BASE_URL: "http://localhost:3001",
         DATABASE_URL: databaseUrl!,
+        CUSTOMER_PII_ENCRYPTION_KEY: "11".repeat(32),
+        CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
+        LAUNCH_ACCESS_MODE: "public",
         BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
       },
       loadDotenvFile: false,
@@ -304,10 +307,14 @@ describe.skipIf(!databaseUrl)("bookings", () => {
       const after = await publicSlots(site);
       expect(after).not.toContain(slots[0]);
 
-      const outbox = await app.prisma.outboxEvent.findFirst({
-        where: { tenantId: site.tenantId },
+      const requested = await app.prisma.outboxEvent.findFirst({
+        where: {
+          tenantId: site.tenantId,
+          aggregateType: "Booking",
+          eventType: "BOOKING_REQUESTED",
+        },
       });
-      expect(outbox?.eventType).toBe("BOOKING_REQUESTED");
+      expect(requested?.eventType).toBe("BOOKING_REQUESTED");
     });
 
     it("lets the owner automatically confirm a provider's approval-required services", async () => {

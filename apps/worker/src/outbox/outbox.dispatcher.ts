@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import { buildAppUrl } from "@bam/contracts";
 import { type Prisma, type PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
@@ -1155,7 +1156,7 @@ async function loadBookingFacts(
       customerId: booking.customerId,
       // The snapshot, not the customer's current address: rule 15, and the
       // reason a confirmation goes where the customer was told it would.
-      recipientEmail: booking.customerEmailSnapshot,
+      recipientEmail: customerPiiFor(prisma).openNullable(booking.customerEmailSnapshot),
       customerLanguage: booking.customer.preferredLanguage,
       tenantLanguage: booking.tenant.defaultLanguage,
     },

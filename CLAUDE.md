@@ -26,27 +26,27 @@ answers, `:all` and `:own`, and a receptionist is the third. **`ASSISTANT` is na
 `booking:read:all` and `booking:manage:all` and gains the `:delegated` variants, so the front desk reaches
 the diaries it was given and no others. **Read its §2.3 first** — staffing is `delegation:manage`, held by
 **OWNER alone**: not the ADMIN, who holds `availability:manage:all` and may edit every schedule in the
-clinic, and not the provider, who only *reads* who assists them. That gap in the ADMIN row is deliberate and
+clinic, and not the provider, who only _reads_ who assists them. That gap in the ADMIN row is deliberate and
 is asserted over the whole table, because it is the one line here that looks like an omission. **§2.2 is the
 other one to read before touching the backfill** — it grants `{BOOKINGS}` only, because an assistant never
 held `availability:manage:all` and a compatibility backfill may reproduce yesterday but may never round up.
 Four more that bite: **§2.13** — an invitation carries the assignment and acceptance writes both rows or
 neither, because an ASSISTANT with a membership and no diary sees nothing and looks exactly like a
 permissions bug; **§2.13.2** — one address may hold one live invitation per tenant (Epic 1's rule), so
-inviting somebody for a second diary *supersedes* the first and an index added for the opposite assumption
-was dropped again; **§2.4** — the grant set lives *inside* `Actor.membership`, which is what makes a
+inviting somebody for a second diary _supersedes_ the first and an index added for the opposite assumption
+was dropped again; **§2.4** — the grant set lives _inside_ `Actor.membership`, which is what makes a
 cross-tenant grant unrepresentable rather than merely checked; and **§2.12** — the affected-bookings payload
 carries `customerName`, so splitting availability from bookings created a leak that could not exist before.
 §4.3 is why an empty provider set may never be spelled the same way as "no filter", §2.9 why the availability
 `GET`s were narrowed and `POST /v1/slots/search` deliberately was not, and §6.3 why the nav gates Bookings
-and Availability on *data* rather than on a permission. **§2.14 is the one to read before adding a second
+and Availability on _data_ rather than on a permission. **§2.14 is the one to read before adding a second
 editor to anything.** Bookings were already safe under two actors (state machine, exclusion constraint,
 idempotency key), but the whole-week `PUT …/working-hours` had **no concurrency control at all** — a provider
 and their assistant silently reverted each other, a bug that predates delegation and that delegation turned
 from rare into the expected case. Both halves are now built, neither needing a migration: **§2.14.2**
 `lastChange` on the working-hours `GET`, read from the audit log and therefore eventually consistent because
 `request.audit()` is fire-and-forget on purpose; and **§2.14.3** a content fingerprint the `GET` issues and
-the `PUT` must echo, compared *inside* the replace transaction. Read §2.14.3 before touching either — it is
+the `PUT` must echo, compared _inside_ the replace transaction. Read §2.14.3 before touching either — it is
 why the fingerprint hashes content rather than row ids, why `expectedFingerprint` is required but declared
 optional in Zod (Fastify validates the body before the preHandler, so a required field turns a 403 into a
 422 — the same trade `idempotencyHeaderSchema` records), and why `SCHEDULE_MODIFIED` must never be merged
@@ -66,14 +66,14 @@ outbox payload and reaches exactly two of the five templates — and §2.2 recor
 deliberately not one of them. **§2.6 is the one to read before touching the "Add to Google Calendar"
 link**: it is a prefill URL and not Epic 6's sync, its timestamps are UTC while every printed time is
 in the clinic's zone (both are right, for different reasons), and it is on the confirmation email
-alone — the reschedule email would add a *second* entry to a calendar rather than move the one
+alone — the reschedule email would add a _second_ entry to a calendar rather than move the one
 already saved ·
 [Phase 6 — booking calendar](docs/phase-6-booking-calendar.md) (the customer's month view only; the staff
 calendar, Google Calendar sync and per-step deep links are still Epic 6's and still unbuilt — its §6 says so
 explicitly). The "When" step was a date input and a list, so an empty day was a dead end. **Read its §2.2
 before widening or narrowing any slot search**: it reverses phase 4's "never widen the search", with the
 measurement that justifies it, and §2.2.1 records why `@fastify/compress` arrived with it and why
-`requestEncodings` must stay untouched. §2.4 is the one that bites — a day's count is *distinct start times*,
+`requestEncodings` must stay untouched. §2.4 is the one that bites — a day's count is _distinct start times_,
 because the search merges providers without deduplicating. §2.7 is two zones on one screen on purpose: a slot
 is an instant in the reader's zone, a calendar cell is a zoneless square formatted in UTC ·
 [Phase 6 — Google Calendar, part 1](docs/phase-6-google-calendar-part-1.md) (**PARKED 2026-08-17 — read its
@@ -90,15 +90,15 @@ Two suites are skipped behind a `const parked = true`; the processor and sweeper
 un-parking, read [the code review](docs/google-calendar-feature-code-review.md)** — the flow requests
 `calendar.events` while the picker calls `calendarList.list`, which that scope does not authorize, so the
 first real connection fails on its first screen. Everything below describes the design that is waiting.
-Connect a Google account and write bookings *to* it; **reading busy time back is part 2**, so
+Connect a Google account and write bookings _to_ it; **reading busy time back is part 2**, so
 `externalBusyPeriods` is still `[]`. **Read its
 §2.2 before adding any consumer of the outbox**: that table is single-consumer — one `status`, and
 `markProcessed` clears the payload — so the calendar leg shares `dispatchOne`'s claim rather than polling
-separately. §2.3 is the other one to read first: idempotency comes from a Google event id *derived* from
+separately. §2.3 is the other one to read first: idempotency comes from a Google event id _derived_ from
 `(bookingId, mappingId)`, which is the only thing that covers a worker dying between Google's 200 and our
 row update. Three more that bite: **§2.9** — refreshing a token is the caller's job because only the caller
 can persist the re-sealed result, so the API and the worker each own one and share only
-`isAccessTokenStale`; **§7.6** — a BullMQ `jobId` may never be a bare row id, because a *failed* job lingers
+`isAccessTokenStale`; **§7.6** — a BullMQ `jobId` may never be a bare row id, because a _failed_ job lingers
 a fortnight and would silently refuse every later enqueue of that row; and **§7.8** — a dead grant parks
 every row behind it, so "needs reconnect" must be decided before "sync failed" or the screen offers a Retry
 that cannot work. §2.1 records why working hours are never written to Google, §5 why disconnecting deletes
@@ -370,7 +370,7 @@ pnpm db:explain-availability <slug> [YYYY-MM-DD] [--service <slug>] [--provider 
 
 **`db:explain-availability` is the answer to "the provider has hours but the booking page offers nothing".**
 It opens by counting `working_hours` rows per provider, because the nastiest version of that question is a
-tenant whose table is *full* while the search reaches a provider who has none: an archived provider still
+tenant whose table is _full_ while the search reaches a provider who has none: an archived provider still
 has an availability screen, and a membership linked to one still saves to it, so the schedule lands
 somewhere real and invisible. That first block turns "no working hours here" into "the working hours are
 over there".
@@ -379,7 +379,7 @@ An empty slot list is the honest answer to a real search that matched nobody, an
 from a misconfiguration — of which there are eight, spread across four screens. The script walks the same
 gates `AvailabilityService.searchSlots` walks, in the same order, and prints what each one decided: the
 service's own flags, the provider assignment, the effective notice and advance window after the
-most-restrictive rule, whether the working periods are long enough to hold the service *plus its buffers*,
+most-restrictive rule, whether the working periods are long enough to hold the service _plus its buffers_,
 which rows are ignored and why, and finally the verdict from `generateSlots` itself rather than from a
 reimplementation. It reads only — no write, no audit row — and so, alone among the scripts here, it does
 **not** refuse to run against production: refusing would remove it from the one database whose data is ever

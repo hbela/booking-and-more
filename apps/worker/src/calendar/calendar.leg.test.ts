@@ -1,3 +1,5 @@
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
+const testPii = createCustomerPii("11".repeat(32), "22".repeat(32));
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { deriveEventId } from "@bam/google-calendar";
@@ -89,6 +91,7 @@ describe.skipIf(parked || !databaseUrl)("calendar leg", () => {
 
   beforeEach(async () => {
     prisma ??= createPrismaClient({ databaseUrl: databaseUrl! });
+    bindCustomerPii(prisma, testPii);
 
     // The dispatcher claims across every tenant — it is a worker, not a request
     // — so a stray event from an earlier test lands in this one's batch.
@@ -129,8 +132,8 @@ describe.skipIf(parked || !databaseUrl)("calendar leg", () => {
         endAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000 + 30 * 60 * 1_000),
         status: "CONFIRMED",
         version: 1,
-        customerNameSnapshot: "Nagy Péter",
-        customerEmailSnapshot: "peter@example.com",
+        customerNameSnapshot: testPii.seal("Nagy Péter"),
+        customerEmailSnapshot: testPii.seal("peter@example.com"),
         serviceNameSnapshot: "Cleaning",
       },
     });
@@ -171,8 +174,7 @@ describe.skipIf(parked || !databaseUrl)("calendar leg", () => {
       },
     });
 
-  const rows = () =>
-    prisma.calendarEventMapping.findMany({ where: { tenantId, bookingId } });
+  const rows = () => prisma.calendarEventMapping.findMany({ where: { tenantId, bookingId } });
 
   // -------------------------------------------------------------------------
   // The happy path, through the real dispatcher

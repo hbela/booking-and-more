@@ -40,9 +40,9 @@ describe("checkPendingActionUsable", () => {
     // Not on the request after the sweeper next woke up.
     const late = new Date("2026-08-10T12:04:00Z");
 
-    expect(checkPendingActionUsable({ action: action(), sessionId: "cnv_1", now: late })).toMatchObject(
-      { allowed: false, reason: "PENDING_ACTION_EXPIRED" },
-    );
+    expect(
+      checkPendingActionUsable({ action: action(), sessionId: "cnv_1", now: late }),
+    ).toMatchObject({ allowed: false, reason: "PENDING_ACTION_EXPIRED" });
   });
 
   it("refuses a second confirmation of the same action", () => {
@@ -69,13 +69,18 @@ describe("checkPendingActionUsable", () => {
 
 describe("effectivePendingActionStatus", () => {
   it("reads the clock rather than the column", () => {
-    expect(effectivePendingActionStatus(action(), new Date("2026-08-10T12:05:00Z"))).toBe("EXPIRED");
+    expect(effectivePendingActionStatus(action(), new Date("2026-08-10T12:05:00Z"))).toBe(
+      "EXPIRED",
+    );
     expect(effectivePendingActionStatus(action(), NOW)).toBe("PENDING");
   });
 
   it("leaves a settled status alone", () => {
     expect(
-      effectivePendingActionStatus(action({ status: "CANCELLED" }), new Date("2027-01-01T00:00:00Z")),
+      effectivePendingActionStatus(
+        action({ status: "CANCELLED" }),
+        new Date("2027-01-01T00:00:00Z"),
+      ),
     ).toBe("CANCELLED");
   });
 });
@@ -134,7 +139,12 @@ describe("turn limits", () => {
 
   it("refuses once the conversation is out of turns", () => {
     expect(
-      checkTurnAllowed({ turnCount: 40, maxTurns: 40, expiresAt: "2026-08-10T12:30:00Z", now: NOW }),
+      checkTurnAllowed({
+        turnCount: 40,
+        maxTurns: 40,
+        expiresAt: "2026-08-10T12:30:00Z",
+        now: NOW,
+      }),
     ).toMatchObject({ allowed: false, reason: "TURN_LIMIT_REACHED" });
   });
 

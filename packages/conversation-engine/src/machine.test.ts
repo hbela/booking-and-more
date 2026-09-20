@@ -95,7 +95,10 @@ describe("missingFieldsFor", () => {
     // The "email or phone" rule belongs to publicCustomerInputSchema; restating
     // it here would give the product two definitions of a reachable customer.
     expect(
-      missingFieldsFor("COLLECTING_CUSTOMER_DETAILS", { fullName: "Nagy Péter", phone: "+36301234567" }),
+      missingFieldsFor("COLLECTING_CUSTOMER_DETAILS", {
+        fullName: "Nagy Péter",
+        phone: "+36301234567",
+      }),
     ).toEqual([]);
   });
 

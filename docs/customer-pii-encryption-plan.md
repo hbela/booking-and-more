@@ -1,6 +1,8 @@
 # Encrypt customer PII at rest — design plan
 
-**Status: proposed, not yet implemented.**
+**Status: implementation in progress; production conversion not performed.**
+
+The preserved-data rollout in [production-launch.md](production-launch.md) supersedes the pre-launch/disposable-data migration assumptions below. Columns are additive; conversion is resumable, validates authenticated envelopes, and clears legacy lookup values only after complete validation. Runtime keys are scoped to the application database client. Existing API response shapes remain unchanged.
 
 ## Context
 
@@ -20,6 +22,7 @@ encrypt this" — this doc explains why that's the wrong layer for this system a
 recommends extending the encryption primitive the codebase already has instead.
 
 **Confirmed by codebase research, not assumed:**
+
 - A pure, tested AES-256-GCM sealer already exists: `@bam/crypto`
   (`packages/crypto/src/token-cipher.ts`) — `sealToken`/`openToken`/`parseEncryptionKey`/
   `looksSealed`. Currently used for exactly one thing (Google Calendar OAuth tokens on
@@ -32,7 +35,7 @@ recommends extending the encryption primitive the codebase already has instead.
   `Customer.normalizedEmail`/`normalizedPhone` **do** carry
   `@@index([tenantId, normalizedX])` and are used in a live equality lookup —
   `BookingService.upsertCustomer` (`apps/api/src/modules/bookings/booking.service.ts`,
-  the *only* place `Customer` rows are read/written) does
+  the _only_ place `Customer` rows are read/written) does
   `findMany({ where: { tenantId, OR: [{ normalizedEmail }, { normalizedPhone }] } })`
   on every booking (public form, staff walk-in, **and** the live conversation/AI-intake
   path — contrary to `CLAUDE.md`'s claim that Phases 7–8 left nothing in the codebase,
@@ -51,6 +54,7 @@ recommends extending the encryption primitive the codebase already has instead.
   clean and out of scope.
 
 **Decisions already made:**
+
 - Rollout: **pre-launch/test data only** → one migration + one backfill script + one
   deploy, not a phased dual-write/cutover/cleanup sequence.
 - The two new encryption keys are **required at boot** (not optional-degrading like the
@@ -75,7 +79,7 @@ Two independent, sufficient reasons, both confirmed by research rather than assu
    connections/requests. Neither improves on "the key lives only in application memory
    and never crosses the wire to Postgres," which is what `sealToken`/`openToken`
    already give you for free.
-2. **No searchability win.** `pgp_sym_encrypt`'s default mode is *also*
+2. **No searchability win.** `pgp_sym_encrypt`'s default mode is _also_
    non-deterministic (random session key wrapped per call), so it doesn't solve the one
    actually-hard problem in this design (keeping `normalizedEmail`/`normalizedPhone`
    equality-searchable) either. Whatever mechanism solves that — see the blind index
@@ -87,7 +91,7 @@ only legitimate readers of plaintext PII), so the "trusted-DB/untrusted-app" cas
 pgcrypto would genuinely earn its keep doesn't apply here.
 
 Disk/volume-level encryption (Hetzner Cloud Volume encryption or LUKS) is a legitimate,
-*orthogonal* control against physical media theft — worth having, but a separate
+_orthogonal_ control against physical media theft — worth having, but a separate
 infrastructure decision, not part of this plan.
 
 ## Design
@@ -108,12 +112,13 @@ rows, reintroducing a cross-tenant correlation channel in obfuscated form that a
 backup could exploit. With tenant scoping, a stolen backup can no longer tell "this
 tenant has a customer with email X" (today's plaintext `normalizedEmail` discloses that
 directly) or correlate a customer across tenants — the two properties this migration is
-actually meant to buy. It is *not* protection against an attacker who also holds the
+actually meant to buy. It is _not_ protection against an attacker who also holds the
 key (low-entropy inputs like email addresses remain dictionary-attackable with the key
 in hand) — worth being explicit about that limit rather than overclaiming.
 
 Two separate keys, standard blind-index hygiene (compromising one must not help attack
 the other):
+
 - `CUSTOMER_PII_ENCRYPTION_KEY` — seals/opens the display fields.
 - `CUSTOMER_PII_BLIND_INDEX_KEY` — computes the HMAC digests.
 
@@ -127,7 +132,7 @@ generation instructions as `GOOGLE_TOKEN_ENCRYPTION_KEY`), both **required** —
 ## The one required refactor: `customerMatches`
 
 `packages/booking-engine/src/snapshots.ts`'s `customerMatches(existing, incoming)`
-currently normalizes the *raw* incoming email/phone internally and compares the result
+currently normalizes the _raw_ incoming email/phone internally and compares the result
 directly against `existing.normalizedEmail`/`normalizedPhone` (plaintext today). Once
 those become blind-index tokens, this comparison has to happen on tokens, not raw
 strings — and `@bam/booking-engine` must stay free of `node:crypto` (it's the pure,
@@ -179,6 +184,7 @@ commented-out Google line), inject into `BookingService` and every worker module
 step 7.
 
 **6. Write path** — `apps/api/src/modules/bookings/booking.service.ts`:
+
 - `upsertCustomer`: normalize incoming email/phone (existing normalizers), blind-index
   them, look up candidates by `emailBlindIndex`/`phoneBlindIndex` equality, call the
   refactored `customerMatches` with tokens. On create/update, `sealToken` the
@@ -191,6 +197,7 @@ step 7.
 
 **7. Read/decrypt path** — open with `CUSTOMER_PII_ENCRYPTION_KEY` at each confirmed
 site:
+
 - `apps/api/src/modules/bookings/booking.routes.ts` — staff booking list/detail
   response serialization.
 - `apps/api/src/modules/availability/schedule-conflicts.service.ts`

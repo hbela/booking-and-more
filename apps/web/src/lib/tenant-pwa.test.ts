@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./api-origin";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import QRCode from "qrcode";
@@ -42,10 +43,10 @@ describe("organization installations", () => {
       }),
       params(),
     );
-    expect(fetcher).toHaveBeenCalledWith(
-      "https://api.example.test/v1/public/tenants/wellness-demo",
-      { cache: "no-store", signal: expect.any(AbortSignal) },
-    );
+    expect(fetcher).toHaveBeenCalledWith(`${API_BASE_URL}/v1/public/tenants/wellness-demo`, {
+      cache: "no-store",
+      signal: expect.any(AbortSignal),
+    });
     expect(response.headers.get("content-type")).toContain("application/manifest+json");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toMatchObject({

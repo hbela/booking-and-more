@@ -1,5 +1,7 @@
 "use client";
 
+import { VerifyEmailBanner } from "./verify-email-banner";
+
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -254,7 +256,10 @@ export function DashboardShell({
         </nav>
       ) : null}
 
-      <div className="flex min-w-0 flex-col gap-8">{children}</div>
+      <div className="flex min-w-0 flex-col gap-8">
+        <VerifyEmailBanner />
+        {children}
+      </div>
     </div>
   );
 }

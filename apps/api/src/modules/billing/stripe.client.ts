@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { SUBSCRIPTION_OFFERS, subscribablePlanSchema } from "@bam/contracts";
 
 /**
  * Stripe, constructed on first use.
@@ -113,7 +114,21 @@ export type PaymentLinkCreator = (input: {
 
 export function createStripePaymentLink(options: StripeOptions): PaymentLinkCreator {
   return async ({ priceId, tenantId, plan, trialPeriodDays, returnUrl }) => {
-    const link = await getStripe(options).paymentLinks.create({
+    const offer = SUBSCRIPTION_OFFERS[subscribablePlanSchema.parse(plan)];
+    const stripe = getStripe(options);
+    const price = await stripe.prices.retrieve(priceId);
+    if (
+      price.livemode !== options.secretKey.startsWith("sk_live_") ||
+      !price.active ||
+      price.currency !== "huf" ||
+      price.recurring?.interval !== "month" ||
+      price.recurring.interval_count !== 1 ||
+      // Stripe represents HUF charges in minor units, unlike HUF payouts.
+      price.unit_amount !== offer.monthlyAmount * 100
+    ) {
+      throw new Error("Stripe price does not match the configured mode or monthly catalogue.");
+    }
+    const link = await stripe.paymentLinks.create({
       line_items: [{ price: priceId, quantity: 1 }],
 
       // The seller uses AAM (alanyi adomentesseg), matching Billingo's VAT

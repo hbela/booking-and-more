@@ -84,6 +84,20 @@ const postgresUrlSchema = z
 
 const baseEnvSchema = z.object({
   // --- Core -----------------------------------------------------------------
+  CUSTOMER_PII_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/u),
+  CUSTOMER_PII_BLIND_INDEX_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/u),
+  LAUNCH_ACCESS_MODE: z.enum(["invite_only", "public"]).default("invite_only"),
+  LAUNCH_OWNER_EMAIL_ALLOWLIST: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.email())),
+  BILLING_MODE: z.enum(["test", "live"]).default("test"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 
@@ -357,6 +371,36 @@ const baseEnvSchema = z.object({
 });
 
 const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
+  if (
+    env.CUSTOMER_PII_ENCRYPTION_KEY.toLowerCase() === env.CUSTOMER_PII_BLIND_INDEX_KEY.toLowerCase()
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["CUSTOMER_PII_BLIND_INDEX_KEY"],
+      message: "PII encryption and index keys must be distinct.",
+    });
+  }
+  if (
+    env.STRIPE_SECRET_KEY &&
+    !env.STRIPE_SECRET_KEY.startsWith(env.BILLING_MODE === "live" ? "sk_live_" : "sk_test_")
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["STRIPE_SECRET_KEY"],
+      message: "Stripe secret key must match BILLING_MODE.",
+    });
+  }
+  if (
+    env.NODE_ENV === "production" &&
+    env.LAUNCH_ACCESS_MODE === "invite_only" &&
+    (!env.RESEND_API_KEY || !env.EMAIL_FROM)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["RESEND_API_KEY"],
+      message: "Invite-only production requires verification email delivery.",
+    });
+  }
   // Half-configured OAuth is worse than none: Better Auth would register the
   // provider and every sign-in attempt would fail at Google with an opaque
   // error. Catch it at boot instead.

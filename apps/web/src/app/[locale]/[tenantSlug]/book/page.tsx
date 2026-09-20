@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/lib/api-origin";
 import { cookies } from "next/headers";
 import { setRequestLocale } from "next-intl/server";
 import { BookingFlow } from "@/components/booking-flow";
@@ -80,7 +81,7 @@ export default async function BookPage({
  * the browser and has somewhere to report it.
  */
 async function tenantLanguage(tenantSlug: string): Promise<string | undefined> {
-  const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  const base = API_BASE_URL;
 
   try {
     const response = await fetch(`${base}/v1/public/tenants/${encodeURIComponent(tenantSlug)}`, {

@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import { toWallClock } from "@bam/availability-engine";
 import type { ConversationIntent } from "@bam/contracts";
 import {
@@ -105,24 +106,38 @@ export class ConversationTools {
   async locationDetails(context: ToolContext): Promise<ToolOutcome> {
     const locations = await this.prisma.location.findMany({
       where: { tenantId: context.tenant.id, active: true, archivedAt: null },
-      orderBy: { name: "asc" }, take: 25,
+      orderBy: { name: "asc" },
+      take: 25,
     });
-    const answers = locations.map((location) => {
-      if (location.type !== "PHYSICAL") {
-        const remote = location.type === "ONLINE"
-          ? context.locale === "hu" ? "Online konzultáció" : "Online consultation"
-          : context.locale === "hu" ? "Telefonos konzultáció" : "Telephone consultation";
-        return `${location.name}: ${remote}`;
-      }
-      const address = [
-        [location.postalCode, location.city].filter(Boolean).join(" "),
-        location.addressLine1, location.addressLine2, location.countryCode,
-      ].filter(Boolean).join(", ");
-      return address ? `${location.name}: ${address}` : "";
-    }).filter(Boolean);
-    const answer = answers.join("\n") || (context.locale === "hu"
-      ? "A pontos cím nincs megadva. Kérem, érdeklődjön közvetlenül a vállalkozásnál."
-      : "The exact address has not been provided. Please contact the business directly.");
+    const answers = locations
+      .map((location) => {
+        if (location.type !== "PHYSICAL") {
+          const remote =
+            location.type === "ONLINE"
+              ? context.locale === "hu"
+                ? "Online konzultáció"
+                : "Online consultation"
+              : context.locale === "hu"
+                ? "Telefonos konzultáció"
+                : "Telephone consultation";
+          return `${location.name}: ${remote}`;
+        }
+        const address = [
+          [location.postalCode, location.city].filter(Boolean).join(" "),
+          location.addressLine1,
+          location.addressLine2,
+          location.countryCode,
+        ]
+          .filter(Boolean)
+          .join(", ");
+        return address ? `${location.name}: ${address}` : "";
+      })
+      .filter(Boolean);
+    const answer =
+      answers.join("\n") ||
+      (context.locale === "hu"
+        ? "A pontos cím nincs megadva. Kérem, érdeklődjön közvetlenül a vállalkozásnál."
+        : "The exact address has not been provided. Please contact the business directly.");
     return { message: { key: "conversation.answer", params: { answer }, ui: "NONE" } };
   }
 
@@ -132,8 +147,11 @@ export class ConversationTools {
     const serviceId = stringParam(context.parameters, "serviceId");
 
     const matched =
-      serviceId !== undefined ? rows.filter((row) => row.id === serviceId)
-        : query === undefined ? rows : matchByName(rows, query, (row) => nameOf(row, context.locale));
+      serviceId !== undefined
+        ? rows.filter((row) => row.id === serviceId)
+        : query === undefined
+          ? rows
+          : matchByName(rows, query, (row) => nameOf(row, context.locale));
 
     // Exactly one match is a choice the customer has already made.
     if ((query !== undefined || serviceId !== undefined) && matched.length === 1) {
@@ -159,8 +177,12 @@ export class ConversationTools {
 
     const query = stringParam(context.parameters, "providerQuery", "query");
     const providerId = stringParam(context.parameters, "providerId");
-    const matched = providerId !== undefined ? rows.filter((row) => row.id === providerId)
-      : query === undefined ? rows : matchByName(rows, query, (row) => row.displayName);
+    const matched =
+      providerId !== undefined
+        ? rows.filter((row) => row.id === providerId)
+        : query === undefined
+          ? rows
+          : matchByName(rows, query, (row) => row.displayName);
 
     if ((query !== undefined || providerId !== undefined) && matched.length === 1) {
       const only = matched[0]!;
@@ -440,7 +462,7 @@ export class ConversationTools {
           endAt: preview.proposed.endAt,
           priceMinor: booking.priceMinorSnapshot,
           currency: booking.currencySnapshot,
-          customerName: booking.customerNameSnapshot,
+          customerName: customerPiiFor(this.prisma).open(booking.customerNameSnapshot),
         },
       },
     };
@@ -473,7 +495,7 @@ export class ConversationTools {
           endAt: booking.endAt.toISOString(),
           priceMinor: booking.priceMinorSnapshot,
           currency: booking.currencySnapshot,
-          customerName: booking.customerNameSnapshot,
+          customerName: customerPiiFor(this.prisma).open(booking.customerNameSnapshot),
         },
       },
     };

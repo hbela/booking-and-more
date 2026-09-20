@@ -40,11 +40,14 @@ export class ProviderService {
    * engine, and "no zone" during a DST transition is not a question with a
    * sensible default answer (tech-impl §13.4).
    */
-  async create(args: {
-    tenantId: string;
-    input: CreateProviderBody;
-    defaults: TenantDefaults;
-  }, transaction?: Prisma.TransactionClient): Promise<Provider> {
+  async create(
+    args: {
+      tenantId: string;
+      input: CreateProviderBody;
+      defaults: TenantDefaults;
+    },
+    transaction?: Prisma.TransactionClient,
+  ): Promise<Provider> {
     const { input, defaults } = args;
 
     return (transaction ?? this.prisma).provider.create({

@@ -175,7 +175,6 @@ export function AvailabilityExceptions({
             onChange={(event) => {
               setFrom(event.target.value);
             }}
-            
           />
         </Field>
         <Field id="exception-range-to" label={t("rangeTo")}>
@@ -186,7 +185,6 @@ export function AvailabilityExceptions({
             onChange={(event) => {
               setTo(event.target.value);
             }}
-            
           />
         </Field>
       </div>
@@ -277,7 +275,6 @@ export function AvailabilityExceptions({
               onChange={(event) => {
                 setDraft((current) => ({ ...current, type: event.target.value }));
               }}
-              
             >
               <option value="UNAVAILABLE">{t("type.UNAVAILABLE")}</option>
               <option value="ADDITIONAL_AVAILABILITY">{t("type.ADDITIONAL_AVAILABILITY")}</option>
@@ -293,7 +290,6 @@ export function AvailabilityExceptions({
                 setDraft((current) => ({ ...current, startAt: event.target.value }));
               }}
               required
-              
             />
           </Field>
 
@@ -306,7 +302,6 @@ export function AvailabilityExceptions({
                 setDraft((current) => ({ ...current, endAt: event.target.value }));
               }}
               required
-              
             />
           </Field>
         </div>
@@ -319,7 +314,6 @@ export function AvailabilityExceptions({
               onChange={(event) => {
                 setDraft((current) => ({ ...current, locationId: event.target.value }));
               }}
-              
             >
               <option value="">{t("anyLocation")}</option>
               {locations.data?.items.map((location) => (
@@ -337,7 +331,6 @@ export function AvailabilityExceptions({
               onChange={(event) => {
                 setDraft((current) => ({ ...current, serviceId: event.target.value }));
               }}
-              
             >
               <option value="">{t("anyService")}</option>
               {services.data?.items.map((service) => (
@@ -355,7 +348,6 @@ export function AvailabilityExceptions({
               onChange={(event) => {
                 setDraft((current) => ({ ...current, reason: event.target.value }));
               }}
-              
             />
           </Field>
         </div>
@@ -369,16 +361,16 @@ export function AvailabilityExceptions({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {draft.id === null ? t("add") : t("save")}
           </Button>
           {draft.id === null ? null : (
-            <Button variant="secondary"
+            <Button
+              variant="secondary"
               type="button"
               onClick={() => {
                 setDraft(emptyDraft());
               }}
-              
             >
               {t("cancel")}
             </Button>

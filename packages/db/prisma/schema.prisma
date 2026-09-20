@@ -1083,6 +1083,8 @@ model Customer {
   ///
   /// Records are never merged on name alone — two people called Nagy Péter is a
   /// Tuesday in Hungary, and merging them is a data-protection incident.
+  emailBlindIndex String? @map("email_blind_index")
+  phoneBlindIndex String? @map("phone_blind_index")
   normalizedEmail String? @map("normalized_email")
   normalizedPhone String? @map("normalized_phone")
 
@@ -1099,6 +1101,8 @@ model Customer {
   notifications Notification[]
   conversations ConversationSession[]
 
+  @@index([tenantId, emailBlindIndex])
+  @@index([tenantId, phoneBlindIndex])
   @@index([tenantId, normalizedEmail])
   @@index([tenantId, normalizedPhone])
   @@map("customers")
@@ -2306,4 +2310,12 @@ model CalendarOauthState {
   @@index([tenantId, userId])
   @@index([expiresAt])
   @@map("calendar_oauth_states")
+}
+
+/// Immutable, encrypted evidence for a tenant's test-to-live billing transition.
+model BillingTransitionArchive {
+  tenantId String @id @map("tenant_id")
+  sealedSnapshot String @map("sealed_snapshot")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  @@map("billing_transition_archives")
 }

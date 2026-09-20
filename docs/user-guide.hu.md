@@ -81,10 +81,10 @@ Felsorolja az előtted álló három lépést — előfizetés, beállítás, fo
 
 Nyisd meg az **Előfizetés** menüpontot az oldalsávban. Két csomagot fogsz látni:
 
-| Csomag                  | Mire való                                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Alap**                | Irányítópult és nyilvános foglalási űrlap havi 9990 Ft-ért, áfával együtt                              |
-| **AI Recepciós**        | Alap csomag plusz AI chat, widget, átiratok, és havi 2M/400K token havi 24 990 Ft-ért, áfával együtt |
+| Csomag           | Mire való                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| **Alap**         | Irányítópult és nyilvános foglalási űrlap havi 9990 Ft-ért, áfával együtt                            |
+| **AI Recepciós** | Alap csomag plusz AI chat, widget, átiratok, és havi 2M/400K token havi 24 990 Ft-ért, áfával együtt |
 
 Válassz egyet, és nyomd meg a **Küldd el a fizetési linket** gombot. E-mailben küldünk egy biztonságos fizetési oldalt a címedre — továbbíthatod annak, aki intézi a pénzügyeket, ezért érkezik e-mailben ahelyett, hogy azonnal megnyílna.
 
@@ -127,13 +127,13 @@ Egy szolgáltatás egy foglalható dolog: egy kontrollvizsgálat, egy vágás é
 
 ![A Szolgáltatások képernyő négy szolgáltatással, azok időtartamával, árával és beállításaival](assets/screenshots/hu/dashboard-services.png)
 
-| Mező                            | Mire való                                                                                                                              |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Név** és **Leírás**       | Amit az ügyfél a foglalási oldalon olvas                                                                                                  |
-| **Időtartam**                | Milyen hosszú az időpont — **ezt látja az ügyfél**                                                                                |
+| Mező                      | Mire való                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Név** és **Leírás**     | Amit az ügyfél a foglalási oldalon olvas                                                                       |
+| **Időtartam**             | Milyen hosszú az időpont — **ezt látja az ügyfél**                                                             |
 | **Puffer előtte / utána** | Extra percek az időpont körül. **Az ügyfelek soha nem látják őket** — használd takarításra vagy jegyzeteléshez |
-| **Ár**                         | Hagyd üresen, és a foglalási oldal helyette azt írja: _"Ár megkérdezésre"_                                                              |
-| **URL-név**                    | A foglalási linkjeidben jelenik meg. Hagyd üresen, és a névből építünk egyet                                                    |
+| **Ár**                    | Hagyd üresen, és a foglalási oldal helyette azt írja: _"Ár megkérdezésre"_                                     |
+| **URL-név**               | A foglalási linkjeidben jelenik meg. Hagyd üresen, és a névből építünk egyet                                   |
 
 ### A három beállítás, amit érdemes megérteni
 
@@ -164,12 +164,12 @@ Egy helyszín az egyik telephelyed. Négyféle van:
 
 ![A Helyszínek képernyő két telephellyel és azok címével](assets/screenshots/hu/dashboard-locations.png)
 
-| Típus              | Mire használd                             |
-| -------------------- | -------------------------------------------- |
-| **Személyesen**    | Egy fizikai cím, ahová az ügyfelek eljönnek |
-| **Online**          | Videós időpontok                          |
+| Típus                | Mire használd                               |
+| -------------------- | ------------------------------------------- |
+| **Személyesen**      | Egy fizikai cím, ahová az ügyfelek eljönnek |
+| **Online**           | Videós időpontok                            |
 | **Házhoz kiszállás** | Te utazol hozzájuk                          |
-| **Telefonos**      | Telefonos konzultációk                     |
+| **Telefonos**        | Telefonos konzultációk                      |
 
 Fizikai telephelyekhez add meg a címet, irányítószámot, várost és országot. A **térkép-koordináták** opcionálisak, és lehetővé teszik, hogy a foglalási oldal a megfelelő pontra mutasson.
 
@@ -187,12 +187,12 @@ Egy szolgáltató az, akihez az időpontokat foglalják. Fontos, hogy **egy szol
 
 ![A Szolgáltatók képernyő három szolgáltatóval, a hozzájuk rendelt szolgáltatásokkal és helyszínekkel](assets/screenshots/hu/dashboard-providers.png)
 
-| Mező                              | Mire való                                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Név, e-mail, telefonszám**   | A rekordjuk. Az e-mail címre érkezne egy meghívó is                                                          |
-| **Beszélt nyelvek**              | Magyar, angol, német, francia — az ügyfelek választását segíti                                              |
-| **Online foglalható**            | Kapcsold **ki**, hogy valaki ne jelenjen meg a nyilvános foglalási oldalon, miközben a csapatod telefonon még foglal neki |
-| **Alapértelmezett helyszín** | Ahol általában dolgozik                                                                                     |
+| Mező                         | Mire való                                                                                                                 |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Név, e-mail, telefonszám** | A rekordjuk. Az e-mail címre érkezne egy meghívó is                                                                       |
+| **Beszélt nyelvek**          | Magyar, angol, német, francia — az ügyfelek választását segíti                                                            |
+| **Online foglalható**        | Kapcsold **ki**, hogy valaki ne jelenjen meg a nyilvános foglalási oldalon, miközben a csapatod telefonon még foglal neki |
+| **Alapértelmezett helyszín** | Ahol általában dolgozik                                                                                                   |
 
 ### Szolgáltatások hozzárendelése
 
@@ -285,19 +285,19 @@ Ha az illető, akit meghívsz, **szolgáltató**, ne ezt az utat használd — a
 
 Négy szerepkör. Mindegyik egy **tagsághoz** tartozik — vagyis egy adott személyhez _egy adott vállalkozásban_. Ugyanaz a személy lehet az egyik klinika tulajdonosa, és asszisztenskedhet egy másiknál, teljesen más jogosultságokkal mindkét helyen.
 
-|                                            | Tulajdonos | Adminisztrátor | Szolgáltató | Asszisztens |
-| ------------------------------------------- | :--------: | :------------: | :---------: | :---------: |
-| Számlázás és előfizetés                  |     ✅     |       —       |     —      |     —      |
-| Vállalkozási beállítások                 |     ✅     |       —       |     —      |     —      |
-| Tagok meghívása és kezelése               |     ✅     |       ✅       |     —      |     —      |
-| Szolgáltatások, helyszínek, szolgáltatók |     ✅     |       ✅       |     —      |     —      |
-| **Bárki** munkarendjének szerkesztése   |     ✅     |       ✅       |     —      |     —      |
-| **Saját** munkarend szerkesztése        |     ✅     |       ✅       |     ✅     |     —      |
-| **Átruházott** naptár szerkesztése       |     —     |       —       |     —      |     ✅     |
-| **Minden** foglalás megtekintése/kezelése |     ✅     |       ✅       |     —      |     —      |
-| **Saját** foglalások megtekintése/kezelése |     ✅     |       ✅       |     ✅     |     —      |
-| **Átruházott** foglalások megtekintése/kezelése |     —     |       —       |     —      |     ✅     |
-| **Eldönti, ki segít egy naptárnál**     |     ✅     |       —       |     —      |     —      |
+|                                                 | Tulajdonos | Adminisztrátor | Szolgáltató | Asszisztens |
+| ----------------------------------------------- | :--------: | :------------: | :---------: | :---------: |
+| Számlázás és előfizetés                         |     ✅     |       —        |      —      |      —      |
+| Vállalkozási beállítások                        |     ✅     |       —        |      —      |      —      |
+| Tagok meghívása és kezelése                     |     ✅     |       ✅       |      —      |      —      |
+| Szolgáltatások, helyszínek, szolgáltatók        |     ✅     |       ✅       |      —      |      —      |
+| **Bárki** munkarendjének szerkesztése           |     ✅     |       ✅       |      —      |      —      |
+| **Saját** munkarend szerkesztése                |     ✅     |       ✅       |     ✅      |      —      |
+| **Átruházott** naptár szerkesztése              |     —      |       —        |      —      |     ✅      |
+| **Minden** foglalás megtekintése/kezelése       |     ✅     |       ✅       |      —      |      —      |
+| **Saját** foglalások megtekintése/kezelése      |     ✅     |       ✅       |     ✅      |      —      |
+| **Átruházott** foglalások megtekintése/kezelése |     —      |       —        |      —      |     ✅      |
+| **Eldönti, ki segít egy naptárnál**             |     ✅     |       —        |      —      |      —      |
 
 Két sor van ebben a táblázatban, amin érdemes elgondolkodni.
 
@@ -319,10 +319,10 @@ A recepciódnak azokat a naptárakat kell látnia, amiket kezel, és csakis azok
 
 Nyomd meg a **Segítő hozzáadása** gombot, válassz egy tagot, és pipáld be, mit tehet meg:
 
-| Hatáskör            | Mit ad nekik                                                     |
-| --------------------- | -------------------------------------------------------------------- |
-| **Elérhetőség**    | Munkarend beállítása és szabadidő felvétele ennél a naptárnál       |
-| **Foglalások**      | Ennek a naptárnak a foglalásainak megtekintése, elfogadása, átütemezése és lemondása |
+| Hatáskör        | Mit ad nekik                                                                         |
+| --------------- | ------------------------------------------------------------------------------------ |
+| **Elérhetőség** | Munkarend beállítása és szabadidő felvétele ennél a naptárnál                        |
+| **Foglalások**  | Ennek a naptárnak a foglalásainak megtekintése, elfogadása, átütemezése és lemondása |
 
 Pipálj be legalább egyet — egy segítőnek kell legalább egy hatáskör. A hozzáférés teljes megszüntetéséhez használd a **Visszavonás** gombot; a következő műveletüknél elveszítik a jogosultságot.
 
@@ -381,13 +381,13 @@ Egy már lemondott vagy megtörtént időpont lezárt, és az oldal ezt jelzi, a
 
 Öt e-mail, mind az ügyfél saját nyelvén:
 
-| E-mail                        | Mikor                                                | Tartalmaz kezelő linket?           |
-| ------------------------------ | ------------------------------------------------------ | ----------------------------------- |
-| **Foglalás kérve**           | Azonnal, jóváhagyást igénylő szolgáltatásnál          | ✅                                 |
+| E-mail                      | Mikor                                                          | Tartalmaz kezelő linket?                  |
+| --------------------------- | -------------------------------------------------------------- | ----------------------------------------- |
+| **Foglalás kérve**          | Azonnal, jóváhagyást igénylő szolgáltatásnál                   | ✅                                        |
 | **Foglalás visszaigazolva** | Visszaigazoláskor, vagy amikor a személyzet elfogadja a kérést | ✅ (plusz _Hozzáadás a Google Naptárhoz_) |
-| **Foglalás módosult**        | Amikor változik az időpont                            | —                                  |
-| **Foglalás lemondva**        | Amikor lemondásra kerül                                | —                                  |
-| **Emlékeztető**               | 24 órával az időpont előtt                            | —                                  |
+| **Foglalás módosult**       | Amikor változik az időpont                                     | —                                         |
+| **Foglalás lemondva**       | Amikor lemondásra kerül                                        | —                                         |
+| **Emlékeztető**             | 24 órával az időpont előtt                                     | —                                         |
 
 A visszaigazoló e-mail tartalmaz egy **Hozzáadás a Google Naptárhoz** gombot. Ez egy egykattintásos előkitöltés — nem köt össze semmit a rendszereddel, és szándékosan csak a visszaigazoló e-mailen szerepel: ha egy átütemezési e-mailre kerülne, egy _második_ bejegyzést adna valaki naptárához ahelyett, hogy a már meglévőt mozgatná.
 
@@ -403,14 +403,14 @@ A **lemondási feltételeidet**, ha beállítottál ilyet, pontosan úgy nyomtat
 
 Szűrj **dátumtartomány**, **szolgáltató** — _"Mindenki"_, vagy _"Az összes szolgáltatóm"_, ha asszisztensként több naptárhoz is hozzáférsz — és **állapot** szerint.
 
-| Állapot                     | Jelentése                                     |
-| ----------------------------- | ------------------------------------------------ |
-| **Jóváhagyásra vár**       | Egy kérés egy jóváhagyást igénylő szolgáltatásra |
-| **Visszaigazolva**          | Megy tovább                                       |
-| **Lemondva**                | Törölve                                          |
-| **Megtörtént**              | Megtörtént                                        |
-| **Nem jelent meg**          | Nem jött el                                       |
-| **Lejárt**                  | Egy soha be nem fejezett fenntartás              |
+| Állapot              | Jelentése                                        |
+| -------------------- | ------------------------------------------------ |
+| **Jóváhagyásra vár** | Egy kérés egy jóváhagyást igénylő szolgáltatásra |
+| **Visszaigazolva**   | Megy tovább                                      |
+| **Lemondva**         | Törölve                                          |
+| **Megtörtént**       | Megtörtént                                       |
+| **Nem jelent meg**   | Nem jött el                                      |
+| **Lejárt**           | Egy soha be nem fejezett fenntartás              |
 
 Négy művelet minden sorban: **Elfogadás** (egy kérésből visszaigazolt időpontot csinál, és e-mailt küld az ügyfélnek), **Megtörténtnek jelölés**, **Nem jelent meg jelölés**, és **Lemondás**.
 

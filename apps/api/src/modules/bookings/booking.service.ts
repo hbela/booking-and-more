@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import type { Booking, Customer, Location, Prisma, PrismaClient, Provider, Service } from "@bam/db";
 import {
   AppError,
@@ -17,7 +18,6 @@ import {
   checkHoldUsable,
   checkReschedulable,
   checkTransition,
-  customerMatches,
   holdExpiresAt,
   initialBookingStatus,
   mostRestrictiveAdvance,
@@ -299,7 +299,11 @@ export class BookingService {
       const customer = await this.upsertCustomer(tx, tenantId, input.customer);
 
       const snapshot = buildBookingSnapshot({
-        customer: { fullName: customer.fullName, email: customer.email, phone: customer.phone },
+        customer: {
+          fullName: customerPiiFor(this.prisma).open(customer.fullName),
+          email: customerPiiFor(this.prisma).openNullable(customer.email),
+          phone: customerPiiFor(this.prisma).openNullable(customer.phone),
+        },
         serviceName: plan.service.name,
         priceMinor: plan.service.priceMinor,
         currency: plan.service.currency,
@@ -326,9 +330,9 @@ export class BookingService {
           endAt: hold.endAt,
           status,
           source: args.source,
-          customerNameSnapshot: snapshot.customerName,
-          customerEmailSnapshot: snapshot.customerEmail,
-          customerPhoneSnapshot: snapshot.customerPhone,
+          customerNameSnapshot: customerPiiFor(this.prisma).seal(snapshot.customerName),
+          customerEmailSnapshot: customerPiiFor(this.prisma).sealNullable(snapshot.customerEmail),
+          customerPhoneSnapshot: customerPiiFor(this.prisma).sealNullable(snapshot.customerPhone),
           serviceNameSnapshot: snapshot.serviceName,
           priceMinorSnapshot: snapshot.priceMinor,
           currencySnapshot: snapshot.currency,
@@ -434,7 +438,11 @@ export class BookingService {
 
         const customer = await this.upsertCustomer(tx, tenantId, input.customer);
         const snapshot = buildBookingSnapshot({
-          customer: { fullName: customer.fullName, email: customer.email, phone: customer.phone },
+          customer: {
+            fullName: customerPiiFor(this.prisma).open(customer.fullName),
+            email: customerPiiFor(this.prisma).openNullable(customer.email),
+            phone: customerPiiFor(this.prisma).openNullable(customer.phone),
+          },
           serviceName: plan.service.name,
           priceMinor: plan.service.priceMinor,
           currency: plan.service.currency,
@@ -457,9 +465,9 @@ export class BookingService {
             // it is the one making it.
             status: BookingStatuses.CONFIRMED,
             source: args.input.source ?? "STAFF",
-            customerNameSnapshot: snapshot.customerName,
-            customerEmailSnapshot: snapshot.customerEmail,
-            customerPhoneSnapshot: snapshot.customerPhone,
+            customerNameSnapshot: customerPiiFor(this.prisma).seal(snapshot.customerName),
+            customerEmailSnapshot: customerPiiFor(this.prisma).sealNullable(snapshot.customerEmail),
+            customerPhoneSnapshot: customerPiiFor(this.prisma).sealNullable(snapshot.customerPhone),
             serviceNameSnapshot: snapshot.serviceName,
             priceMinorSnapshot: snapshot.priceMinor,
             currencySnapshot: snapshot.currency,
@@ -954,23 +962,25 @@ export class BookingService {
         ? null
         : normalizePhone(input.phone);
 
-    if (normalizedEmail !== null || normalizedPhone !== null) {
+    const pii = customerPiiFor(this.prisma);
+    const emailBlindIndex = pii.index(tenantId, normalizedEmail);
+    const phoneBlindIndex = pii.index(tenantId, normalizedPhone);
+    if (emailBlindIndex !== null || phoneBlindIndex !== null) {
       const candidates = await db.customer.findMany({
         where: {
           tenantId,
           OR: [
-            ...(normalizedEmail === null ? [] : [{ normalizedEmail }]),
-            ...(normalizedPhone === null ? [] : [{ normalizedPhone }]),
+            ...(emailBlindIndex === null ? [] : [{ emailBlindIndex }]),
+            ...(phoneBlindIndex === null ? [] : [{ phoneBlindIndex }]),
           ],
         },
         take: 10,
       });
 
-      const match = candidates.find((candidate) =>
-        customerMatches(candidate, {
-          email: input.email ?? null,
-          phone: input.phone ?? null,
-        }),
+      const match = candidates.find(
+        (candidate) =>
+          (emailBlindIndex !== null && candidate.emailBlindIndex === emailBlindIndex) ||
+          (phoneBlindIndex !== null && candidate.phoneBlindIndex === phoneBlindIndex),
       );
 
       if (match) {
@@ -980,9 +990,13 @@ export class BookingService {
             // The name they gave this time wins: people correct spellings and
             // change surnames, and the booking snapshot preserves what each
             // individual appointment was made under regardless.
-            fullName: input.fullName.trim(),
-            ...(input.email === undefined ? {} : { email: input.email, normalizedEmail }),
-            ...(input.phone === undefined ? {} : { phone: input.phone, normalizedPhone }),
+            fullName: pii.seal(input.fullName.trim()),
+            ...(input.email === undefined
+              ? {}
+              : { email: pii.seal(input.email), emailBlindIndex, normalizedEmail: null }),
+            ...(input.phone === undefined
+              ? {}
+              : { phone: pii.seal(input.phone), phoneBlindIndex, normalizedPhone: null }),
             ...(input.preferredLanguage === undefined
               ? {}
               : { preferredLanguage: input.preferredLanguage }),
@@ -997,11 +1011,11 @@ export class BookingService {
     return db.customer.create({
       data: {
         tenantId,
-        fullName: input.fullName.trim(),
-        email: input.email ?? null,
-        phone: input.phone ?? null,
-        normalizedEmail,
-        normalizedPhone,
+        fullName: pii.seal(input.fullName.trim()),
+        email: pii.sealNullable(input.email ?? null),
+        phone: pii.sealNullable(input.phone ?? null),
+        emailBlindIndex,
+        phoneBlindIndex,
         ...(input.preferredLanguage === undefined
           ? {}
           : { preferredLanguage: input.preferredLanguage }),

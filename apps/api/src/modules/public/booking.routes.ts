@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { Tenant } from "@bam/db";
@@ -63,7 +64,7 @@ export const publicBookingRoutes: FastifyPluginAsyncZod = async (app) => {
       locationName: booking.location?.name ?? null,
       priceMinor: booking.priceMinorSnapshot,
       currency: booking.currencySnapshot,
-      customerName: booking.customerNameSnapshot,
+      customerName: customerPiiFor(app.prisma).open(booking.customerNameSnapshot),
       cancellationPolicy: tenant.cancellationPolicy,
     };
   }

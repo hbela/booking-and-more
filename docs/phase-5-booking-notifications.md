@@ -195,7 +195,7 @@ be built at any time from the booking rather than travelling in the payload.
 | `dedupe.ts`    | its variant, keyed `{ bookingId }` — one request email per booking                     |
 | `planning.ts`  | `BOOKING_REQUESTED` mapped (no reminder), and `checkStillOwed` for the send-time check |
 | `templates.ts` | five renderers in `hu` and `en`, plus the shared appointment block they all print      |
-| `calendar.ts`  | §2.6, added 2026-08-16: `buildGoogleCalendarUrl` and its one localized label            |
+| `calendar.ts`  | §2.6, added 2026-08-16: `buildGoogleCalendarUrl` and its one localized label           |
 
 `bookingEmail` assembles all five so they differ only where they mean to: greeting, one sentence, the
 same six-fact details table, then whatever that message adds. `detailPairs` drops the place and price

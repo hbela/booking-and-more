@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import type { PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
@@ -262,8 +263,8 @@ async function perform(
     bookingId: row.booking.id,
     reference: row.booking.reference,
     serviceName: row.booking.serviceNameSnapshot,
-    customerName: row.booking.customerNameSnapshot,
-    customerPhone: row.booking.customerPhoneSnapshot,
+    customerName: customerPiiFor(options.prisma).open(row.booking.customerNameSnapshot),
+    customerPhone: customerPiiFor(options.prisma).openNullable(row.booking.customerPhoneSnapshot),
     notes: row.booking.notes,
     locationName: row.booking.location?.name ?? null,
     locationAddress: addressOf(row.booking.location),

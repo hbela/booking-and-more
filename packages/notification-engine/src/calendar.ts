@@ -120,5 +120,8 @@ export function buildGoogleCalendarUrl(locale: Locale, event: CalendarEventInput
  * by the form, which produces an event at today's date rather than an error.
  */
 function utcBasic(instant: Date): string {
-  return instant.toISOString().replace(/[-:]/gu, "").replace(/\.\d{3}/u, "");
+  return instant
+    .toISOString()
+    .replace(/[-:]/gu, "")
+    .replace(/\.\d{3}/u, "");
 }

@@ -90,7 +90,11 @@ export function missingFieldsFor(
 
   const missing = required.filter((field) => collected[field] === undefined);
 
-  if (state === "COLLECTING_CUSTOMER_DETAILS" && collected.email === undefined && collected.phone === undefined) {
+  if (
+    state === "COLLECTING_CUSTOMER_DETAILS" &&
+    collected.email === undefined &&
+    collected.phone === undefined
+  ) {
     missing.push("email");
   }
 
@@ -138,10 +142,34 @@ export type TransitionRefusal =
 /** Which states may follow which. Terminal states have no successors. */
 const TRANSITIONS: Record<CustomerBookingState, CustomerBookingState[]> = {
   START: ["SELECTING_SERVICE", "SELECTING_DATE", "SEARCHING_SLOTS", "CANCELLED", "EXPIRED"],
-  SELECTING_SERVICE: ["SELECTING_PROVIDER", "SELECTING_DATE", "SEARCHING_SLOTS", "CANCELLED", "EXPIRED"],
-  SELECTING_PROVIDER: ["SELECTING_DATE", "SEARCHING_SLOTS", "SELECTING_SERVICE", "CANCELLED", "EXPIRED"],
-  SELECTING_DATE: ["SEARCHING_SLOTS", "SELECTING_SERVICE", "SELECTING_PROVIDER", "CANCELLED", "EXPIRED"],
-  SEARCHING_SLOTS: ["SELECTING_SLOT", "SELECTING_DATE", "SELECTING_SERVICE", "CANCELLED", "EXPIRED"],
+  SELECTING_SERVICE: [
+    "SELECTING_PROVIDER",
+    "SELECTING_DATE",
+    "SEARCHING_SLOTS",
+    "CANCELLED",
+    "EXPIRED",
+  ],
+  SELECTING_PROVIDER: [
+    "SELECTING_DATE",
+    "SEARCHING_SLOTS",
+    "SELECTING_SERVICE",
+    "CANCELLED",
+    "EXPIRED",
+  ],
+  SELECTING_DATE: [
+    "SEARCHING_SLOTS",
+    "SELECTING_SERVICE",
+    "SELECTING_PROVIDER",
+    "CANCELLED",
+    "EXPIRED",
+  ],
+  SEARCHING_SLOTS: [
+    "SELECTING_SLOT",
+    "SELECTING_DATE",
+    "SELECTING_SERVICE",
+    "CANCELLED",
+    "EXPIRED",
+  ],
   SELECTING_SLOT: ["HOLDING_SLOT", "SEARCHING_SLOTS", "SELECTING_DATE", "CANCELLED", "EXPIRED"],
   HOLDING_SLOT: ["COLLECTING_CUSTOMER_DETAILS", "SELECTING_SLOT", "CANCELLED", "EXPIRED"],
   COLLECTING_CUSTOMER_DETAILS: ["AWAITING_CONFIRMATION", "SELECTING_SLOT", "CANCELLED", "EXPIRED"],

@@ -1,5 +1,7 @@
 "use client";
 
+import { API_BASE_URL } from "@/lib/api-origin";
+
 import { ApiError, apiFetch, idempotencyKey, withIdempotency } from "./api-client";
 
 /**
@@ -134,7 +136,7 @@ export async function sendMessage(args: {
   text: string;
   onTextDelta?: ((message: AssistantMessage) => void) | undefined;
 }): Promise<ConversationTurn> {
-  const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  const base = API_BASE_URL;
   const response = await fetch(`${base}/v1/public/conversations/${args.session.id}/messages`, {
     method: "POST",
     credentials: "include",

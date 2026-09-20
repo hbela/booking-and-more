@@ -115,11 +115,10 @@ export function createGoogleCalendarClient(): GoogleCalendarClient {
       // not refuse our correction — the etag is recorded for part 2's change
       // detection and deliberately not used as a precondition here.
       return eventResult(
-        await request<Record<string, unknown>>(
-          accessToken,
-          eventUrl(calendarId, eventId),
-          { method: "PATCH", body: event },
-        ),
+        await request<Record<string, unknown>>(accessToken, eventUrl(calendarId, eventId), {
+          method: "PATCH",
+          body: event,
+        }),
       );
     },
 

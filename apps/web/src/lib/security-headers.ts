@@ -1,5 +1,5 @@
-const API_ORIGIN = new URL(process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001")
-  .origin;
+import { API_BASE_URL } from "@/lib/api-origin";
+const API_ORIGIN = new URL(API_BASE_URL).origin;
 
 export function buildContentSecurityPolicy(nonce: string, production: boolean): string {
   return [

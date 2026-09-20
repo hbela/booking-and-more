@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/lib/api-origin";
 /** Server-side public lookup: never forwards staff session credentials. */
 export async function publicAppTenant(
   slug: string,
@@ -5,7 +6,7 @@ export async function publicAppTenant(
   | { tenant: { id: string; name: string; slug: string; features?: { assistant?: boolean } } }
   | { status: number }
 > {
-  const base = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+  const base = API_BASE_URL;
   try {
     const response = await fetch(`${base}/v1/public/tenants/${slug}`, {
       cache: "no-store",

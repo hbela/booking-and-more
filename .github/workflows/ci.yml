@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
   pull_request:
 
 concurrency:
@@ -16,8 +16,46 @@ env:
   SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/booking_and_more_shadow?schema=public
   APP_BASE_URL: http://localhost:3000
   API_BASE_URL: http://localhost:3001
+  NEXT_PUBLIC_API_BASE_URL: https://api.example.test
+  CUSTOMER_PII_ENCRYPTION_KEY: "1111111111111111111111111111111111111111111111111111111111111111"
+  CUSTOMER_PII_BLIND_INDEX_KEY: "2222222222222222222222222222222222222222222222222222222222222222"
+  LAUNCH_ACCESS_MODE: public
 
 jobs:
+  linux-images:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      POSTGRES_PASSWORD: ci-postgres-only
+      REDIS_PASSWORD: ci-redis-only
+      BETTER_AUTH_SECRET: ci-only-auth-secret-at-least-32-characters
+      APP_BASE_URL: https://app.example.test
+      API_BASE_URL: https://api.example.test
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the production Linux images
+        run: docker compose -p bam-ci -f docker/docker-compose.yml build
+      - name: Start isolated database and queue
+        run: docker compose -p bam-ci -f docker/docker-compose.yml up -d --wait postgres redis
+      - name: Migrate the empty image-test database
+        run: docker compose -p bam-ci -f docker/docker-compose.yml run --rm --no-deps -w /app/packages/db api ./node_modules/.bin/prisma migrate deploy
+      - name: Start and check all application images
+        run: |
+          docker compose -p bam-ci -f docker/docker-compose.yml up -d --wait --wait-timeout 180 api worker web
+          curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:3001/health/ready
+          curl --fail http://127.0.0.1:3000/api/health
+          curl --fail http://127.0.0.1:3000/sign-in >/dev/null
+          curl --fail http://127.0.0.1:3000/en/sign-in >/dev/null
+      - name: Report failed container checks
+        if: failure()
+        run: docker compose -p bam-ci -f docker/docker-compose.yml logs --tail 80
+      - name: Stop isolated CI stack
+        if: always()
+        run: docker compose -p bam-ci -f docker/docker-compose.yml down
+
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -58,6 +96,9 @@ jobs:
       # package.json, never an ignored audit failure in this workflow.
       - name: Audit production dependencies
         run: pnpm audit:prod
+
+      - name: Verify backup failure handling
+        run: python3 ops/production/test-backup.py
 
       - name: Check formatting
         run: pnpm format:check

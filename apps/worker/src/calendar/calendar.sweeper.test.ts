@@ -1,3 +1,5 @@
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
+const testPii = createCustomerPii("11".repeat(32), "22".repeat(32));
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { deriveEventId } from "@bam/google-calendar";
@@ -53,6 +55,7 @@ describe.skipIf(!databaseUrl)("calendar sweeper", () => {
 
   beforeEach(async () => {
     prisma ??= createPrismaClient({ databaseUrl: databaseUrl! });
+    bindCustomerPii(prisma, testPii);
 
     // The sweep looks across every tenant — it is a worker, not a request — so a
     // row left by an earlier test lands in this one's batch.
@@ -137,7 +140,7 @@ describe.skipIf(!databaseUrl)("calendar sweeper", () => {
         startAt,
         endAt: new Date(startAt.getTime() + 30 * 60_000),
         status: "CONFIRMED",
-        customerNameSnapshot: "Nagy Péter",
+        customerNameSnapshot: testPii.seal("Nagy Péter"),
         serviceNameSnapshot: "Cleaning",
       },
     });

@@ -1,3 +1,4 @@
+import { assertLaunchAccess, type LaunchAccessOptions } from "../../lib/launch-access.js";
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { canHoldTenantMembership, Permissions } from "@bam/auth";
@@ -31,7 +32,7 @@ function toResponse(tenant: Tenant): z.infer<typeof tenantResponseSchema> {
   };
 }
 
-export const tenantRoutes: FastifyPluginAsyncZod = async (app) => {
+export const tenantRoutes: FastifyPluginAsyncZod<LaunchAccessOptions> = async (app, options) => {
   const service = new TenantService(app.prisma);
 
   // --- Create ---------------------------------------------------------------
@@ -67,6 +68,7 @@ export const tenantRoutes: FastifyPluginAsyncZod = async (app) => {
         );
       }
 
+      await assertLaunchAccess(app, user.id, options);
       const tenant = await service.create(request.body, user.id);
 
       // tenantId is passed explicitly: the request had no tenant context when

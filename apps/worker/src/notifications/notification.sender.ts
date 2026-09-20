@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { customerPiiFor } from "@bam/crypto";
 import type { PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 import {
@@ -248,7 +250,34 @@ async function build(
   }
 
   const email = render(notification, options.logger);
-  return email === undefined ? { skipped: "no renderable template or payload" } : { email };
+  if (email === undefined) return { skipped: "no renderable template or payload" };
+
+  if (notification.type === NotificationTypes.ORGANIZATION_CREATED) {
+    // A resend revokes the previous token immediately, but its email may still
+    // be queued while the worker is offline. Never deliver that stale link.
+    const payload = notification.payload as { acceptUrl: string };
+    let token: string | undefined;
+    try {
+      token = new URL(payload.acceptUrl).pathname.match(/\/invitations\/([^/]+)\/?$/u)?.[1];
+    } catch {
+      return { skipped: "invalid owner invitation URL" };
+    }
+    if (!token) return { skipped: "invalid owner invitation URL" };
+    const invitation = await options.prisma.invitation.findFirst({
+      where: {
+        tenantId: notification.tenantId,
+        email: notification.recipient,
+        role: "OWNER",
+        tokenHash: createHash("sha256").update(token).digest("hex"),
+        status: "PENDING",
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true },
+    });
+    if (!invitation) return { skipped: "owner invitation is no longer valid" };
+  }
+
+  return { email };
 }
 
 /**
@@ -328,7 +357,7 @@ async function buildBookingEmail(
     organizationName: booking.tenant.name,
     // The snapshots, not the current catalogue rows: a booking records what the
     // customer was told (rule 15), and an email about it must say the same.
-    customerName: booking.customerNameSnapshot,
+    customerName: customerPiiFor(options.prisma).open(booking.customerNameSnapshot),
     serviceName: booking.serviceNameSnapshot,
     providerName: booking.provider.displayName,
     when: formatInstant(booking.startAt, locale, timeZone),

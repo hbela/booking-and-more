@@ -4,8 +4,7 @@
  */
 
 export type Decision<TReason extends string> =
-  | { allowed: true }
-  | { allowed: false; reason: TReason; detail?: Record<string, unknown> };
+  { allowed: true } | { allowed: false; reason: TReason; detail?: Record<string, unknown> };
 
 export const ALLOWED: Decision<never> = { allowed: true };
 

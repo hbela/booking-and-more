@@ -22,6 +22,9 @@ describe("api", () => {
         DATABASE_URL:
           process.env["TEST_DATABASE_URL"] ??
           "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+        CUSTOMER_PII_ENCRYPTION_KEY: "11".repeat(32),
+        CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
+        LAUNCH_ACCESS_MODE: "public",
         BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
       },
       loadDotenvFile: false,
@@ -275,6 +278,9 @@ describe("api", () => {
           DATABASE_URL:
             process.env["TEST_DATABASE_URL"] ??
             "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+          CUSTOMER_PII_ENCRYPTION_KEY: "11".repeat(32),
+          CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
+          LAUNCH_ACCESS_MODE: "public",
           BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
         },
         loadDotenvFile: false,

@@ -6,6 +6,8 @@ const valid = {
   APP_BASE_URL: "http://localhost:3000",
   API_BASE_URL: "http://localhost:3001",
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/booking_and_more_test",
+  CUSTOMER_PII_ENCRYPTION_KEY: "11".repeat(32),
+  CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
   BETTER_AUTH_SECRET: "a-test-secret-that-is-at-least-32-characters",
 } satisfies NodeJS.ProcessEnv;
 

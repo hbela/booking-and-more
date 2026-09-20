@@ -287,7 +287,10 @@ export class MembershipService {
    * arbitrary mailbox to a named diary — phase-9-owner-onboarding §2.1's
    * security property, moved one layer up to issuance (§2.4).
    */
-  async inviteProvider(input: InviteProviderInput, transaction?: Prisma.TransactionClient): Promise<InviteResult & { email: string }> {
+  async inviteProvider(
+    input: InviteProviderInput,
+    transaction?: Prisma.TransactionClient,
+  ): Promise<InviteResult & { email: string }> {
     const { tenantId, provider } = input;
     const db = transaction ?? this.prisma;
 
@@ -410,7 +413,9 @@ export class MembershipService {
 
         return created;
       };
-      const invitation = transaction ? await issue(transaction) : await this.prisma.$transaction(issue);
+      const invitation = transaction
+        ? await issue(transaction)
+        : await this.prisma.$transaction(issue);
 
       return { invitationId: invitation.id, token, expiresAt, email };
     } catch (error) {

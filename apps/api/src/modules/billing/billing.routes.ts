@@ -1,3 +1,4 @@
+import { assertLaunchAccess, type LaunchAccessOptions } from "../../lib/launch-access.js";
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions } from "@bam/auth";
@@ -27,7 +28,7 @@ import type { PaymentLinkClient, PortalSessionCreator } from "./stripe.client.js
  * Permission, not role, per rule 10: `BILLING_MANAGE` is the owner's alone.
  */
 
-export interface BillingRoutesOptions {
+export interface BillingRoutesOptions extends LaunchAccessOptions {
   /** Stripe price ID per sellable plan. A plan with no price is not offered. */
   planPrices: PlanPriceIds;
   /** Omitted when Stripe is unconfigured; subscribing then reports 503. */
@@ -159,6 +160,7 @@ export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async 
       const tenant = request.tenant!;
       const user = request.user!;
 
+      await assertLaunchAccess(app, user.id, options);
       const result = await service.requestPaymentLink({
         tenantId: tenant.id,
         plan: request.body.plan,

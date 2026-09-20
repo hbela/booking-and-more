@@ -1,3 +1,4 @@
+import { customerPiiFor } from "@bam/crypto";
 import type { AvailabilityException, PrismaClient, WorkingHours } from "@bam/db";
 import {
   findUncoveredAppointments,
@@ -85,18 +86,16 @@ export class ScheduleConflictService {
       // it (`activeOnly: true` in `planFor`). Judging against it would let an
       // owner strand a booking by unticking a box rather than deleting a row.
       .filter((entry) => entry.active)
-      .map(
-        (entry): ScopedPeriod => ({
-          locationId: entry.locationId ?? null,
-          period: {
-            weekday: entry.weekday,
-            startTime: entry.startTime,
-            endTime: entry.endTime,
-            ...(entry.validFrom == null ? {} : { validFrom: entry.validFrom }),
-            ...(entry.validUntil == null ? {} : { validUntil: entry.validUntil }),
-          },
-        }),
-      );
+      .map((entry): ScopedPeriod => ({
+        locationId: entry.locationId ?? null,
+        period: {
+          weekday: entry.weekday,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          ...(entry.validFrom == null ? {} : { validFrom: entry.validFrom }),
+          ...(entry.validUntil == null ? {} : { validUntil: entry.validUntil }),
+        },
+      }));
 
     return this.judge({
       tenantId: args.tenantId,
@@ -235,9 +234,7 @@ export class ScheduleConflictService {
           // the evening before still covers the following morning.
           startAt: { lt: addDays(latest, 2) },
           endAt: { gt: addDays(earliest, -2) },
-          ...(args.ignoreExceptionId === undefined
-            ? {}
-            : { NOT: { id: args.ignoreExceptionId } }),
+          ...(args.ignoreExceptionId === undefined ? {} : { NOT: { id: args.ignoreExceptionId } }),
         },
       }),
     ]);
@@ -284,13 +281,11 @@ export class ScheduleConflictService {
           .filter(inScope)
           .filter((entry) => appliesToServices(entry, group))
           .map((entry) => entry.period),
-        appointments: group.map(
-          (booking): ScheduledAppointment => ({
-            id: booking.id,
-            startAt: booking.startAt.toISOString(),
-            endAt: booking.endAt.toISOString(),
-          }),
-        ),
+        appointments: group.map((booking): ScheduledAppointment => ({
+          id: booking.id,
+          startAt: booking.startAt.toISOString(),
+          endAt: booking.endAt.toISOString(),
+        })),
       });
 
       const byId = new Map(group.map((booking) => [booking.id, booking]));
@@ -307,7 +302,7 @@ export class ScheduleConflictService {
           providerId: booking.providerId,
           providerName: booking.provider.displayName,
           serviceName: booking.serviceNameSnapshot,
-          customerName: booking.customerNameSnapshot,
+          customerName: customerPiiFor(this.prisma).open(booking.customerNameSnapshot),
           reason: entry.reason,
         });
       }
@@ -379,10 +374,11 @@ interface ScopedException {
  * exception is kept if it touches any of them — the safe direction: it can add
  * a finding the badge will explain, never hide one.
  */
-function appliesToServices(entry: { serviceId: string | null }, group: JudgeableBooking[]): boolean {
-  return (
-    entry.serviceId === null || group.some((booking) => booking.serviceId === entry.serviceId)
-  );
+function appliesToServices(
+  entry: { serviceId: string | null },
+  group: JudgeableBooking[],
+): boolean {
+  return entry.serviceId === null || group.some((booking) => booking.serviceId === entry.serviceId);
 }
 
 /** Keyed by location id, with `null` as its own group. */

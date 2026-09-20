@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted off-host Booking and More PostgreSQL backup
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/bam/backup.env
+ExecStart=/opt/bam/ops/production/backup.sh
+TimeoutStartSec=25min
+UMask=0077

@@ -1,3 +1,5 @@
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
+const testPii = createCustomerPii("11".repeat(32), "22".repeat(32));
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { parseEncryptionKey, sealToken } from "@bam/crypto";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
@@ -153,6 +155,7 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
 
   beforeEach(() => {
     prisma ??= createPrismaClient({ databaseUrl: databaseUrl! });
+    bindCustomerPii(prisma, testPii);
     calendar = stubCalendar();
     oauth = stubOAuth();
     queues = fakeQueues();
@@ -274,8 +277,8 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
         endAt: new Date(startAt.getTime() + 30 * 60_000),
         status: "CONFIRMED",
         version: overrides.bookingVersion ?? 1,
-        customerNameSnapshot: "Nagy Béla",
-        customerPhoneSnapshot: "+36301234567",
+        customerNameSnapshot: testPii.seal("Nagy Béla"),
+        customerPhoneSnapshot: testPii.seal("+36301234567"),
         serviceNameSnapshot: "Fogtisztítás",
       },
     });
@@ -300,10 +303,9 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
   /** §25.6, asserted per path rather than once. */
   async function expectBookingUntouched(bookingId: string): Promise<void> {
     const booking = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    expect(
-      booking.status,
-      "a calendar failure must never change a booking (PRD §9.10)",
-    ).toBe("CONFIRMED");
+    expect(booking.status, "a calendar failure must never change a booking (PRD §9.10)").toBe(
+      "CONFIRMED",
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -313,10 +315,7 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
   it("creates the event with our own derived id", async () => {
     const { tenantId, row, mapping, booking } = await scenario();
 
-    const outcome = await syncCalendarEvent(
-      { tenantId, eventMappingId: row.id },
-      options(),
-    );
+    const outcome = await syncCalendarEvent({ tenantId, eventMappingId: row.id }, options());
 
     expect(outcome).toBe(CalendarOutcomes.SYNCED);
     expect(calendar.calls).toEqual([
@@ -440,9 +439,9 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
       where: { id: row.id },
       data: { syncStatus: "SYNCING", claimedAt: new Date() },
     });
-    await expect(
-      syncCalendarEvent({ tenantId, eventMappingId: row.id }, options()),
-    ).resolves.toBe(CalendarOutcomes.NOT_CLAIMED);
+    await expect(syncCalendarEvent({ tenantId, eventMappingId: row.id }, options())).resolves.toBe(
+      CalendarOutcomes.NOT_CLAIMED,
+    );
 
     // Pending, but not due. `nextAttemptAt` is in the claim predicate rather
     // than checked afterwards, so a premature job never takes the row at all.
@@ -450,9 +449,9 @@ describe.skipIf(!databaseUrl)("calendar processor", () => {
       where: { id: row.id },
       data: { syncStatus: "PENDING", nextAttemptAt: new Date(Date.now() + 600_000) },
     });
-    await expect(
-      syncCalendarEvent({ tenantId, eventMappingId: row.id }, options()),
-    ).resolves.toBe(CalendarOutcomes.NOT_CLAIMED);
+    await expect(syncCalendarEvent({ tenantId, eventMappingId: row.id }, options())).resolves.toBe(
+      CalendarOutcomes.NOT_CLAIMED,
+    );
 
     expect(calendar.calls).toEqual([]);
   });

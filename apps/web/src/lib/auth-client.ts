@@ -1,8 +1,8 @@
 "use client";
 
-import { createAuthClient } from "better-auth/react";
+import { API_BASE_URL } from "@/lib/api-origin";
 
-const API_BASE_URL = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
+import { createAuthClient } from "better-auth/react";
 
 /**
  * Better Auth browser client.

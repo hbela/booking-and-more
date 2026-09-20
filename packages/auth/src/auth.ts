@@ -36,6 +36,8 @@ export interface CreateAuthOptions {
   appUrl: string;
   /** Cross-site cookies require HTTPS; in local development they must not. */
   secureCookies: boolean;
+  sendVerificationEmail?:
+    ((input: { user: { email: string }; url: string }) => Promise<void>) | undefined;
   /**
    * Google sign-in. Omitted entirely when credentials are absent, rather than
    * registered with empty strings — a missing key degrades one feature instead
@@ -67,6 +69,15 @@ export function createAuth(options: CreateAuthOptions) {
       autoSignIn: true,
     },
 
+    ...(options.sendVerificationEmail
+      ? {
+          emailVerification: {
+            sendVerificationEmail: options.sendVerificationEmail,
+            sendOnSignUp: true,
+            expiresIn: 3600,
+          },
+        }
+      : {}),
     ...(google ? { socialProviders: { google } } : {}),
 
     user: {

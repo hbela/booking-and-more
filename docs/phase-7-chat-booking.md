@@ -20,7 +20,7 @@
 > a network, so they can be lifted out of `a6b754e` unchanged. §5 is still the argument for why a pending
 > action is a table rather than a field, and §9's ordering rule — the quota gate before the paid call, its
 > aggregate incremented in the same transaction as the event — is the one to re-read before anything in this
-> product costs money per request again. What should *not* be reinstated as-written is the assumption in §2
+> product costs money per request again. What should _not_ be reinstated as-written is the assumption in §2
 > that the panel lives inside `BookingFlow`: that is what coupled the assistant to the form's hold.
 >
 > tech-impl §18–§24 and PRD goal #2 still specify this feature. They are now a recorded deviation:
@@ -55,7 +55,7 @@ form · A tenant's AI spend has a ceiling before the first paid call.
 Three sentences decide the whole design.
 
 **One conversation, two transports.** Voice (Epic 8, [phase-8-push-to-talk-voice.md](phase-8-push-to-talk-voice.md))
-is `audio → text` followed by the *same* message endpoint chat uses. There is no voice-specific state machine
+is `audio → text` followed by the _same_ message endpoint chat uses. There is no voice-specific state machine
 and no voice-specific tool path, which makes Epic 8's exit criterion — "voice and chat share one conversation
 state machine" — true by construction rather than by discipline.
 
@@ -109,7 +109,7 @@ against another tenant's conversation — all return the same body. This mirrors
 public booking routes and exists so the endpoint is not an oracle for which conversation ids are real.
 
 **Why a token at all, when the form path makes do with a client-chosen `sessionId`.** `BookingHold.sessionId`
-is explicitly documented as "not a login and not trusted for authorization" — it decides which hold to *show*
+is explicitly documented as "not a login and not trusted for authorization" — it decides which hold to _show_
 somebody, and getting it wrong costs a stranger's five-minute hold. A conversation spends money on every
 turn. A client-chosen string is the wrong key for that, so this one is server-minted.
 
@@ -135,8 +135,8 @@ Confidence below a floor, or a non-empty `missingFields`, does not execute eithe
 # 5. Pending actions: why a table
 
 tech-impl §22.1 models a pending action as a field on the session's state JSON. It is a table here —
-`conversation_pending_actions` — because of the sentence immediately after it: *a generic "yes" must never
-confirm an unknown or expired action.*
+`conversation_pending_actions` — because of the sentence immediately after it: _a generic "yes" must never
+confirm an unknown or expired action._
 
 Making that true means the confirm route has to prove four things at once: this action exists, it belongs to
 **this** session, it has not expired, and it has not already been used. A row with a status and an
@@ -174,7 +174,7 @@ is a deliberate limit of the slice, not an oversight.
 
 # 7. Dates are resolved by us, not by the model
 
-tech-impl §24's hybrid. The model extracts *expressions* — `"jövő kedden"`, `"next Tuesday"`, `"délután"` —
+tech-impl §24's hybrid. The model extracts _expressions_ — `"jövő kedden"`, `"next Tuesday"`, `"délután"` —
 and the deterministic resolver in `packages/conversation-engine/src/dates.ts` converts them, using
 `@bam/availability-engine`'s `zone.ts`.
 
@@ -191,7 +191,7 @@ The absolute date is shown on screen before any write (PRD §10.2). The confirma
 
 # 8. Deterministic text, model-free
 
-tech-impl §20: *prefer deterministic template responses for common booking steps.* `templates.ts` returns a
+tech-impl §20: _prefer deterministic template responses for common booking steps._ `templates.ts` returns a
 **message key and parameters**, not a rendered sentence.
 
 Two things follow. Localization stays in the next-intl catalogs where the rest of the product's language
@@ -252,7 +252,7 @@ tech-impl §28 is explicit that the conversational interface lives inside the no
 on a page of its own, and `booking-flow.tsx` is already built the way that requires: one route, one `Step`
 state machine, one owner for the hold's whole life.
 
-The assistant becomes a panel within it that *drives* those same steps. A customer can ask for a slot, then
+The assistant becomes a panel within it that _drives_ those same steps. A customer can ask for a slot, then
 tap a different one; can start by clicking a service and finish by typing. Two parallel booking journeys that
 each own a hold is precisely what the single-route decision was made to avoid.
 
@@ -266,23 +266,23 @@ explicitly confirmed" a structural claim rather than a prompt instruction.
 
 Delivered and green (`pnpm lint && pnpm check-types && pnpm test`, 23/23 turbo tasks):
 
-| Area | Files |
-|---|---|
-| Schema | `packages/db/prisma/schema.prisma` + migration `20260810175159_conversations_and_usage_metering` — `conversation_sessions`, `conversation_messages`, `conversation_pending_actions`, `voice_interactions`, `usage_events`, `usage_aggregates` and eight enums |
-| Contracts | `packages/contracts/src/conversation.ts` (envelope, per-intent parameters, `parseCommand`), `usage.ts` (`PLAN_QUOTAS`, `quotaFor`, `isWithinQuota`, `usagePeriodOf`), nine new `ErrorCodes` |
-| Engine | `packages/conversation-engine/` — `machine.ts`, `pending.ts`, `dates.ts`, `templates.ts`, `turns.ts` |
-| AI | `packages/ai/` — `types.ts`, `client.ts`, `interpreter.ts`, `transcription.ts`, `composer.ts`, `prompt.ts`, `pricing.ts`, `fake.ts` |
-| API | `apps/api/src/modules/public/conversation.{routes,schemas,service,repository,tools}.ts`, `audio.ts`, `apps/api/src/modules/usage/` |
-| Worker | `apps/worker/src/conversations/conversation.sweeper.ts` |
-| Web | `apps/web/src/lib/conversation-client.ts`, `components/conversation-panel.tsx`, `components/push-to-talk-button.tsx`, the `conversation` namespace in both message catalogues |
-| Tests | `packages/{contracts,conversation-engine,ai}/src/*.test.ts`, `apps/api/src/{conversation,voice,usage}.test.ts`, `apps/worker/src/conversations/conversation.sweeper.test.ts` |
+| Area      | Files                                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema    | `packages/db/prisma/schema.prisma` + migration `20260810175159_conversations_and_usage_metering` — `conversation_sessions`, `conversation_messages`, `conversation_pending_actions`, `voice_interactions`, `usage_events`, `usage_aggregates` and eight enums |
+| Contracts | `packages/contracts/src/conversation.ts` (envelope, per-intent parameters, `parseCommand`), `usage.ts` (`PLAN_QUOTAS`, `quotaFor`, `isWithinQuota`, `usagePeriodOf`), nine new `ErrorCodes`                                                                   |
+| Engine    | `packages/conversation-engine/` — `machine.ts`, `pending.ts`, `dates.ts`, `templates.ts`, `turns.ts`                                                                                                                                                          |
+| AI        | `packages/ai/` — `types.ts`, `client.ts`, `interpreter.ts`, `transcription.ts`, `composer.ts`, `prompt.ts`, `pricing.ts`, `fake.ts`                                                                                                                           |
+| API       | `apps/api/src/modules/public/conversation.{routes,schemas,service,repository,tools}.ts`, `audio.ts`, `apps/api/src/modules/usage/`                                                                                                                            |
+| Worker    | `apps/worker/src/conversations/conversation.sweeper.ts`                                                                                                                                                                                                       |
+| Web       | `apps/web/src/lib/conversation-client.ts`, `components/conversation-panel.tsx`, `components/push-to-talk-button.tsx`, the `conversation` namespace in both message catalogues                                                                                 |
+| Tests     | `packages/{contracts,conversation-engine,ai}/src/*.test.ts`, `apps/api/src/{conversation,voice,usage}.test.ts`, `apps/worker/src/conversations/conversation.sweeper.test.ts`                                                                                  |
 
 ## 12.1 Two things found while building it
 
 **`updateMany` cannot write a relation, and TypeScript will not tell you.** The
 repository's `update` originally took `Prisma.ConversationSessionUpdateInput` and cast to the `many`
 variant. `booking: { connect: … }` compiled and failed at runtime with "Unknown argument `booking`".
-The fix is to *name the type the query actually accepts* —
+The fix is to _name the type the query actually accepts_ —
 `ConversationSessionUncheckedUpdateManyInput` — which turns that class of mistake into a compile error
 and means a foreign key is set as `bookingId`, which is what the column is called anyway.
 
@@ -290,7 +290,7 @@ and means a foreign key is set as `bookingId`, which is what the column is calle
 `FakeIntentInterpreter` consumed its queue only when more than one answer remained, so the first
 envelope was replayed forever. Twelve integration tests passed while testing one turn. It now shifts
 on every call and repeats only once the queue is empty. Worth remembering because nothing about the
-failure looked like a test-harness bug: every assertion was about the *product*, and the product was
+failure looked like a test-harness bug: every assertion was about the _product_, and the product was
 fine.
 
 ---

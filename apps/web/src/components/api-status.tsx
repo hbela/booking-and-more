@@ -1,11 +1,11 @@
 "use client";
 
+import { API_BASE_URL } from "@/lib/api-origin";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import type { ReadinessResponse } from "@bam/contracts";
 import { Badge } from "./ui/badge";
-
-const API_BASE_URL = process.env["NEXT_PUBLIC_API_BASE_URL"] ?? "http://localhost:3001";
 
 /**
  * Live readiness of the Fastify API.
@@ -41,7 +41,10 @@ export function ApiStatus(): React.ReactElement {
       className="border-line bg-surface rounded-xl border p-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="api-status-heading" className="text-ink text-sm font-semibold tracking-wide uppercase">
+        <h2
+          id="api-status-heading"
+          className="text-ink text-sm font-semibold tracking-wide uppercase"
+        >
           {t("heading")}
         </h2>
         {/* The badge carries a word, never a bare coloured dot: colour alone

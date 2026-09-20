@@ -1,3 +1,5 @@
+import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
+const testPii = createCustomerPii("11".repeat(32), "22".repeat(32));
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { createLogger } from "@bam/observability";
@@ -63,6 +65,7 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
 
   beforeEach(async () => {
     prisma ??= createPrismaClient({ databaseUrl: databaseUrl! });
+    bindCustomerPii(prisma, testPii);
 
     // The dispatcher claims across every tenant — it is a worker, not a
     // request — so a stray event from an earlier test lands in this one's
@@ -106,8 +109,8 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
         startAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000),
         endAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000 + 30 * 60 * 1_000),
         status: "CONFIRMED",
-        customerNameSnapshot: "Nagy Péter",
-        customerEmailSnapshot: "peter@example.com",
+        customerNameSnapshot: testPii.seal("Nagy Péter"),
+        customerEmailSnapshot: testPii.seal("peter@example.com"),
         serviceNameSnapshot: "Cleaning",
       },
     });

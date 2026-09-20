@@ -1,3 +1,4 @@
+import { customerPiiFor, type CustomerPii } from "@bam/crypto";
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import type { FastifyRequest } from "fastify";
@@ -40,6 +41,7 @@ import {
  * for the whole page; every other caller passes nothing and gets null.
  */
 export function toBookingResponse(
+  pii: CustomerPii,
   booking: BookingWithRelations,
   outsideSchedule: UncoveredReasonCode | null = null,
 ): BookingResponse {
@@ -57,9 +59,9 @@ export function toBookingResponse(
     customerId: booking.customerId,
     startAt: booking.startAt.toISOString(),
     endAt: booking.endAt.toISOString(),
-    customerName: booking.customerNameSnapshot,
-    customerEmail: booking.customerEmailSnapshot,
-    customerPhone: booking.customerPhoneSnapshot,
+    customerName: pii.open(booking.customerNameSnapshot),
+    customerEmail: pii.openNullable(booking.customerEmailSnapshot),
+    customerPhone: pii.openNullable(booking.customerPhoneSnapshot),
     serviceName: booking.serviceNameSnapshot,
     priceMinor: booking.priceMinorSnapshot,
     currency: booking.currencySnapshot,
@@ -99,6 +101,10 @@ export function auditContextOf(request: FastifyRequest): AuditContext {
  * the specific row.
  */
 export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
+  const serializeBooking = (
+    booking: BookingWithRelations,
+    outsideSchedule: UncoveredReasonCode | null = null,
+  ) => toBookingResponse(customerPiiFor(app.prisma), booking, outsideSchedule);
   const service = new BookingService(app.prisma);
   // Read-only and stateless, so a second instance beside the availability
   // module's own costs nothing and saves threading that module's service in.
@@ -217,8 +223,11 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
         now: new Date(),
       });
 
-      return pageOf(rows, query.limit, (row) => row.startAt.toISOString(), (row) =>
-        toBookingResponse(row, stranded.get(row.id) ?? null),
+      return pageOf(
+        rows,
+        query.limit,
+        (row) => row.startAt.toISOString(),
+        (row) => serializeBooking(row, stranded.get(row.id) ?? null),
       );
     },
   );
@@ -234,7 +243,7 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: bookingResponseSchema, ...commonErrorResponses },
       },
     },
-    async (request) => toBookingResponse(await loadForRead(request, request.params.bookingId)),
+    async (request) => serializeBooking(await loadForRead(request, request.params.bookingId)),
   );
 
   // --- Create ---------------------------------------------------------------
@@ -285,7 +294,7 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
           });
 
           return {
-            ...toBookingResponse(created.booking),
+            ...serializeBooking(created.booking),
             managementToken: created.managementToken,
           };
         },
@@ -314,7 +323,7 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => {
       const booking = await loadForManage(request, request.params.bookingId);
 
-      return toBookingResponse(
+      return serializeBooking(
         await service.updateBooking({
           tenantId: request.tenant!.id,
           bookingId: booking.id,
@@ -396,7 +405,7 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
           successStatus: 200,
         },
         async () =>
-          toBookingResponse(
+          serializeBooking(
             await service.confirmReschedule({
               tenantId: request.tenant!.id,
               bookingId: booking.id,
@@ -483,7 +492,7 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
           successStatus: 200,
         },
         async () =>
-          toBookingResponse(
+          serializeBooking(
             await service.confirmCancellation({
               tenantId: request.tenant!.id,
               bookingId: booking.id,

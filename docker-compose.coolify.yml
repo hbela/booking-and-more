@@ -34,6 +34,11 @@ name: booking-and-more
 # every process in this stack. That is what makes mapping form safe now.
 # ---------------------------------------------------------------------------
 x-app-environment: &app-environment
+  CUSTOMER_PII_ENCRYPTION_KEY: ${CUSTOMER_PII_ENCRYPTION_KEY:?set CUSTOMER_PII_ENCRYPTION_KEY}
+  CUSTOMER_PII_BLIND_INDEX_KEY: ${CUSTOMER_PII_BLIND_INDEX_KEY:?set CUSTOMER_PII_BLIND_INDEX_KEY}
+  LAUNCH_ACCESS_MODE: ${LAUNCH_ACCESS_MODE:-invite_only}
+  LAUNCH_OWNER_EMAIL_ALLOWLIST: ${LAUNCH_OWNER_EMAIL_ALLOWLIST:-}
+  BILLING_MODE: ${BILLING_MODE:-test}
   NODE_ENV: production
   LOG_LEVEL: ${LOG_LEVEL:-info}
 

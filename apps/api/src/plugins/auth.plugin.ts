@@ -24,6 +24,8 @@ export interface AuthPluginOptions {
   baseUrl: string;
   appUrl: string;
   secureCookies: boolean;
+  sendVerificationEmail?:
+    ((input: { user: { email: string }; url: string }) => Promise<void>) | undefined;
   google?: { clientId: string; clientSecret: string } | undefined;
 }
 
@@ -53,6 +55,7 @@ const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (app, options) =
     appUrl: options.appUrl,
     secureCookies: options.secureCookies,
     google: options.google,
+    sendVerificationEmail: options.sendVerificationEmail,
   });
 
   app.decorate("auth", auth);

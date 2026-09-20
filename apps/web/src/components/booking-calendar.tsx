@@ -99,9 +99,7 @@ export function BookingCalendar({
     if (!wantsFocus.current || focusedDay === null) return;
     wantsFocus.current = false;
 
-    const target = gridRef.current?.querySelector<HTMLButtonElement>(
-      `[data-date="${focusedDay}"]`,
-    );
+    const target = gridRef.current?.querySelector<HTMLButtonElement>(`[data-date="${focusedDay}"]`);
     target?.focus();
   }, [focusedDay, month]);
 
@@ -162,7 +160,9 @@ export function BookingCalendar({
         aria-busy={busy}
         className="w-full min-h-[19rem] table-fixed border-collapse"
       >
-        <caption className="sr-only">{t("calendarCaption", { month: formatMonth(month, locale) })}</caption>
+        <caption className="sr-only">
+          {t("calendarCaption", { month: formatMonth(month, locale) })}
+        </caption>
         <thead>
           <tr>
             {(weeks[0] ?? []).map((cell) => (

@@ -72,6 +72,13 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      CUSTOMER_PII_ENCRYPTION_KEY: ${CUSTOMER_PII_ENCRYPTION_KEY:?set CUSTOMER_PII_ENCRYPTION_KEY}
+      CUSTOMER_PII_BLIND_INDEX_KEY: ${CUSTOMER_PII_BLIND_INDEX_KEY:?set CUSTOMER_PII_BLIND_INDEX_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      LAUNCH_ACCESS_MODE: ${LAUNCH_ACCESS_MODE:-invite_only}
+      LAUNCH_OWNER_EMAIL_ALLOWLIST: ${LAUNCH_OWNER_EMAIL_ALLOWLIST:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PORT: 3001
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
@@ -84,9 +91,9 @@ services:
       CONVERSATION_TTL_MINUTES: ${CONVERSATION_TTL_MINUTES:-1440}
       CONVERSATION_MAX_TURNS: ${CONVERSATION_MAX_TURNS:-40}
       PENDING_ACTION_TTL_SECONDS: ${PENDING_ACTION_TTL_SECONDS:-300}
-      # REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
 
   worker:
     build:
@@ -98,12 +105,19 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      CUSTOMER_PII_ENCRYPTION_KEY: ${CUSTOMER_PII_ENCRYPTION_KEY:?set CUSTOMER_PII_ENCRYPTION_KEY}
+      CUSTOMER_PII_BLIND_INDEX_KEY: ${CUSTOMER_PII_BLIND_INDEX_KEY:?set CUSTOMER_PII_BLIND_INDEX_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      LAUNCH_ACCESS_MODE: ${LAUNCH_ACCESS_MODE:-invite_only}
+      LAUNCH_OWNER_EMAIL_ALLOWLIST: ${LAUNCH_OWNER_EMAIL_ALLOWLIST:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-booking_and_more}?schema=public
       SENTRY_DSN: ${SENTRY_DSN:-}
-      # REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
+      REDIS_URL: redis://default:${REDIS_PASSWORD}@redis:6379
 
   web:
     build:
@@ -120,7 +134,7 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
       NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres-data:

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createStripePaymentLink, resetStripeForTests } from "./stripe.client.js";
 
-const { createLink } = vi.hoisted(() => ({ createLink: vi.fn() }));
+const { createLink, retrievePrice } = vi.hoisted(() => ({
+  createLink: vi.fn(),
+  retrievePrice: vi.fn(),
+}));
 
 vi.mock("stripe", () => ({
   default: class {
+    prices = { retrieve: retrievePrice };
     paymentLinks = { create: createLink };
   },
 }));
@@ -12,10 +16,74 @@ vi.mock("stripe", () => ({
 describe("AAM payment links", () => {
   beforeEach(() => {
     resetStripeForTests();
+    retrievePrice.mockResolvedValue({
+      livemode: false,
+      active: true,
+      currency: "huf",
+      unit_amount: 2499000,
+      recurring: { interval: "month", interval_count: 1 },
+    });
     createLink.mockReset();
     createLink.mockResolvedValue({ id: "plink_test", url: "https://buy.stripe.com/test" });
   });
 
+  it("refuses a price from another billing mode before creating a link", async () => {
+    retrievePrice.mockResolvedValue({ livemode: true });
+    await expect(
+      createStripePaymentLink({ secretKey: "sk_test_mock" })({
+        priceId: "price_wrong",
+        tenantId: "tenant_test",
+        plan: "PROFESSIONAL",
+        trialPeriodDays: null,
+        returnUrl: "https://example.test",
+      }),
+    ).rejects.toThrow("configured mode");
+    expect(createLink).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["STARTER", 999000],
+    ["PROFESSIONAL", 2499000],
+  ])("accepts the correct Stripe minor-unit amount for %s", async (plan, amount) => {
+    retrievePrice.mockResolvedValue({
+      livemode: false,
+      active: true,
+      currency: "huf",
+      unit_amount: amount,
+      recurring: { interval: "month", interval_count: 1 },
+    });
+    await createStripePaymentLink({ secretKey: "sk_test_mock" })({
+      priceId: "price_test",
+      tenantId: "tenant_test",
+      plan: String(plan),
+      trialPeriodDays: null,
+      returnUrl: "https://example.test",
+    });
+    expect(createLink).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["STARTER", 9990],
+    ["PROFESSIONAL", 24990],
+  ])("rejects a price 100 times too low for %s", async (plan, amount) => {
+    retrievePrice.mockResolvedValue({
+      livemode: false,
+      active: true,
+      currency: "huf",
+      unit_amount: amount,
+      recurring: { interval: "month", interval_count: 1 },
+    });
+    await expect(
+      createStripePaymentLink({ secretKey: "sk_test_mock" })({
+        priceId: "price_test",
+        tenantId: "tenant_test",
+        plan: String(plan),
+        trialPeriodDays: null,
+        returnUrl: "https://example.test",
+      }),
+    ).rejects.toThrow("monthly catalogue");
+    expect(createLink).not.toHaveBeenCalled();
+  });
   it.each([null, 30])("does not calculate VAT with trial days %s", async (trialPeriodDays) => {
     await createStripePaymentLink({ secretKey: "sk_test_mock" })({
       priceId: "price_test",
