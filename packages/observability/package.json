@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./sentry-scrubbing": {
+      "types": "./dist/sentry-scrubbing.d.ts",
+      "default": "./dist/sentry-scrubbing.js"
     }
   },
   "files": [
@@ -25,7 +29,7 @@
   },
   "dependencies": {
     "@bam/config": "workspace:*",
-    "@sentry/node": "^10.68.0",
+    "@sentry/node": "^10.75.1",
     "pino": "^10.3.1"
   },
   "devDependencies": {

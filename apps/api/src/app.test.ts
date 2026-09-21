@@ -218,6 +218,8 @@ describe("api", () => {
         "idempotency-key",
         "x-conversation-token",
         "x-request-id",
+        "sentry-trace",
+        "baggage",
         TENANT_HEADER,
       ];
 

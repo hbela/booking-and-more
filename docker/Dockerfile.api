@@ -81,7 +81,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3001/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["node", "--import", "./apps/api/dist/instrument.js", "apps/api/dist/server.js"]
 
 # --- worker runtime -----------------------------------------------------------
 #
@@ -109,7 +109,7 @@ COPY --from=build --chown=node:node /app/apps/worker/node_modules ./apps/worker/
 HEALTHCHECK --interval=60s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "import('./apps/worker/dist/heartbeat.js').then(m=>process.exit(m.heartbeatHealthy()?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "apps/worker/dist/worker.js"]
+CMD ["node", "--import", "./apps/worker/dist/instrument.js", "apps/worker/dist/worker.js"]
 
 # Preserve the documented no-target build command: the default final image is
 # still the API image.

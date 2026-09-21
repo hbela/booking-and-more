@@ -216,6 +216,8 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
       "Idempotency-Key",
       "X-Conversation-Token",
       "X-Request-Id",
+      "sentry-trace",
+      "baggage",
       TENANT_HEADER,
     ],
     exposedHeaders: ["X-Request-Id"],

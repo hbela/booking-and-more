@@ -1,9 +1,10 @@
+import { env } from "./instrument.js";
 import { writeHeartbeat, clearHeartbeat } from "./heartbeat.js";
 import { reportProcessingHealth } from "./processing-health.js";
 import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
-import { hasBillingo, hasRedis, loadEnvOrExit } from "@bam/config";
+import { hasBillingo, hasRedis } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
-import { createLogger, flushSentry, initSentry } from "@bam/observability";
+import { createLogger, flushSentry } from "@bam/observability";
 // PARKED — Epic 6 part 1 (see the block in `attachQueues` below).
 // import { hasGoogleCalendar } from "@bam/config";
 // import { parseEncryptionKey } from "@bam/crypto";
@@ -52,16 +53,6 @@ import { startConversationSweeper } from "./conversations/conversation.sweeper.j
  *   - exiting looks like a crash to a supervisor and produces a restart loop;
  *   - pretending to be healthy hides the fact that no jobs are being processed.
  */
-
-const env = loadEnvOrExit();
-
-initSentry({
-  dsn: env.SENTRY_DSN,
-  environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
-  release: env.SENTRY_RELEASE,
-  tracesSampleRate: env.NODE_ENV === "production" ? 0.1 : 1,
-  service: "worker",
-});
 
 const log = createLogger({
   service: "worker",

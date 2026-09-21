@@ -4,7 +4,7 @@ const API_ORIGIN = new URL(API_BASE_URL).origin;
 export function buildContentSecurityPolicy(nonce: string, production: boolean): string {
   return [
     "default-src 'self'",
-    "worker-src 'self'",
+    "worker-src 'self' blob:",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${production ? "" : " 'unsafe-eval'"}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",

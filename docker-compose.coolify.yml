@@ -258,6 +258,11 @@ services:
         # API_BASE_URL and is separate only because Next.js requires the
         # NEXT_PUBLIC_ prefix to expose it to the browser.
         NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
+        NEXT_PUBLIC_SENTRY_DSN: ${WEB_SENTRY_DSN:-}
+        NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+        NEXT_PUBLIC_SENTRY_RELEASE: ${SOURCE_COMMIT:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: booking-and-more-web
     restart: unless-stopped
     # The site can boot independently; tenant manifests fetch public branding
     # from the API when requested and report temporary failures separately.
@@ -265,6 +270,9 @@ services:
       NODE_ENV: production
       APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL to the web app's public https origin}
       NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL to the API's public https origin}
+      SENTRY_DSN: ${WEB_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_RELEASE: ${SOURCE_COMMIT:-}
       # As on the API above: this is what earns the web app a domain and a
       # Traefik route to container port 3000. Edit the generated value in
       # Coolify to your own host, and make it agree with APP_BASE_URL exactly —

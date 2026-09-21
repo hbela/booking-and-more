@@ -17,6 +17,7 @@
   "dependencies": {
     "@bam/availability-engine": "workspace:*",
     "@bam/contracts": "workspace:*",
+    "@sentry/nextjs": "^10.75.1",
     "@tanstack/react-query": "^5.101.4",
     "better-auth": "^1.6.25",
     "clsx": "^2.1.1",
@@ -27,7 +28,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwind-merge": "^3.6.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@bam/observability": "workspace:*"
   },
   "devDependencies": {
     "@bam/eslint-config": "workspace:*",

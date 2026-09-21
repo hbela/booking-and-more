@@ -1,0 +1,12 @@
+# Optional build-only secret overlay for source-map uploads.
+# docker compose -f docker-compose.coolify.yml -f docker-compose.sentry.yml ...
+# Supply SENTRY_AUTH_TOKEN in the build process environment, never a build ARG.
+services:
+  web:
+    build:
+      secrets:
+        - SENTRY_AUTH_TOKEN
+
+secrets:
+  SENTRY_AUTH_TOKEN:
+    environment: SENTRY_AUTH_TOKEN

@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { getRequestContext } from "./request-context.js";
 import { redactSecretBearingValues } from "./url-redaction.js";
+import { scrubTelemetry } from "./sentry-scrubbing.js";
 
 export interface InitSentryOptions {
   dsn?: string | undefined;
@@ -41,9 +42,11 @@ export function initSentry(options: InitSentryOptions): boolean {
     sendDefaultPii: false,
 
     initialScope: { tags: { service } },
+    beforeSendTransaction: scrubTelemetry,
+    beforeBreadcrumb: scrubTelemetry,
 
     beforeSend(event) {
-      event = redactSecretBearingValues(event);
+      event = scrubTelemetry(redactSecretBearingValues(event));
       const context = getRequestContext();
       if (!context) return event;
 
