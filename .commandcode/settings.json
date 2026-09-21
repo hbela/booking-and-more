@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(corepack pnpm test 2>&1; echo \"---TEST EXIT: $LASTEXITCODE---\")",
+      "Shell(Select-String:*)",
+      "Shell(Select-Object:*)",
+      "powershell"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}

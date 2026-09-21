@@ -1,5 +1,9 @@
 # Production deployment tasklist
 
+Staging R2 backup setup and manual restore evidence are recorded in
+[staging backup and recovery](staging-backup-recovery.md). Scheduling and independent
+secret recovery are still pending; staging evidence does not complete production gates.
+
 **Scope update (2026-09-20):** production will start with a new empty database,
 while existing staging data is preserved. Follow the
 [environment decision](production-environment-decision.md) for setup and promotion.

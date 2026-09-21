@@ -37,7 +37,7 @@ class BackupTests(unittest.TestCase):
                 executable.chmod(0o700)
             # Isolate the lock path too: these tests never touch the operator's lock.
             script = Path(__file__).with_name("backup.sh").read_text()
-            script = script.replace("/run/lock/bam-backup.lock", str(root / "backup.lock"))
+            script = script.replace("/run/lock/${BACKUP_TAG}.lock", str(root / "backup.lock"))
             target = root / "backup.sh"
             target.write_text(script)
             env = {
@@ -56,7 +56,7 @@ class BackupTests(unittest.TestCase):
     def test_success_promotes_snapshot_before_retention_and_heartbeat(self):
         code, calls = self.run_backup()
         self.assertEqual(code, 0)
-        self.assertIn("--tag bam-pending-", calls)
+        self.assertIn("--tag bam-production-pending-", calls)
         self.assertIn("--set bam-production", calls)
         self.assertLess(calls.index("restic tag"), calls.index("restic forget"))
         self.assertLess(calls.index("restic forget"), calls.index("curl"))
@@ -68,6 +68,13 @@ class BackupTests(unittest.TestCase):
                 self.assertNotEqual(code, 0)
                 self.assertNotIn("docker exec", calls)
                 self.assertNotIn("curl", calls)
+
+    def test_staging_uses_its_own_snapshot_tag(self):
+        code, calls = self.run_backup(BACKUP_TAG="bam-staging")
+        self.assertEqual(code, 0)
+        self.assertIn("--set bam-staging", calls)
+        self.assertIn("restic forget --tag bam-staging", calls)
+        self.assertNotIn("bam-production", calls)
 
     def test_failed_dump_never_promotes_snapshot(self):
         code, calls = self.run_backup(MOCK_DUMP_EXIT="1")

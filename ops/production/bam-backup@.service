@@ -1,0 +1,15 @@
+[Unit]
+Description=Encrypted off-host Booking and More %i database backup
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/bam/%i-backup.conf
+LoadCredential=restic-password:/etc/bam/%i-restic.password
+LoadCredential=r2-access-key:/etc/bam/%i-r2-access-key
+LoadCredential=r2-secret-key:/etc/bam/%i-r2-secret-key
+LoadCredential=backup-monitor-url:/etc/bam/%i-backup-monitor-url
+ExecStart=/usr/bin/python3 /opt/bam/ops/production/backup-service.py
+TimeoutStartSec=25min
+UMask=0077

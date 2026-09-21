@@ -353,6 +353,8 @@ const baseEnvSchema = z.object({
 
   /** Unset is valid — Sentry is simply not initialised. */
   SENTRY_DSN: z.url().optional(),
+  SENTRY_ENVIRONMENT: z.enum(["development", "test", "staging", "production"]).optional(),
+  SENTRY_RELEASE: z.string().min(1).optional(),
 
   // --- Booking defaults (tech-impl §42) ------------------------------------
   BOOKING_HOLD_DURATION_SECONDS: z.coerce.number().int().positive().default(300),

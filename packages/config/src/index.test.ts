@@ -15,6 +15,13 @@ const load = (overrides: NodeJS.ProcessEnv = {}) =>
   loadEnv({ source: { ...valid, ...overrides }, loadDotenvFile: false });
 
 describe("loadEnv", () => {
+  it("labels Sentry independently from the Node runtime environment", () => {
+    const env = load({ SENTRY_ENVIRONMENT: "staging", SENTRY_RELEASE: "release-sha" });
+    expect(env.NODE_ENV).toBe("test");
+    expect(env.SENTRY_ENVIRONMENT).toBe("staging");
+    expect(env.SENTRY_RELEASE).toBe("release-sha");
+  });
+
   it("accepts a minimal valid environment and applies defaults", () => {
     const env = load();
 
