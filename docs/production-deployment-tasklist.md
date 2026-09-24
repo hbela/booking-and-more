@@ -2,7 +2,7 @@
 
 Staging R2 backup setup and manual restore evidence are recorded in
 [staging backup and recovery](staging-backup-recovery.md). Scheduling and independent
-secret recovery are still pending; staging evidence does not complete production gates.
+secret recovery have passed on staging; staging evidence does not complete production gates.
 
 **Scope update (2026-09-20):** production will start with a new empty database,
 while existing staging data is preserved. Follow the
@@ -69,8 +69,10 @@ Do not put credentials, encryption keys or customer details in this checklist.
       validation, within four hours; record elapsed time and evidence.
       [Staging technical drill](staging-recovery-drill-2026-09-24.md) passed on
       2026-09-24 in 78.97 seconds, including application reads, synthetic encrypted
-      data and queue recovery. Full acceptance remains open: independent secrets,
-      configuration/image recovery and HTTPS/browser validation are unverified.
+      data and queue recovery. The vault-sourced rerun passed in 79.21 seconds;
+      Restic/R2 credentials, the authentication secret and both PII keys were verified.
+      Full acceptance remains open: complete configuration, independent image
+      recovery, clean-host provisioning and HTTPS/browser validation are unverified.
 - [ ] Configure and test alerts for web/API availability, stale worker heartbeat,
       overdue/failed work, disk pressure, billing and invoicing failures; exclude customer details.
 

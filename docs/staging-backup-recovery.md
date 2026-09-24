@@ -63,10 +63,13 @@ encrypted customer/booking dump-and-restore checks, booking reads, password
 sign-in/session checks, invalid-key rejection and Redis queue reconstruction passed.
 No external notifications were sent; all temporary resources were removed.
 
-Technical recovery and validation took 78.97 seconds (80.23 including cleanup).
-**Full recovery acceptance remains open:** this exercise reused secrets and images
-from the surviving VPS. Independent secret/configuration retrieval, independent
-image recovery and the intended HTTPS/browser recovery path still need verification.
+The initial run took 78.97 seconds (80.23 including cleanup). A second run used
+Restic/R2 credentials, the authentication secret and both PII keys retrieved from
+the independent KeePassXC vault, and passed in 79.21 seconds (80.50 with cleanup).
+All three application keys matched staging; R2 decryption used no VPS credential files.
+**Full recovery acceptance remains open:** both runs used cached images on the
+existing VPS. Complete configuration, independent image recovery, clean-host
+provisioning and the intended HTTPS/browser path still need verification.
 The original snapshot had no customer or booking rows; synthetic data was added
 only in the isolated copy. Staging data and its running services were unchanged.
 

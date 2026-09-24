@@ -2,10 +2,12 @@
 
 **Status: technical recovery exercised; full server-loss recovery acceptance remains open.**
 The exercise recovered the application from an encrypted off-host database backup
-on the existing VPS. It reused secrets and cached images from the surviving server.
-An independent secret/configuration recovery copy has not yet been identified or tested.
+on the existing VPS. The first run reused secrets and cached images from the
+surviving server. A subsequent run retrieved recovery credentials from the off-VPS
+KeePassXC vault (`Passwords.kdbx`, group `Booking-and-more-Staging`) and passed
+all technical checks. Both runs used cached images on the existing VPS.
 
-Final successful run: `2026-09-24T14:46:39.797760Z`–`14:48:00.026994Z`
+First successful run: `2026-09-24T14:46:39.797760Z`–`14:48:00.026994Z`
 (16:46:39–16:48:00 Budapest time). Technical recovery and validation took **78.97
 seconds**; including cleanup, **80.23 seconds**. This timer excludes preparation,
 earlier attempts, independent secret retrieval and new-host/image provisioning;
@@ -15,7 +17,43 @@ Credential-free raw report on the VPS:
 `/var/backups/bam-recovery-drill/bam-recovery-20260924144639/report.json`.
 All drill-owned containers, volumes and networks were removed and absence verified.
 
-## Source and isolation
+## Vault-sourced rerun
+
+The rerun at `2026-09-24T15:33:58.900796Z`–`15:35:19.401293Z`
+(17:33:58–17:35:19 Budapest) passed in **79.21 seconds**, or **80.50 seconds**
+including cleanup. This timing excludes vault retrieval, preparation and clean-host
+provisioning, so it does not establish the full four-hour recovery target.
+
+- Retrieved Restic password, both R2 credentials and the repository address from
+  KeePassXC; the address was in the configuration entry's Notes field.
+- Independently opened R2 and decrypted the selected snapshot's 161,706-byte
+  PostgreSQL custom-format dump without reading VPS credential files.
+- Retrieved `BETTER_AUTH_SECRET`, `CUSTOMER_PII_ENCRYPTION_KEY` and
+  `CUSTOMER_PII_BLIND_INDEX_KEY` from the vault. All three matched the deployed
+  staging values; the restored applications used those vault-sourced values.
+- Repeated every technical application, encryption, authentication and queue check
+  listed below successfully. No external notifications were sent.
+- All five original staging services remained healthy, their images matched the
+  rerun's source images, and the backup timer remained active. No drill containers,
+  volumes or networks remained after cleanup.
+- The vault was read only. Secrets travelled over SSH stdin and process
+  environments; temporary local recovery values were protected with Windows DPAPI.
+
+Credential-free report:
+`/var/backups/bam-recovery-drill/bam-recovery-20260924153358/report.json`.
+The rerun used release `c2d7b5190f5703a6346dc0680fb67928df243cc1`:
+
+| Service | Image ID used in vault-sourced rerun                                      |
+| ------- | ------------------------------------------------------------------------- |
+| API     | `sha256:cda502f9a37ee3bfef28a97a6b64a0a5f8e9494ee44949a3eddd42d3c2013bba` |
+| Worker  | `sha256:08cd937102c6ddc8f498789d9ef4ca047723993706942322146afba714d72341` |
+| Web     | `sha256:2bd43dfc93fb0c970c171fd23769cc4db9b20cb66864c88949d1e9a4cf1f5d22` |
+
+PostgreSQL and Redis images and the selected R2 snapshot were unchanged from the
+first run. Application configuration used the explicit isolated overrides below;
+complete production configuration recovery remains unverified.
+
+## First run: source and isolation
 
 - Staging release reported by the running API: `8be3b269b0c20b1d15ad4f1b838f151f6b37d875`.
 - Selected recoverable Restic snapshot:
@@ -80,11 +118,12 @@ notification proved queue reconstruction without invoking its email delivery.
 
 ## Remaining full-recovery acceptance
 
-1. Identify the operator's independently stored recovery copy of the Restic password,
-   R2 access credentials, authentication secret, both distinct PII keys, and application
-   configuration. Retrieve it without relying on the original VPS. The local root
-   `.env` contains an authentication-secret entry but no PII-key or Restic/R2 entries;
-   it has not been validated as a staging recovery source.
+Storage credentials, repository address, authentication secret and both distinct
+PII keys have now been retrieved from KeePassXC and validated in the rerun.
+
+1. Verify complete application/deployment configuration can be reconstructed
+   independently. The rerun used deliberately limited isolated configuration;
+   it did not recover the intended public origins, routing or external integrations.
 2. Prove the selected application images can be recovered from an independent
    registry/artifact source or rebuilt from the recorded revision. This exercise
    used images already cached on the VPS.
