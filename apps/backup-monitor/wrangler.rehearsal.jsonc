@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bam-backup-monitor-rehearsal",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": true,
+  "triggers": { "crons": [] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bam-backup-monitor-rehearsal",
+      "database_id": "6e68c986-4b16-4434-aaff-1bb4d42a752e",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "observability": { "enabled": true },
+  "vars": { "MONITOR_IDS": "bam-test" },
+}

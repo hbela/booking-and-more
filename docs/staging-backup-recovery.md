@@ -3,8 +3,13 @@
 Status: 2026-09-21. Chosen path: VPS systemd timer → PostgreSQL custom-format
 dump → encrypted Restic repository → Cloudflare R2.
 
-Monitoring choice: UptimeRobot for backup heartbeats and availability, Sentry for
-application errors. Follow [monitoring setup](monitoring-setup.md) to connect them.
+Update 2026-09-24: SSH inspection confirms the staging timer is enabled and active.
+Cloudflare and Resend monitoring is deployed, email rehearsals passed, and a real
+manual backup reported success. Both the 15:00 and 15:30 Budapest scheduled runs on
+2026-09-24 succeeded in systemd and D1. The operator deleted the Sentry backup Cron
+monitor, and the VPS legacy URL credential was emptied after preserving its rollback
+copy. The staging monitoring cutover is complete. See [custom backup monitoring](backup-monitor.md)
+for evidence and rollback. Sentry remains in use for application errors.
 
 ## Prepared infrastructure
 
@@ -12,12 +17,12 @@ application errors. Follow [monitoring setup](monitoring-setup.md) to connect th
 - Separate staging repository prefix: `booking-and-more/staging`.
 - Staging Compose project: `zcskco80804ogk4gskwoso40`.
 - Environment-specific service: `bam-backup@staging.service`.
-- Environment-specific timer: `bam-backup@staging.timer` (currently **disabled**).
+- Environment-specific timer: `bam-backup@staging.timer` (**enabled and active**, verified 2026-09-24).
 - Non-secret configuration: `/etc/bam/staging-backup.conf`.
 - Root-only credential files: `/etc/bam/staging-restic.password`,
   `/etc/bam/staging-r2-access-key`, `/etc/bam/staging-r2-secret-key`.
-- Required monitor credential, not yet supplied:
-  `/etc/bam/staging-backup-monitor-url`.
+- Legacy monitor credential: `/etc/bam/staging-backup-monitor-url` remains present
+  but empty after cutover; its protected rollback copy is recorded in the monitor runbook.
 
 The service loads credentials using systemd `LoadCredential`; the Python launcher
 passes them to Restic and the monitor in memory. Credentials are not committed to
@@ -49,7 +54,27 @@ There were no customer fields to decrypt. Repeat with representative staging
 bookings and recover keys from their independent backup before declaring the
 encryption recovery and full service recovery gates passed.
 
-## Finish configuration and enable scheduling
+## Application recovery drill — 2026-09-24
+
+The [staging application recovery drill](staging-recovery-drill-2026-09-24.md)
+restored the 14:30 UTC R2 snapshot into isolated PostgreSQL/Redis volumes and
+started the deployed API, web and worker images. Baseline counts matched. Synthetic
+encrypted customer/booking dump-and-restore checks, booking reads, password
+sign-in/session checks, invalid-key rejection and Redis queue reconstruction passed.
+No external notifications were sent; all temporary resources were removed.
+
+Technical recovery and validation took 78.97 seconds (80.23 including cleanup).
+**Full recovery acceptance remains open:** this exercise reused secrets and images
+from the surviving VPS. Independent secret/configuration retrieval, independent
+image recovery and the intended HTTPS/browser recovery path still need verification.
+The original snapshot had no customer or booking rows; synthetic data was added
+only in the isolated copy. Staging data and its running services were unchanged.
+
+## Original activation checklist and ongoing recovery checks
+
+Scheduling is already active as of 2026-09-24; do not repeat initialization or reset
+the repository. For monitoring changes use the [cutover runbook](backup-monitor.md).
+The historical checklist below also records outstanding recovery responsibilities.
 
 1. Create an external monitor that alerts after 50 minutes without a successful
    backup. Store its heartbeat URL in the root-readable monitor credential file.

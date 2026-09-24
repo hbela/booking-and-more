@@ -1,7 +1,9 @@
-# Sentry and UptimeRobot monitoring
+# Application and backup monitoring
 
-Selected on 2026-09-21. Accounts/monitor destinations are not yet connected or
-verified. Keep staging and production clearly separated.
+Updated 2026-09-24. Sentry handles application monitoring. Backup monitoring is
+handled by a custom Cloudflare Worker with Resend email following the completed
+staging Sentry Cron cutover. UptimeRobot is not required. Keep staging and production separate.
+See [custom backup monitoring](backup-monitor.md) for verified status and rollout gates.
 
 ## Staging account setup
 
@@ -75,35 +77,40 @@ Verify a controlled diagnostic reaches Sentry and contains no customer details,
 authentication cookies or invitation links. Configure issue alerts and recipients
 in Sentry; SDK initialization alone does not establish alert delivery.
 
-Create these UptimeRobot monitors, assign operator alert contacts, and test delivery:
+Configure external availability checks separately from backup monitoring and verify
+operator alert delivery:
 
-| Monitor                 | Type                 | Target / expectation                                                             |
-| ----------------------- | -------------------- | -------------------------------------------------------------------------------- |
-| Staging web             | HTTPS                | `https://app.booking.appointer.hu/api/health`, HTTP 200                          |
-| Staging API             | HTTPS                | `https://api.booking.appointer.hu/health/ready`, HTTP 200                        |
-| Staging database backup | Cron-job / heartbeat | Successful backups every 30 minutes; DOWN/alert after 50 minutes without success |
+| Monitor                 | Type                      | Target / expectation                                                                 |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| Staging web             | HTTPS                     | `https://app.booking.appointer.hu/api/health`, HTTP 200                              |
+| Staging API             | HTTPS                     | `https://api.booking.appointer.hu/health/ready`, HTTP 200                            |
+| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together
 produce an alert before the newest successful backup reaches one hour old.
 Create separate production monitors once the production domains exist.
 
-Store the staging backup heartbeat URL in the root-only file
-`/etc/bam/staging-backup-monitor-url` on the VPS. The prepared systemd service reads
-that credential and calls it only after dump, encrypted upload and retention succeed.
-Do not manually ping it to simulate a successful backup. Then follow
-[staging backup and recovery](staging-backup-recovery.md) to run the service manually,
-confirm receipt, enable its timer and exercise the missing-backup alert.
+The Cloudflare Worker and VPS check-ins are deployed; failure, silence, overrun
+and recovery emails were verified in Gmail on 2026-09-24. A genuine manual backup
+also reported success. Both scheduled runs at 15:00 and 15:30 Budapest time on
+2026-09-24 succeeded in systemd and D1. The operator confirmed deletion of the
+Sentry backup Cron monitor; the VPS legacy URL credential was emptied at 13:51:38 UTC
+after verifying its protected rollback copy. The credential file remains present
+for systemd, and the backup timer remains enabled and active. Cloudflare/Resend is
+authoritative for staging backup monitoring. Routine successful backups do not
+send email. See [custom backup monitoring](backup-monitor.md) for evidence and rollback.
+Do not manually send fabricated success events to the staging monitor.
 
 ## Remaining coverage
 
 - Worker heartbeat freshness is checked by Docker; external delivery of worker-down
   alerts still needs configuration. A green API monitor does not prove worker health.
 - Overdue and failed background work is currently logged as aggregate counts;
-  log warnings do not automatically become Sentry issues or UptimeRobot alerts.
+  log warnings do not automatically become Sentry issues or email alerts.
 - Disk pressure and billing/invoicing failure alert paths need explicit wiring and
   an end-to-end test before the production monitoring gate is complete.
 - Test Sentry scrubbing and delivery, uptime alerts, missing-heartbeat alerts,
   and operator receipt separately; never include patient data in test events.
 
-References: [UptimeRobot heartbeat monitoring](https://uptimerobot.com/help/heartbeat-monitoring/).
+Backup architecture and provider references: [custom backup monitoring](backup-monitor.md).

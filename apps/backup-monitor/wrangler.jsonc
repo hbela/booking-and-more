@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bam-backup-monitor",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": true,
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bam-backup-monitor",
+      "database_id": "4064845b-cc28-4b84-ad71-fcc6d5e6ad50",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "observability": { "enabled": true },
+  "vars": { "MONITOR_IDS": "bam-staging" },
+}

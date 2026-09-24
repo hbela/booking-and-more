@@ -1,0 +1,7 @@
+# Install as /etc/systemd/system/bam-backup@staging.service.d/monitor.conf
+# after the Worker is deployed and synthetic alert tests pass.
+[Service]
+Environment=BACKUP_MONITOR_ENDPOINT=https://bam-backup-monitor.ACCOUNT.workers.dev/v1/check-ins/bam-staging
+LoadCredential=backup-monitor-token:/etc/bam/staging-backup-monitor-token
+# Keep the legacy backup-monitor-url credential during acceptance. Afterward,
+# leave its file empty to stop legacy pings without changing unrelated credentials.

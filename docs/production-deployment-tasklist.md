@@ -41,7 +41,7 @@ The application owner is the launch operator and incident contact.
 
 - [ ] Choose backup storage: existing R2 bucket `booking-for-all-bucket` with
       separate prefix `booking-and-more/production`, or another destination.
-- [ ] Supply the backup monitor heartbeat URL with a 50-minute missing-success deadline.
+- [x] Complete [staging custom backup monitor rollout](backup-monitor.md): Cloudflare/Resend email rehearsal and both scheduled successes (2026-09-24, 15:00 and 15:30 Budapest) verified. Operator confirmed Sentry backup Cron deletion; VPS legacy pings disabled with a protected rollback copy. Staging's half-hourly timer remains active.
 - [ ] Supply up to five approved owner email addresses through private configuration.
 - [ ] Confirm monthly prices of 9,990 and 24,990 HUF and the intended AAM configuration.
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
@@ -67,6 +67,10 @@ Do not put credentials, encryption keys or customer details in this checklist.
       customer email, live payments and invoicing disabled.
 - [ ] Demonstrate complete recovery, including secrets, application startup and data
       validation, within four hours; record elapsed time and evidence.
+      [Staging technical drill](staging-recovery-drill-2026-09-24.md) passed on
+      2026-09-24 in 78.97 seconds, including application reads, synthetic encrypted
+      data and queue recovery. Full acceptance remains open: independent secrets,
+      configuration/image recovery and HTTPS/browser validation are unverified.
 - [ ] Configure and test alerts for web/API availability, stale worker heartbeat,
       overdue/failed work, disk pressure, billing and invoicing failures; exclude customer details.
 

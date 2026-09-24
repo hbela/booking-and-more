@@ -9,12 +9,18 @@ environment = dict(os.environ)
 for setting, filename in (
     ("AWS_ACCESS_KEY_ID", "r2-access-key"),
     ("AWS_SECRET_ACCESS_KEY", "r2-secret-key"),
-    ("BACKUP_MONITOR_URL", "backup-monitor-url"),
 ):
     value = (credentials / filename).read_text().strip()
     if not value:
         raise RuntimeError(f"Missing credential: {filename}")
     environment[setting] = value
+for setting, filename in (
+    ("BACKUP_MONITOR_URL", "backup-monitor-url"),
+    ("BACKUP_MONITOR_TOKEN", "backup-monitor-token"),
+):
+    path = credentials / filename
+    if path.exists():
+        environment[setting] = path.read_text().strip()
 environment["RESTIC_PASSWORD_FILE"] = str(credentials / "restic-password")
 script = str(Path(__file__).with_name("backup.sh"))
 os.execve("/usr/bin/bash", ["bash", script], environment)

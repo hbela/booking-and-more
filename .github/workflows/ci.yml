@@ -98,7 +98,9 @@ jobs:
         run: pnpm audit:prod
 
       - name: Verify backup failure handling
-        run: python3 ops/production/test-backup.py
+        run: |
+          python3 ops/production/test-backup.py
+          python3 ops/production/test-backup-check-in.py
 
       - name: Check formatting
         run: pnpm format:check

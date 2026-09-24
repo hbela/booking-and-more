@@ -1,0 +1,27 @@
+{
+  "name": "@bam/backup-monitor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev:monitor": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@bam/eslint-config": "workspace:*",
+    "@cloudflare/workers-types": "^5.20260924.1",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "miniflare": "^4.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "^4.0.0"
+  }
+}
