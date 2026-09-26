@@ -4,180 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
-    <meta
-      name="description"
-      content="Wellness bemutatóoldal: online foglalás, AI segítség és munkatársi belépés."
-    />
-    <title>Wellness · Idő önmagára.</title>
+    <title>Wellness</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="/patient-qr.js" defer></script>
   </head>
   <body class="wellness">
-    <a class="skip" href="#main">Ugrás a tartalomra</a>
     <div class="notice">BEMUTATÓOLDAL · Teszt foglalási környezet</div>
     <div class="wrap">
-      <header>
-        <a class="brand" href="./" aria-label="Wellness kezdőlap"
-          ><span class="mark" aria-hidden="true">w</span>Wellness</a
-        >
-        <nav aria-label="Fő navigáció">
-          <a class="nav-book" href="https://app.booking.appointer.hu/wellness-demo/book"
-            >Időpontfoglalás</a
-          >
-          <div class="langs">
-            <a href="./" lang="hu" hreflang="hu" aria-current="page">HU</a
-            ><span aria-hidden="true">/</span><a href="en/" lang="en" hreflang="en">EN</a>
-          </div>
-        </nav>
-      </header>
       <main id="main">
-        <section class="hero">
-          <div>
-            <p class="eyebrow">Wellness · Bemutatóhelyszín</p>
-            <h1>Lassítson.<br />Ez az Ön ideje.</h1>
-            <p class="intro">
-              Egy nyugodtabb nap az első lépéssel kezdődik. Tekintse meg a foglalási oldalt, vagy
-              kérdezzen az AI Asszisztenstől.
-            </p>
-            <div class="actions">
-              <a class="button" href="https://app.booking.appointer.hu/wellness-demo/book"
-                >Időpontot foglalok <span aria-hidden="true">↗</span></a
-              ><a
-                class="button secondary"
-                data-chat-link
-                hidden
-                href="https://app.booking.appointer.hu/wellness-demo/chat"
-                >AI Asszistens <span aria-hidden="true">↗</span></a
-              >
-            </div>
-            <p class="note">
-              A foglalás és a chat a külön foglalási alkalmazásban nyílik meg. A chat magyarul
-              indul; négy nyelv közül választhat.
-            </p>
+        <section class="mobile-apps">
+          <h1>Wellness</h1>
+          <div class="actions">
+            <a class="button" href="patient.html">Pácienseknek</a
+            ><a class="button secondary" href="staff.html">Munkatársaknak</a>
           </div>
-          <div class="art">
-            <svg viewBox="0 0 420 420" fill="none" aria-hidden="true">
-              <circle cx="210" cy="178" r="110" fill="#d1d8b9" />
-              <path
-                d="M72 330c46-74 122-114 241-113 16 0 36 3 45 7-52 84-142 132-286 106Z"
-                fill="#748866"
-              />
-              <path d="M101 319c-9-94 20-175 91-237 41 91 16 177-91 237Z" fill="#a1b18a" />
-              <path
-                d="M105 319c65-31 113-44 180-54M108 310c21-71 44-124 76-177"
-                stroke="#f7f5ed"
-                stroke-width="2"
-              />
-              <ellipse cx="221" cy="358" rx="125" ry="9" fill="#c6ceb7" />
-            </svg>
-            <div class="art-label"><span>Wellness</span><span>Tegye meg az első lépést</span></div>
-          </div>
-        </section>
-        <section class="details" aria-labelledby="details">
-          <h2 id="details">Egy kis tér a feltöltődéshez.</h2>
-          <p>
-            Ez a wellness-bemutatóoldal megmutatja, hogyan érhetők el a foglalási lehetőségek egy
-            vállalkozás saját weboldaláról. Az aktuális szolgáltatások és időpontok a foglalási
-            alkalmazásban találhatók.
-          </p>
-        </section>
-        <div class="cards">
-          <article class="card">
-            <span class="number" aria-hidden="true">01</span>
-            <h3>Nézzen körül</h3>
-            <p>A foglalási oldalon megismerheti az elérhető szolgáltatásokat.</p>
-          </article>
-          <article class="card">
-            <span class="number" aria-hidden="true">02</span>
-            <h3>Kérdezzen bátran</h3>
-            <p>
-              Az AI Asszisztens segít eligazodni a vállalkozás által megadott információk között.
-            </p>
-          </article>
-          <article class="card">
-            <span class="number" aria-hidden="true">03</span>
-            <h3>Válasszon időpontot</h3>
-            <p>Találja meg az Önnek megfelelő szabad időpontot a foglalási felületen.</p>
-          </article>
-        </div>
-        <section class="mobile-apps" aria-labelledby="mobile-apps-title">
-          <h2 id="mobile-apps-title">Wellness Demo a telefonján</h2>
-          <p>
-            Olvassa be vagy koppintson a páciens QR-kódra: közvetlenül az időpontfoglalás vagy a
-            chat nyílik meg, telepítés nélkül. A munkatársak külön alkalmazást telepíthetnek.
-          </p>
-          <div class="mobile-app-grid">
-            <a class="mobile-app-card" href="https://app.booking.appointer.hu/wellness-demo/book">
-              <h3>Időpontfoglalás</h3>
-              <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=hu"
-                width="256"
-                height="256"
-                alt="QR-kód a Wellness Demo időpontfoglalásához"
-                loading="lazy"
-              />
-              <p>
-                Időpontfoglalás közvetlenül a Wellness Demo oldalán. Munkatársi fiók nem szükséges.
-              </p>
-              <span class="button">Időpontfoglalás megnyitása</span>
-            </a>
-            <a
-              class="mobile-app-card"
-              data-chat-link
-              hidden
-              href="https://app.booking.appointer.hu/wellness-demo/chat"
-            >
-              <h3>Foglalás chaten</h3>
-              <img
-                data-chat-qr
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=hu"
-                width="256"
-                height="256"
-                alt="QR-kód a Wellness Demo chathez"
-              />
-              <p>
-                Foglaljon az AI-asszisztens segítségével. Telepítés és munkatársi fiók nem
-                szükséges.
-              </p>
-              <span class="button">Chat megnyitása</span>
-            </a>
-            <a
-              class="mobile-app-card"
-              href="https://app.booking.appointer.hu/wellness-demo/install/staff"
-            >
-              <h3>Munkatársi alkalmazás</h3>
-              <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu"
-                width="256"
-                height="256"
-                alt="QR-kód a Wellness Demo munkatársi alkalmazás telepítési oldalához"
-                loading="lazy"
-              />
-              <p>
-                Tulajdonosok, szolgáltatók és asszisztensek számára. Bejelentkezés és megfelelő
-                jogosultság szükséges.
-              </p>
-              <span class="button">Telepítési oldal megnyitása</span>
-            </a>
-          </div>
-        </section>
-        <section class="staff" aria-labelledby="staff">
-          <div>
-            <h2 id="staff">Munkatársainknak</h2>
-            <p>Tulajdonosok, szolgáltatók és asszisztensek belépése a vállalkozás felületére.</p>
-          </div>
-          <a href="https://app.booking.appointer.hu/wellness-demo.appointer.hu/sign-in"
-            >Munkatársi belépés <span aria-hidden="true">↗</span></a
-          >
         </section>
       </main>
-      <footer>
-        <strong>Wellness · Bemutató</strong>
-        <p>
-          A foglalási folyamat bemutatója. Az oldal nem tartalmaz valós rendelői adatokat vagy
-          egészségügyi tanácsot.
-        </p>
-      </footer>
     </div>
   </body>
 </html>

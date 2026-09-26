@@ -4,175 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
-    <meta
-      name="description"
-      content="Wellness demo website: online booking, AI assistance and staff sign-in."
-    />
-    <title>Wellness · A little time for you.</title>
+    <title>Wellness</title>
     <link rel="stylesheet" href="../styles.css" />
-    <script src="/patient-qr.js" defer></script>
   </head>
   <body class="wellness">
-    <a class="skip" href="#main">Skip to content</a>
-    <div class="notice">DEMO WEBSITE · Staging booking environment</div>
+    <div class="notice">DEMO WEBSITE · Test booking environment</div>
     <div class="wrap">
-      <header>
-        <a class="brand" href="./" aria-label="Wellness home"
-          ><span class="mark" aria-hidden="true">w</span>Wellness</a
-        >
-        <nav aria-label="Main navigation">
-          <a class="nav-book" href="https://app.booking.appointer.hu/en/wellness-demo/book"
-            >Appointments</a
-          >
-          <div class="langs">
-            <a href="../" lang="hu" hreflang="hu">HU</a><span aria-hidden="true">/</span
-            ><a href="./" lang="en" hreflang="en" aria-current="page">EN</a>
-          </div>
-        </nav>
-      </header>
       <main id="main">
-        <section class="hero">
-          <div>
-            <p class="eyebrow">Wellness · Demo practice</p>
-            <h1>Slow down.<br />This is your time.</h1>
-            <p class="intro">
-              A calmer day starts with a first step. Explore the booking page or ask the AI
-              Assistant for help.
-            </p>
-            <div class="actions">
-              <a class="button" href="https://app.booking.appointer.hu/en/wellness-demo/book"
-                >Book an appointment <span aria-hidden="true">↗</span></a
-              ><a
-                class="button secondary"
-                data-chat-link
-                hidden
-                href="https://app.booking.appointer.hu/en/wellness-demo/chat"
-                >AI Assistant <span aria-hidden="true">↗</span></a
-              >
-            </div>
-            <p class="note">
-              Booking and chat open in our dedicated booking app. Chat starts in Hungarian; choose
-              any of its four languages.
-            </p>
+        <section class="mobile-apps">
+          <h1>Wellness</h1>
+          <div class="actions">
+            <a class="button" href="patient.html">For patients</a
+            ><a class="button secondary" href="staff.html">For staff</a>
           </div>
-          <div class="art">
-            <svg viewBox="0 0 420 420" fill="none" aria-hidden="true">
-              <circle cx="210" cy="178" r="110" fill="#d1d8b9" />
-              <path
-                d="M72 330c46-74 122-114 241-113 16 0 36 3 45 7-52 84-142 132-286 106Z"
-                fill="#748866"
-              />
-              <path d="M101 319c-9-94 20-175 91-237 41 91 16 177-91 237Z" fill="#a1b18a" />
-              <path
-                d="M105 319c65-31 113-44 180-54M108 310c21-71 44-124 76-177"
-                stroke="#f7f5ed"
-                stroke-width="2"
-              />
-              <ellipse cx="221" cy="358" rx="125" ry="9" fill="#c6ceb7" />
-            </svg>
-            <div class="art-label"><span>Wellness</span><span>Take the first step</span></div>
-          </div>
-        </section>
-        <section class="details" aria-labelledby="details">
-          <h2 id="details">Make room to recharge.</h2>
-          <p>
-            This wellness demo shows how a business’s own website connects to online booking.
-            Current services and available appointments are listed in the booking app.
-          </p>
-        </section>
-        <div class="cards">
-          <article class="card">
-            <span class="number" aria-hidden="true">01</span>
-            <h3>Explore your options</h3>
-            <p>Find the available services on the booking page.</p>
-          </article>
-          <article class="card">
-            <span class="number" aria-hidden="true">02</span>
-            <h3>Ask a question</h3>
-            <p>The AI Assistant helps you explore information supplied by the business.</p>
-          </article>
-          <article class="card">
-            <span class="number" aria-hidden="true">03</span>
-            <h3>Choose your time</h3>
-            <p>Find an available appointment that works for you in the booking app.</p>
-          </article>
-        </div>
-        <section class="mobile-apps" aria-labelledby="mobile-apps-title">
-          <h2 id="mobile-apps-title">Wellness Demo on your phone</h2>
-          <p>
-            Scan or tap a patient QR code to open booking or chat directly. No installation is
-            needed. Staff can install their separate app.
-          </p>
-          <div class="mobile-app-grid">
-            <a
-              class="mobile-app-card"
-              href="https://app.booking.appointer.hu/en/wellness-demo/book"
-            >
-              <h3>Book an appointment</h3>
-              <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=en"
-                width="256"
-                height="256"
-                alt="QR code for Wellness Demo booking"
-                loading="lazy"
-              />
-              <p>Book appointments directly with Wellness Demo. No staff account is needed.</p>
-              <span class="button">Open booking</span>
-            </a>
-            <a
-              class="mobile-app-card"
-              data-chat-link
-              hidden
-              href="https://app.booking.appointer.hu/en/wellness-demo/chat"
-            >
-              <h3>Chat booking</h3>
-              <img
-                data-chat-qr
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=en"
-                width="256"
-                height="256"
-                alt="QR code for Wellness Demo chat"
-              />
-              <p>Book with the AI assistant. No installation or staff account is needed.</p>
-              <span class="button">Open chat</span>
-            </a>
-            <a
-              class="mobile-app-card"
-              href="https://app.booking.appointer.hu/en/wellness-demo/install/staff"
-            >
-              <h3>Staff app</h3>
-              <img
-                src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=en"
-                width="256"
-                height="256"
-                alt="QR code for the Wellness Demo staff app installation page"
-                loading="lazy"
-              />
-              <p>
-                For owners, providers and assistants. Sign-in and the appropriate permissions are
-                required.
-              </p>
-              <span class="button">Open installation page</span>
-            </a>
-          </div>
-        </section>
-        <section class="staff" aria-labelledby="staff">
-          <div>
-            <h2 id="staff">For our team</h2>
-            <p>Owners, providers and assistants: access your practice’s dashboard.</p>
-          </div>
-          <a href="https://app.booking.appointer.hu/en/wellness-demo.appointer.hu/sign-in"
-            >Staff login <span aria-hidden="true">↗</span></a
-          >
         </section>
       </main>
-      <footer>
-        <strong>Wellness · Demo</strong>
-        <p>
-          A demonstration of the booking journey. No real practice details or medical advice are
-          provided on this page.
-        </p>
-      </footer>
     </div>
   </body>
 </html>

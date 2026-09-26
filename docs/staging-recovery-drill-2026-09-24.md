@@ -118,6 +118,42 @@ notification proved queue reconstruction without invoking its email delivery.
 
 ## Remaining full-recovery acceptance
 
+Update 2026-09-25: [independent builds and clean-host recovery passed](staging-clean-host-recovery-2026-09-25.md)
+on a new Hetzner ARM server using the recorded source and KeePassXC credentials.
+HTTPS/browser validation is awaiting DNS. The preparation and remaining steps below
+record the September 24 state; use the September 25 evidence for current progress.
+
+### Clean-host drill preparation
+
+The selected deployed revision remains
+`c2d7b5190f5703a6346dc0680fb67928df243cc1`. Its
+[CI run](https://github.com/hbela/booking-and-more/actions/runs/36017960836)
+successfully built and started the production application images on both
+`ubuntu-latest` and `ubuntu-24.04-arm`. These jobs used fresh GitHub runners,
+applied migrations to an empty database and checked application readiness.
+The overall workflow failed at formatting in its separate `ci` job; this is not
+a passing release gate. The workflow does not publish recoverable image artifacts.
+
+This proves the selected source can build independently of the staging image
+cache. It does not yet prove those rebuilt images can run against the restored
+backup under the recovery HTTPS origins.
+
+The clean-host execution still needs a separate server SSH target and two temporary
+web/API hostnames. Only the existing `hetzner` staging alias was configured at
+inspection. Once the recovery target is identified:
+
+1. Record host identity, architecture and the start of the complete timed drill.
+2. Obtain the selected source revision independently and build API, worker and web;
+   supply the recovery API's HTTPS origin at web build time. Record image IDs.
+3. Retrieve vault credentials again and restore the selected R2 backup into new
+   PostgreSQL storage, with a separate empty Redis instance.
+4. Restrict access to the recovery stack, configure valid HTTPS for both origins,
+   and keep external integrations disabled. Do not repoint staging DNS.
+5. Exercise browser sign-in/session cookies, API calls and restored encrypted-data
+   reads; repeat queue reconstruction checks and verify staging remains healthy.
+6. Record total elapsed time, TLS/browser evidence and resource cleanup. Do not
+   count CI image-build time as the clean-host recovery measurement.
+
 Storage credentials, repository address, authentication secret and both distinct
 PII keys have now been retrieved from KeePassXC and validated in the rerun.
 

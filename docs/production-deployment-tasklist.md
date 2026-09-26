@@ -71,8 +71,11 @@ Do not put credentials, encryption keys or customer details in this checklist.
       2026-09-24 in 78.97 seconds, including application reads, synthetic encrypted
       data and queue recovery. The vault-sourced rerun passed in 79.21 seconds;
       Restic/R2 credentials, the authentication secret and both PII keys were verified.
-      Full acceptance remains open: complete configuration, independent image
-      recovery, clean-host provisioning and HTTPS/browser validation are unverified.
+      [Independent images and clean-host recovery](staging-clean-host-recovery-2026-09-25.md)
+      and HTTPS/browser validation passed on 2026-09-25; drill resources were removed.
+      Software provisioning through browser validation took 2h10m including DNS wait.
+      Full production acceptance remains open: manual VPS creation/SSH setup was
+      outside that timer, and representative production data/configuration was not tested.
 - [ ] Configure and test alerts for web/API availability, stale worker heartbeat,
       overdue/failed work, disk pressure, billing and invoicing failures; exclude customer details.
 
