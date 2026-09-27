@@ -48,11 +48,12 @@ export interface BillingRoutesOptions extends LaunchAccessOptions {
    * (docs/phase-9-duplicate-subscription-prevention.md §4.2).
    */
   trialPeriodDays: number;
+  chatMonthlyLimits?: { professional: number; plus: number };
 }
 
 const subscriptionSchema = z
   .object({
-    plan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL"]),
+    plan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"]),
     status: z.enum(["ACTIVE", "PAST_DUE", "CANCELED", "INCOMPLETE", "TRIALING", "NOT_APPLICABLE"]),
     currentPeriodEnd: z.iso.datetime({ offset: true }).nullable(),
     cancelAtPeriodEnd: z.boolean(),
@@ -63,7 +64,7 @@ const subscriptionSchema = z
      * at renewal (docs/phase-9-subscription-lifecycle.md §2.4). Both null when
      * nothing is scheduled; the screen shows the current plan alone.
      */
-    pendingPlan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL"]).nullable(),
+    pendingPlan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"]).nullable(),
     pendingPlanStartsAt: z.iso.datetime({ offset: true }).nullable(),
   })
   .nullable();
@@ -89,6 +90,11 @@ export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async 
           "Available plans are those with a payment link configured. A plan that cannot be paid for is not offered, because a button leading to a blank Stripe page is worse than one that is absent.",
         response: {
           200: z.object({
+            chatUsage: z.object({
+              used: z.number(),
+              limit: z.number().nullable(),
+              remaining: z.number().nullable(),
+            }),
             subscription: subscriptionSchema,
             availablePlans: z.array(subscribablePlanSchema),
             /** Whether "manage billing" can lead anywhere. See POST /portal. */
@@ -110,7 +116,27 @@ export const billingRoutes: FastifyPluginAsyncZod<BillingRoutesOptions> = async 
       const tenant = request.tenant!;
       const subscription = await service.currentSubscription(tenant.id);
 
+      const used =
+        (
+          await app.prisma.chatUsageCounter.findUnique({
+            where: {
+              tenantId_period: {
+                tenantId: tenant.id,
+                period: new Date().toISOString().slice(0, 7),
+              },
+            },
+          })
+        )?.quantity ?? 0;
+      const limit =
+        subscription?.plan === "INTERNAL"
+          ? null
+          : subscription?.plan === "PROFESSIONAL_PLUS"
+            ? (options.chatMonthlyLimits?.plus ?? 300)
+            : subscription?.plan === "PROFESSIONAL"
+              ? (options.chatMonthlyLimits?.professional ?? 150)
+              : 0;
       return {
+        chatUsage: { used, limit, remaining: limit === null ? null : Math.max(0, limit - used) },
         subscription:
           subscription === null
             ? null

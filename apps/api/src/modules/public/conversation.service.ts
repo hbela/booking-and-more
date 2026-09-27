@@ -1,8 +1,16 @@
-import type { AiProviders, ConversationTurn } from "@bam/ai";
+import { createHash, createHmac } from "node:crypto";
+import { closeConversation } from "@bam/db";
+import { chatMetadata, chatLimitError, type ChatLimits } from "./chat-guards.js";
+import { hashRequest } from "../../lib/idempotency.js";
+import {
+  conversationUnavailable,
+  tokenCostMinor,
+  type AiProviders,
+  type ConversationTurn,
+} from "@bam/ai";
 import { parseCommand, type ConversationIntent } from "@bam/contracts";
 import {
   checkPendingActionUsable,
-  checkTurnAllowed,
   conversationExpiresAt,
   greeting,
   promptFor,
@@ -60,20 +68,10 @@ import type { z } from "zod";
 
 type StoredState = StoredConversationState;
 
-/**
- * What one turn is assumed to cost before it is made.
- *
- * The gate has to authorise a spend it has not yet measured, so it authorises a
- * generous estimate and records the truth afterwards. Over-estimating is the
- * safe direction: a tenant is refused slightly early rather than slightly late,
- * and the recorded figure is always the real one.
- */
-const ESTIMATED_INPUT_TOKENS = 1_500;
-
 /** Below this the assistant asks rather than acts (PRD §9.12). */
 const CONFIDENCE_FLOOR = 0.55;
 
-export interface ConversationOptions {
+export interface ConversationOptions extends ChatLimits {
   sessionTtlMinutes: number;
   maxTurns: number;
   pendingActionTtlSeconds: number;
@@ -98,7 +96,7 @@ export class ConversationService {
     this.bookings = new BookingService(prisma);
     this.bookingRepository = new BookingRepository(prisma);
     this.usage = new UsageService(prisma);
-    this.assistant = new AssistantService(prisma);
+    this.assistant = new AssistantService(prisma, options);
   }
 
   // --- Lifecycle ------------------------------------------------------------
@@ -106,6 +104,7 @@ export class ConversationService {
   async start(args: {
     tenant: Tenant;
     input: CreateConversationBody;
+    idempotencyKey: string;
     now: Date;
   }): Promise<{ response: ConversationTurnResponse; token: string; expiresAt: Date }> {
     const expiresAt = conversationExpiresAt(args.now, this.options.sessionTtlMinutes);
@@ -123,7 +122,15 @@ export class ConversationService {
       throw conversationNotFound();
     }
 
-    const { session, token } = await this.repo.create({
+    const tokenValue = createHmac("sha256", this.options.tokenSigningKey)
+      .update(JSON.stringify(["chat-start", args.tenant.id, args.idempotencyKey]))
+      .digest("hex");
+    const { session, token, replayed } = await this.repo.create({
+      token: tokenValue,
+      startKeyHash: createHash("sha256").update(args.idempotencyKey).digest("hex"),
+      startRequestHash: hashRequest(args.input),
+      limits: this.options,
+      now: args.now,
       tenantId: args.tenant.id,
       channel: args.input.channel,
       locale: args.input.locale,
@@ -138,6 +145,12 @@ export class ConversationService {
           }),
     });
 
+    if (replayed)
+      return {
+        response: await this.replay({ session, tenant: args.tenant }),
+        token,
+        expiresAt: session.expiresAt,
+      };
     const message = greeting(args.tenant.name);
 
     await this.repo.appendMessage({
@@ -163,6 +176,7 @@ export class ConversationService {
       token,
       expiresAt,
       response: {
+        ...chatMetadata(session, this.options),
         conversationId: session.id,
         state: session.machineState,
         status: "ACTIVE",
@@ -196,6 +210,12 @@ export class ConversationService {
       expiresAt: string;
     }
   > {
+    if (args.session.expiresAt <= new Date() && !args.session.closedAt) {
+      await closeConversation(this.prisma, args.tenant.id, args.session.id, "TIME_LIMIT");
+      args.session = await this.prisma.conversationSession.findUniqueOrThrow({
+        where: { id: args.session.id },
+      });
+    }
     const rows = await this.repo.messages({
       tenantId: args.tenant.id,
       conversationId: args.session.id,
@@ -209,10 +229,13 @@ export class ConversationService {
     const collected = this.repo.collectedOf(args.session);
 
     return {
+      ...chatMetadata(args.session, this.options),
       conversationId: args.session.id,
       state: args.session.machineState,
       status: args.session.status,
-      message: promptFor(args.session.machineState as CustomerBookingState, collected),
+      message: args.session.closedAt
+        ? { key: "conversation.goodbye", ui: "NONE" }
+        : promptFor(args.session.machineState as CustomerBookingState, collected),
       ...(collected.lastSlots === undefined ? {} : { slots: collected.lastSlots }),
       confirmation:
         action === null
@@ -246,70 +269,160 @@ export class ConversationService {
   }): Promise<ConversationTurnResponse> {
     const { session, tenant } = args;
 
-    const turn = checkTurnAllowed({
-      turnCount: session.turnCount,
-      maxTurns: this.options.maxTurns,
-      expiresAt: session.expiresAt,
-      now: args.now,
-    });
-
-    if (!turn.allowed) {
-      // The panel folds away and the form is still there (PRD §12.4).
-      await this.settle(session, turn.reason === "CONVERSATION_EXPIRED" ? "EXPIRED" : "ACTIVE");
-      return this.reply({
-        session,
-        tenant,
-        collected: this.repo.collectedOf(session),
-        message: refusalMessage(turn.reason),
-      });
-    }
-
-    await this.repo.appendMessage({
+    const now = new Date();
+    if (session.closedAt || session.expiresAt <= now)
+      return this.close(session, tenant, session.closureReason ?? "TIME_LIMIT");
+    const text = args.text.trim();
+    const characters = Array.from(text).length;
+    if (!characters || characters > this.options.maxMessageCharacters)
+      throw chatLimitError("Please shorten your message.", 400);
+    if (session.patientCharacters + characters > this.options.maxPatientCharacters)
+      return this.close(session, tenant, "CHARACTER_LIMIT");
+    if (session.turnCount >= this.options.maxTurns)
+      return this.close(session, tenant, "TURN_LIMIT");
+    const rateActive =
+      session.rateWindowStart && now.getTime() - session.rateWindowStart.getTime() < 60_000;
+    if (rateActive && session.rateWindowCount >= this.options.sessionRateLimit)
+      throw chatLimitError("Please wait before sending another message.");
+    await this.repo.update({
       tenantId: tenant.id,
       conversationId: session.id,
-      sender: "CUSTOMER",
-      messageType: "TEXT",
-      content: args.text,
+      data: {
+        rateWindowStart: rateActive ? session.rateWindowStart : now,
+        rateWindowCount: rateActive ? session.rateWindowCount + 1 : 1,
+      },
     });
-
-    const reservationId = await this.usage.reserveAiCall({
-      tenantId: tenant.id,
-      inputTokens: ESTIMATED_INPUT_TOKENS,
-      outputTokens: this.options.maxOutputTokens,
-      now: args.now,
-    });
-
     const collected = this.repo.collectedOf(session);
     const state = session.machineState as CustomerBookingState;
-
-    const history = await this.recentTurns(tenant.id, session.id);
-    const catalogue = await this.tools.catalogueFor(tenant.id, session.locale);
-
+    // Build history before appending this utterance: it must occur exactly once.
+    const input = {
+      utterance: text,
+      locale: session.locale,
+      timezone: session.timezone,
+      state,
+      history: await this.recentTurns(tenant.id, session.id),
+      catalogue: await this.tools.catalogueFor(tenant.id, session.locale),
+      businessContext: await this.assistant.knowledgeContext(tenant, session.locale),
+      timeoutMs: Math.max(1, Math.min(30_000, session.expiresAt.getTime() - Date.now())),
+    };
+    let counted: number;
+    try {
+      counted = await this.providers.interpreter.countTokens(input);
+    } catch {
+      throw conversationUnavailable();
+    }
+    if (!Number.isSafeInteger(counted) || counted < 0)
+      throw new Error("Invalid provider token count");
+    const reservedInput = Math.ceil((counted * 110) / 100);
+    const reservedOutput = Math.min(
+      this.options.maxOutputTokens,
+      this.options.maxConversationOutputTokens - session.aiOutputTokens,
+    );
+    if (session.aiInputTokens + reservedInput > this.options.maxInputTokens || reservedOutput <= 0)
+      return this.close(session, tenant, "TOKEN_LIMIT");
+    if (session.expiresAt <= new Date()) return this.close(session, tenant, "TIME_LIMIT");
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId: tenant.id },
+    });
+    const monthly =
+      subscription?.plan === "PROFESSIONAL_PLUS"
+        ? this.options.plusMonthlyLimit
+        : this.options.professionalMonthlyLimit;
+    const reservationId = await this.usage.reserveAiCall({
+      tenantId: tenant.id,
+      inputTokens: reservedInput,
+      outputTokens: reservedOutput,
+      inputLimit: monthly * this.options.maxInputTokens,
+      outputLimit: monthly * this.options.maxConversationOutputTokens,
+      now,
+    });
+    const accepted = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.conversationSession.updateMany({
+        where: {
+          id: session.id,
+          tenantId: tenant.id,
+          closedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: {
+          patientCharacters: { increment: characters },
+          turnCount: { increment: 1 },
+          aiInputTokens: { increment: reservedInput },
+          aiOutputTokens: { increment: reservedOutput },
+        },
+      });
+      if (!changed.count) return false;
+      await tx.conversationMessage.create({
+        data: {
+          tenantId: tenant.id,
+          sessionId: session.id,
+          sender: "CUSTOMER",
+          messageType: "TEXT",
+          content: text,
+        },
+      });
+      return true;
+    });
+    if (!accepted || session.expiresAt <= new Date()) {
+      await this.usage.releaseAiReservation(tenant.id, reservationId);
+      if (accepted)
+        await this.repo.update({
+          tenantId: tenant.id,
+          conversationId: session.id,
+          data: {
+            aiInputTokens: { decrement: reservedInput },
+            aiOutputTokens: { decrement: reservedOutput },
+          },
+        });
+      return this.close(session, tenant, "TIME_LIMIT");
+    }
     let interpretation;
     try {
       interpretation = await this.providers.interpreter.interpret({
-        utterance: args.text,
-        locale: session.locale,
-        timezone: session.timezone,
-        state,
-        history,
-        catalogue,
-        businessContext: await this.assistant.knowledgeContext(tenant, session.locale),
+        ...input,
+        maxOutputTokens: reservedOutput,
+        timeoutMs: Math.max(1, Math.min(30_000, session.expiresAt.getTime() - Date.now())),
       });
+    } catch {
+      // The provider may have charged a failed or disconnected call. Settle the
+      // reserved upper bound rather than returning potentially spent allowance.
       await this.usage.reconcileAiCall({
         tenantId: tenant.id,
         reservationId,
-        inputTokens: interpretation.usage.inputTokens ?? 0,
-        outputTokens: interpretation.usage.outputTokens ?? 0,
-        provider: interpretation.usage.provider,
-        model: interpretation.usage.model,
-        estimatedCostMinor: interpretation.usage.estimatedCostMinor,
-        now: args.now,
+        inputTokens: reservedInput,
+        outputTokens: reservedOutput,
+        provider: "anthropic",
+        model: "unknown",
+        estimatedCostMinor: tokenCostMinor({
+          model: "unknown",
+          inputTokens: reservedInput,
+          outputTokens: reservedOutput,
+        }),
+        now,
       });
-    } catch (error) {
-      await this.usage.releaseAiReservation(tenant.id, reservationId);
-      throw error;
+      throw conversationUnavailable();
     }
+    const actualInput = interpretation.usage.inputTokens ?? reservedInput;
+    const actualOutput = interpretation.usage.outputTokens ?? reservedOutput;
+    await this.usage.reconcileAiCall({
+      tenantId: tenant.id,
+      reservationId,
+      inputTokens: actualInput,
+      outputTokens: actualOutput,
+      provider: interpretation.usage.provider,
+      model: interpretation.usage.model,
+      estimatedCostMinor: interpretation.usage.estimatedCostMinor,
+      now,
+    });
+    await this.repo.update({
+      tenantId: tenant.id,
+      conversationId: session.id,
+      data: {
+        aiInputTokens: { increment: actualInput - reservedInput },
+        aiOutputTokens: { increment: actualOutput - reservedOutput },
+      },
+    });
+    if (session.expiresAt <= new Date()) return this.close(session, tenant, "TIME_LIMIT");
 
     const parsed = parseCommand(interpretation.envelope);
 
@@ -394,6 +507,8 @@ export class ConversationService {
       // The database refused, most often because somebody faster took the slot
       // (rule 14). That is a turn in the conversation, not a 500: the customer
       // is told and offered another time.
+      if (args.session.expiresAt <= new Date())
+        return this.close(args.session, args.tenant, "TIME_LIMIT");
       const refusal = refusalFor(error);
       if (refusal === undefined) throw error;
 
@@ -427,7 +542,12 @@ export class ConversationService {
         toolName: outcome.prepare.tool,
         args: outcome.prepare.args,
         preview: { ...outcome.prepare.preview },
-        expiresAt: new Date(args.now.getTime() + this.options.pendingActionTtlSeconds * 1_000),
+        expiresAt: new Date(
+          Math.min(
+            args.session.expiresAt.getTime(),
+            args.now.getTime() + this.options.pendingActionTtlSeconds * 1_000,
+          ),
+        ),
       });
 
       confirmation = {
@@ -548,6 +668,8 @@ export class ConversationService {
     now: Date;
   }): Promise<ConversationTurnResponse> {
     const { session, tenant } = args;
+    if (session.closedAt || session.expiresAt <= new Date())
+      return this.close(session, tenant, "TIME_LIMIT");
     const collected = this.repo.collectedOf(session);
 
     const action = await this.repo.findPendingAction({
@@ -609,11 +731,13 @@ export class ConversationService {
           successStatus: 200,
         },
         async () => {
+          if (session.expiresAt <= new Date()) throw chatLimitError("This chat has ended.", 409);
           const values = action.argumentsJson as Record<string, unknown>;
           if (action.toolName === "confirmReschedule") {
             const bookingId = stringValue(values["bookingId"]);
             const booking = await this.bookings.confirmReschedule({
               tenantId: tenant.id,
+              conversationId: session.id,
               bookingId,
               input: { newStartAt: stringValue(values["newStartAt"]) },
               now: args.now,
@@ -626,6 +750,7 @@ export class ConversationService {
             const reason = typeof values["reason"] === "string" ? values["reason"] : undefined;
             const booking = await this.bookings.confirmCancellation({
               tenantId: tenant.id,
+              conversationId: session.id,
               bookingId,
               input: reason === undefined ? {} : { reason },
               now: args.now,
@@ -636,6 +761,7 @@ export class ConversationService {
           if (action.toolName !== "confirmBooking") throw conversationNotFound();
           const created = await this.bookings.confirmBooking({
             tenantId: tenant.id,
+            conversationId: session.id,
             input: action.argumentsJson as never,
             now: args.now,
             source: "CHAT",
@@ -646,13 +772,14 @@ export class ConversationService {
         },
       );
 
-      await this.repo.update({
-        tenantId: tenant.id,
-        conversationId: session.id,
+      await this.prisma.conversationSession.updateMany({
+        where: { tenantId: tenant.id, id: session.id, closedAt: null },
         data: { status: "COMPLETED", machineState: "COMPLETED", bookingId: value.bookingId },
       });
+      if (session.expiresAt <= new Date()) return this.close(session, tenant, "TIME_LIMIT");
 
       return {
+        ...chatMetadata(session, this.options),
         conversationId: session.id,
         state: "COMPLETED",
         status: "COMPLETED",
@@ -662,6 +789,7 @@ export class ConversationService {
         turnsRemaining: Math.max(0, this.options.maxTurns - session.turnCount),
       };
     } catch (error) {
+      if (session.expiresAt <= new Date()) return this.close(session, tenant, "TIME_LIMIT");
       const refusal = refusalFor(error);
       if (refusal === undefined) throw error;
 
@@ -683,6 +811,13 @@ export class ConversationService {
     actionId: string;
     now: Date;
   }): Promise<ConversationTurnResponse> {
+    if (args.session.closedAt || args.session.expiresAt <= new Date())
+      return this.close(args.session, args.tenant, "TIME_LIMIT");
+    const action = await this.repo.findPendingAction({
+      tenantId: args.tenant.id,
+      actionId: args.actionId,
+    });
+    if (!action || action.sessionId !== args.session.id) throw conversationNotFound();
     await this.repo.settleAction({
       tenantId: args.tenant.id,
       actionId: args.actionId,
@@ -722,33 +857,53 @@ export class ConversationService {
     providers?: z.infer<typeof conversationProviderSchema>[];
     slots?: z.infer<typeof conversationSlotSchema>[];
   }): Promise<ConversationTurnResponse> {
+    const current = await this.prisma.conversationSession.findUniqueOrThrow({
+      where: { id: args.session.id },
+    });
+    if (current.closedAt || current.expiresAt <= new Date())
+      return this.close(current, args.tenant, current.closureReason ?? "TIME_LIMIT");
+    if (
+      current.patientCharacters >= this.options.maxPatientCharacters ||
+      current.aiInputTokens >= this.options.maxInputTokens ||
+      current.aiOutputTokens >= this.options.maxConversationOutputTokens ||
+      current.turnCount >= this.options.maxTurns
+    )
+      return this.close(current, args.tenant, "USAGE_LIMIT");
     const state = args.state ?? (args.session.machineState as CustomerBookingState);
     const now = new Date();
 
-    await this.repo.appendMessage({
-      tenantId: args.tenant.id,
-      conversationId: args.session.id,
-      sender: "ASSISTANT",
-      messageType: "STRUCTURED",
-      content: args.message.key,
-      structured: args.message.params ?? {},
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // Conditional write locks against the expiry worker before appending text.
+      const changed = await tx.conversationSession.updateMany({
+        where: {
+          id: args.session.id,
+          tenantId: args.tenant.id,
+          closedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: {
+          machineState: state,
+          stateJson: args.collected as Prisma.InputJsonValue,
+          lastActivityAt: now,
+        },
+      });
+      if (!changed.count) return null;
+      await tx.conversationMessage.create({
+        data: {
+          tenantId: args.tenant.id,
+          sessionId: args.session.id,
+          sender: "ASSISTANT",
+          messageType: "STRUCTURED",
+          content: args.message.key,
+          structuredContentJson: args.message.params ?? {},
+        },
+      });
+      return tx.conversationSession.findUniqueOrThrow({ where: { id: args.session.id } });
     });
-
-    const updated = await this.repo.update({
-      tenantId: args.tenant.id,
-      conversationId: args.session.id,
-      data: {
-        machineState: state,
-        stateJson: args.collected as Prisma.InputJsonValue,
-        lastActivityAt: now,
-        // Sliding, so a customer working through a booking is never cut off
-        // mid-sentence and an abandoned tab still releases its hold on time.
-        expiresAt: conversationExpiresAt(now, this.options.sessionTtlMinutes),
-        ...(args.countTurn === true ? { turnCount: { increment: 1 } } : {}),
-      },
-    });
+    if (!updated) return this.close(args.session, args.tenant, "TIME_LIMIT");
 
     return {
+      ...chatMetadata(updated, this.options),
       conversationId: updated.id,
       state,
       status: updated.status,
@@ -762,14 +917,16 @@ export class ConversationService {
     };
   }
 
-  private async settle(session: ConversationSession, status: "EXPIRED" | "ACTIVE"): Promise<void> {
-    if (status === "ACTIVE") return;
-
-    await this.repo.update({
-      tenantId: session.tenantId,
-      conversationId: session.id,
-      data: { status, machineState: status },
+  private async close(
+    session: ConversationSession,
+    tenant: Tenant,
+    reason: string,
+  ): Promise<ConversationTurnResponse> {
+    await closeConversation(this.prisma, tenant.id, session.id, reason);
+    const fresh = await this.prisma.conversationSession.findUniqueOrThrow({
+      where: { id: session.id },
     });
+    return this.replay({ session: fresh, tenant });
   }
 
   private async referenceOf(session: ConversationSession): Promise<string | null> {

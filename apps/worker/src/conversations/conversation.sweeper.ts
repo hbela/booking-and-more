@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@bam/db";
+import { closeConversation, type PrismaClient } from "@bam/db";
 import type { Logger } from "@bam/observability";
 
 /**
@@ -56,17 +56,23 @@ export async function sweepConversations(
     take: options.batchSize,
   });
 
-  const { count: sessionsExpired } = await prisma.conversationSession.updateMany({
-    where: { status: "ACTIVE", expiresAt: { lte: now } },
-    data: { status: "EXPIRED", machineState: "EXPIRED" },
+  const expired = await prisma.conversationSession.findMany({
+    where: { closedAt: null, expiresAt: { lte: now } },
+    select: { id: true, tenantId: true },
+    take: options.batchSize,
   });
+  let sessionsExpired = 0;
+  let holdsReleased = 0;
+  for (const session of expired) {
+    const result = await closeConversation(prisma, session.tenantId, session.id, "TIME_LIMIT", now);
+    sessionsExpired += result.closed;
+    holdsReleased += result.holdsReleased;
+  }
 
   const { count: actionsExpired } = await prisma.conversationPendingAction.updateMany({
     where: { status: "PENDING", expiresAt: { lte: now } },
     data: { status: "EXPIRED" },
   });
-
-  let holdsReleased = 0;
 
   for (const session of abandoned) {
     if (session.holdId === null) continue;

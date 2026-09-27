@@ -48,7 +48,7 @@ export function getAnthropic(config: AnthropicConfig): Anthropic {
   // take here.
   if (cached?.key === apiKey) return cached.client;
 
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 30_000 });
   cached = { key: apiKey, client };
 
   return client;

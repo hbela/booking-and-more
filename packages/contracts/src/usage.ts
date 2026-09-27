@@ -31,7 +31,7 @@ export const usageCategorySchema = z.enum([
 export type UsageCategory = z.infer<typeof usageCategorySchema>;
 
 /** Every plan a tenant can be on, including the one that is not sold. */
-export const quotaPlanSchema = z.enum(["INTERNAL", "STARTER", "PROFESSIONAL"]);
+export const quotaPlanSchema = z.enum(["INTERNAL", "STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"]);
 
 export type QuotaPlan = z.infer<typeof quotaPlanSchema>;
 
@@ -87,11 +87,20 @@ export const PLAN_QUOTAS: Record<QuotaPlan, Record<UsageCategory, number | null>
     EMAIL_SENT: null,
     BOOKING_CREATED: null,
   },
+  PROFESSIONAL_PLUS: {
+    VOICE_TRANSCRIPTION: 30_000,
+    AI_INPUT_TOKENS: 24_000_000,
+    AI_OUTPUT_TOKENS: 1_200_000,
+    TTS_CHARACTERS: 0,
+    REALTIME_AUDIO_SECONDS: 0,
+    EMAIL_SENT: null,
+    BOOKING_CREATED: null,
+  },
   PROFESSIONAL: {
     /** PRD §11: 1,000 voice commands a month. */
     VOICE_TRANSCRIPTION: 30_000,
-    AI_INPUT_TOKENS: 2_000_000,
-    AI_OUTPUT_TOKENS: 400_000,
+    AI_INPUT_TOKENS: 12_000_000,
+    AI_OUTPUT_TOKENS: 600_000,
     TTS_CHARACTERS: 0,
     REALTIME_AUDIO_SECONDS: 0,
     EMAIL_SENT: null,

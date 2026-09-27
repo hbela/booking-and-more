@@ -32,7 +32,7 @@ interface OrganizationSummary {
   createdAt: string;
   owner: { email: string; name: string | null; accepted: boolean } | null;
   subscription: {
-    plan: "INTERNAL" | "STARTER" | "PROFESSIONAL";
+    plan: "INTERNAL" | "STARTER" | "PROFESSIONAL" | "PROFESSIONAL_PLUS";
     status: string;
     currentPeriodEnd: string | null;
     cancelAtPeriodEnd: boolean;

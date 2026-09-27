@@ -4,11 +4,11 @@ import { idSchema, instantSchema, languageSchema } from "@bam/contracts";
 export const assistantSettingsInputSchema = z.object({
   enabled: z.boolean(),
   personaName: z.string().trim().min(1).max(80),
-  businessDescription: z.string().trim().max(4_000).nullable(),
-  businessDescriptionHu: z.string().trim().max(4_000).nullable(),
-  businessDescriptionEn: z.string().trim().max(4_000).nullable(),
-  businessDescriptionDe: z.string().trim().max(4_000).nullable(),
-  businessDescriptionFr: z.string().trim().max(4_000).nullable(),
+  businessDescription: z.string().trim().nullable(),
+  businessDescriptionHu: z.string().trim().nullable(),
+  businessDescriptionEn: z.string().trim().nullable(),
+  businessDescriptionDe: z.string().trim().nullable(),
+  businessDescriptionFr: z.string().trim().nullable(),
   supportedLocales: z.array(languageSchema).min(1).max(4),
   escalationMessage: z.string().trim().max(1_000).nullable(),
 });
@@ -19,8 +19,8 @@ export const assistantSettingsSchema = assistantSettingsInputSchema.extend({
 export const assistantSettingsPatchSchema = assistantSettingsInputSchema.partial();
 export const assistantFaqInputSchema = z.object({
   locale: languageSchema,
-  question: z.string().trim().min(1).max(500),
-  answer: z.string().trim().min(1).max(4_000),
+  question: z.string().trim().min(1),
+  answer: z.string().trim().min(1),
   active: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(10_000).default(0),
 });

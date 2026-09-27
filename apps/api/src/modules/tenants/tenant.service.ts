@@ -1,3 +1,4 @@
+import { withKnowledgeBudget } from "../assistant/knowledge-budget.js";
 import type { PrismaClient, Tenant } from "@bam/db";
 import { Roles } from "@bam/auth";
 import { ConflictError, ErrorCodes, ValidationError } from "@bam/contracts";
@@ -110,12 +111,14 @@ export class TenantService {
       Object.entries(input).filter(([, value]) => value !== undefined),
     );
 
-    return this.prisma.tenant.update({
-      where: { id: tenantId },
-      // Zod has already stripped unknown keys, and `slug` and `status` are not
-      // in the update schema at all, so neither can be smuggled through here.
-      data,
-    });
+    return withKnowledgeBudget(this.prisma, tenantId, (tx) =>
+      tx.tenant.update({
+        where: { id: tenantId },
+        // Zod has already stripped unknown keys, and `slug` and `status` are not
+        // in the update schema at all, so neither can be smuggled through here.
+        data,
+      }),
+    );
   }
 
   /**

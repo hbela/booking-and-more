@@ -313,6 +313,7 @@ export class ConversationTools {
     }
 
     const { hold } = await this.bookings.createHold({
+      conversationId: context.conversationId,
       tenantId: context.tenant.id,
       input: {
         serviceId,

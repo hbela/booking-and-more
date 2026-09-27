@@ -103,3 +103,5 @@ export async function hasExtension(client: PrismaClient, name: string): Promise<
   `;
   return (rows[0]?.count ?? 0n) > 0n;
 }
+
+export { closeConversation } from "./close-conversation.js";

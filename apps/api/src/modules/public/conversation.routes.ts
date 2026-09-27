@@ -2,7 +2,8 @@ import { conversationUnavailable, type AiProviders } from "@bam/ai";
 import { commonErrorResponses } from "@bam/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
-import { requireIdempotencyKey } from "../../lib/idempotency.js";
+import { withChatClaim } from "./chat-guards.js";
+import { withIdempotency, requireIdempotencyKey } from "../../lib/idempotency.js";
 import { auditContextOf } from "../bookings/booking.routes.js";
 import { idempotencyHeaderSchema } from "../bookings/booking.schemas.js";
 import { tenantSlugParamsSchema } from "./catalogue.schemas.js";
@@ -49,18 +50,29 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
   app,
   options,
 ) => {
+  app.addHook("onError", async (request, _reply, error) => {
+    // Never attach the error object, headers or message body to chat telemetry.
+    request.log.warn(
+      { code: error.code ?? "CHAT_REQUEST_FAILED", requestId: request.id },
+      "chat request refused or failed",
+    );
+  });
   const catalogue = new PublicCatalogueService(app.prisma);
   const conversations = new ConversationService(
     app.prisma,
     options.providers,
     options.conversation,
   );
-  const assistant = new AssistantService(app.prisma);
+  const assistant = new AssistantService(app.prisma, options.conversation);
 
   /** A turn costs a model call. Tighter than the catalogue's 120/min. */
-  const turnRateLimit = { rateLimit: { max: 20, timeWindow: "1 minute" } };
+  const turnRateLimit = {
+    rateLimit: { max: options.conversation.messageRateLimit, timeWindow: "1 minute" },
+  };
   /** Starting one is rarer still, and each start mints a credential. */
-  const startRateLimit = { rateLimit: { max: 10, timeWindow: "1 minute" } };
+  const startRateLimit = {
+    rateLimit: { max: options.conversation.startRateLimit, timeWindow: "1 minute" },
+  };
 
   /** The header, then the row. Both must agree or it is a 404. */
   async function fromRequest(request: {
@@ -71,7 +83,7 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
       conversationId: request.params.conversationId,
       token: request.headers["x-conversation-token"],
     });
-    const availability = await assistant.publicConfig(resolved.tenant);
+    const availability = await assistant.publicConfig(resolved.tenant, true);
     if (!options.configured || !availability.available) throw conversationUnavailable();
     return resolved;
   }
@@ -102,9 +114,10 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
         tags: ["public"],
         summary: "Start a conversation with the booking assistant",
         description:
-          "Returns the session token once and only once — it is stored as a hash and cannot be reissued.",
+          "Returns an opaque session token; identical start keys replay the same session — only its hash is stored.",
         params: tenantSlugParamsSchema,
         body: createConversationBodySchema,
+        headers: idempotencyHeaderSchema,
         response: { 201: conversationCreatedSchema, ...commonErrorResponses },
       },
     },
@@ -116,6 +129,7 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
       const started = await conversations.start({
         tenant,
         input: request.body,
+        idempotencyKey: requireIdempotencyKey(request.headers),
         now: new Date(),
       });
 
@@ -156,7 +170,7 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
         description:
           "The same endpoint for typed text and for a reviewed transcript — voice is a transport, not a mode.",
         params: conversationParamsSchema,
-        headers: conversationTokenHeaderSchema,
+        headers: conversationTokenHeaderSchema.merge(idempotencyHeaderSchema),
         body: sendMessageBodySchema,
         response: { ...commonErrorResponses },
       },
@@ -164,13 +178,33 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
     async (request, reply) => {
       const { session, tenant } = await fromRequest(request);
 
-      const turn = await conversations.message({
-        session,
-        tenant,
-        text: request.body.text,
-        spoken: false,
-        now: new Date(),
-      });
+      const { value: completedTurn } = await withIdempotency(
+        app.prisma,
+        {
+          tenantId: tenant.id,
+          operation: "chat.message:" + session.id,
+          key: requireIdempotencyKey(request.headers),
+          requestBody: request.body,
+          successStatus: 200,
+        },
+        () =>
+          withChatClaim(app.prisma, session, (fresh) =>
+            conversations.message({
+              session: fresh,
+              tenant,
+              text: request.body.text,
+              spoken: false,
+              now: new Date(),
+            }),
+          ),
+      );
+      // A cached successful turn must not reopen controls after the deadline.
+      const turn =
+        session.closedAt || session.expiresAt <= new Date()
+          ? await conversations.replay({ session, tenant })
+          : completedTurn;
+      if (turn.closureReason)
+        request.log.info({ conversationId: session.id, reason: turn.closureReason }, "chat closed");
 
       // `hijack()` bypasses Fastify's normal send path, including the point
       // where CORS and security headers are copied onto the Node response.
@@ -220,14 +254,16 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
     async (request) => {
       const { session, tenant } = await fromRequest(request);
 
-      return conversations.confirm({
-        session,
-        tenant,
-        actionId: request.params.actionId,
-        idempotencyKey: requireIdempotencyKey(request.headers),
-        audit: auditContextOf(request),
-        now: new Date(),
-      });
+      return withChatClaim(app.prisma, session, (fresh) =>
+        conversations.confirm({
+          session: fresh,
+          tenant,
+          actionId: request.params.actionId,
+          idempotencyKey: requireIdempotencyKey(request.headers),
+          audit: auditContextOf(request),
+          now: new Date(),
+        }),
+      );
     },
   );
 
@@ -246,12 +282,14 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
     async (request) => {
       const { session, tenant } = await fromRequest(request);
 
-      return conversations.cancelAction({
-        session,
-        tenant,
-        actionId: request.params.actionId,
-        now: new Date(),
-      });
+      return withChatClaim(app.prisma, session, (fresh) =>
+        conversations.cancelAction({
+          session: fresh,
+          tenant,
+          actionId: request.params.actionId,
+          now: new Date(),
+        }),
+      );
     },
   );
 };

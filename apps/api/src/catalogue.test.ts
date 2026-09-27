@@ -116,6 +116,46 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
     return { cookie: owner.cookie, id: owner.id, tenantId };
   }
 
+  it("enforces the shared knowledge allowance for direct API callers and exposes tenant usage", async () => {
+    const owner = await owned("knowledge-api");
+    const headers = as(owner.cookie, owner.tenantId);
+    await app.prisma.tenantAssistantSettings.create({
+      data: { tenantId: owner.tenantId, businessDescriptionHu: "p".repeat(9999) },
+    });
+    const accepted = await app.inject({
+      method: "POST",
+      url: "/v1/services",
+      headers,
+      payload: { name: "Fits", durationMinutes: 30, description: " x " },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(201);
+    const rejected = await app.inject({
+      method: "POST",
+      url: "/v1/services",
+      headers,
+      payload: { name: "Exceeds", durationMinutes: 30, description: "x" },
+    });
+    expect(rejected.statusCode).toBe(422);
+    expect(rejected.json().error.details).toMatchObject({
+      field: "knowledge",
+      locale: "hu",
+      used: 10001,
+      limit: 10000,
+    });
+    const usage = await app.inject({ method: "GET", url: "/v1/services/knowledge-usage", headers });
+    expect(usage.statusCode, usage.body).toBe(200);
+    expect(usage.json().locales).toContainEqual({
+      locale: "hu",
+      company: 9999,
+      services: 1,
+      faqs: 0,
+      used: 10000,
+      remaining: 0,
+    });
+    const anonymous = await app.inject({ method: "GET", url: "/v1/services/knowledge-usage" });
+    expect(anonymous.statusCode).toBe(401);
+  });
+
   async function createProvider(
     cookie: string,
     tenantId: string,

@@ -15,10 +15,11 @@ import {
 const NOW = new Date("2026-07-30T12:00:00.000Z");
 
 describe("subscription offers", () => {
-  it("publishes the two HUF launch prices", () => {
+  it("publishes the three HUF subscription prices", () => {
     expect(SUBSCRIPTION_OFFERS).toEqual({
       STARTER: { monthlyAmount: 9_990, currency: "HUF" },
-      PROFESSIONAL: { monthlyAmount: 24_990, currency: "HUF" },
+      PROFESSIONAL: { monthlyAmount: 29_900, currency: "HUF" },
+      PROFESSIONAL_PLUS: { monthlyAmount: 59_800, currency: "HUF" },
     });
   });
 
@@ -69,6 +70,19 @@ describe("subscribablePlanSchema", () => {
 });
 
 describe("planForPrice", () => {
+  it("recognises both current and grandfathered prices without selling legacy prices", () => {
+    const catalogue = {
+      STARTER: ["price_form", "price_form_old"],
+      PROFESSIONAL: ["price_current", "price_old"],
+      PROFESSIONAL_PLUS: "price_plus",
+    };
+    expect(planForPrice("price_old", catalogue)).toBe("PROFESSIONAL");
+    expect(planForPrice("price_form_old", catalogue)).toBe("STARTER");
+    expect(planForPrice("price_current", catalogue)).toBe("PROFESSIONAL");
+    expect(planForPrice("price_plus", catalogue)).toBe("PROFESSIONAL_PLUS");
+    expect(hasAssistantEntitlement("PROFESSIONAL_PLUS", "ACTIVE")).toBe(true);
+    expect(hasAssistantEntitlement("PROFESSIONAL_PLUS", "CANCELED")).toBe(false);
+  });
   const prices = { STARTER: "price_starter", PROFESSIONAL: "price_pro" };
 
   it("maps a configured price to its plan", () => {

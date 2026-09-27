@@ -226,6 +226,7 @@ function stripeHufMinorToForints(invoice: StripePaidInvoice): number {
 }
 
 function planName(plan: SubscribablePlan): string {
+  if (plan === "PROFESSIONAL_PLUS") return "Booking and More — Professional Plus";
   return plan === "PROFESSIONAL" ? "Booking and More — AI Receptionist" : "Booking and More — Form";
 }
 

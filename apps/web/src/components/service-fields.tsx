@@ -140,7 +140,6 @@ export function ServiceFields({
             onChange({ description: event.target.value });
           }}
           rows={3}
-          maxLength={4000}
         />
       </Field>
 

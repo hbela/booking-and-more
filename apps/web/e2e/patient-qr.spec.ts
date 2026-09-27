@@ -72,8 +72,8 @@ for (const assistant of [false, true]) {
           : path.endsWith(".css")
             ? "styles.css"
             : locale === "en"
-              ? "en/index.html"
-              : "index.html";
+              ? `en/${path.includes("staff") ? "staff" : "patient"}.html`
+              : `${path.includes("staff") ? "staff" : "patient"}.html`;
         await route.fulfill({
           contentType: file.endsWith(".js")
             ? "text/javascript"
@@ -96,6 +96,7 @@ for (const assistant of [false, true]) {
       const chat = page.locator('.mobile-app-card[href$="/chat"]');
       if (assistant) await expect(chat).toBeVisible();
       else await expect(chat).toBeHidden();
+      await page.goto("https://demo.test/staff.html");
       await expect(page.locator('.mobile-app-card[href$="/install/staff"]')).toBeVisible();
     });
   }

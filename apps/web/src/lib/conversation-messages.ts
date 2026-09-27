@@ -3,6 +3,12 @@ import type { AssistantMessage } from "./conversation-client";
 type Locale = "hu" | "en" | "de" | "fr";
 
 export const conversationMessages: Record<string, Record<Locale, string>> = {
+  "conversation.goodbye": {
+    en: "Thank you for chatting with us. This chat has ended. Goodbye! You can continue using the booking form.",
+    hu: "Köszönjük a beszélgetést! A chat véget ért. Viszontlátásra! A foglalási űrlapon folytathatja.",
+    de: "Vielen Dank für das Gespräch. Dieser Chat ist beendet. Auf Wiedersehen! Sie können das Buchungsformular nutzen.",
+    fr: "Merci pour cet échange. Cette conversation est terminée. Au revoir ! Vous pouvez continuer avec le formulaire de réservation.",
+  },
   "conversation.greeting": {
     en: "Hello! How can I help?",
     hu: "Üdvözlöm! Miben segíthetek?",

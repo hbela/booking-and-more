@@ -28,6 +28,36 @@ interface Bubble {
   from: "customer" | "assistant";
   text: string;
 }
+const guardCopy = {
+  en: {
+    start: "Start chat",
+    warning: "One minute remaining.",
+    paste: "Please type your message. Pasting and dropping text are disabled.",
+    remaining: "Characters remaining",
+    time: "Time remaining",
+  },
+  hu: {
+    start: "Beszélgetés indítása",
+    warning: "Egy perc van hátra.",
+    paste: "Kérjük, gépelje be az üzenetet. A beillesztés és a szöveg behúzása nem engedélyezett.",
+    remaining: "Hátralévő karakterek",
+    time: "Hátralévő idő",
+  },
+  de: {
+    start: "Chat starten",
+    warning: "Noch eine Minute.",
+    paste: "Bitte tippen Sie Ihre Nachricht. Einfügen und Ablegen von Text sind deaktiviert.",
+    remaining: "Verbleibende Zeichen",
+    time: "Verbleibende Zeit",
+  },
+  fr: {
+    start: "Démarrer le chat",
+    warning: "Il reste une minute.",
+    paste: "Veuillez saisir votre message. Le collage et le dépôt de texte sont désactivés.",
+    remaining: "Caractères restants",
+    time: "Temps restant",
+  },
+};
 const copy = {
   en: {
     language: "Language",
@@ -120,7 +150,11 @@ function ChatConversation({
   onLanguageChange: (locale: Locale) => void;
 }): React.ReactElement {
   const t = copy[language];
-  const storageKey = `bam.chat.${tenantSlug}.${language}`;
+  const storageKey = `bam.chat.${tenantSlug}`;
+  const g = guardCopy[language];
+  const [clock, setClock] = useState(() => Date.now());
+  const startKey = useRef<string | null>(null);
+  const pendingMessage = useRef<{ text: string; key: string } | null>(null);
   const [session, setSession] = useState<ConversationSession | null>(null);
   const [turn, setTurn] = useState<ConversationTurn | null>(null);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -149,12 +183,15 @@ function ChatConversation({
 
   const begin = useCallback(
     async (token?: string) => {
+      startKey.current ??= crypto.randomUUID();
       const started = await startConversation({
+        idempotencyKey: startKey.current,
         tenantSlug,
         locale: language,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(token ? { managementToken: token } : {}),
       });
+      startKey.current = null;
       const nextSession = { id: started.conversationId, token: started.sessionToken };
       sessionStorage.setItem(storageKey, JSON.stringify(nextSession));
       setAvailable(true);
@@ -197,7 +234,7 @@ function ChatConversation({
                     : renderMessage({ key: message.content, ui: "NONE" }, language),
               })),
           );
-        } else await begin(managementToken);
+        }
       } catch (cause) {
         if (isAssistantUnavailable(cause)) setAvailable(false);
         else setError(cause instanceof ApiError ? cause.message : String(cause));
@@ -218,9 +255,32 @@ function ChatConversation({
     );
   }, [bubbles, parentOrigin, turn]);
 
+  const secondsLeft = turn
+    ? Math.max(0, Math.ceil((Date.parse(turn.expiresAt) - clock) / 1000))
+    : null;
+  const closed = Boolean(turn && (turn.closureReason || secondsLeft === 0));
+  useEffect(() => {
+    if (!session) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [session]);
+  useEffect(() => {
+    if (secondsLeft !== 0 || !session || turn?.closureReason) return;
+    void replayConversation(session)
+      .then(setTurn)
+      .catch(() => undefined);
+  }, [secondsLeft, session, turn?.closureReason]);
+
   const sendText = async (value: string) => {
     const text = value.trim();
-    if (!session || !text || busy) return;
+    if (!session || !text || busy || closed) return;
+    if (
+      Array.from(text).length >
+      Math.min(turn?.maxMessageCharacters ?? 500, turn?.charactersRemaining ?? 5000)
+    )
+      return;
+    if (pendingMessage.current?.text !== text)
+      pendingMessage.current = { text, key: crypto.randomUUID() };
     setDraft("");
     setBusy(true);
     setError(null);
@@ -229,6 +289,7 @@ function ChatConversation({
       const next = await sendMessage({
         session,
         text,
+        idempotencyKey: pendingMessage.current.key,
         onTextDelta: (message) => {
           setBubbles((rows) => [
             ...rows.filter((row) => row.id !== "stream"),
@@ -237,8 +298,10 @@ function ChatConversation({
         },
       });
       setBubbles((rows) => rows.filter((row) => row.id !== "stream"));
+      pendingMessage.current = null;
       absorb(next);
     } catch (cause) {
+      setDraft(text);
       if (isAssistantUnavailable(cause)) setAvailable(false);
       else setError(cause instanceof ApiError ? cause.message : String(cause));
     } finally {
@@ -250,7 +313,7 @@ function ChatConversation({
     return sendText(draft);
   };
   const act = async (card: ConfirmationCard, confirm: boolean) => {
-    if (!session) return;
+    if (!session || closed || busy) return;
     setBusy(true);
     try {
       absorb(
@@ -271,7 +334,7 @@ function ChatConversation({
     setBubbles([]);
     setError(null);
     setBusy(true);
-    void begin()
+    void begin(managementToken)
       .catch((cause: unknown) => {
         if (isAssistantUnavailable(cause)) setAvailable(false);
         else setError(cause instanceof ApiError ? cause.message : String(cause));
@@ -322,7 +385,7 @@ function ChatConversation({
           </label>
           <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
             <RefreshCw size={16} aria-hidden />
-            {t.reset}
+            {session ? t.reset : g.start}
           </Button>
         </header>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
@@ -351,22 +414,31 @@ function ChatConversation({
               {bubble.text}
             </p>
           ))}
+          {closed &&
+          !bubbles.some(
+            (row) =>
+              row.text === renderMessage({ key: "conversation.goodbye", ui: "NONE" }, language),
+          ) ? (
+            <p role="status">
+              {renderMessage({ key: "conversation.goodbye", ui: "NONE" }, language)}
+            </p>
+          ) : null}
           {busy && available ? <p className="text-sm text-ink-muted">{t.working}</p> : null}
           <ChatCatalogueChoices
             services={turn?.message.ui === "SERVICE_LIST" ? turn.services : undefined}
             providers={turn?.message.ui === "PROVIDER_LIST" ? turn.providers : undefined}
             locale={language}
-            disabled={busy || !available}
+            disabled={busy || !available || closed}
             onPick={(name) => void sendText(name)}
           />
-          {turn?.slots?.length ? (
+          {!closed && turn?.slots?.length ? (
             <SlotChoices
               slots={turn.slots}
               locale={language}
               onPick={(ordinal) => setDraft(t.slot(ordinal))}
             />
           ) : null}
-          {turn?.confirmation ? (
+          {!closed && turn?.confirmation ? (
             <Confirmation
               card={turn.confirmation}
               locale={language}
@@ -382,6 +454,23 @@ function ChatConversation({
           ) : null}
         </div>
         <footer className="border-t border-line bg-surface-raised p-4 sm:p-6">
+          <div id="chat-limits" className="mb-3 text-sm">
+            {turn ? (
+              <p>
+                {g.remaining}:{" "}
+                {Math.max(0, turn.charactersRemaining - Array.from(draft.trim()).length)} ·{" "}
+                {Array.from(draft.trim()).length}/{turn.maxMessageCharacters}
+              </p>
+            ) : null}
+            {secondsLeft !== null ? (
+              <p>
+                {g.time}: {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
+              </p>
+            ) : null}
+            {!closed && secondsLeft !== null && secondsLeft <= 60 ? (
+              <p role="status">{g.warning}</p>
+            ) : null}
+          </div>
           <form
             className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
             onSubmit={(event) => void submit(event)}
@@ -391,16 +480,38 @@ function ChatConversation({
             </label>
             <input
               id="chat-message"
-              maxLength={2000}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              disabled={!available || busy}
+              onPaste={(event) => {
+                event.preventDefault();
+                setError(g.paste);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setError(g.paste);
+              }}
+              onBeforeInput={(event) => {
+                if (["insertFromPaste", "insertFromDrop"].includes(event.nativeEvent.inputType)) {
+                  event.preventDefault();
+                  setError(g.paste);
+                }
+              }}
+              aria-describedby="chat-limits"
+              disabled={!available || busy || closed || !session}
               placeholder={t.placeholder}
               className="min-h-12 min-w-0 rounded-lg border border-line-strong bg-surface px-4"
             />
             <Button
               type="submit"
-              disabled={!available || busy || !draft.trim()}
+              disabled={
+                !available ||
+                busy ||
+                closed ||
+                !session ||
+                !draft.trim() ||
+                Array.from(draft.trim()).length >
+                  Math.min(turn?.maxMessageCharacters ?? 500, turn?.charactersRemaining ?? 5000)
+              }
               aria-label={t.send}
             >
               <Send size={17} aria-hidden />

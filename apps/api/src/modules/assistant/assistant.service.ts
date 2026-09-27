@@ -1,3 +1,5 @@
+import { withKnowledgeBudget } from "./knowledge-budget.js";
+import type { ChatLimits } from "../public/chat-guards.js";
 import type { PrismaClient, Tenant } from "@bam/db";
 import {
   ForbiddenError,
@@ -22,9 +24,12 @@ const PROFILE_FIELDS = {
 } as const;
 
 export class AssistantService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly chatLimits?: ChatLimits,
+  ) {}
 
-  async publicConfig(tenant: Tenant) {
+  async publicConfig(tenant: Tenant, ignoreTokenQuota = false) {
     const period = usagePeriodOf();
     const [settings, subscription, aggregates, reserved] = await Promise.all([
       this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: tenant.id } }),
@@ -48,8 +53,20 @@ export class AssistantService {
     const outputUsed =
       (aggregates.find((row) => row.category === "AI_OUTPUT_TOKENS")?.quantity ?? 0) +
       (reserved._sum.outputTokens ?? 0);
-    const inputLimit = quotaFor(subscription?.plan, "AI_INPUT_TOKENS");
-    const outputLimit = quotaFor(subscription?.plan, "AI_OUTPUT_TOKENS");
+    const monthly =
+      subscription?.plan === "PROFESSIONAL_PLUS"
+        ? this.chatLimits?.plusMonthlyLimit
+        : subscription?.plan === "PROFESSIONAL"
+          ? this.chatLimits?.professionalMonthlyLimit
+          : undefined;
+    const inputLimit =
+      monthly === undefined
+        ? quotaFor(subscription?.plan, "AI_INPUT_TOKENS")
+        : monthly * this.chatLimits!.maxInputTokens;
+    const outputLimit =
+      monthly === undefined
+        ? quotaFor(subscription?.plan, "AI_OUTPUT_TOKENS")
+        : monthly * this.chatLimits!.maxConversationOutputTokens;
     const quotaRemaining =
       (inputLimit === null || inputUsed < inputLimit) &&
       (outputLimit === null || outputUsed < outputLimit);
@@ -57,7 +74,7 @@ export class AssistantService {
       available: Boolean(
         settings?.enabled &&
         hasAssistantEntitlement(subscription?.plan, subscription?.status) &&
-        quotaRemaining,
+        (ignoreTokenQuota || quotaRemaining),
       ),
       personaName,
       greeting: `${personaName} · ${tenant.name}`,
@@ -118,7 +135,7 @@ export class AssistantService {
         return `Service: ${JSON.stringify({
           id: service.id,
           name: localized.name,
-          description: localized.description?.slice(0, 2_000) ?? null,
+          description: localized.description ?? null,
         })}`;
       }),
       ...faqs.map((faq) => `Q: ${faq.question}\nA: ${faq.answer}`),
@@ -147,17 +164,19 @@ export class AssistantService {
         ? { [originalField]: input.businessDescription }
         : {}),
     };
-    return this.prisma.tenantAssistantSettings.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
-        enabled: false,
-        personaName: locale === "hu" ? "Asszisztens" : "Assistant",
-        supportedLocales: [...languageSchema.options],
-        ...data,
-      },
-      update: data,
-    });
+    return withKnowledgeBudget(this.prisma, tenantId, (tx) =>
+      tx.tenantAssistantSettings.upsert({
+        where: { tenantId },
+        create: {
+          tenantId,
+          enabled: false,
+          personaName: locale === "hu" ? "Asszisztens" : "Assistant",
+          supportedLocales: [...languageSchema.options],
+          ...data,
+        },
+        update: data,
+      }),
+    );
   }
   listFaqs(tenantId: string): Promise<AssistantFaqRow[]> {
     return this.prisma.tenantAssistantFaq.findMany({
@@ -166,19 +185,25 @@ export class AssistantService {
     });
   }
   createFaq(tenantId: string, input: AssistantFaqInput): Promise<AssistantFaqRow> {
-    return this.prisma.tenantAssistantFaq.create({ data: { tenantId, ...input } });
+    return withKnowledgeBudget(this.prisma, tenantId, (tx) =>
+      tx.tenantAssistantFaq.create({ data: { tenantId, ...input } }),
+    );
   }
   async updateFaq(tenantId: string, id: string, input: AssistantFaqInput) {
-    const result = await this.prisma.tenantAssistantFaq.updateMany({
-      where: { id, tenantId },
-      data: input,
+    return withKnowledgeBudget(this.prisma, tenantId, async (tx) => {
+      const result = await tx.tenantAssistantFaq.updateMany({
+        where: { id, tenantId },
+        data: input,
+      });
+      if (result.count !== 1) throw new NotFoundError("FAQ not found.");
+      return tx.tenantAssistantFaq.findFirstOrThrow({ where: { id, tenantId } });
     });
-    if (result.count !== 1) throw new NotFoundError("FAQ not found.");
-    return this.prisma.tenantAssistantFaq.findFirstOrThrow({ where: { id, tenantId } });
   }
   async deleteFaq(tenantId: string, id: string): Promise<void> {
-    const result = await this.prisma.tenantAssistantFaq.deleteMany({ where: { id, tenantId } });
-    if (result.count !== 1) throw new NotFoundError("FAQ not found.");
+    await withKnowledgeBudget(this.prisma, tenantId, async (tx) => {
+      const result = await tx.tenantAssistantFaq.deleteMany({ where: { id, tenantId } });
+      if (result.count !== 1) throw new NotFoundError("FAQ not found.");
+    });
   }
   listConversations(
     tenantId: string,

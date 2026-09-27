@@ -253,6 +253,25 @@ const baseEnvSchema = z.object({
    * read. Required alongside the secret key — see the superRefine.
    */
   STRIPE_PRICE_STARTER: z.string().startsWith("price_").optional(),
+  STRIPE_PRICE_PROFESSIONAL_PLUS: z.string().startsWith("price_").optional(),
+  STRIPE_PRICE_STARTER_LEGACY: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
+  STRIPE_PRICE_PROFESSIONAL_LEGACY: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean),
+    ),
   STRIPE_PRICE_PROFESSIONAL: z.string().startsWith("price_").optional(),
 
   /**
@@ -362,7 +381,32 @@ const baseEnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   ANTHROPIC_CHAT_MODEL: z.string().min(1).default("claude-sonnet-5"),
   CHAT_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(4_096).default(1_024),
-  CONVERSATION_TTL_MINUTES: z.coerce.number().int().positive().default(1_440),
+  CONVERSATION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  CHAT_DAILY_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(30),
+  CHAT_MONTHLY_LIMIT_PROFESSIONAL: z.coerce.number().int().positive().max(100_000_000).default(150),
+  CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100_000_000)
+    .default(300),
+  CHAT_MAX_MESSAGE_CHARACTERS: z.coerce.number().int().positive().max(100_000_000).default(500),
+  CHAT_MAX_PATIENT_CHARACTERS: z.coerce.number().int().positive().max(100_000_000).default(5000),
+  CHAT_MAX_INPUT_TOKENS_PER_CONVERSATION: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100_000_000)
+    .default(80000),
+  CHAT_MAX_OUTPUT_TOKENS_PER_CONVERSATION: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(100_000_000)
+    .default(4000),
+  CHAT_START_RATE_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(10),
+  CHAT_MESSAGE_RATE_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(20),
+  CHAT_SESSION_RATE_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(10),
   CONVERSATION_MAX_TURNS: z.coerce.number().int().positive().max(100).default(40),
   PENDING_ACTION_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   VOICE_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(30),
@@ -373,6 +417,18 @@ const baseEnvSchema = z.object({
 });
 
 const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production" && env.ANTHROPIC_API_KEY && !env.REDIS_URL)
+    ctx.addIssue({
+      code: "custom",
+      path: ["REDIS_URL"],
+      message: "Public AI chat in production requires shared Redis rate limiting.",
+    });
+  if (env.CHAT_MAX_MESSAGE_CHARACTERS > env.CHAT_MAX_PATIENT_CHARACTERS)
+    ctx.addIssue({
+      code: "custom",
+      path: ["CHAT_MAX_MESSAGE_CHARACTERS"],
+      message: "A message cannot exceed the conversation character allowance.",
+    });
   if (
     env.CUSTOMER_PII_ENCRYPTION_KEY.toLowerCase() === env.CUSTOMER_PII_BLIND_INDEX_KEY.toLowerCase()
   ) {

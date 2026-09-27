@@ -92,8 +92,7 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  environment:
-    process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? "production",
+  environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? "production",
 
   tracesSampleRate: 0.1,
 
@@ -103,8 +102,7 @@ Sentry.init({
   sendDefaultPii: false,
 });
 
-export const onRouterTransitionStart =
-  Sentry.captureRouterTransitionStart;
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
 ```
 
 I would **not start with `tracesSampleRate: 1` in production**. That means recording every transaction.
@@ -122,7 +120,7 @@ You can adjust them once you see your actual Sentry volume.
 Because you're operating in the EU, I would also start with:
 
 ```ts
-sendDefaultPii: false
+sendDefaultPii: false;
 ```
 
 unless you have specifically decided what personal information you want sent to Sentry.
@@ -139,8 +137,7 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
 
-  environment:
-    process.env.SENTRY_ENVIRONMENT ?? "production",
+  environment: process.env.SENTRY_ENVIRONMENT ?? "production",
 
   tracesSampleRate: 0.1,
 
@@ -163,8 +160,7 @@ export async function register() {
   }
 }
 
-export const onRequestError =
-  Sentry.captureRequestError;
+export const onRequestError = Sentry.captureRequestError;
 ```
 
 This is particularly useful for errors in:
@@ -263,13 +259,13 @@ I would configure them roughly like this:
 
 | Variable                         |    Build | Runtime |
 | -------------------------------- | -------: | ------: |
-| `NEXT_PUBLIC_SENTRY_DSN`         |        ✅ |       ✅ |
-| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` |        ✅ |       ✅ |
-| `SENTRY_DSN`                     | optional |       ✅ |
-| `SENTRY_ENVIRONMENT`             | optional |       ✅ |
-| `SENTRY_ORG`                     |        ✅ |       ❌ |
-| `SENTRY_PROJECT`                 |        ✅ |       ❌ |
-| `SENTRY_AUTH_TOKEN`              |        ✅ |       ❌ |
+| `NEXT_PUBLIC_SENTRY_DSN`         |       ✅ |      ✅ |
+| `NEXT_PUBLIC_SENTRY_ENVIRONMENT` |       ✅ |      ✅ |
+| `SENTRY_DSN`                     | optional |      ✅ |
+| `SENTRY_ENVIRONMENT`             | optional |      ✅ |
+| `SENTRY_ORG`                     |       ✅ |      ❌ |
+| `SENTRY_PROJECT`                 |       ✅ |      ❌ |
+| `SENTRY_AUTH_TOKEN`              |       ✅ |      ❌ |
 
 The especially important one is:
 
@@ -315,9 +311,7 @@ Create a temporary route/page or button:
 import * as Sentry from "@sentry/nextjs";
 
 export function testSentry() {
-  Sentry.captureException(
-    new Error("Test Next.js Sentry error")
-  );
+  Sentry.captureException(new Error("Test Next.js Sentry error"));
 }
 ```
 
@@ -388,8 +382,7 @@ import * as Sentry from "@sentry/node";
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
 
-  environment:
-    process.env.SENTRY_ENVIRONMENT ?? "production",
+  environment: process.env.SENTRY_ENVIRONMENT ?? "production",
 
   tracesSampleRate: 0.1,
 
@@ -570,10 +563,7 @@ Sentry.init({
 
   tracesSampleRate: 0.1,
 
-  tracePropagationTargets: [
-    "localhost",
-    /^https:\/\/api\.example\.com/,
-  ],
+  tracePropagationTargets: ["localhost", /^https:\/\/api\.example\.com/],
 });
 ```
 
@@ -598,12 +588,7 @@ For example, if you configure headers manually:
 await app.register(cors, {
   origin: "https://app.example.com",
 
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "sentry-trace",
-    "baggage",
-  ],
+  allowedHeaders: ["Content-Type", "Authorization", "sentry-trace", "baggage"],
 });
 ```
 

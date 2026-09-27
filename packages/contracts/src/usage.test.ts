@@ -18,8 +18,8 @@ describe("quotaFor", () => {
   it("keeps Form tenants out of AI and caps AI Receptionist tenants", () => {
     expect(quotaFor("STARTER", "AI_INPUT_TOKENS")).toBe(0);
     expect(quotaFor("STARTER", "AI_OUTPUT_TOKENS")).toBe(0);
-    expect(quotaFor("PROFESSIONAL", "AI_INPUT_TOKENS")).toBe(2_000_000);
-    expect(quotaFor("PROFESSIONAL", "AI_OUTPUT_TOKENS")).toBe(400_000);
+    expect(quotaFor("PROFESSIONAL", "AI_INPUT_TOKENS")).toBe(12_000_000);
+    expect(quotaFor("PROFESSIONAL", "AI_OUTPUT_TOKENS")).toBe(600_000);
   });
 
   it("leaves the unsold internal plan unmetered", () => {

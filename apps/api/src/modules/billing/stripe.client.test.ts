@@ -20,7 +20,7 @@ describe("AAM payment links", () => {
       livemode: false,
       active: true,
       currency: "huf",
-      unit_amount: 2499000,
+      unit_amount: 2990000,
       recurring: { interval: "month", interval_count: 1 },
     });
     createLink.mockReset();
@@ -43,7 +43,8 @@ describe("AAM payment links", () => {
 
   it.each([
     ["STARTER", 999000],
-    ["PROFESSIONAL", 2499000],
+    ["PROFESSIONAL", 2990000],
+    ["PROFESSIONAL_PLUS", 5980000],
   ])("accepts the correct Stripe minor-unit amount for %s", async (plan, amount) => {
     retrievePrice.mockResolvedValue({
       livemode: false,
@@ -64,7 +65,8 @@ describe("AAM payment links", () => {
 
   it.each([
     ["STARTER", 9990],
-    ["PROFESSIONAL", 24990],
+    ["PROFESSIONAL", 29900],
+    ["PROFESSIONAL_PLUS", 59800],
   ])("rejects a price 100 times too low for %s", async (plan, amount) => {
     retrievePrice.mockResolvedValue({
       livemode: false,

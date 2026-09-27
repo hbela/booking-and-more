@@ -60,7 +60,9 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
   });
 
   /** A tenant on a plan, with nothing metered against it yet. */
-  async function tenantOn(plan: "INTERNAL" | "STARTER" | "PROFESSIONAL"): Promise<string> {
+  async function tenantOn(
+    plan: "INTERNAL" | "STARTER" | "PROFESSIONAL" | "PROFESSIONAL_PLUS",
+  ): Promise<string> {
     const label = `${RUN}${tenantIds.length}`;
 
     const tenant = await app.prisma.tenant.create({
@@ -204,7 +206,7 @@ describe.skipIf(!databaseUrl)("usage metering", () => {
     const tenantId = await tenantOn("PROFESSIONAL");
     const attempts = await Promise.allSettled(
       Array.from({ length: 3 }, () =>
-        usage.reserveAiCall({ tenantId, inputTokens: 1_000_000, outputTokens: 200_000 }),
+        usage.reserveAiCall({ tenantId, inputTokens: 6_000_000, outputTokens: 300_000 }),
       ),
     );
 

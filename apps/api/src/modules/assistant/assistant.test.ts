@@ -3,6 +3,19 @@ import { createPrismaClient, type PrismaClient, type Tenant } from "@bam/db";
 import { AssistantService, localizedBusinessDescription } from "./assistant.service.js";
 import { assistantFaqInputSchema, assistantSettingsPatchSchema } from "./assistant.schemas.js";
 
+function settingsMock(upsert: ReturnType<typeof vi.fn>): PrismaClient {
+  const tx = {
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    tenant: { findUniqueOrThrow: vi.fn().mockResolvedValue({ defaultLanguage: "hu" }) },
+    tenantAssistantSettings: { upsert, findUnique: vi.fn().mockResolvedValue(null) },
+    service: { findMany: vi.fn().mockResolvedValue([]) },
+    tenantAssistantFaq: { findMany: vi.fn().mockResolvedValue([]) },
+  };
+  return {
+    $transaction: (work: (client: typeof tx) => Promise<unknown>) => work(tx),
+  } as unknown as PrismaClient;
+}
+
 const profile = {
   businessDescription: "Original",
   businessDescriptionHu: "Magyar bemutatkozás",
@@ -65,7 +78,7 @@ describe("company profile translations", () => {
         localizedBusinessDescription({ ...profile, businessDescriptionHu: null }, "hu", locale),
       ).toBe(profile[field]);
       const upsert = vi.fn().mockResolvedValue(profile);
-      const prisma = { tenantAssistantSettings: { upsert } } as unknown as PrismaClient;
+      const prisma = settingsMock(upsert);
       await new AssistantService(prisma).saveSettings(
         "tenant-1",
         { businessDescription: "Updated" },
@@ -76,8 +89,8 @@ describe("company profile translations", () => {
           update: { businessDescription: "Updated", [field]: "Updated" },
         }),
       );
-      expect(assistantSettingsPatchSchema.safeParse({ [field]: "x".repeat(4001) }).success).toBe(
-        false,
+      expect(assistantSettingsPatchSchema.safeParse({ [field]: "x".repeat(10000) }).success).toBe(
+        true,
       );
     },
   );
@@ -87,8 +100,8 @@ describe("company profile translations", () => {
       businessDescriptionEn: "English",
     });
     expect(
-      assistantSettingsPatchSchema.safeParse({ businessDescriptionHu: "x".repeat(4001) }).success,
-    ).toBe(false);
+      assistantSettingsPatchSchema.safeParse({ businessDescriptionHu: "x".repeat(10000) }).success,
+    ).toBe(true);
     expect(assistantSettingsPatchSchema.parse({ businessDescriptionHu: null })).toEqual({
       businessDescriptionHu: null,
     });
@@ -110,7 +123,7 @@ describe("company profile translations", () => {
 
   it("keeps the other language unchanged when saving a translation", async () => {
     const upsert = vi.fn().mockResolvedValue(profile);
-    const prisma = { tenantAssistantSettings: { upsert } } as unknown as PrismaClient;
+    const prisma = settingsMock(upsert);
     await new AssistantService(prisma).saveSettings(
       "tenant-1",
       { businessDescriptionEn: "New English" },
@@ -126,7 +139,7 @@ describe("company profile translations", () => {
 
   it("clears the legacy fallback when the original profile is cleared", async () => {
     const upsert = vi.fn().mockResolvedValue(profile);
-    const prisma = { tenantAssistantSettings: { upsert } } as unknown as PrismaClient;
+    const prisma = settingsMock(upsert);
     await new AssistantService(prisma).saveSettings(
       "tenant-1",
       { businessDescriptionHu: null },

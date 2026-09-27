@@ -1,4 +1,11 @@
 {
+  "knowledgeBudget": {
+    "hint": "Nyelvenként összesen 10 000 karakter használható a cégbemutatkozásra, az összes szolgáltatás leírására és a GYIK kérdéseire és válaszaira. Az inaktív és archivált tartalom is beleszámít.",
+    "usage": "{language} tartalom: {used, number} / {limit, number} karakter",
+    "over": "A keret túllépve. Az összes karakterszámot csökkentő módosítások menthetők.",
+    "error": "A tartalom meghaladja a nyelvenkénti 10 000 karakteres közös keretet. Rövidítse a cégbemutatkozást, a szolgáltatások leírását vagy a GYIK tartalmát. A beírt szöveg megmaradt.",
+    "loadError": "A felhasznált karakterszám nem tölthető be. Mentéskor a rendszer ellenőrzi a keretet."
+  },
   "common": {
     "appName": "Booking and More",
     "tagline": "Online időpontfoglalás rendelőknek, szalonoknak és stúdióknak.",
@@ -121,9 +128,9 @@
     "subscriptionTitle": "Előfizetés",
     "choosePlan": "Válasszon csomagot",
     "planStarter": "Űrlap",
-    "planProfessional": "AI Asszistens",
+    "planProfessional": "Professional",
     "planStarterDescription": "Vezérlőpult és nyilvános foglalási űrlap. Az AI chat nem része a csomagnak.",
-    "planProfessionalDescription": "Az Űrlap csomag minden funkciója, továbbá AI chat, weboldali widget, beszélgetési naplók, valamint havi 2M bemeneti és 400K kimeneti token. A keret felhasználása után a foglalási űrlap továbbra is elérhető.",
+    "planProfessionalDescription": "AI chat, weboldali widget és beszélgetési naplók. Havi 150, legfeljebb napi 30 beszélgetés. Egy chat legfeljebb 5 perc.",
     "perMonth": "/ hó",
     "pricesTaxExempt": "Alanyi adómentes (AAM). Áfát nem számítunk fel.",
     "subscriptionActivationPending": "A Stripe-on az előfizetési folyamat befejeződött. Az aktiválás visszaigazolására várunk, az állapot automatikusan frissül. Ne indítson új előfizetést. Ha az állapot nem változik, kérjen segítséget.",
@@ -159,7 +166,10 @@
     "integrations": "Naptár",
     "noOrganizationTitle": "Még nem tartozik egyetlen szervezethez sem",
     "noOrganizationHint": "Ez a képernyő egy adott szervezethez tartozik, az Ön fiókja pedig egyikhez sem. Ha hozzáférésre számított, kérje meg a szervezet tulajdonosát, hogy hívja meg.",
-    "noOrganizationLink": "Vissza az áttekintéshez"
+    "noOrganizationLink": "Vissza az áttekintéshez",
+    "planProfessionalPlus": "Professional Plus",
+    "planProfessionalPlusDescription": "A Professional minden funkciója havi 300, legfeljebb napi 30 beszélgetéssel. Egy chat legfeljebb 5 perc.",
+    "chatUsage": "Havi beszélgetések: {used} / {limit}. Hátralévő: {remaining}. A keret minden UTC hónap elején megújul."
   },
   "invitation": {
     "title": "Meghívó",

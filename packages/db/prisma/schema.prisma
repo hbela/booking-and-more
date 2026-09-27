@@ -133,6 +133,7 @@ model Tenant {
   billingoInvoices     BillingoInvoice[]
   assistantSettings    TenantAssistantSettings?
   assistantFaqs        TenantAssistantFaq[]
+  chatCounters         ChatUsageCounter[]
   conversationSessions ConversationSession[]
   conversationMessages ConversationMessage[]
   conversationActions  ConversationPendingAction[]
@@ -1425,6 +1426,17 @@ model ConversationSession {
   stateJson         Json                        @default("{}") @map("state_json")
   tokenHash         String                      @unique @map("token_hash")
   turnCount         Int                         @default(0) @map("turn_count")
+  startKeyHash      String?                     @map("start_key_hash")
+  startRequestHash  String?                     @map("start_request_hash")
+  patientCharacters Int                         @default(0) @map("patient_characters")
+  aiInputTokens     Int                         @default(0) @map("ai_input_tokens")
+  aiOutputTokens    Int                         @default(0) @map("ai_output_tokens")
+  processingUntil   DateTime?                   @map("processing_until") @db.Timestamptz(3)
+  processingToken   String?                     @map("processing_token")
+  rateWindowStart   DateTime?                   @map("rate_window_start") @db.Timestamptz(3)
+  rateWindowCount   Int                         @default(0) @map("rate_window_count")
+  closedAt          DateTime?                   @map("closed_at") @db.Timestamptz(3)
+  closureReason     String?                     @map("closure_reason")
   outcomeSuccessful Boolean?                    @map("outcome_successful")
   summary           String?                     @db.Text
   lastActivityAt    DateTime                    @default(now()) @map("last_activity_at") @db.Timestamptz(3)
@@ -1434,6 +1446,7 @@ model ConversationSession {
   messages          ConversationMessage[]
   pendingActions    ConversationPendingAction[]
 
+  @@unique([tenantId, startKeyHash])
   @@index([tenantId, status, lastActivityAt])
   @@index([status, expiresAt])
   @@map("conversation_sessions")
@@ -1767,6 +1780,7 @@ enum SubscriptionPlan {
   INTERNAL
   STARTER
   PROFESSIONAL
+  PROFESSIONAL_PLUS
 
   @@map("subscription_plan")
 }
@@ -2318,4 +2332,13 @@ model BillingTransitionArchive {
   sealedSnapshot String @map("sealed_snapshot")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   @@map("billing_transition_archives")
+}
+
+model ChatUsageCounter {
+  tenantId String @map("tenant_id")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period String
+  quantity Int @default(0)
+  @@id([tenantId, period])
+  @@map("chat_usage_counters")
 }

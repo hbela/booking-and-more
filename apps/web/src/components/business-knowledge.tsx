@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import { knowledgeCharacters, type Language } from "@bam/contracts";
+import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
 import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
@@ -46,6 +49,9 @@ export function BusinessKnowledge({
 }) {
   const t = useTranslations("businessKnowledge");
   const locale = useLocale();
+  const budgetText = useTranslations("knowledgeBudget");
+  const [profileChanges, setProfileChanges] = useState<Partial<Record<Language, number>>>({});
+  const [faqChanges, setFaqChanges] = useState<Partial<Record<Language, number>>>({});
   const client = useQueryClient();
   const settings = useQuery({
     queryKey: ["assistant-settings", tenantId],
@@ -62,7 +68,11 @@ export function BusinessKnowledge({
         tenantId,
         body: profile,
       }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["assistant-settings", tenantId] }),
+    onSuccess: () => {
+      setProfileChanges({});
+      void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: ["assistant-settings", tenantId] });
+    },
   });
   const addFaq = useMutation({
     mutationFn: (body: Omit<Faq, "id">) =>
@@ -71,19 +81,43 @@ export function BusinessKnowledge({
         tenantId,
         body: { ...body, active: true, sortOrder: 0 },
       }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] }),
+    onSuccess: () => {
+      setFaqChanges({});
+      void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] });
+    },
   });
   const removeFaq = useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/v1/assistant/faqs/${id}`, { method: "DELETE", tenantId }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] }),
+    onSuccess: () => {
+      setFaqChanges({});
+      void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] });
+    },
   });
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
       <Card title={t("title")} description={t("hint")}>
-        {settings.error || save.isError ? <ErrorText>{t("error")}</ErrorText> : null}
+        {settings.error || save.isError ? (
+          <ErrorText>
+            {isKnowledgeLimitError(save.error) ? budgetText("error") : t("error")}
+          </ErrorText>
+        ) : null}
         {settings.data ? (
           <form
+            onChange={(event) => {
+              const data = new FormData(event.currentTarget);
+              setProfileChanges(
+                Object.fromEntries(
+                  LANGUAGES.map((language) => [
+                    language,
+                    knowledgeCharacters(formText(data, `description-${language}`)) -
+                      knowledgeCharacters(settings.data?.[PROFILE_FIELDS[language]]),
+                  ]),
+                ),
+              );
+            }}
             key={tenantId}
             className="grid gap-3"
             onSubmit={(event) => {
@@ -104,11 +138,12 @@ export function BusinessKnowledge({
                   name={`description-${language}`}
                   lang={language}
                   defaultValue={settings.data[PROFILE_FIELDS[language]] ?? ""}
-                  maxLength={4000}
+
                   readOnly={!canManage}
                 />
               </label>
             ))}
+            <KnowledgeBudget tenantId={tenantId} changes={profileChanges} />
             <p className="text-sm text-ink-muted">{t("translationHint")}</p>
             {canManage ? (
               <Button type="submit" disabled={save.isPending}>
@@ -123,10 +158,21 @@ export function BusinessKnowledge({
       </Card>
       <Card title={t("faqs")} description={t("faqHint")}>
         {faqs.error || addFaq.isError || removeFaq.isError ? (
-          <ErrorText>{t("error")}</ErrorText>
+          <ErrorText>
+            {isKnowledgeLimitError(addFaq.error) ? budgetText("error") : t("error")}
+          </ErrorText>
         ) : null}
         {canManage ? (
           <form
+            onChange={(event) => {
+              const data = new FormData(event.currentTarget);
+              const language = LANGUAGES.find((entry) => entry === data.get("locale")) ?? "hu";
+              setFaqChanges({
+                [language]:
+                  knowledgeCharacters(formText(data, "question")) +
+                  knowledgeCharacters(formText(data, "answer")),
+              });
+            }}
             className="grid gap-3"
             onSubmit={(event) => {
               event.preventDefault();
@@ -154,12 +200,13 @@ export function BusinessKnowledge({
             </label>
             <label>
               {t("question")}
-              <Input name="question" required maxLength={500} />
+              <Input name="question" required />
             </label>
             <label>
               {t("answer")}
-              <Textarea name="answer" required maxLength={4000} />
+              <Textarea name="answer" required />
             </label>
+            <KnowledgeBudget tenantId={tenantId} changes={faqChanges} />
             <Button type="submit" disabled={addFaq.isPending}>
               {t("addFaq")}
             </Button>

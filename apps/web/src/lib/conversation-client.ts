@@ -13,10 +13,8 @@ import { ApiError, apiFetch, idempotencyKey, withIdempotency } from "./api-clien
  * token is minted once, held in memory for the life of the panel, and put in
  * `X-Conversation-Token` on every subsequent call.
  *
- * It is deliberately **not** persisted. A token in `localStorage` is a token
- * that outlives the tab it was issued to and survives in a shared browser; the
- * conversation itself is thirty minutes long and the form is always there, so
- * losing it on refresh costs a customer one greeting.
+ * Stored in sessionStorage for refresh recovery, never in localStorage. The
+ * server enforces an absolute 15-minute deadline independently of the tab.
  */
 
 export type UiHint =
@@ -79,6 +77,10 @@ export interface ConversationTurn {
   slots?: ConversationSlot[];
   confirmation: ConfirmationCard | null;
   bookingReference: string | null;
+  expiresAt: string;
+  maxMessageCharacters: number;
+  charactersRemaining: number;
+  closureReason: string | null;
   turnsRemaining: number;
 }
 
@@ -115,6 +117,7 @@ function auth(session: ConversationSession): Record<string, string> {
 }
 
 export async function startConversation(args: {
+  idempotencyKey: string;
   tenantSlug: string;
   locale: string;
   timezone: string;
@@ -122,6 +125,7 @@ export async function startConversation(args: {
 }): Promise<StartedConversation> {
   return apiFetch<StartedConversation>(`/v1/public/tenants/${args.tenantSlug}/conversations`, {
     method: "POST",
+    headers: withIdempotency(args.idempotencyKey),
     body: {
       channel: "CHAT",
       locale: args.locale,
@@ -134,6 +138,7 @@ export async function startConversation(args: {
 export async function sendMessage(args: {
   session: ConversationSession;
   text: string;
+  idempotencyKey: string;
   onTextDelta?: ((message: AssistantMessage) => void) | undefined;
 }): Promise<ConversationTurn> {
   const base = API_BASE_URL;
@@ -142,6 +147,7 @@ export async function sendMessage(args: {
     credentials: "include",
     headers: {
       ...auth(args.session),
+      ...withIdempotency(args.idempotencyKey),
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },

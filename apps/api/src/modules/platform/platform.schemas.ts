@@ -86,7 +86,7 @@ export const organizationSummarySchema = z.object({
 
   subscription: z
     .object({
-      plan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL"]),
+      plan: z.enum(["INTERNAL", "STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"]),
       status: z.enum([
         "ACTIVE",
         "PAST_DUE",

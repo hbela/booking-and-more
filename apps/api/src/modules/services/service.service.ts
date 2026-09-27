@@ -1,3 +1,4 @@
+import { withKnowledgeBudget } from "../assistant/knowledge-budget.js";
 import type { PrismaClient } from "@bam/db";
 import { ConflictError, ErrorCodes, ValidationError } from "@bam/contracts";
 import { definedOnly } from "../../lib/patch.js";
@@ -43,36 +44,38 @@ export class ServiceCatalogService {
 
     await this.assertSlugIsFree({ tenantId, slug });
 
-    const created = await this.services.create({
-      tenantId,
-      data: {
-        name: input.name,
-        slug,
-        durationMinutes: input.durationMinutes,
-        ...definedOnly({
-          description: input.description,
-          bufferBeforeMinutes: input.bufferBeforeMinutes,
-          bufferAfterMinutes: input.bufferAfterMinutes,
-          priceMinor: input.priceMinor,
-          currency: input.currency,
-          active: input.active,
-          requiresApproval: input.requiresApproval,
-          minimumNoticeMinutes: input.minimumNoticeMinutes,
-          maximumAdvanceDays: input.maximumAdvanceDays,
-        }),
-        ...(input.translations === undefined
-          ? {}
-          : {
-              translations: {
-                create: input.translations.map((translation) => ({
-                  locale: translation.locale,
-                  name: translation.name,
-                  description: translation.description ?? null,
-                })),
-              },
-            }),
-      },
-    });
+    const created = await withKnowledgeBudget(this.prisma, tenantId, (tx) =>
+      new ServiceRepository(tx).create({
+        tenantId,
+        data: {
+          name: input.name,
+          slug,
+          durationMinutes: input.durationMinutes,
+          ...definedOnly({
+            description: input.description,
+            bufferBeforeMinutes: input.bufferBeforeMinutes,
+            bufferAfterMinutes: input.bufferAfterMinutes,
+            priceMinor: input.priceMinor,
+            currency: input.currency,
+            active: input.active,
+            requiresApproval: input.requiresApproval,
+            minimumNoticeMinutes: input.minimumNoticeMinutes,
+            maximumAdvanceDays: input.maximumAdvanceDays,
+          }),
+          ...(input.translations === undefined
+            ? {}
+            : {
+                translations: {
+                  create: input.translations.map((translation) => ({
+                    locale: translation.locale,
+                    name: translation.name,
+                    description: translation.description ?? null,
+                  })),
+                },
+              }),
+        },
+      }),
+    );
 
     return created;
   }
@@ -106,11 +109,13 @@ export class ServiceCatalogService {
       });
     }
 
-    return this.services.update({
-      tenantId,
-      serviceId,
-      data: definedOnly(input),
-    });
+    return withKnowledgeBudget(this.prisma, tenantId, (tx) =>
+      new ServiceRepository(tx).update({
+        tenantId,
+        serviceId,
+        data: definedOnly(input),
+      }),
+    );
   }
 
   async archive(args: { tenantId: string; serviceId: string }): Promise<ServiceWithTranslations> {
@@ -155,7 +160,7 @@ export class ServiceCatalogService {
       });
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    await withKnowledgeBudget(this.prisma, tenantId, async (tx) => {
       await tx.serviceTranslation.deleteMany({
         where: { serviceId, locale: { notIn: locales } },
       });

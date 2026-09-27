@@ -23,9 +23,8 @@ interface TokenPrice {
 }
 
 const TOKEN_PRICES: Record<string, TokenPrice> = {
-  // Standard price after the Sonnet 5 launch promotion ends on 2026-08-31.
-  // Recording the durable rate avoids understating the plan's unit economics.
-  "claude-sonnet-5": { input: 300, output: 1_500 },
+  // Verified against Anthropic platform pricing on 2026-09-26.
+  "claude-sonnet-5": { input: 200, output: 1_000 },
   "gpt-4o-mini": { input: 15, output: 60 },
   "gpt-4o": { input: 250, output: 1_000 },
   "gpt-4.1-mini": { input: 40, output: 160 },

@@ -69,7 +69,7 @@ export const conversationTokenHeaderSchema = z.object({
 });
 
 export const sendMessageBodySchema = z.object({
-  text: z.string().trim().min(1).max(2_000),
+  text: z.string().trim().min(1).max(100_000),
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +153,10 @@ export const conversationTurnSchema = z.object({
   confirmation: confirmationCardSchema.nullable(),
   /** Set once a booking exists. The management token is emailed, never here. */
   bookingReference: z.string().nullable(),
+  expiresAt: instantSchema,
+  maxMessageCharacters: z.number().int().positive(),
+  charactersRemaining: z.number().int().nonnegative(),
+  closureReason: z.string().nullable(),
   turnsRemaining: z.number().int().min(0),
 });
 

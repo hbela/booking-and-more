@@ -1,5 +1,7 @@
 "use client";
 
+import { knowledgeCharacters, type Language } from "@bam/contracts";
+import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -152,6 +154,9 @@ export function ServicesScreen(): React.ReactElement {
                                 tenantId: context.tenantId,
                               }).then(() => {
                                 void queryClient.invalidateQueries({ queryKey: ["services"] });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ["knowledge-usage"],
+                                });
                               });
                             }}
                           >
@@ -182,6 +187,9 @@ export function ServicesScreen(): React.ReactElement {
                                   body: { active: !service.active },
                                 }).then(() => {
                                   void queryClient.invalidateQueries({ queryKey: ["services"] });
+                                  void queryClient.invalidateQueries({
+                                    queryKey: ["knowledge-usage"],
+                                  });
                                 });
                               }}
                             >
@@ -194,6 +202,9 @@ export function ServicesScreen(): React.ReactElement {
                                   tenantId: context.tenantId,
                                 }).then(() => {
                                   void queryClient.invalidateQueries({ queryKey: ["services"] });
+                                  void queryClient.invalidateQueries({
+                                    queryKey: ["knowledge-usage"],
+                                  });
                                 });
                               }}
                             >
@@ -240,6 +251,7 @@ export function ServicesScreen(): React.ReactElement {
 
 function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const budgetText = useTranslations("knowledgeBudget");
   const queryClient = useQueryClient();
 
   const [state, setState] = useState<ServiceFormState>(() => serviceStateFrom());
@@ -256,13 +268,20 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
     onSuccess: () => {
       setState(serviceStateFrom());
       void queryClient.invalidateQueries({ queryKey: ["services"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-usage"] });
     },
     onError: (cause: unknown) => {
       // The slug index covers archived rows, so this error usually means the
       // name is held by something the owner archived — and cannot see. Saying
       // so turns the most confusing possible failure into an instruction.
       setSlugTaken(cause instanceof ApiError && cause.code === "SLUG_TAKEN");
-      setError(cause instanceof ApiError ? cause.message : t("genericError"));
+      setError(
+        isKnowledgeLimitError(cause)
+          ? budgetText("error")
+          : cause instanceof ApiError
+            ? cause.message
+            : t("genericError"),
+      );
     },
   });
 
@@ -287,6 +306,10 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
           }}
         />
 
+        <KnowledgeBudget
+          tenantId={tenantId}
+          baseDescriptionChange={knowledgeCharacters(state.description)}
+        />
         <ErrorText>{error}</ErrorText>
         {slugTaken ? <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p> : null}
 
@@ -317,6 +340,7 @@ function EditServicePanel({
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const budgetText = useTranslations("knowledgeBudget");
   const queryClient = useQueryClient();
 
   const original = serviceStateFrom(service);
@@ -340,10 +364,17 @@ function EditServicePanel({
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["services"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-usage"] });
       onClose();
     },
     onError: (cause: unknown) => {
-      setError(cause instanceof ApiError ? cause.message : t("genericError"));
+      setError(
+        isKnowledgeLimitError(cause)
+          ? budgetText("error")
+          : cause instanceof ApiError
+            ? cause.message
+            : t("genericError"),
+      );
     },
   });
 
@@ -365,6 +396,12 @@ function EditServicePanel({
           }}
         />
 
+        <KnowledgeBudget
+          tenantId={tenantId}
+          baseDescriptionChange={
+            knowledgeCharacters(state.description) - knowledgeCharacters(service.description)
+          }
+        />
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium">{t("offeredBy")}</span>
           {detail.data === undefined ? null : detail.data.providers.length === 0 ? (
@@ -400,9 +437,9 @@ function EditServicePanel({
 /**
  * Tenant-managed service translations (tech-impl §38).
  *
- * The original language and saved translations are locked. Preserve saved
- * translations explicitly: disabled inputs are absent from FormData, while
- * the API's PUT replaces the whole set.
+ * The original language is edited in the main service form. Translations remain
+ * editable so owners can reduce existing content. Preserve the disabled
+ * original-language entry when replacing the set.
  */
 function TranslationsPanel({
   tenantId,
@@ -416,17 +453,18 @@ function TranslationsPanel({
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const budgetText = useTranslations("knowledgeBudget");
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
+  const [changes, setChanges] = useState<Partial<Record<Language, number>>>({});
   const save = useMutation({
     mutationFn: (form: HTMLFormElement) => {
       const data = new FormData(form);
 
       const translations = LOCALES.flatMap((locale) => {
         const existing = service.translations.find((entry) => entry.locale === locale);
-        if (existing) return [existing];
-        if (locale === defaultLanguage) return [];
+        if (locale === defaultLanguage) return existing ? [existing] : [];
 
         const name = textField(data, `name-${locale}`);
         // A blank name means "no translation for this locale", and the whole
@@ -445,16 +483,39 @@ function TranslationsPanel({
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["services"] });
+      void queryClient.invalidateQueries({ queryKey: ["knowledge-usage"] });
       onClose();
     },
     onError: (cause: unknown) => {
-      setError(cause instanceof ApiError ? cause.message : t("genericError"));
+      setError(
+        isKnowledgeLimitError(cause)
+          ? budgetText("error")
+          : cause instanceof ApiError
+            ? cause.message
+            : t("genericError"),
+      );
     },
   });
 
   return (
     <Card title={t("translationsFor", { name: service.name })}>
       <form
+        onChange={(event) => {
+          const data = new FormData(event.currentTarget);
+          setChanges(
+            Object.fromEntries(
+              LOCALES.filter((locale) => locale !== defaultLanguage).map((locale) => [
+                locale,
+                (textField(data, `name-${locale}`)
+                  ? knowledgeCharacters(textField(data, `description-${locale}`))
+                  : 0) -
+                  knowledgeCharacters(
+                    service.translations.find((entry) => entry.locale === locale)?.description,
+                  ),
+              ]),
+            ),
+          );
+        }}
         className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
@@ -465,7 +526,7 @@ function TranslationsPanel({
         {LOCALES.map((locale) => {
           const existing = service.translations.find((entry) => entry.locale === locale);
           const isOriginal = locale === defaultLanguage;
-          const locked = isOriginal || Boolean(existing);
+          const locked = isOriginal;
 
           return (
             <div key={locale} className="flex flex-col gap-2">
@@ -488,7 +549,6 @@ function TranslationsPanel({
                   id={`description-${locale}`}
                   aria-describedby={`description-${locale}-hint`}
                   rows={5}
-                  maxLength={4000}
                   name={`description-${locale}`}
                   defaultValue={
                     existing?.description ?? (isOriginal ? (service.description ?? "") : "")
@@ -500,6 +560,7 @@ function TranslationsPanel({
           );
         })}
 
+        <KnowledgeBudget tenantId={tenantId} changes={changes} />
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">

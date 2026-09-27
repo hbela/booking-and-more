@@ -15,6 +15,20 @@ const load = (overrides: NodeJS.ProcessEnv = {}) =>
   loadEnv({ source: { ...valid, ...overrides }, loadDotenvFile: false });
 
 describe("loadEnv", () => {
+  it("defaults to bounded chats and supports deployment overrides", () => {
+    const env = load();
+    expect(env.CONVERSATION_TTL_MINUTES).toBe(15);
+    expect(env.CHAT_DAILY_LIMIT).toBe(30);
+    expect(env.CHAT_MONTHLY_LIMIT_PROFESSIONAL).toBe(150);
+    expect(env.CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS).toBe(300);
+    expect(env.CHAT_MAX_MESSAGE_CHARACTERS).toBe(500);
+    expect(env.CHAT_MAX_PATIENT_CHARACTERS).toBe(5000);
+    expect(env.CHAT_MAX_INPUT_TOKENS_PER_CONVERSATION).toBe(80000);
+    expect(env.CHAT_MAX_OUTPUT_TOKENS_PER_CONVERSATION).toBe(4000);
+    expect(load({ CHAT_DAILY_LIMIT: "12" }).CHAT_DAILY_LIMIT).toBe(12);
+    expect(() => load({ CHAT_DAILY_LIMIT: "0" })).toThrow();
+    expect(() => load({ CHAT_MAX_MESSAGE_CHARACTERS: "6000" })).toThrow();
+  });
   it("labels Sentry independently from the Node runtime environment", () => {
     const env = load({ SENTRY_ENVIRONMENT: "staging", SENTRY_RELEASE: "release-sha" });
     expect(env.NODE_ENV).toBe("test");

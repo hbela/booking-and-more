@@ -1049,7 +1049,7 @@ function newerScheduleEvent(options: StripeEventContext): Prisma.SubscriptionWhe
  * seconds anyway.
  */
 function planFromMetadata(object: Record<string, unknown>): SubscribablePlan {
-  return metadataPlan(object) === "PROFESSIONAL" ? "PROFESSIONAL" : "STARTER";
+  return asPlan(metadataPlan(object)) ?? "STARTER";
 }
 
 /**
@@ -1163,7 +1163,9 @@ function timestamp(value: unknown): Date | undefined {
 }
 
 function asPlan(value: string | undefined): SubscribablePlan | undefined {
-  return value === "STARTER" || value === "PROFESSIONAL" ? value : undefined;
+  return value === "STARTER" || value === "PROFESSIONAL" || value === "PROFESSIONAL_PLUS"
+    ? value
+    : undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

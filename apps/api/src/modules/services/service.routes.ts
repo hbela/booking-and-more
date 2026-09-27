@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Permissions } from "@bam/auth";
+import { knowledgeUsageSchema } from "@bam/contracts";
+import { knowledgeUsage } from "../assistant/knowledge-budget.js";
 import { commonErrorResponses, idSchema, paginatedSchema } from "@bam/contracts";
 import { pageOf } from "../../lib/pagination.js";
 import { ServiceCatalogService } from "./service.service.js";
@@ -45,6 +47,18 @@ export function toServiceResponse(
 export const serviceRoutes: FastifyPluginAsyncZod = async (app) => {
   const catalog = new ServiceCatalogService(app.prisma);
   const services = catalog.repository;
+
+  app.get(
+    "/knowledge-usage",
+    {
+      preHandler: [app.requirePermission(Permissions.TENANT_READ)],
+      schema: {
+        tags: ["services"],
+        response: { 200: knowledgeUsageSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => knowledgeUsage(app.prisma, request.tenant!.id),
+  );
 
   // --- List -----------------------------------------------------------------
   app.get(

@@ -93,13 +93,29 @@ function stripNulls(parameters: Record<string, unknown>): Record<string, unknown
 export class AnthropicIntentInterpreter implements IntentInterpreter {
   constructor(private readonly config: AnthropicConfig) {}
 
-  async interpret(input: InterpretationInput): Promise<InterpretationResult> {
-    const client = getAnthropic(this.config);
-    const model = this.config.chatModel;
+  async countTokens(input: InterpretationInput): Promise<number> {
+    const request = this.request(input);
+    const result = await getAnthropic(this.config).messages.countTokens(
+      {
+        model: request.model,
+        system: request.system!,
+        messages: request.messages,
+        tools: request.tools!,
+        tool_choice: request.tool_choice!,
+      },
+      {
+        timeout: input.timeoutMs ?? 30_000,
+        signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
+        maxRetries: 0,
+      },
+    );
+    return result.input_tokens;
+  }
 
-    const stream = client.messages.stream({
-      model,
-      max_tokens: this.config.maxOutputTokens,
+  private request(input: InterpretationInput): Anthropic.MessageCreateParamsNonStreaming {
+    return {
+      model: this.config.chatModel,
+      max_tokens: input.maxOutputTokens ?? this.config.maxOutputTokens,
       system: buildSystemPrompt(input),
       messages: buildUserMessages(input),
       tools: [
@@ -110,6 +126,17 @@ export class AnthropicIntentInterpreter implements IntentInterpreter {
         },
       ],
       tool_choice: { type: "tool", name: "emit_command" },
+    };
+  }
+
+  async interpret(input: InterpretationInput): Promise<InterpretationResult> {
+    const client = getAnthropic(this.config);
+    const model = this.config.chatModel;
+
+    const stream = client.messages.stream(this.request(input), {
+      timeout: input.timeoutMs ?? 30_000,
+      signal: AbortSignal.timeout(input.timeoutMs ?? 30_000),
+      maxRetries: 0,
     });
     const completion = await stream.finalMessage();
 

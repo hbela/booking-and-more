@@ -28,12 +28,18 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
 
   const PRICE_STARTER = `price_starter_${suffix}`;
   const PRICE_PROFESSIONAL = `price_professional_${suffix}`;
+  const PRICE_PLUS = `price_plus_${suffix}`;
+  const PRICE_LEGACY = `price_legacy_${suffix}`;
 
   const options = () => ({
     prisma,
     logger: log,
     batchSize: 50,
-    planPrices: { STARTER: PRICE_STARTER, PROFESSIONAL: PRICE_PROFESSIONAL },
+    planPrices: {
+      STARTER: PRICE_STARTER,
+      PROFESSIONAL: [PRICE_PROFESSIONAL, PRICE_LEGACY],
+      PROFESSIONAL_PLUS: PRICE_PLUS,
+    },
     orphanTimeoutMs: 900_000,
   });
 
@@ -116,6 +122,61 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
   });
 
   describe("checkout.session.completed", () => {
+    it("activates Plus and recognises a grandfathered downgrade without resetting chat usage", async () => {
+      const subscriptionId = `sub_plus-${suffix}`;
+      const now = new Date();
+      await record(
+        "evt_plus_checkout",
+        "checkout.session.completed",
+        {
+          client_reference_id: tenantId,
+          customer: "cus_plus",
+          subscription: subscriptionId,
+          metadata: { plan: "PROFESSIONAL_PLUS" },
+        },
+        now,
+      );
+      await processStripeEventBatch(options());
+      expect((await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).plan).toBe(
+        "PROFESSIONAL_PLUS",
+      );
+      await prisma.chatUsageCounter.create({
+        data: { tenantId, period: now.toISOString().slice(0, 7), quantity: 17 },
+      });
+      await record(
+        "evt_plus_active",
+        "customer.subscription.created",
+        {
+          id: subscriptionId,
+          customer: "cus_plus",
+          status: "active",
+          ...withPrice(PRICE_PLUS),
+        },
+        new Date(now.getTime() + 1000),
+      );
+      await processStripeEventBatch(options());
+      expect((await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).plan).toBe(
+        "PROFESSIONAL_PLUS",
+      );
+      await record(
+        "evt_plus_downgrade",
+        "customer.subscription.updated",
+        {
+          id: subscriptionId,
+          customer: "cus_plus",
+          status: "active",
+          ...withPrice(PRICE_LEGACY),
+        },
+        new Date(now.getTime() + 2000),
+      );
+      await processStripeEventBatch(options());
+      expect((await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).plan).toBe(
+        "PROFESSIONAL",
+      );
+      expect(
+        (await prisma.chatUsageCounter.findFirstOrThrow({ where: { tenantId } })).quantity,
+      ).toBe(17);
+    });
     it("binds the organization to its Stripe identifiers and clears the deadline", async () => {
       // Suffixed, like every other Stripe id here: `stripe_subscription_id` is
       // unique across the whole table, not per tenant, so a fixed literal

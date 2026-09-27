@@ -13,7 +13,7 @@ import { z } from "zod";
  * (phase-9 §2.2) — it is not sold, has no price, and offering it on a screen
  * would be offering the product for free.
  */
-export const subscribablePlanSchema = z.enum(["STARTER", "PROFESSIONAL"]);
+export const subscribablePlanSchema = z.enum(["STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"]);
 
 export type SubscribablePlan = z.infer<typeof subscribablePlanSchema>;
 
@@ -31,7 +31,8 @@ export const SUBSCRIPTION_OFFERS: Record<
   { monthlyAmount: number; currency: "HUF" }
 > = {
   STARTER: { monthlyAmount: 9_990, currency: "HUF" },
-  PROFESSIONAL: { monthlyAmount: 24_990, currency: "HUF" },
+  PROFESSIONAL: { monthlyAmount: 29_900, currency: "HUF" },
+  PROFESSIONAL_PLUS: { monthlyAmount: 59_800, currency: "HUF" },
 };
 
 /**
@@ -68,7 +69,7 @@ export function daysUntil(
 // ---------------------------------------------------------------------------
 
 /** Stripe price ID → plan. Configured, because Stripe cannot tell us. */
-export type PlanPrices = Partial<Record<SubscribablePlan, string>>;
+export type PlanPrices = Partial<Record<SubscribablePlan, string | readonly string[]>>;
 
 /**
  * Resolve a plan from a Stripe price ID.
@@ -90,8 +91,12 @@ export function planForPrice(
 ): SubscribablePlan | undefined {
   if (priceId === undefined || priceId === "") return undefined;
 
-  for (const [plan, configured] of Object.entries(prices) as [SubscribablePlan, string][]) {
-    if (configured === priceId) return plan;
+  for (const [plan, configured] of Object.entries(prices) as [
+    SubscribablePlan,
+    string | readonly string[],
+  ][]) {
+    if (configured === priceId || (Array.isArray(configured) && configured.includes(priceId)))
+      return plan;
   }
 
   return undefined;
@@ -150,7 +155,10 @@ export function hasAssistantEntitlement(
   plan: string | null | undefined,
   status: string | null | undefined,
 ): boolean {
-  return (plan === "PROFESSIONAL" || plan === "INTERNAL") && isLiveSubscription(status);
+  return (
+    (plan === "PROFESSIONAL" || plan === "PROFESSIONAL_PLUS" || plan === "INTERNAL") &&
+    isLiveSubscription(status)
+  );
 }
 
 /** What a tenant becomes. `null` means "leave it exactly as it is". */

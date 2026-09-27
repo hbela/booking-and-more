@@ -355,9 +355,16 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     // (docs/phase-9-duplicate-subscription-prevention.md §4).
     planPrices: {
       ...(env.STRIPE_PRICE_STARTER === undefined ? {} : { STARTER: env.STRIPE_PRICE_STARTER }),
+      ...(env.STRIPE_PRICE_PROFESSIONAL_PLUS === undefined
+        ? {}
+        : { PROFESSIONAL_PLUS: env.STRIPE_PRICE_PROFESSIONAL_PLUS }),
       ...(env.STRIPE_PRICE_PROFESSIONAL === undefined
         ? {}
         : { PROFESSIONAL: env.STRIPE_PRICE_PROFESSIONAL }),
+    },
+    chatMonthlyLimits: {
+      professional: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL,
+      plus: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS,
     },
     trialPeriodDays: env.TRIAL_PERIOD_DAYS,
     // Both billing features now need a live Stripe call, so both disappear
@@ -499,6 +506,17 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     prefix: "/v1/public",
     providers: aiProviders,
     conversation: {
+      tokenSigningKey: env.BETTER_AUTH_SECRET,
+      dailyLimit: env.CHAT_DAILY_LIMIT,
+      professionalMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL,
+      plusMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS,
+      maxMessageCharacters: env.CHAT_MAX_MESSAGE_CHARACTERS,
+      maxPatientCharacters: env.CHAT_MAX_PATIENT_CHARACTERS,
+      maxInputTokens: env.CHAT_MAX_INPUT_TOKENS_PER_CONVERSATION,
+      maxConversationOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS_PER_CONVERSATION,
+      sessionRateLimit: env.CHAT_SESSION_RATE_LIMIT,
+      startRateLimit: env.CHAT_START_RATE_LIMIT,
+      messageRateLimit: env.CHAT_MESSAGE_RATE_LIMIT,
       sessionTtlMinutes: env.CONVERSATION_TTL_MINUTES,
       maxTurns: env.CONVERSATION_MAX_TURNS,
       pendingActionTtlSeconds: env.PENDING_ACTION_TTL_SECONDS,

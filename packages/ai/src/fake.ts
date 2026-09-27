@@ -54,6 +54,10 @@ export class FakeIntentInterpreter implements IntentInterpreter {
     return this;
   }
 
+  countTokens(_input: InterpretationInput): Promise<number> {
+    return Promise.resolve(100);
+  }
+
   interpret(input: InterpretationInput): Promise<InterpretationResult> {
     this.calls.push(input);
 

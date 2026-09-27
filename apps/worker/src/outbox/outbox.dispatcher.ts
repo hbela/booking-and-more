@@ -1002,6 +1002,7 @@ async function dispatchSubscriptionConfirmed(
 /** Stripe/database identifiers are not customer-facing product names. */
 function localizedPlanName(plan: string | undefined, locale: "en" | "hu"): string {
   if (plan === "STARTER") return locale === "hu" ? "Űrlap" : "Form";
+  if (plan === "PROFESSIONAL_PLUS") return "Professional Plus";
   if (plan === "PROFESSIONAL") return locale === "hu" ? "AI recepciós" : "AI Receptionist";
   return plan ?? "";
 }

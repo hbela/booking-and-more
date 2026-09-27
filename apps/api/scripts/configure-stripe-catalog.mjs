@@ -5,6 +5,7 @@ loadDotenv({ path: "../../.env", quiet: true });
 
 const APPLY = process.argv.includes("--apply");
 const VERIFY = process.argv.includes("--verify");
+const PORTAL = process.argv.includes("--portal");
 // Stripe accepts HUF charges with two decimal places, so API amounts are in
 // fillér even though prices are normally presented as whole forints. HUF is
 // zero-decimal only for payouts, not for charges.
@@ -21,11 +22,18 @@ const CATALOG = [
   },
   {
     plan: "PROFESSIONAL",
-    name: "Booking and More — AI Receptionist",
+    name: "Booking and More — Professional",
     description:
-      "Online időpontfoglaló űrlap, AI chat, weboldalba illeszthető widget, beszélgetési naplók és havi AI-használati keret.",
-    amountHuf: 24_990,
-    lookupKey: "bam_ai_receptionist_monthly_huf_v1",
+      "Online időpontfoglaló űrlap, AI chat, widget és naplók. Havi 150 beszélgetés, legfeljebb napi 30.",
+    amountHuf: 29_900,
+    lookupKey: "bam_professional_monthly_huf_v2",
+  },
+  {
+    plan: "PROFESSIONAL_PLUS",
+    name: "Booking and More — Professional Plus",
+    description: "AI recepciós: havi 300 beszélgetés, legfeljebb napi 30.",
+    amountHuf: 59_800,
+    lookupKey: "bam_professional_plus_monthly_huf_v1",
   },
 ];
 
@@ -42,6 +50,9 @@ if (!APPLY && !VERIFY) {
 const secretKey = process.env["STRIPE_SECRET_KEY"];
 if (!secretKey) throw new Error("STRIPE_SECRET_KEY is required with --apply.");
 
+if (process.argv.includes("--test-only") && !secretKey.startsWith("sk_test_"))
+  throw new Error("--test-only requires a Stripe test key; no changes made.");
+
 const stripe = new Stripe(secretKey, {
   apiVersion: "2026-07-29.dahlia",
   appInfo: { name: "booking-and-more-catalog" },
@@ -49,6 +60,7 @@ const stripe = new Stripe(secretKey, {
 
 if (VERIFY) {
   let valid = true;
+  const configuredPrices = [];
 
   for (const offer of CATALOG) {
     const priceId = process.env[`STRIPE_PRICE_${offer.plan}`];
@@ -59,6 +71,7 @@ if (VERIFY) {
     }
 
     const price = await stripe.prices.retrieve(priceId);
+    configuredPrices.push(price.id);
     const matches =
       price.active &&
       price.currency === "huf" &&
@@ -72,11 +85,31 @@ if (VERIFY) {
     valid &&= matches;
   }
 
+  if (PORTAL) {
+    const portal = await defaultPortal();
+    const configuration = await stripe.billingPortal.configurations.retrieve(portal.id, {
+      expand: ["features.subscription_update.products"],
+    });
+    const update = configuration.features.subscription_update;
+    const offered = update.products?.flatMap((product) => product.prices) ?? [];
+    const matches =
+      update.enabled &&
+      update.default_allowed_updates.includes("price") &&
+      update.proration_behavior === "always_invoice" &&
+      update.schedule_at_period_end.conditions.some(
+        (condition) => condition.type === "decreasing_item_amount",
+      ) &&
+      configuredPrices.every((price) => offered.includes(price));
+    console.log(`Customer Portal ${portal.id}: ${matches ? "valid" : "mismatch"}`);
+    valid &&= matches;
+  }
+
   if (!valid) process.exitCode = 1;
   process.exit();
 }
 
 const existingProducts = await stripe.products.list({ active: true, limit: 100 });
+const portalProducts = [];
 
 for (const offer of CATALOG) {
   let product = existingProducts.data.find(
@@ -97,8 +130,11 @@ for (const offer of CATALOG) {
     );
   }
 
-  if (product.description !== offer.description) {
-    product = await stripe.products.update(product.id, { description: offer.description });
+  if (product.description !== offer.description || product.name !== offer.name) {
+    product = await stripe.products.update(product.id, {
+      name: offer.name,
+      description: offer.description,
+    });
   }
 
   const prices = await stripe.prices.list({ product: product.id, active: true, limit: 100 });
@@ -133,13 +169,42 @@ for (const offer of CATALOG) {
       // not always reject a mismatched replay — treat `--verify` as the only
       // evidence the catalogue is right, never the exit code of `--apply`.
       // v5 removes the inclusive tax behavior for the seller's AAM status.
-      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v5` },
+      { idempotencyKey: `bam-catalog-price-${offer.plan.toLowerCase()}-huf-v6` },
     );
   }
 
   console.log(`STRIPE_PRICE_${offer.plan}=${price.id}`);
+  portalProducts.push({ product: product.id, prices: [price.id] });
+}
+
+if (PORTAL) {
+  const portal = await defaultPortal();
+  await stripe.billingPortal.configurations.update(portal.id, {
+    features: {
+      subscription_update: {
+        enabled: true,
+        default_allowed_updates: ["price"],
+        products: portalProducts,
+        proration_behavior: "always_invoice",
+        billing_cycle_anchor: "unchanged",
+        schedule_at_period_end: { conditions: [{ type: "decreasing_item_amount" }] },
+      },
+    },
+  });
+  console.log(`Customer Portal ${portal.id}: configured for all three plans.`);
 }
 
 console.log(
   "AAM catalog: keep automatic tax disabled on payment links. Review Customer Portal upgrade/downgrade rules and test mode before copying these IDs to production.",
 );
+
+async function defaultPortal() {
+  const configurations = await stripe.billingPortal.configurations.list({
+    active: true,
+    limit: 100,
+  });
+  const portal = configurations.data.find((configuration) => configuration.is_default);
+  if (!portal)
+    throw new Error("Save a default Stripe Customer Portal configuration before using --portal.");
+  return portal;
+}

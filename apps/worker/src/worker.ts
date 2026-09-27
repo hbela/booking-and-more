@@ -230,10 +230,17 @@ async function main(): Promise<void> {
     // price ID and no metadata (phase-9-subscription-lifecycle.md §2.4). Config
     // validation requires both whenever Stripe is configured at all.
     planPrices: {
-      ...(env.STRIPE_PRICE_STARTER === undefined ? {} : { STARTER: env.STRIPE_PRICE_STARTER }),
+      ...(env.STRIPE_PRICE_STARTER === undefined
+        ? {}
+        : { STARTER: [env.STRIPE_PRICE_STARTER, ...env.STRIPE_PRICE_STARTER_LEGACY] }),
+      ...(env.STRIPE_PRICE_PROFESSIONAL_PLUS === undefined
+        ? {}
+        : { PROFESSIONAL_PLUS: env.STRIPE_PRICE_PROFESSIONAL_PLUS }),
       ...(env.STRIPE_PRICE_PROFESSIONAL === undefined
         ? {}
-        : { PROFESSIONAL: env.STRIPE_PRICE_PROFESSIONAL }),
+        : {
+            PROFESSIONAL: [env.STRIPE_PRICE_PROFESSIONAL, ...env.STRIPE_PRICE_PROFESSIONAL_LEGACY],
+          }),
     },
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
     // The one thing in this worker that calls Stripe rather than reading its

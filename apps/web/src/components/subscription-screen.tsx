@@ -14,6 +14,7 @@ import { ErrorText } from "./ui/field";
 type Plan = SubscribablePlan;
 
 interface SubscriptionResponse {
+  chatUsage: { used: number; limit: number | null; remaining: number | null };
   subscription: {
     plan: "INTERNAL" | Plan;
     status: string;
@@ -149,6 +150,15 @@ export function SubscriptionScreen(): React.ReactElement {
 
   return (
     <DashboardShell context={context}>
+      {billing.data?.chatUsage.limit != null ? (
+        <p role="status">
+          {t("chatUsage", {
+            used: billing.data.chatUsage.used,
+            limit: billing.data.chatUsage.limit,
+            remaining: billing.data.chatUsage.remaining ?? 0,
+          })}
+        </p>
+      ) : null}
       <Card title={t("subscriptionTitle")}>
         {isSubscribed ? (
           <>
@@ -296,7 +306,9 @@ export function SubscriptionScreen(): React.ReactElement {
                     <span className="text-ink-muted">
                       {option === "STARTER"
                         ? t("planStarterDescription")
-                        : t("planProfessionalDescription")}
+                        : option === "PROFESSIONAL_PLUS"
+                          ? t("planProfessionalPlusDescription")
+                          : t("planProfessionalDescription")}
                     </span>
                   </span>
                 </label>
@@ -330,6 +342,7 @@ export function SubscriptionScreen(): React.ReactElement {
 /** INTERNAL has no marketing name; it is shown as-is to the few who see it. */
 function planLabel(plan: string, t: (key: string) => string): string {
   if (plan === "STARTER") return t("planStarter");
+  if (plan === "PROFESSIONAL_PLUS") return t("planProfessionalPlus");
   if (plan === "PROFESSIONAL") return t("planProfessional");
   return plan;
 }

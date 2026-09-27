@@ -129,6 +129,7 @@ export class BookingService {
    */
   async createHold(args: {
     tenantId: string;
+    conversationId?: string;
     input: CreateHoldBody;
     now: Date;
     publicOnly: boolean;
@@ -172,6 +173,7 @@ export class BookingService {
 
     try {
       const hold = await this.prisma.$transaction(async (tx) => {
+        await this.assertChatOpen(tx, tenantId, args.conversationId);
         await this.repository.sweepExpired(tx, { providerId: plan.provider.id, now });
 
         return this.repository.createHold(tx, {
@@ -258,8 +260,30 @@ export class BookingService {
    * rather than replaced, so the slot is guarded continuously — there is no
    * instant at which it is free for somebody else to take.
    */
+  private async assertChatOpen(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    id?: string,
+  ): Promise<void> {
+    if (!id) return;
+    // Lock the session before the booking/hold, matching the expiry worker.
+    const rows = await tx.$queryRaw<{ expires_at: Date; closed_at: Date | null }[]>`
+      SELECT expires_at, closed_at FROM conversation_sessions
+      WHERE id = ${id} AND tenant_id = ${tenantId} FOR UPDATE
+    `;
+    const session = rows[0];
+    if (!session || session.closed_at || session.expires_at <= new Date()) {
+      throw new AppError(
+        ErrorCodes.CONVERSATION_EXPIRED,
+        "This chat has ended. Please use the booking form.",
+        { statusCode: 409, report: false },
+      );
+    }
+  }
+
   async confirmBooking(args: {
     tenantId: string;
+    conversationId?: string;
     input: ConfirmBookingBody;
     now: Date;
     source: BookingSource;
@@ -269,6 +293,7 @@ export class BookingService {
     const { tenantId, input, now } = args;
 
     const result = await this.prisma.$transaction(async (tx) => {
+      await this.assertChatOpen(tx, tenantId, args.conversationId);
       // Step 1: lock. Two confirmations of one hold must not both proceed.
       const hold = await this.repository.lockHold(tx, { tenantId, holdId: input.holdId });
 
@@ -372,6 +397,7 @@ export class BookingService {
         managementToken: management.token,
       });
 
+      await this.assertChatOpen(tx, tenantId, args.conversationId);
       return { bookingId: booking.id, managementToken: management.token };
     });
 
@@ -563,6 +589,7 @@ export class BookingService {
    */
   async confirmReschedule(args: {
     tenantId: string;
+    conversationId?: string;
     bookingId: string;
     input: ReschedulePrepareBody & { version?: number | undefined };
     now: Date;
@@ -594,6 +621,7 @@ export class BookingService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await this.assertChatOpen(tx, tenantId, args.conversationId);
         await this.repository.sweepExpired(tx, { providerId: preview.booking.providerId, now });
 
         await this.repository.moveReservation(tx, {
@@ -631,6 +659,7 @@ export class BookingService {
           // booking has already moved by the time the worker looks.
           previousStartAt: preview.booking.startAt.toISOString(),
         });
+        await this.assertChatOpen(tx, tenantId, args.conversationId);
       });
     } catch (error) {
       if (isSlotConflict(error)) throw slotTaken();
@@ -666,6 +695,7 @@ export class BookingService {
 
   async confirmCancellation(args: {
     tenantId: string;
+    conversationId?: string;
     bookingId: string;
     input: CancelBody;
     now: Date;
@@ -677,6 +707,7 @@ export class BookingService {
     this.enforce(preview.decision, CANCELLATION_STATUS_MAP);
 
     await this.prisma.$transaction(async (tx) => {
+      await this.assertChatOpen(tx, tenantId, args.conversationId);
       await this.repository.updateBooking(tx, {
         tenantId,
         bookingId,
@@ -701,6 +732,7 @@ export class BookingService {
       });
 
       await this.writeOutbox(tx, { tenantId, eventType: "BOOKING_CANCELLED", bookingId });
+      await this.assertChatOpen(tx, tenantId, args.conversationId);
     });
 
     return this.repository.findByIdOrThrow({ tenantId, bookingId });

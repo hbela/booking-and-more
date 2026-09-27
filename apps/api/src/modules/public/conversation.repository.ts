@@ -1,4 +1,4 @@
-import { ErrorCodes, NotFoundError } from "@bam/contracts";
+import { hasAssistantEntitlement, ErrorCodes, NotFoundError } from "@bam/contracts";
 import type { CollectedFields } from "@bam/conversation-engine";
 import type {
   ConversationChannel,
@@ -9,7 +9,7 @@ import type {
   PrismaClient,
 } from "@bam/db";
 
-import { createManagementToken, hashToken } from "../bookings/booking.repository.js";
+import { hashToken } from "../bookings/booking.repository.js";
 import type { conversationSlotSchema } from "./conversation.schemas.js";
 import type { z } from "zod";
 
@@ -35,6 +35,8 @@ export type StoredConversationState = CollectedFields & {
  * scope every subsequent call by what they found.
  */
 
+import { chatMonthlyLimit, chatLimitError, type ChatLimits } from "./chat-guards.js";
+
 export type ConversationWithTenant = ConversationSession;
 
 export class ConversationRepository {
@@ -43,11 +45,16 @@ export class ConversationRepository {
   /**
    * Mint a conversation and its token.
    *
-   * The token is returned once. Only its SHA-256 hash is stored, the same
+   * Identical start keys reproduce the opaque token. Only its SHA-256 hash is stored, the same
    * construction as a booking's management token — a database dump must not be a
    * set of live credentials.
    */
   async create(args: {
+    token: string;
+    startKeyHash: string;
+    startRequestHash: string;
+    limits: ChatLimits;
+    now: Date;
     tenantId: string;
     channel: ConversationChannel;
     locale: string;
@@ -56,24 +63,60 @@ export class ConversationRepository {
     expiresAt: Date;
     bookingId?: string | undefined;
     customerId?: string | undefined;
-  }): Promise<{ session: ConversationSession; token: string }> {
-    const { token, hash } = createManagementToken();
+  }): Promise<{ session: ConversationSession; token: string; replayed: boolean }> {
+    const token = args.token;
+    return this.prisma.$transaction(async (tx) => {
+      const lock = "chat-admission:" + args.tenantId;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))`;
+      const existing = await tx.conversationSession.findUnique({
+        where: {
+          tenantId_startKeyHash: { tenantId: args.tenantId, startKeyHash: args.startKeyHash },
+        },
+      });
+      if (existing) {
+        if (existing.startRequestHash !== args.startRequestHash)
+          throw chatLimitError("This start key belongs to another request.", 409);
+        return { session: existing, token, replayed: true };
+      }
+      const subscription = await tx.subscription.findUnique({ where: { tenantId: args.tenantId } });
+      if (!hasAssistantEntitlement(subscription?.plan, subscription?.status))
+        throw chatLimitError("Chat is unavailable. Please use the booking form.", 403);
+      const monthly = chatMonthlyLimit(subscription!.plan, args.limits);
+      if (monthly !== null) {
+        for (const [period, limit] of [
+          [args.now.toISOString().slice(0, 10), args.limits.dailyLimit],
+          [args.now.toISOString().slice(0, 7), monthly],
+        ] as const) {
+          const where = { tenantId_period: { tenantId: args.tenantId, period } };
+          const counter = await tx.chatUsageCounter.findUnique({ where });
+          if ((counter?.quantity ?? 0) >= limit)
+            throw chatLimitError("The chat allowance has been used. Please use the booking form.");
+          await tx.chatUsageCounter.upsert({
+            where,
+            create: { tenantId: args.tenantId, period, quantity: 1 },
+            update: { quantity: { increment: 1 } },
+          });
+        }
+      }
+      const session = await tx.conversationSession.create({
+        data: {
+          tenantId: args.tenantId,
+          channel: args.channel,
+          locale: args.locale,
+          timezone: args.timezone,
+          machineState: args.machineState,
+          tokenHash: hashToken(token),
+          startKeyHash: args.startKeyHash,
+          startRequestHash: args.startRequestHash,
+          createdAt: args.now,
+          expiresAt: args.expiresAt,
+          ...(args.bookingId === undefined ? {} : { bookingId: args.bookingId }),
+          ...(args.customerId === undefined ? {} : { customerId: args.customerId }),
+        },
+      });
 
-    const session = await this.prisma.conversationSession.create({
-      data: {
-        tenantId: args.tenantId,
-        channel: args.channel,
-        locale: args.locale,
-        timezone: args.timezone,
-        machineState: args.machineState,
-        tokenHash: hash,
-        expiresAt: args.expiresAt,
-        ...(args.bookingId === undefined ? {} : { bookingId: args.bookingId }),
-        ...(args.customerId === undefined ? {} : { customerId: args.customerId }),
-      },
+      return { session, token, replayed: false };
     });
-
-    return { session, token };
   }
 
   /**
@@ -94,7 +137,7 @@ export class ConversationRepository {
 
     if (!session) return null;
     if (session.tokenHash !== hashToken(args.token)) return null;
-    if (session.expiresAt.getTime() <= Date.now()) return null;
+    // Authenticated expired sessions remain readable; write gates enforce expiry.
 
     return session;
   }

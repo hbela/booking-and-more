@@ -21,7 +21,7 @@ export type ServiceWithTranslations = Prisma.ServiceGetPayload<{
  * unchanged here.
  */
 export class ServiceRepository {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaClient | Prisma.TransactionClient) {}
 
   async list(args: {
     tenantId: string;

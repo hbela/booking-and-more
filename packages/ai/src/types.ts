@@ -75,6 +75,8 @@ export interface InterpretationCatalogue {
 }
 
 export interface InterpretationInput {
+  maxOutputTokens?: number;
+  timeoutMs?: number;
   utterance: string;
   /** BCP-47. Seeds the prompt (tech-impl §38) — not a filter on the answer. */
   locale: string;
@@ -96,6 +98,7 @@ export interface InterpretationResult {
 }
 
 export interface IntentInterpreter {
+  countTokens(input: InterpretationInput): Promise<number>;
   interpret(input: InterpretationInput): Promise<InterpretationResult>;
 }
 

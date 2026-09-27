@@ -46,13 +46,25 @@ export class UsageService {
     tenantId: string;
     inputTokens: number;
     outputTokens: number;
+    inputLimit?: number;
+    outputLimit?: number;
     now?: Date;
   }): Promise<string | null> {
     const now = args.now ?? new Date();
     const period = usagePeriodOf(now);
     const plan = await this.repository.planOf(args.tenantId);
-    const inputLimit = quotaFor(plan, "AI_INPUT_TOKENS");
-    const outputLimit = quotaFor(plan, "AI_OUTPUT_TOKENS");
+    const inputLimit =
+      plan === "INTERNAL"
+        ? null
+        : plan === "STARTER"
+          ? 0
+          : (args.inputLimit ?? quotaFor(plan, "AI_INPUT_TOKENS"));
+    const outputLimit =
+      plan === "INTERNAL"
+        ? null
+        : plan === "STARTER"
+          ? 0
+          : (args.outputLimit ?? quotaFor(plan, "AI_OUTPUT_TOKENS"));
     if (inputLimit === null && outputLimit === null) return null;
 
     return this.prisma.$transaction(async (tx) => {

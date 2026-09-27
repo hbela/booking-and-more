@@ -14,7 +14,7 @@ import {
 export const serviceTranslationSchema = z.object({
   locale: languageSchema,
   name: z.string().min(1).max(160),
-  description: z.string().max(4000).nullable().optional(),
+  description: z.string().trim().nullable().optional(),
 });
 
 export const serviceResponseSchema = z.object({
@@ -59,7 +59,7 @@ export const createServiceBodySchema = z
     name: z.string().min(2).max(160),
     /** Derived from the name when omitted. Appears in public booking URLs. */
     slug: slugSchema.optional(),
-    description: z.string().max(4000).optional(),
+    description: z.string().trim().optional(),
     durationMinutes: z.number().int().min(5).max(1440),
     bufferBeforeMinutes: z.number().int().min(0).max(240).optional(),
     bufferAfterMinutes: z.number().int().min(0).max(240).optional(),
@@ -93,7 +93,7 @@ export const updateServiceBodySchema = z
   .object({
     name: z.string().min(2).max(160),
     slug: slugSchema,
-    description: z.string().max(4000).nullable(),
+    description: z.string().trim().nullable(),
     durationMinutes: z.number().int().min(5).max(1440),
     bufferBeforeMinutes: z.number().int().min(0).max(240),
     bufferAfterMinutes: z.number().int().min(0).max(240),

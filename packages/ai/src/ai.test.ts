@@ -114,14 +114,14 @@ describe("the prompt", () => {
 });
 
 describe("pricing", () => {
-  it("recognises Sonnet 5 at its standard post-promotion rate", () => {
+  it("recognises Sonnet 5 at its verified September rate", () => {
     expect(
       tokenCostMinor({
         model: "claude-sonnet-5",
         inputTokens: 2_000_000,
         outputTokens: 400_000,
       }),
-    ).toBe(1_200);
+    ).toBe(800);
   });
 
   it("rounds up, so a month of conversations is not free", () => {
