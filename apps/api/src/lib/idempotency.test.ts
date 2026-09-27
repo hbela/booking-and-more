@@ -95,10 +95,15 @@ describe.skipIf(!databaseUrl)("idempotency expiry", () => {
 
     const first = run("race", {}, operation);
     const second = run("race", {}, operation);
-    await vi.waitFor(() => expect(operation).toHaveBeenCalledTimes(1));
-    release();
+    // Observe both promises before waiting: the follower can reject immediately.
+    const settling = Promise.allSettled([first, second]);
+    try {
+      await vi.waitFor(() => expect(operation).toHaveBeenCalledTimes(1));
+    } finally {
+      release();
+    }
 
-    const settled = await Promise.allSettled([first, second]);
+    const settled = await settling;
     expect(operation).toHaveBeenCalledTimes(1);
     // Depending on scheduling, the follower either observes IN_PROGRESS or
     // arrives just after the owner stores its response and replays it. It must
