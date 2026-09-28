@@ -75,6 +75,9 @@ Commands and cleanup behavior: [staging-live-tests.md](staging-live-tests.md).
 - [x] [AUTO] Resolve the existing high/critical dependency-audit failures on `main`
       and merge [the workflow registration PR](https://github.com/hbela/booking-and-more/pull/1).
       Its patched web package passed lint, type-check and 329 tests locally.
-- [ ] [AUTO / maintenance] Fix pre-existing formatting debt on `main`; the PR CI audit
-      passed but its formatting check failed on unchanged files. Four moderate audit
-      findings also remain. Full release-branch CI passed independently.
+- [x] [AUTO / maintenance] Fix pre-existing formatting debt on `main` and resolve the
+      four remaining moderate audit findings. Both full and production dependency audits
+      report no known vulnerabilities. Merged [maintenance PR](https://github.com/hbela/booking-and-more/pull/2).
+      [Full CI](https://github.com/hbela/booking-and-more/actions/runs/36492464387) passed
+      formatting, audit, lint, type-check, tests, build, browser smoke tests and fresh-database
+      migrations. Also corrected test fixtures and an outbox claim that could exceed its batch limit.
