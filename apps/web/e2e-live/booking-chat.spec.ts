@@ -5,7 +5,18 @@ import type {
   ReplayedConversation,
   StartedConversation,
 } from "../src/lib/conversation-client";
-import { allowWrites, apiOrigin, call, expect, key, tenantPreflight, test } from "./fixtures";
+import {
+  allowWrites,
+  apiOrigin,
+  appOrigin,
+  call,
+  expect,
+  key,
+  ownerTokens,
+  ownerUsage,
+  tenantPreflight,
+  test,
+} from "./fixtures";
 
 const isResponse =
   (path: string, method = "GET") =>
@@ -56,6 +67,7 @@ test("preflight: dedicated tenant, bookable catalogue and assistant are availabl
 test("booking: browser confirmation persists, retries replay, and cancellation persists", async ({
   page,
   live,
+  owner,
 }) => {
   allowWrites();
   const { api, config } = live;
@@ -148,6 +160,10 @@ test("booking: browser confirmation persists, retries replay, and cancellation p
       true,
     );
     await expect(page.getByText(booking.reference, { exact: true })).toBeVisible();
+    await owner.page.goto(`${appOrigin}/en/dashboard/bookings`);
+    await expect(
+      owner.page.getByRole("listitem").filter({ hasText: booking.reference }),
+    ).toContainText(name);
 
     const retry = await call(api, "POST", `${root}/bookings`, 201, {
       data: submitted!.postDataJSON(),
@@ -192,6 +208,11 @@ test("booking: browser confirmation persists, retries replay, and cancellation p
         await call(api, "POST", `${path}/cancel/confirm`, 200, { headers, data });
         const cancelled = await call(api, "GET", path, 200);
         expect(((await cancelled.json()) as Booking).status).toBe("CANCELLED");
+        await owner.page.goto(`${appOrigin}/en/dashboard/bookings`);
+        await owner.page.locator("#bookings-status").selectOption("CANCELLED");
+        await expect(
+          owner.page.getByRole("listitem").filter({ hasText: booking!.reference }),
+        ).toContainText(name);
       });
     }
     if (hold && !booking?.managementToken)
@@ -207,11 +228,19 @@ test("booking: browser confirmation persists, retries replay, and cancellation p
 test("chat: explicit start, replay, rejected oversize input and one idempotent real AI turn", async ({
   page,
   live,
+  owner,
 }) => {
   allowWrites();
   const { api, config } = live;
   await tenantPreflight(api, config.slug);
   const root = `/v1/public/tenants/${config.slug}`;
+  const usageBefore = await ownerUsage(owner);
+  expect(
+    usageBefore.chatUsage.limit,
+    "Use a metered Professional test subscription",
+  ).not.toBeNull();
+  const tokensBefore = await ownerTokens(owner);
+  const period = new Date().toISOString().slice(0, 7);
   let starts = 0;
   page.on("request", (request) => {
     if (request.method() === "POST" && new URL(request.url()).pathname === `${root}/conversations`)
@@ -242,6 +271,9 @@ test("chat: explicit start, replay, rejected oversize input and one idempotent r
     "Start retry returns the original credential",
   ).toBe(true);
   expect(repeated.expiresAt).toBe(session.expiresAt);
+  const startedUsage = await ownerUsage(owner);
+  expect(startedUsage.chatUsage.used).toBe(usageBefore.chatUsage.used + 1);
+  expect(startedUsage.chatUsage.remaining).toBe(usageBefore.chatUsage.remaining! - 1);
   await call(api, "GET", path, 404, { headers: { "X-Conversation-Token": randomUUID() } });
 
   const initial = (await (
@@ -256,6 +288,7 @@ test("chat: explicit start, replay, rejected oversize input and one idempotent r
   ).json()) as ReplayedConversation;
   expect(rejected.charactersRemaining).toBe(initial.charactersRemaining);
   expect(rejected.messages.length).toBe(initial.messages.length);
+  expect(await ownerTokens(owner)).toEqual(tokensBefore);
 
   const message = "Hello! Please list the services available. Do not make a booking.";
   await page.locator("#chat-message").fill(message);
@@ -279,6 +312,9 @@ test("chat: explicit start, replay, rejected oversize input and one idempotent r
   const after = (await (
     await call(api, "GET", path, 200, { headers })
   ).json()) as ReplayedConversation;
+  const tokensAfter = await ownerTokens(owner);
+  expect(tokensAfter.inputTokens).toBeGreaterThan(tokensBefore.inputTokens);
+  expect(tokensAfter.outputTokens).toBeGreaterThan(tokensBefore.outputTokens);
   expect(
     after.messages.filter((item) => item.sender === "CUSTOMER" && item.content === message),
   ).toHaveLength(1);
@@ -301,12 +337,18 @@ test("chat: explicit start, replay, rejected oversize input and one idempotent r
   ).json()) as ReplayedConversation;
   expect(retried.messages).toEqual(after.messages);
   expect(retried.charactersRemaining).toBe(after.charactersRemaining);
+  expect(await ownerTokens(owner), "Retry must not add billed token usage").toEqual(tokensAfter);
   const replayed = page.waitForResponse(isResponse(path));
   await page.reload();
   assertApi(await replayed);
   await expect(page.locator("#chat-message")).toBeEnabled();
   await expect(page.getByText(message, { exact: true })).toBeVisible();
   expect(starts).toBe(1);
+  expect(
+    new Date().toISOString().slice(0, 7),
+    "Run usage-delta checks away from the UTC month boundary",
+  ).toBe(period);
+  expect((await ownerUsage(owner)).chatUsage).toEqual(startedUsage.chatUsage);
   // No close-session API exists. This synthetic session expires normally;
   // its allowance is intentionally not refunded or deleted by this suite.
 });

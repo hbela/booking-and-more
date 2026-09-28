@@ -1,8 +1,20 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { fileURLToPath } from "node:url";
+
+for (const name of [".env.staging-tests", ".env"]) {
+  const file = fileURLToPath(new URL(`../../${name}`, import.meta.url));
+  if (!existsSync(file)) continue;
+  for (const [key, value] of Object.entries(parseEnv(readFileSync(file, "utf8")))) {
+    if (key.startsWith("STAGING_E2E_") && process.env[key] === undefined) process.env[key] = value;
+  }
+}
 
 /** Real staging traffic. Deliberately separate from the mocked e2e directory. */
 export default defineConfig({
   testDir: "./e2e-live",
+  testIgnore: "**/stripe-sandbox.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
