@@ -23,6 +23,7 @@ import {
 } from "./notifications/notification.sweeper.js";
 import {
   createStripeCustomerLocaleSetter,
+  createStripeStateLoader,
   createStripePaidInvoiceLoader,
 } from "./stripe/stripe.client.js";
 import { startStripePoller } from "./stripe/stripe.poller.js";
@@ -243,15 +244,15 @@ async function main(): Promise<void> {
           }),
     },
     orphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
-    // The one thing in this worker that calls Stripe rather than reading its
-    // events. Omitted without a key so an unconfigured deployment still
-    // processes everything else (rule 4).
+    // Current-state reconciliation and customer locale updates share the
+    // configured Stripe account. Ambiguous events retry if no reader exists.
     ...(env.STRIPE_SECRET_KEY === undefined
       ? {}
       : {
           setCustomerLocale: createStripeCustomerLocaleSetter({
             secretKey: env.STRIPE_SECRET_KEY,
           }),
+          loadStripeState: createStripeStateLoader({ secretKey: env.STRIPE_SECRET_KEY }),
         }),
     ...(hasBillingo(env)
       ? {

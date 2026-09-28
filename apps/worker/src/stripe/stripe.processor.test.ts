@@ -1141,6 +1141,186 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
   });
 
   describe("durable claiming and event ordering", () => {
+    it.each([false, true])(
+      "reconciles same-second schedules regardless of delivery order (reverse=%s)",
+      async (reverse) => {
+        const subId = `sub_tie-${suffix}-${reverse}`;
+        const scheduleId = `sched_tie-${suffix}-${reverse}`;
+        await prisma.subscription.create({
+          data: { tenantId, plan: "PROFESSIONAL", status: "ACTIVE", stripeSubscriptionId: subId },
+        });
+        const at = new Date("2026-09-28T12:00:00Z");
+        const future = Math.floor(Date.now() / 1000) + 86400;
+        const current = {
+          id: scheduleId,
+          subscription: subId,
+          status: "active",
+          phases: [{ start_date: future, items: [{ price: PRICE_STARTER }] }],
+        };
+        const events = [
+          { id: "evt_z_created", type: "subscription_schedule.created", phases: [] },
+          { id: "evt_a_updated", type: "subscription_schedule.updated", phases: current.phases },
+        ];
+        if (reverse) events.reverse();
+        for (const event of events) {
+          await record(event.id, event.type, { ...current, phases: event.phases }, at);
+          expect(
+            await processStripeEventBatch({
+              ...options(),
+              loadStripeState: () => Promise.resolve(current),
+            }),
+          ).toMatchObject({ processed: 1, failed: 0 });
+        }
+        expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+          pendingPlan: "STARTER",
+        });
+      },
+    );
+
+    it("does not revive a released schedule from a delayed created event", async () => {
+      const subId = `sub_released-${suffix}`;
+      const id = `sched_released-${suffix}`;
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "PROFESSIONAL",
+          status: "ACTIVE",
+          stripeSubscriptionId: subId,
+          pendingPlan: "STARTER",
+        },
+      });
+      await record("evt_delayed_schedule", "subscription_schedule.created", {
+        id,
+        subscription: subId,
+      });
+      await processStripeEventBatch({
+        ...options(),
+        loadStripeState: () =>
+          Promise.resolve({
+            id,
+            subscription: null,
+            released_subscription: subId,
+            status: "released",
+          }),
+      });
+      expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+        pendingPlan: null,
+        stripeScheduleId: null,
+      });
+    });
+
+    it("uses the current Stripe phase when the test clock is ahead of wall time", async () => {
+      const subId = `sub_clock-${suffix}`;
+      const id = `sched_clock-${suffix}`;
+      const future = Math.floor(Date.now() / 1000) + 86400;
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "ACTIVE",
+          stripeSubscriptionId: subId,
+          pendingPlan: "STARTER",
+        },
+      });
+      await record("evt_clock", "subscription_schedule.updated", { id, subscription: subId });
+      await processStripeEventBatch({
+        ...options(),
+        loadStripeState: () =>
+          Promise.resolve({
+            id,
+            subscription: subId,
+            status: "active",
+            current_phase: { start_date: future },
+            phases: [{ start_date: future, items: [{ price: PRICE_STARTER }] }],
+          }),
+      });
+      expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+        pendingPlan: null,
+      });
+    });
+
+    it("keeps failed Stripe reconciliation queued without applying the stale event", async () => {
+      const subId = `sub_unavailable-${suffix}`;
+      await prisma.subscription.create({
+        data: { tenantId, plan: "PROFESSIONAL", status: "ACTIVE", stripeSubscriptionId: subId },
+      });
+      const event = await record("evt_unavailable", "customer.subscription.deleted", { id: subId });
+      expect(
+        await processStripeEventBatch({
+          ...options(),
+          loadStripeState: () => Promise.reject(new Error("Stripe unavailable")),
+        }),
+      ).toMatchObject({ failed: 1, processed: 0 });
+      expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+        status: "ACTIVE",
+      });
+      expect(await prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } })).toMatchObject(
+        { processedAt: null, claimedAt: null },
+      );
+    });
+
+    it("retries a snapshot if another worker changes state during the Stripe read", async () => {
+      const subId = `sub_race-${suffix}`;
+      await prisma.subscription.create({
+        data: { tenantId, plan: "PROFESSIONAL", status: "ACTIVE", stripeSubscriptionId: subId },
+      });
+      const event = await record("evt_race", "customer.subscription.updated", {
+        id: subId,
+        status: "active",
+      });
+      expect(
+        await processStripeEventBatch({
+          ...options(),
+          loadStripeState: async () => {
+            await prisma.subscription.update({
+              where: { tenantId },
+              data: { status: "PAST_DUE", lastStripeStateEventId: "evt_competing" },
+            });
+            return { id: subId, status: "active" };
+          },
+        }),
+      ).toMatchObject({ failed: 1, processed: 0 });
+      expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+        status: "PAST_DUE",
+      });
+      expect(
+        (await prisma.stripeEvent.findUniqueOrThrow({ where: { id: event.id } })).processedAt,
+      ).toBeNull();
+      expect(
+        await processStripeEventBatch({
+          ...options(),
+          loadStripeState: () => Promise.resolve({ id: subId, status: "past_due" }),
+        }),
+      ).toMatchObject({ failed: 0, processed: 1 });
+    });
+
+    it("uses current subscription state for a delayed same-second deletion", async () => {
+      const subId = `sub_current-${suffix}`;
+      const at = new Date("2026-09-28T12:00:00Z");
+      await prisma.subscription.create({
+        data: {
+          tenantId,
+          plan: "STARTER",
+          status: "ACTIVE",
+          stripeSubscriptionId: subId,
+          lastStripeStateEventAt: at,
+          lastStripeStateEventId: "evt_z",
+        },
+      });
+      await record("evt_a", "customer.subscription.deleted", { id: subId }, at);
+      expect(
+        await processStripeEventBatch({
+          ...options(),
+          loadStripeState: () =>
+            Promise.resolve({ id: subId, status: "active", ...withPrice(PRICE_PLUS) }),
+        }),
+      ).toMatchObject({ processed: 1, failed: 0 });
+      expect(await prisma.subscription.findUniqueOrThrow({ where: { tenantId } })).toMatchObject({
+        status: "ACTIVE",
+        plan: "PROFESSIONAL_PLUS",
+      });
+    });
+
     it("lets only one worker process and emit effects for an event", async () => {
       const subscriptionId = `sub_claim-${suffix}`;
       await prisma.subscription.create({

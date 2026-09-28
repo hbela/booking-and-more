@@ -1,19 +1,17 @@
 import Stripe from "stripe";
 
 /**
- * The worker's one outbound call to Stripe.
+ * The worker's bounded outbound calls to Stripe.
  * docs/phase-9-owner-language-and-return-paths.md §5.3.
  *
- * Everything else here consumes `stripe_events` and writes PostgreSQL — the
- * poller deliberately does not talk to Stripe at all, which is why a Stripe
- * outage cannot stop an already-recorded payment from activating a tenant. This
- * file is the single exception, and it is kept to one narrow function rather
- * than exposing the client so that stays true by construction.
+ * Lifecycle events reconcile against current Stripe state because webhook
+ * delivery and same-second event IDs cannot provide reliable ordering. Reads
+ * are bounded; failures leave the durable event queued for the next poll.
  *
  * Constructed on first use, per CLAUDE.md rule 4: a deployment with no
  * `STRIPE_SECRET_KEY` must idle rather than fail to boot. `worker.ts` passes the
- * setter only when the key is present, so the absence degrades one cosmetic
- * property of an invoice and nothing else.
+ * integrations only when the key is present. Without a reader, ambiguous
+ * same-second events remain queued rather than guessing their order.
  */
 
 let client: Stripe | undefined;
@@ -32,9 +30,28 @@ function getStripe(options: StripeOptions): Stripe {
     // versions of the same API.
     apiVersion: "2026-07-29.dahlia",
     appInfo: { name: "booking-and-more-worker" },
+    timeout: 30_000,
+    maxNetworkRetries: 0,
   });
 
   return client;
+}
+
+export type StripeStateLoader = (
+  kind: "subscription" | "schedule",
+  id: string,
+) => Promise<Record<string, unknown>>;
+
+/** Event delivery order and event IDs cannot determine the current billing state. */
+export function createStripeStateLoader(options: StripeOptions): StripeStateLoader {
+  return async (kind, id) => {
+    const stripe = getStripe(options);
+    const object =
+      kind === "subscription"
+        ? await stripe.subscriptions.retrieve(id)
+        : await stripe.subscriptionSchedules.retrieve(id);
+    return { ...object };
+  };
 }
 
 /** Test seam: the singleton would otherwise leak a key between test cases. */

@@ -9,7 +9,7 @@ import {
   type PlanPrices,
   type SubscribablePlan,
 } from "@bam/contracts";
-import type { CustomerLocaleSetter } from "./stripe.client.js";
+import type { CustomerLocaleSetter, StripeStateLoader } from "./stripe.client.js";
 import type { BillingoInvoiceIssuer } from "../billingo/billingo.invoice.js";
 
 /**
@@ -56,6 +56,7 @@ export interface StripeProcessorOptions {
    * API's optional clients use (rule 4) — billing degrades, nothing crashes.
    */
   setCustomerLocale?: CustomerLocaleSetter | undefined;
+  loadStripeState?: StripeStateLoader | undefined;
   /** Creates the Hungarian invoice for a positive paid Stripe invoice. */
   issueBillingoInvoice?: BillingoInvoiceIssuer | undefined;
 }
@@ -85,6 +86,7 @@ interface ClaimedStripeRow {
 interface StripeEventContext extends StripeProcessorOptions {
   eventId: string;
   eventCreatedAt: Date;
+  reconciliationGuard?: Prisma.SubscriptionWhereInput;
 }
 
 const DEFAULT_STALE_CLAIM_SECONDS = 300;
@@ -213,7 +215,7 @@ async function processOne(
   const object = extractObject(event.payload);
 
   try {
-    await dispatch(event.type, object, {
+    await reconcileAndDispatch(event.type, object, {
       ...options,
       eventId: event.id,
       eventCreatedAt: event.eventCreatedAt,
@@ -235,6 +237,88 @@ async function processOne(
 
     throw error;
   }
+}
+
+/** Fetch outside a transaction, then compare the markers read before the fetch.
+ * A competing write makes this event retry with a fresh snapshot, never silently
+ * discard a result. Both markers protect interactions between schedules and plans.
+ */
+async function reconcileAndDispatch(
+  type: string,
+  object: Record<string, unknown>,
+  options: StripeEventContext,
+): Promise<void> {
+  const stateEvent = [
+    "customer.subscription.created",
+    "customer.subscription.updated",
+    "customer.subscription.resumed",
+    "customer.subscription.deleted",
+    "customer.subscription.paused",
+  ].includes(type);
+  const scheduleEvent =
+    type.startsWith("subscription_schedule.") &&
+    ["created", "updated", "released", "canceled", "completed", "aborted"].includes(
+      type.split(".")[1]!,
+    );
+  if (!stateEvent && !scheduleEvent) return dispatch(type, object, options);
+  const id = asString(object["id"]);
+  const subscriptionId = stateEvent
+    ? id
+    : (asString(object["subscription"]) ?? asString(object["released_subscription"]));
+  if (!id || !subscriptionId) return;
+  const markers = await options.prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    select: {
+      lastStripeStateEventAt: true,
+      lastStripeStateEventId: true,
+      lastStripeScheduleEventAt: true,
+      lastStripeScheduleEventId: true,
+    },
+  });
+  if (!options.loadStripeState) {
+    const at = stateEvent ? markers?.lastStripeStateEventAt : markers?.lastStripeScheduleEventAt;
+    const previousId = stateEvent
+      ? markers?.lastStripeStateEventId
+      : markers?.lastStripeScheduleEventId;
+    if (at?.getTime() === options.eventCreatedAt.getTime() && previousId !== options.eventId)
+      throw new Error("Same-second Stripe events require current-state reconciliation");
+    return dispatch(type, object, options);
+  }
+  const current = await options.loadStripeState(stateEvent ? "subscription" : "schedule", id);
+  if (
+    current["id"] !== id ||
+    (options.billingMode !== undefined && current["livemode"] !== (options.billingMode === "live"))
+  )
+    throw new Error("Stripe reconciliation returned a mismatched object or billing mode");
+  if (
+    scheduleEvent &&
+    (asString(current["subscription"]) ?? asString(current["released_subscription"])) !==
+      subscriptionId
+  )
+    throw new Error("Stripe schedule reconciliation returned a different subscription");
+  const previousAt = stateEvent
+    ? markers?.lastStripeStateEventAt
+    : markers?.lastStripeScheduleEventAt;
+  const context: StripeEventContext = {
+    ...options,
+    eventCreatedAt:
+      previousAt && previousAt > options.eventCreatedAt ? previousAt : options.eventCreatedAt,
+    reconciliationGuard: markers ?? {
+      lastStripeStateEventAt: null,
+      lastStripeStateEventId: null,
+      lastStripeScheduleEventAt: null,
+      lastStripeScheduleEventId: null,
+    },
+  };
+  if (stateEvent) {
+    return ["canceled", "paused"].includes(String(current["status"]))
+      ? endSubscription(current, context)
+      : mirrorSubscription(current, context);
+  }
+  const linked = { ...current, subscription: subscriptionId };
+  return ["released", "canceled", "completed", "aborted"].includes(String(current["status"]))
+    ? clearSchedule(linked, context)
+    : mirrorSchedule(linked, context);
 }
 
 async function dispatch(
@@ -624,6 +708,8 @@ async function mirrorSubscription(
   });
 
   if (!applied) {
+    if (options.reconciliationGuard)
+      throw new Error("Concurrent Stripe state change; retry reconciliation");
     options.logger.info(
       { eventId: options.eventId, subscriptionId },
       "stripe: stale subscription event ignored",
@@ -711,6 +797,8 @@ async function endSubscription(
   });
 
   if (!applied) {
+    if (options.reconciliationGuard)
+      throw new Error("Concurrent Stripe state change; retry reconciliation");
     options.logger.info(
       { eventId: options.eventId, subscriptionId },
       "stripe: stale subscription-ending event ignored",
@@ -759,6 +847,8 @@ async function mirrorSchedule(
   });
 
   if (updated.count === 0) {
+    if (options.reconciliationGuard)
+      throw new Error("Concurrent Stripe schedule change; retry reconciliation");
     options.logger.info(
       { eventId: options.eventId, subscriptionId },
       "stripe: stale schedule event ignored",
@@ -797,6 +887,8 @@ async function clearSchedule(
   });
 
   if (updated.count === 0) {
+    if (options.reconciliationGuard)
+      throw new Error("Concurrent Stripe schedule change; retry reconciliation");
     options.logger.info(
       { eventId: options.eventId, subscriptionId },
       "stripe: stale schedule-clearing event ignored",
@@ -1006,31 +1098,30 @@ function extractObject(payload: unknown): Record<string, unknown> {
   return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
 }
 
-/** Conditional-update predicate implementing (created_at, event_id) ordering. */
+/** Reconciliation uses compare-and-swap; offline processing requires a newer timestamp. */
 function newerStateEvent(options: StripeEventContext): Prisma.SubscriptionWhereInput {
+  if (options.reconciliationGuard) return options.reconciliationGuard;
   return {
     OR: [
       { lastStripeStateEventAt: null },
       { lastStripeStateEventAt: { lt: options.eventCreatedAt } },
       {
         lastStripeStateEventAt: options.eventCreatedAt,
-        OR: [{ lastStripeStateEventId: null }, { lastStripeStateEventId: { lt: options.eventId } }],
+        lastStripeStateEventId: options.eventId,
       },
     ],
   };
 }
 
 function newerScheduleEvent(options: StripeEventContext): Prisma.SubscriptionWhereInput {
+  if (options.reconciliationGuard) return options.reconciliationGuard;
   return {
     OR: [
       { lastStripeScheduleEventAt: null },
       { lastStripeScheduleEventAt: { lt: options.eventCreatedAt } },
       {
         lastStripeScheduleEventAt: options.eventCreatedAt,
-        OR: [
-          { lastStripeScheduleEventId: null },
-          { lastStripeScheduleEventId: { lt: options.eventId } },
-        ],
+        lastStripeScheduleEventId: options.eventId,
       },
     ],
   };
@@ -1098,7 +1189,10 @@ function upcomingPhase(
   const phases = object["phases"];
   if (!Array.isArray(phases)) return undefined;
 
-  const now = Date.now();
+  // Stripe test clocks can be ahead of wall time. The current phase is already
+  // effective, even when its start is in our future.
+  const phaseStart = timestamp(asRecord(object["current_phase"])?.["start_date"]);
+  const now = phaseStart?.getTime() ?? Date.now();
 
   for (const entry of phases as Record<string, unknown>[]) {
     const startsAt = timestamp(entry["start_date"]);
