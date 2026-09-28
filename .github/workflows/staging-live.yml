@@ -1,0 +1,58 @@
+name: Staging live tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Select booking/chat smoke checks or disposable Stripe Sandbox lifecycle checks
+        type: choice
+        options: [booking-chat, stripe]
+        default: booking-chat
+      allow_mutations:
+        description: Create and cancel a synthetic booking; consume one chat and a real AI turn
+        required: true
+        type: boolean
+        default: false
+  schedule:
+    - cron: "30 5 * * 3"
+
+permissions:
+  contents: read
+
+# Do not interrupt a run while it is cancelling its booking.
+concurrency:
+  group: staging-live-booking-chat
+  cancel-in-progress: false
+
+jobs:
+  live:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.allow_mutations) || (github.event_name == 'schedule' && vars.STAGING_E2E_SCHEDULE_ENABLED == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      STAGING_E2E_TENANT_SLUG: ${{ vars.STAGING_E2E_TENANT_SLUG }}
+      STAGING_E2E_EMAIL: ${{ vars.STAGING_E2E_EMAIL }}
+      STAGING_E2E_SERVICE_ID: ${{ vars.STAGING_E2E_SERVICE_ID }}
+      STAGING_E2E_PROVIDER_ID: ${{ vars.STAGING_E2E_PROVIDER_ID }}
+      STAGING_E2E_ALLOW_MUTATIONS: "1"
+      STAGING_E2E_OWNER_EMAIL: ${{ vars.STAGING_E2E_OWNER_EMAIL }}
+      STAGING_E2E_OWNER_PASSWORD: ${{ secrets.STAGING_E2E_OWNER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'schedule' && vars.STAGING_E2E_REF || github.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bam/web exec playwright install --with-deps chromium
+      - name: Booking, owner dashboard, chat and usage
+        if: ${{ github.event_name == 'schedule' || inputs.suite == 'booking-chat' }}
+        run: pnpm --filter @bam/web test:e2e:live
+      - name: Stripe Sandbox lifecycle
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.suite == 'stripe' }}
+        env:
+          STAGING_E2E_STRIPE_SECRET_KEY: ${{ secrets.STAGING_E2E_STRIPE_SECRET_KEY }}
+        run: pnpm --filter @bam/web test:e2e:stripe
