@@ -72,6 +72,9 @@ describe.skipIf(!databaseUrl)("conversation sweeper", () => {
           providerId,
           serviceId,
           sessionId: `conv-${randomBytes(4).toString("hex")}`,
+          // Match the injected test clock; database wall time eventually passes
+          // this fixture's expiry and would violate the hold lifetime constraint.
+          createdAt: now,
           startAt: new Date("2026-09-07T09:00:00Z"),
           endAt: new Date("2026-09-07T10:00:00Z"),
           expiresAt: new Date("2026-09-07T08:00:00Z"),
