@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:live": "playwright test --config playwright.live.config.ts",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {

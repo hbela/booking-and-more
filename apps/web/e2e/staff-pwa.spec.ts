@@ -118,12 +118,12 @@ for (const [path, title, retry] of [
   ["/en/sign-in", "You're offline", "Try again"],
   ["/sign-in", "Nincs internetkapcsolat", "Újrapróbálkozás"],
 ] as const) {
-  test(`offline document navigation and retry: ${path}`, async ({ page, context }) => {
+  test(`offline document navigation and retry: ${path}`, async ({ page, context, baseURL }) => {
     await context.addCookies([
       {
         name: "NEXT_LOCALE",
         value: path.startsWith("/en") ? "en" : "hu",
-        url: "http://127.0.0.1:3100",
+        url: baseURL!,
       },
     ]);
     const response = await page.goto(path);

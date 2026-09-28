@@ -1,0 +1,40 @@
+name: Staging live booking and chat
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_mutations:
+        description: Create and cancel a synthetic booking; consume one chat and a real AI turn
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Do not interrupt a run while it is cancelling its booking.
+concurrency:
+  group: staging-live-booking-chat
+  cancel-in-progress: false
+
+jobs:
+  live:
+    if: ${{ inputs.allow_mutations }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      STAGING_E2E_TENANT_SLUG: ${{ vars.STAGING_E2E_TENANT_SLUG }}
+      STAGING_E2E_EMAIL: ${{ vars.STAGING_E2E_EMAIL }}
+      STAGING_E2E_SERVICE_ID: ${{ vars.STAGING_E2E_SERVICE_ID }}
+      STAGING_E2E_PROVIDER_ID: ${{ vars.STAGING_E2E_PROVIDER_ID }}
+      STAGING_E2E_ALLOW_MUTATIONS: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @bam/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @bam/web test:e2e:live

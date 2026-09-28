@@ -3,8 +3,9 @@ import { expect, test } from "@playwright/test";
 test("domain login keeps Hungarian despite an English browser preference", async ({
   page,
   context,
+  baseURL,
 }) => {
-  await context.addCookies([{ name: "NEXT_LOCALE", value: "en", url: "http://127.0.0.1:3100" }]);
+  await context.addCookies([{ name: "NEXT_LOCALE", value: "en", url: baseURL! }]);
   await page.route("**/v1/me", (route) => route.fulfill({ status: 401, json: {} }));
   const response = await page.goto("/wellness-demo.appointer.hu/sign-in");
   expect(response?.status()).toBe(200);
