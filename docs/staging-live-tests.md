@@ -174,3 +174,7 @@ Runs are serialized and an in-progress run is not cancelled by a new run.
 Weekly runs are Wednesdays at 05:30 UTC. Both the workflow on the default branch and
 the schedule-enabled variable are required for scheduling to take effect. Keep the tenant
 isolated and account for the monthly allowance (normally 4–5 scheduled chats per month).
+
+Enabled on 2026-09-28 after the first successful booking/chat Actions run. The initial
+scheduled run is still a follow-up; a successful manual dispatch does not prove that
+GitHub has executed the schedule. See the checklist for run links and current evidence.

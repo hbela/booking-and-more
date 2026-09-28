@@ -16,25 +16,21 @@ Evidence: all three extended `test:e2e:live` scenarios passed locally against st
 
 ## 2. Stripe
 
-- [x] [AUTO / isolated database] Billing access and webhook lifecycle regressions: 40 worker
+- [x] [AUTO / isolated database] Billing access and webhook lifecycle regressions: 47 worker
       Stripe tests passed; billing API tests passed in the 99-test API run below.
 - [x] [AUTO / isolated database] Duplicate/reordered events, grandfathered plan recognition,
       scheduled changes, and subscription entitlement guards.
 - [x] [AUTO / staging] Real Payment Links for Form, Professional, Professional Plus.
 - [x] [AUTO / staging] Activation and entitlements for Form, Professional, Professional Plus,
       and legacy Form; cancellation verified for completed scenarios.
-- [ ] [AUTO / staging] Legacy Professional activation and entitlements: retry after the
-      five-tenant-creations-per-hour rate limit resets (HTTP 429 after repeated runs).
-- [ ] [AUTO / staging] Prorated upgrades, clock-driven renewal downgrade, failed renewal,
+- [x] [AUTO / staging] Legacy Professional activation and entitlements.
+- [x] [AUTO / staging] Prorated upgrades, clock-driven renewal downgrade, failed renewal,
       and cancellation with cleanup of disposable Sandbox subscriptions.
 
-Implementation: `test:e2e:stripe`. The corrected key was verified against Peach Seesaw
-Sandbox and stored in GitHub Actions. Live execution exposed a schedule-ordering defect:
-same-second `subscription_schedule.created` and `subscription_schedule.updated` events
-can leave `pendingPlan` null because the worker orders equal timestamps by event ID.
-The failing assertion remains enabled; the full lifecycle suite is not green.
-The independent Professional, Professional Plus, and legacy Form scenarios passed.
-Form activation and immediate prorated upgrades passed before the lifecycle failure.
+Evidence: all five `test:e2e:stripe` scenarios passed against staging revision `8633c0d`
+in 2.2 minutes. The [webhook reconciliation fix](stripe-webhook-reconciliation.md)
+resolved the same-second schedule-ordering defect without weakening the assertion.
+All five also passed in [GitHub Actions](https://github.com/hbela/booking-and-more/actions/runs/36485174139).
 Hosted Stripe Checkout completion is a **[MANUAL]** release check, per Stripe's automation
 guidance; Payment Link creation plus test-API subscriptions do not claim to cover it.
 
@@ -58,21 +54,27 @@ against shared staging.
 ## 4. Automated execution
 
 - [x] [AUTO] Owner login and in-memory session teardown implemented and exercised.
-- [ ] [AUTO] Verify real Stripe suite before enabling its CI path.
+- [x] [AUTO] Verify real Stripe suite before enabling its CI path.
 - [x] [AUTO] Configure repository Actions variables and encrypted owner-password secret.
 - [x] [AUTO] Validate and store the encrypted Stripe Sandbox secret.
-- [ ] [AUTO] Publish updated workflow and test code; verify an Actions run.
-- [ ] [AUTO] Make the workflow available on the default branch and enable weekly booking/chat.
+- [x] [AUTO] Publish updated workflow and test code; verify an Actions run.
+      [Booking/chat run](https://github.com/hbela/booking-and-more/actions/runs/36485170614):
+      all three scenarios passed against staging.
+- [x] [AUTO] Make the workflow available on the default branch and enable weekly booking/chat.
+      Enabled Wednesdays at 05:30 UTC, testing `release/production-launch-2026-09-20`.
 - [ ] [AUTO] Confirm the first scheduled run. Scheduling alone is not evidence of execution.
+      First expected run: Wednesday, 2026-09-30 at 05:30 UTC.
 
 Commands and cleanup behavior: [staging-live-tests.md](staging-live-tests.md).
 
-## Follow-up blockers
+## Fixes and remaining follow-ups
 
-- [ ] [AUTO] Fix same-second Stripe event ordering, add regression coverage, deploy to
+- [x] [AUTO] Fix same-second Stripe event ordering, add regression coverage, deploy to
       staging, and rerun the complete lifecycle suite. Do not add sleeps to hide this race.
-- [ ] [AUTO] Retry legacy Professional after the tenant-creation rate limit resets.
-- [ ] [AUTO] Resolve the existing dependency-audit failures on `main` before merging
-      [the workflow-only PR](https://github.com/hbela/booking-and-more/pull/1).
-      Its CI run reports 10 high and 2 critical findings in the existing dependencies.
-      Scheduling remains disabled.
+- [x] [AUTO] Retry legacy Professional after the tenant-creation rate limit resets.
+- [x] [AUTO] Resolve the existing high/critical dependency-audit failures on `main`
+      and merge [the workflow registration PR](https://github.com/hbela/booking-and-more/pull/1).
+      Its patched web package passed lint, type-check and 329 tests locally.
+- [ ] [AUTO / maintenance] Fix pre-existing formatting debt on `main`; the PR CI audit
+      passed but its formatting check failed on unchanged files. Four moderate audit
+      findings also remain. Full release-branch CI passed independently.
