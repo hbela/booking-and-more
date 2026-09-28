@@ -135,9 +135,7 @@ export interface ConversationSweeperOptions extends ConversationSweepOptions {
   intervalMs: number;
 }
 
-export function startConversationSweeper(
-  options: ConversationSweeperOptions,
-): ConversationSweeper {
+export function startConversationSweeper(options: ConversationSweeperOptions): ConversationSweeper {
   let stopped = false;
   let inFlight: Promise<void> = Promise.resolve();
 

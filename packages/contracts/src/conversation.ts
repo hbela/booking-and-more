@@ -169,9 +169,7 @@ export const INTENT_PARAMETERS = {
   OUT_OF_SCOPE: emptyParametersSchema,
 } as const satisfies Record<ConversationIntent, z.ZodType>;
 
-export type IntentParameters<I extends ConversationIntent> = z.infer<
-  (typeof INTENT_PARAMETERS)[I]
->;
+export type IntentParameters<I extends ConversationIntent> = z.infer<(typeof INTENT_PARAMETERS)[I]>;
 
 /** A command that has been through both validations and may be acted on. */
 export interface ParsedCommand {

@@ -75,7 +75,9 @@ function grantOf(
   scope: (typeof ALL_DELEGATION_SCOPES)[number],
   ...providerIds: string[]
 ): DelegatedProviderIds {
-  return delegatedProviderIdsFrom(providerIds.map((providerId) => ({ providerId, scopes: [scope] })));
+  return delegatedProviderIdsFrom(
+    providerIds.map((providerId) => ({ providerId, scopes: [scope] })),
+  );
 }
 
 describe("isMemberOf", () => {

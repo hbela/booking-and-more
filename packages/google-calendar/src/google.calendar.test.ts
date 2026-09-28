@@ -72,7 +72,13 @@ describe("listCalendars", () => {
     const calls = stubFetch({
       body: {
         items: [
-          { id: "anna@example.test", summary: "Anna", primary: true, accessRole: "owner", timeZone: "Europe/Budapest" },
+          {
+            id: "anna@example.test",
+            summary: "Anna",
+            primary: true,
+            accessRole: "owner",
+            timeZone: "Europe/Budapest",
+          },
           { id: "team@group.calendar.google.com", summary: "Team", accessRole: "writer" },
         ],
       },
@@ -127,7 +133,12 @@ describe("insertEvent", () => {
     // and the caller treats that refusal as success.
     stubFetch({
       status: 409,
-      body: { error: { errors: [{ reason: "duplicate" }], message: "The requested identifier already exists." } },
+      body: {
+        error: {
+          errors: [{ reason: "duplicate" }],
+          message: "The requested identifier already exists.",
+        },
+      },
     });
 
     const failure = await createGoogleCalendarClient()

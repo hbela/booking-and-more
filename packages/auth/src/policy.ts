@@ -83,8 +83,7 @@ export function delegatedProviderIdsFrom(
   for (const grant of grants) {
     for (const scope of grant.scopes) {
       const permissions = DELEGATION_SCOPE_PERMISSIONS[scope as DelegationScope] as
-        | readonly Permission[]
-        | undefined;
+        readonly Permission[] | undefined;
       if (!permissions) continue;
 
       for (const permission of permissions) {
@@ -265,11 +264,7 @@ export function canBlockProviderTime(actor: Actor, tenantId: string, providerId:
  * The omission is the whole enforcement; there is no scope that could reach
  * this rule. docs/phase-3-4-diary-delegation.md §2.4.
  */
-export function canManageIntegration(
-  actor: Actor,
-  tenantId: string,
-  providerId: string,
-): boolean {
+export function canManageIntegration(actor: Actor, tenantId: string, providerId: string): boolean {
   return canForProvider(actor, tenantId, providerId, {
     all: Permissions.INTEGRATION_MANAGE_ALL,
     own: Permissions.INTEGRATION_MANAGE_OWN,

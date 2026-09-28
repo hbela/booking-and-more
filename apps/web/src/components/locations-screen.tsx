@@ -114,17 +114,12 @@ export function LocationsScreen(): React.ReactElement {
                   const archived = location.archivedAt !== null;
 
                   return (
-                    <tr
-                      key={location.id}
-                      className="border-b border-line"
-                    >
+                    <tr key={location.id} className="border-b border-line">
                       <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {location.name}
                       </td>
                       <td className="py-2 pr-4">{t(`locationType.${location.type}`)}</td>
-                      <td className="py-2 pr-4 text-ink-muted">
-                        {formatAddress(location)}
-                      </td>
+                      <td className="py-2 pr-4 text-ink-muted">{formatAddress(location)}</td>
                       <td className="py-2 pr-4">
                         {archived ? t("archived") : location.active ? t("active") : t("inactive")}
                       </td>
@@ -247,7 +242,7 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
 
         <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending} >
+        <Button type="submit" disabled={mutation.isPending}>
           {t("create")}
         </Button>
       </form>
@@ -311,10 +306,10 @@ function EditLocationPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose} >
+          <Button variant="secondary" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>

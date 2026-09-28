@@ -210,23 +210,23 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
             <Button
               className="self-start"
               onClick={() => {
-              void signOut().then(() => {
-                // Straight to the right branch rather than back to `checking`:
-                // the lookup already told us whether the invited address has an
-                // account, and repeating it would spend a request to learn what
-                // is in hand.
-                //
-                // `router.refresh()` first, for the same reason RegisterForm
-                // calls it: the session cookie has just changed and any cached
-                // server render still believes the old one.
-                router.refresh();
-                setState(
-                  state.details.requiresRegistration
-                    ? { kind: "register", details: state.details }
-                    : { kind: "needs-sign-in", details: state.details },
-                );
-              });
-            }}
+                void signOut().then(() => {
+                  // Straight to the right branch rather than back to `checking`:
+                  // the lookup already told us whether the invited address has an
+                  // account, and repeating it would spend a request to learn what
+                  // is in hand.
+                  //
+                  // `router.refresh()` first, for the same reason RegisterForm
+                  // calls it: the session cookie has just changed and any cached
+                  // server render still believes the old one.
+                  router.refresh();
+                  setState(
+                    state.details.requiresRegistration
+                      ? { kind: "register", details: state.details }
+                      : { kind: "needs-sign-in", details: state.details },
+                  );
+                });
+              }}
             >
               {t("signOutAndContinue", { email: state.details.email })}
             </Button>
@@ -242,12 +242,12 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
             <Button
               className="self-start"
               onClick={() => {
-              // A provider goes to their own diary, not to the members table.
-              // Availability is the one part of this system that is theirs
-              // (phase-2-3 §2.7) and the thing the email just asked them to
-              // fill in. Everybody else lands where they always did.
-              //
-              // Providers automatically navigate above; keep this as a fallback.
+                // A provider goes to their own diary, not to the members table.
+                // Availability is the one part of this system that is theirs
+                // (phase-2-3 §2.7) and the thing the email just asked them to
+                // fill in. Everybody else lands where they always did.
+                //
+                // Providers automatically navigate above; keep this as a fallback.
                 router.push(state.role === "PROVIDER" ? "/dashboard/availability" : "/dashboard");
               }}
             >

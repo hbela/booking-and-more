@@ -1,43 +1,43 @@
 ---
 name: Cobalt Day
 colors:
-  surface: '#ffffff'
-  surface-bright: '#ffffff'
-  surface-dim: '#e3e7ef'
-  surface-container-lowest: '#ffffff'
-  surface-container-low: '#f9fafc'
-  surface-container: '#f2f4f9'
-  surface-container-high: '#e3e7ef'
-  surface-container-highest: '#cdd3df'
-  on-surface: '#121926'
-  on-surface-variant: '#4b5566'
-  inverse-surface: '#212938'
-  inverse-on-surface: '#f2f4f9'
-  outline: '#677286'
-  outline-variant: '#e3e7ef'
-  surface-tint: '#1f5cd4'
-  primary: '#1f5cd4'
-  on-primary: '#ffffff'
-  primary-container: '#e0eafd'
-  on-primary-container: '#0f398d'
-  inverse-primary: '#6f9ff7'
-  secondary: '#4b5566'
-  on-secondary: '#ffffff'
-  secondary-container: '#f2f4f9'
-  on-secondary-container: '#374051'
-  tertiary: '#0b7643'
-  on-tertiary: '#ffffff'
-  tertiary-container: '#defae6'
-  on-tertiary-container: '#04361f'
-  error: '#be0214'
-  on-error: '#ffffff'
-  error-container: '#ffebe8'
-  on-error-container: '#76080c'
-  warning: '#845a0f'
-  warning-container: '#fef2dd'
-  background: '#ffffff'
-  on-background: '#121926'
-  surface-variant: '#f2f4f9'
+  surface: "#ffffff"
+  surface-bright: "#ffffff"
+  surface-dim: "#e3e7ef"
+  surface-container-lowest: "#ffffff"
+  surface-container-low: "#f9fafc"
+  surface-container: "#f2f4f9"
+  surface-container-high: "#e3e7ef"
+  surface-container-highest: "#cdd3df"
+  on-surface: "#121926"
+  on-surface-variant: "#4b5566"
+  inverse-surface: "#212938"
+  inverse-on-surface: "#f2f4f9"
+  outline: "#677286"
+  outline-variant: "#e3e7ef"
+  surface-tint: "#1f5cd4"
+  primary: "#1f5cd4"
+  on-primary: "#ffffff"
+  primary-container: "#e0eafd"
+  on-primary-container: "#0f398d"
+  inverse-primary: "#6f9ff7"
+  secondary: "#4b5566"
+  on-secondary: "#ffffff"
+  secondary-container: "#f2f4f9"
+  on-secondary-container: "#374051"
+  tertiary: "#0b7643"
+  on-tertiary: "#ffffff"
+  tertiary-container: "#defae6"
+  on-tertiary-container: "#04361f"
+  error: "#be0214"
+  on-error: "#ffffff"
+  error-container: "#ffebe8"
+  on-error-container: "#76080c"
+  warning: "#845a0f"
+  warning-container: "#fef2dd"
+  background: "#ffffff"
+  on-background: "#121926"
+  surface-variant: "#f2f4f9"
 rounded:
   sm: 0.375rem
   DEFAULT: 0.5rem
@@ -55,7 +55,7 @@ spacing:
 
 ## Brand & Style
 
-This is **booking-and-more**, a multi-tenant appointment-booking SaaS. Two very different audiences share one visual system: the *business* (a clinic owner, a receptionist, a practitioner managing their diary all day) and the *customer* (a stranger on a phone who wants an appointment in under a minute and will never see the product again).
+This is **booking-and-more**, a multi-tenant appointment-booking SaaS. Two very different audiences share one visual system: the _business_ (a clinic owner, a receptionist, a practitioner managing their diary all day) and the _customer_ (a stranger on a phone who wants an appointment in under a minute and will never see the product again).
 
 The aesthetic is **Confident Utility** — modern corporate software that feels engineered rather than decorated. Deep cobalt blue carries authority and trust without the coldness of navy or the flippancy of a bright tech blue. The system prizes legibility, density where density helps, and generous whitespace where a decision has to be made. It is deliberately industry-neutral: the same screens must not look wrong for a dental clinic, a barbershop, a physiotherapist or a law practice.
 
@@ -63,7 +63,7 @@ No decorative flourish that does not carry information. No gradients on text. No
 
 ## Colors
 
-The palette is a single deep-blue hue with a neutral ramp tinted to that same hue, so greys sit *under* the blue rather than beside it.
+The palette is a single deep-blue hue with a neutral ramp tinted to that same hue, so greys sit _under_ the blue rather than beside it.
 
 - **Primary (Cobalt `#1f5cd4`):** Primary actions, active navigation, selected time slots, focus rings. White text on it reaches 5.93:1. One primary action per view.
 - **Primary container (`#e0eafd`):** Selected-but-not-active states, information callouts, the tint behind a chosen slot.
@@ -113,7 +113,7 @@ Never stack a heavy shadow on a bordered card. If two surfaces need separating, 
 ## Components
 
 - **Buttons:** Primary = solid cobalt, white text. Secondary = white fill with a `#cdd3df` border and `#121926` text. Ghost = text only, cobalt, underline on hover. Destructive = solid `#be0214`. Disabled reduces opacity but keeps the label legible.
-- **Inputs:** White fill, 1px `#cdd3df` border, label always *above* the field, never a placeholder used as a label. Focus is a 2px cobalt ring with a 2px offset — **visible focus is a hard requirement, never removed**. Errors put a `#be0214` border plus a message below, never colour alone.
+- **Inputs:** White fill, 1px `#cdd3df` border, label always _above_ the field, never a placeholder used as a label. Focus is a 2px cobalt ring with a 2px offset — **visible focus is a hard requirement, never removed**. Errors put a `#be0214` border plus a message below, never colour alone.
 - **Selects:** Native select controls, styled minimally. Do not draw custom dropdown menus.
 - **Cards:** 12px radius, 1px border, 24px internal padding.
 - **Tables:** Left-aligned text, right-aligned numbers, 56px row height, a `#f2f4f9` header row, hairline `#e3e7ef` row dividers, and a hover tint of `#f9fafc`. Row actions are compact outline buttons at the row end.

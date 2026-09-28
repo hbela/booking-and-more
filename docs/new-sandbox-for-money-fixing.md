@@ -2,6 +2,7 @@ Document and Implement the New Stripe Sandbox Bootstrap
 Summary
 Save the agreed procedure as docs/new-stripe-sandbox-bootstrap.md, connect local development to the empty Stripe sandbox, configure the complete Stripe billing flow, and validate real Starter and Professional sandbox subscriptions.
 Implementation
+
 1. Create the documentation file containing:
    - Required Stripe dashboard configuration.
    - Safe .env transition steps.
@@ -16,7 +17,8 @@ Implementation
 5. Apply local database migrations with pnpm db:migrate:deploy.
 6. Start a Stripe CLI listener for the 13 supported billing events, put its new signing secret in .env, and restart API, worker, and web processes.
 7. Configure Customer Portal cancellation, upgrades, deferred downgrades, unchanged billing anchors, trial preservation, and retry/cancellation policy.
-Verification
+   Verification
+
 - Run API and database lint, type-check, and focused billing tests.
 - Provision two new Prospect organizations without altering existing organizations.
 - Complete a Starter checkout for one and a Professional checkout for the other using Stripe’s successful test card.
@@ -24,24 +26,7 @@ Verification
 - Confirm repeated submission reuses one link, plan changes deactivate the prior unused link, and completed links cannot be reused.
 - Exercise Starter-to-Professional switching through Customer Portal and ensure the trial continues.
 - If the 175 Ft error persists, inspect the failed Stripe request and reject any configuration where Starter uses unit_amount=9990.
-Assumptions
+  Assumptions
 - Billingo Test, production deployment, discounts, and the assisted-configuration fee remain deferred.
 - Subscriptions are created through application checkout, never manually in Stripe.
 - Secrets remain local and are not written to documentation or committed.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

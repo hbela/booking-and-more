@@ -24,7 +24,9 @@ export class DelegationRepository {
   }): Promise<DelegationWithMember[]> {
     return this.prisma.providerDelegation.findMany({
       where: { tenantId: args.tenantId, providerId: args.providerId },
-      include: { membership: { include: { user: { select: { id: true, name: true, email: true } } } } },
+      include: {
+        membership: { include: { user: { select: { id: true, name: true, email: true } } } },
+      },
       orderBy: [{ grantedAt: "asc" }, { id: "asc" }],
     });
   }
@@ -51,7 +53,9 @@ export class DelegationRepository {
         providerId: args.providerId,
         membershipId: args.membershipId,
       },
-      include: { membership: { include: { user: { select: { id: true, name: true, email: true } } } } },
+      include: {
+        membership: { include: { user: { select: { id: true, name: true, email: true } } } },
+      },
     });
   }
 
@@ -88,7 +92,9 @@ export class DelegationRepository {
         scopes: args.scopes,
         grantedByUserId: args.grantedByUserId,
       },
-      include: { membership: { include: { user: { select: { id: true, name: true, email: true } } } } },
+      include: {
+        membership: { include: { user: { select: { id: true, name: true, email: true } } } },
+      },
     });
   }
 
@@ -116,9 +122,9 @@ export class DelegationRepository {
    * because "which roles may receive a delegation" is a permission question and
    * belongs in @bam/auth rather than in a `where` clause (rule 10).
    */
-  async listActiveMemberships(args: { tenantId: string }): Promise<
-    (Membership & { user: Pick<User, "id" | "name" | "email"> })[]
-  > {
+  async listActiveMemberships(args: {
+    tenantId: string;
+  }): Promise<(Membership & { user: Pick<User, "id" | "name" | "email"> })[]> {
     return this.prisma.membership.findMany({
       where: { tenantId: args.tenantId, status: "ACTIVE" },
       include: { user: { select: { id: true, name: true, email: true } } },

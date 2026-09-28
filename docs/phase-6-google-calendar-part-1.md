@@ -1,6 +1,6 @@
 > **PARKED on 2026-08-17 — read §10 first.** The feature was built, reviewed, and then deferred for
 > delivery time before it ever ran against a real Google account. Every module described below is still
-> in the tree and still compiles; the four seams that *reach* them are commented out, so nothing in the
+> in the tree and still compiles; the four seams that _reach_ them are commented out, so nothing in the
 > product touches Google and no calendar rows are written. §10 is the inventory of what is commented and
 > what to uncomment. Read the rest of this document as the design that is waiting, not as the behaviour
 > of the running system.
@@ -44,14 +44,14 @@ those is part 2; the first is this.
 
 Epic 6 has been named in every phase record since Phase 0, and each one left a seam rather than a stub:
 
-| Seam | Left by | State today |
-| --- | --- | --- |
-| `externalBusyPeriods` on `AvailabilityQuery` | phase 3 | declared, subtracted, hard-coded `[]` |
-| `QueueNames.CALENDAR_SYNC` | phase 5 part 1 | the `Queue` is created at boot with no consumer |
-| `CALENDAR_DISCONNECTED` | phase 5 part 1 | enum value + template *name* + a designed dedupe key; **no renderer** |
-| `ExceptionSource.CALENDAR`, nullable `createdByUserId` | phase 2 | "null when the platform created it — a calendar sync, for instance" |
-| `encryptedRefreshToken`, `authorizationCode` in `REDACT_PATHS` | phase 0 | already redacted, before anything could produce one |
-| The outbox tolerating non-`Booking` aggregates | phase 5 part 1 | "marking them processed without acting is correct until their consumers exist" |
+| Seam                                                           | Left by        | State today                                                                    |
+| -------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------ |
+| `externalBusyPeriods` on `AvailabilityQuery`                   | phase 3        | declared, subtracted, hard-coded `[]`                                          |
+| `QueueNames.CALENDAR_SYNC`                                     | phase 5 part 1 | the `Queue` is created at boot with no consumer                                |
+| `CALENDAR_DISCONNECTED`                                        | phase 5 part 1 | enum value + template _name_ + a designed dedupe key; **no renderer**          |
+| `ExceptionSource.CALENDAR`, nullable `createdByUserId`         | phase 2        | "null when the platform created it — a calendar sync, for instance"            |
+| `encryptedRefreshToken`, `authorizationCode` in `REDACT_PATHS` | phase 0        | already redacted, before anything could produce one                            |
+| The outbox tolerating non-`Booking` aggregates                 | phase 5 part 1 | "marking them processed without acting is correct until their consumers exist" |
 
 Part 1 consumes the middle four. `externalBusyPeriods` is part 2's.
 
@@ -80,13 +80,13 @@ What a provider actually wants from "sync my working hours" is that the commitme
 carve into their bookable time. That is the **read-busy** half, and it is part 2. Saying so here stops the
 question being reopened as though it were unconsidered.
 
-Deriving hours *from* Google is refused outright: PRD §9.10 says the database remains authoritative, and
+Deriving hours _from_ Google is refused outright: PRD §9.10 says the database remains authoritative, and
 product objective #3 says Google must not become the sole source of availability.
 
 ## 2.2 One claim on the outbox, two legs
 
 **The outbox is single-consumer, and this is a hard constraint rather than a preference.** `OutboxEvent`
-carries one `status`, and `markProcessed` in `outbox.repository.ts` additionally *clears the payload*. A
+carries one `status`, and `markProcessed` in `outbox.repository.ts` additionally _clears the payload_. A
 second poller over the same rows would race the first for the claim and find an emptied payload if it won.
 
 So the calendar leg runs **inside** `dispatchOne`, sharing the claim the notification leg already takes. One
@@ -117,7 +117,7 @@ externalEventId = "bam" + base32hex(sha256(`${bookingId}:${calendarMappingId}`).
 ```
 
 35 characters, every one inside Google's permitted base32hex alphabet. Derived from the same tuple as the
-unique constraint, so it is computable *before* the row exists and the column is NOT NULL. It is a hash, so
+unique constraint, so it is computable _before_ the row exists and the column is NOT NULL. It is a hash, so
 no booking id of ours leaks into a third party's URL space.
 
 Two layers, one guarantee:
@@ -159,7 +159,7 @@ reasons in increasing order of weight:
    Auth owns **identity only**. An integration is not an identity, and the predecessor project's trouble
    came from exactly this kind of conflation.
 
-The client *credentials* are shared — one `GOOGLE_CLIENT_ID`, one consent screen, one verification
+The client _credentials_ are shared — one `GOOGLE_CLIENT_ID`, one consent screen, one verification
 submission. Only the flow is ours.
 
 ## 2.6 What the event says, and what it does not
@@ -192,7 +192,7 @@ Stripe earned its SDK: dozens of resources, webhook signature verification, and 
 would be a large hand-rolling. Google Calendar here is **six endpoints**. Against that, `googleapis` is a
 very large dependency, and it flattens failures into its own error classes.
 
-That flattening is the deciding objection, because the failure *shape* is the product here. Tech-impl §26.3
+That flattening is the deciding objection, because the failure _shape_ is the product here. Tech-impl §26.3
 requires that `invalid_grant`, an invalid calendar id and permission-denied are never retried — and **403 is
 not one thing**: `rateLimitExceeded` must retry, `insufficientPermissions` must not. Classifying that needs
 the status code and the `reason` field, which is precisely what an SDK error class loses.
@@ -217,7 +217,7 @@ Three consequences worth stating, because each is a bug that this route shape in
   `compose()` on the way out. It is stored server-side rather than round-tripped through Google — but a
   stored redirect target deserves no more trust than a submitted one, and this is the moment it becomes
   a `Location` header. Three forms are refused: anything not starting with `/`, a leading `//` (which is
-  protocol-relative and means *another host* — the spelling that defeats a naive "must start with a
+  protocol-relative and means _another host_ — the spelling that defeats a naive "must start with a
   slash" check), and a backslash anywhere (browsers normalise `\` to `/`).
 - **Unknown, expired and already-burned states are one answer.** Distinguishing them would let somebody
   probe for live handshakes.
@@ -236,7 +236,7 @@ would leave the row holding a token it had already replaced, and the next proces
 again.
 
 So the API refreshes in `IntegrationService.accessTokenFor` and the worker will do the same in step 7. What
-is *shared* is only the decision of when — `isAccessTokenStale` in `@bam/google-calendar`, with a five-minute
+is _shared_ is only the decision of when — `isAccessTokenStale` in `@bam/google-calendar`, with a five-minute
 margin. Two processes asking the same question with two different margins is the kind of disagreement that
 stays invisible until a batch of writes fails halfway through.
 
@@ -264,8 +264,7 @@ mapping in the same transaction as the upsert. Without that the request is refus
 by us, which is the right way round (rule 14) but a poor error message.
 
 The previous mapping is **deactivated, never deleted**, because its `calendar_event_mappings` are the only
-record of what we put in that calendar. Re-pointing therefore orphans the events already created (known limit
-6) — the response names `replacedCalendarId` so the screen can say so, and nothing automatic is offered,
+record of what we put in that calendar. Re-pointing therefore orphans the events already created (known limit 6) — the response names `replacedCalendarId` so the screen can say so, and nothing automatic is offered,
 because the tidy-up would mean deleting real entries out of somebody's diary.
 
 **The backfill exists because an integration that shows an empty calendar on the day you connect it looks
@@ -290,7 +289,7 @@ not `calendar.events`. That integration is **recorded** — the granted scopes a
 diagnosable as itself rather than as a 403 three days later — but recorded as `NEEDS_RECONNECT` with
 the missing scope in `lastError`. `ACTIVE` is a claim that the row can do work, and this one cannot.
 
-A *first* connection that comes back with no refresh token is refused outright instead, and nothing is
+A _first_ connection that comes back with no refresh token is refused outright instead, and nothing is
 stored. `prompt=consent` is supposed to guarantee one (§7.1), so its absence is already unexpected —
 and storing the access token alone would produce an integration that works until lunchtime and then
 stops, with nothing in any log to say why. On a **re**-connection the stored refresh token is kept
@@ -320,7 +319,7 @@ returns only an access token must not let the repair create the fault.
    accepted appearing in a provider's diary is worse than its absence — the same reasoning that gives
    `BOOKING_REQUESTED` its own "this is not confirmed yet" email.
 9. **`DELETE /v1/integrations/google/:integrationId`**, not §19.4's `DELETE /v1/integrations/google`. That
-   path addresses *the* integration, and a tenant may hold several: the unique key is
+   path addresses _the_ integration, and a tenant may hold several: the unique key is
    `(tenantId, providerType, accountEmail)`, so two providers connecting their own Google accounts is the
    ordinary case rather than an edge one.
 10. **The callback answers `302` on every path, including refusal** — §2.8.
@@ -379,8 +378,8 @@ asserted directly rather than implied — every processor failure test ends by r
 
 `CALENDAR_DISCONNECTED` finally gets its renderer, modelled on `renderPaymentFailed` because it is the same
 genre: an alarming email that must not read as an outage. Its load-bearing line is the PRD's promise said to
-the person worried about it — *"Your bookings are safe. The platform is the record of your appointments; only
-the copy in Google Calendar has stopped updating."*
+the person worried about it — _"Your bookings are safe. The platform is the record of your appointments; only
+the copy in Google Calendar has stopped updating."_
 
 It is addressed to `integration.userId`, because only that person can re-consent to their own Google account
 — an owner cannot — falling back to the first ACTIVE `OWNER` when that membership has gone. The dedupe
@@ -396,21 +395,21 @@ yet" assertion, and this phase inverts what it asserts rather than deleting it.
 
 Each step compiles, lints and tests green on its own.
 
-| # | Step | State |
-| --- | --- | --- |
-| 0 | This record, and the CLAUDE.md entry | **done** |
-| 1 | `@bam/crypto`, config vars, redaction | **done** |
-| 2 | Schema and migration | **done** |
-| 3 | `@bam/google-calendar` — pure modules, then `fetch` | **done** |
-| 4 | `INTEGRATION_MANAGE_*` permissions and policy | **done** |
-| 5 | API: connect / callback / disconnect | **done** |
-| 6 | API: calendars / select / sync / read, with backfill | **done** |
-| 7 | Worker: the processor | **done** |
-| 8 | Worker: the dispatcher fan-out | **done** |
-| 9 | Worker: the sweep, and `worker.ts` wiring | **done** |
-| 10 | `CALENDAR_DISCONNECTED` renderer and trigger | **done** |
-| 11 | Web: the integrations screen | **done** |
-| 12 | Close this record: manual walk, known limits | **done** |
+| #   | Step                                                 | State    |
+| --- | ---------------------------------------------------- | -------- |
+| 0   | This record, and the CLAUDE.md entry                 | **done** |
+| 1   | `@bam/crypto`, config vars, redaction                | **done** |
+| 2   | Schema and migration                                 | **done** |
+| 3   | `@bam/google-calendar` — pure modules, then `fetch`  | **done** |
+| 4   | `INTEGRATION_MANAGE_*` permissions and policy        | **done** |
+| 5   | API: connect / callback / disconnect                 | **done** |
+| 6   | API: calendars / select / sync / read, with backfill | **done** |
+| 7   | Worker: the processor                                | **done** |
+| 8   | Worker: the dispatcher fan-out                       | **done** |
+| 9   | Worker: the sweep, and `worker.ts` wiring            | **done** |
+| 10  | `CALENDAR_DISCONNECTED` renderer and trigger         | **done** |
+| 11  | Web: the integrations screen                         | **done** |
+| 12  | Close this record: manual walk, known limits         | **done** |
 
 **The acceptance criterion for step 8** was that every existing test in `outbox.dispatcher.test.ts` stays
 green with no edit. With no integration configured the calendar leg is one indexed `SELECT` returning `[]`.
@@ -420,13 +419,13 @@ green with no edit. With no integration configured the calendar leg is one index
 
 - **`packages/crypto`** — `sealToken` / `openToken` (AES-256-GCM, `v1.<iv>.<ct>.<tag>` envelope so a
   future key rotation can accept two keys and re-seal on read), `parseEncryptionKey`, `looksSealed`,
-  `safeEquals`. 26 tests, including that a wrong key and a tampered value report the *same* message —
+  `safeEquals`. 26 tests, including that a wrong key and a tampered value report the _same_ message —
   a decryption oracle that distinguishes them is how padding-oracle attacks start.
 - **Config** — `GOOGLE_REDIRECT_URI`, `GOOGLE_TOKEN_ENCRYPTION_KEY` (64 hex, validated at boot),
   `CALENDAR_OAUTH_STATE_TTL_MINUTES`, `CALENDAR_SWEEP_INTERVAL_MS`, `CALENDAR_SWEEP_BATCH_SIZE`,
   `CALENDAR_MAX_ATTEMPTS` (8). `hasGoogleCalendar` and `hasGoogleSignIn` are separate helpers because
   sign-in without Calendar is the common deployment. The `superRefine` catches the dangerous
-  half-configuration: a redirect URI with no encryption key means consent succeeds and *then* the
+  half-configuration: a redirect URI with no encryption key means consent succeeds and _then_ the
   callback cannot seal what it was handed — a failure after the irreversible step.
 - **Schema** — two migrations. The second is hand-written for the partial unique index Prisma cannot
   express. `calendar-constraints.test.ts` proves all three rules, including that archiving a provider
@@ -442,7 +441,7 @@ green with no edit. With no integration configured the calendar leg is one index
 Two things worth knowing before step 5. `GOOGLE_CALENDAR_SCOPES` asks for `calendar.events` and
 `userinfo.email` only — **not** `calendar.readonly`, which is part 2's and deliberately deferred so
 the consent screen asks for nothing it does not yet use. And `buildAuthorizationUrl` forces
-`prompt=consent` on every connect: without it Google issues a refresh token only on the *first* ever
+`prompt=consent` on every connect: without it Google issues a refresh token only on the _first_ ever
 consent for a client/user pair, so a provider who disconnects and reconnects would get an integration
 that dies at the first access-token expiry, an hour later, invisibly.
 
@@ -450,11 +449,11 @@ that dies at the first access-token expiry, an hour later, invisibly.
 
 `apps/api/src/modules/integrations/` — three routes, 20 integration tests in `integrations.test.ts`.
 
-| Route | What it does |
-| --- | --- |
-| `POST /v1/integrations/google/connect` | Mints a single-use state row, returns Google's consent URL |
-| `GET /v1/integrations/google/callback` | Burns the state, exchanges the code, seals the tokens, redirects |
-| `DELETE /v1/integrations/google/:integrationId` | Clears the credentials, stops the calendars, revokes |
+| Route                                           | What it does                                                     |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| `POST /v1/integrations/google/connect`          | Mints a single-use state row, returns Google's consent URL       |
+| `GET /v1/integrations/google/callback`          | Burns the state, exchanges the code, seals the tokens, redirects |
+| `DELETE /v1/integrations/google/:integrationId` | Clears the credentials, stops the calendars, revokes             |
 
 - **`google.client.ts`** memoises the OAuth client exactly as `stripe.client.ts` does, and for the same
   reason: with the four variables unset the API boots unchanged and these routes answer **503, not 404**.
@@ -474,9 +473,9 @@ that dies at the first access-token expiry, an hour later, invisibly.
   malformed key fails a deployment rather than one provider's callback.
 
 The assertion the step exists for is `integrations.test.ts`'s "seals both tokens before they touch the
-database": the stored value must not *contain* the plaintext, must satisfy `looksSealed`, and must open
+database": the stored value must not _contain_ the plaintext, must satisfy `looksSealed`, and must open
 back to the original under the configured key. The first two catch "forgot to seal"; the third is what
-proves it was sealed with *this* key rather than merely encoded. The disconnect test closes the loop from
+proves it was sealed with _this_ key rather than merely encoded. The disconnect test closes the loop from
 the other end — the token handed to Google's revoke endpoint is the plaintext, which can only be true if
 the API opened what it sealed.
 
@@ -488,17 +487,17 @@ through a route that does not exist yet.
 
 Four more routes on the same module; `integrations.test.ts` is now 34 tests.
 
-| Route | What it does |
-| --- | --- |
-| `GET /v1/integrations/google` | Connections, their calendars, and the §25.6 sync counts |
-| `GET /v1/integrations/google/:id/calendars` | Asks Google, live, for writable calendars |
-| `POST /v1/integrations/google/:id/calendars/select` | Points a provider at one calendar, queues the backlog |
-| `POST /v1/integrations/google/:id/sync` | Requeues parked rows — §25.6's "Retry" |
+| Route                                               | What it does                                            |
+| --------------------------------------------------- | ------------------------------------------------------- |
+| `GET /v1/integrations/google`                       | Connections, their calendars, and the §25.6 sync counts |
+| `GET /v1/integrations/google/:id/calendars`         | Asks Google, live, for writable calendars               |
+| `POST /v1/integrations/google/:id/calendars/select` | Points a provider at one calendar, queues the backlog   |
+| `POST /v1/integrations/google/:id/sync`             | Requeues parked rows — §25.6's "Retry"                  |
 
 - **§2.9** (token refresh) and **§2.10** (one calendar, bounded backfill) are the decisions; both are new in
   this step and written up above.
-- **`CALENDAR_INTEGRATION_INACTIVE`** is a new error code, and the distinction it draws is the point: *this
-  connection* needs a human (409) versus *this platform* has no Google credentials (503). The screen gives
+- **`CALENDAR_INTEGRATION_INACTIVE`** is a new error code, and the distinction it draws is the point: _this
+  connection_ needs a human (409) versus _this platform_ has no Google credentials (503). The screen gives
   opposite instructions for the two, so a single code would tell somebody the wrong thing to do.
 - **The read route filters rather than refuses.** A provider asking for the integrations page gets the page,
   showing what is theirs; a 403 would be right for one row and wrong for the screen. `canManageIntegration`
@@ -508,7 +507,7 @@ Four more routes on the same module; `integrations.test.ts` is now 34 tests.
 - `CALENDAR_BACKFILL_LIMIT` is the one new environment variable (default 200).
 
 Two tests carry more than their share. "refreshes a stale access token and re-seals the replacement" asserts
-that Google was called with the *new* token, that the new one round-trips under the configured key, and that
+that Google was called with the _new_ token, that the new one round-trips under the configured key, and that
 the refresh token was left alone — the last is the failure §2.8 describes, approached from the other side.
 "marks the connection as needing a human when the grant is gone" is `invalid_grant` arriving as a **400**,
 which is the whole reason `classifyGoogleFailure` reads the reason before the status.
@@ -529,7 +528,7 @@ against a real PostgreSQL and a fake Google.
   roughly 600 requests per minute per user, the backfill is the one bursty workload, and nobody is waiting on
   a calendar entry appearing four seconds sooner.
 - **One job name, not three.** `sync-calendar-event` — the row's `desiredState` and `syncedVersion` already
-  say whether this is a create, an update or a cancellation, and they say it at the moment the job *runs*
+  say whether this is a create, an update or a cancellation, and they say it at the moment the job _runs_
   rather than when it was queued. A `create-` job that found a cancelled booking would have to ignore its own
   name anyway.
 
@@ -538,7 +537,7 @@ against a real PostgreSQL and a fake Google.
 **`booking.status` is never written, on any path.** Asserted at the end of every failure test rather than
 once in a summary, because the value of §25.6's promise is per-path.
 
-**An attempt that never reached Google is not an attempt.** Three conditions release the row *without*
+**An attempt that never reached Google is not an attempt.** Three conditions release the row _without_
 counting the attempt — the integration is not `ACTIVE`, the grant is unusable, or a `RECONNECT` came back
 from the Calendar call — and each waits an hour rather than backing off. Burning the budget there would park
 every pending row before the provider had a chance to reconnect, which turns §5's "a reconnect should resume
@@ -553,7 +552,7 @@ while we were talking to Google leaves the row `PENDING` at the newer version ra
 older one — the difference between a diary that is briefly behind and one that is permanently wrong. The
 outcome has its own name, `SUPERSEDED`, and the etag is kept because it describes the event Google now holds.
 
-**There is no `RETRY` outcome.** A transient failure *throws*, because throwing is what applies BullMQ's
+**There is no `RETRY` outcome.** A transient failure _throws_, because throwing is what applies BullMQ's
 backoff on top of the row's own. An outcome returned normally always means the job is finished with.
 
 The test that earns the file is "reaches SYNCED when Google refuses the insert as a duplicate": a worker
@@ -569,7 +568,7 @@ acceptance criterion, and the reason the leg had to cost nothing when nobody has
 **The desired state comes from the booking, not from the event type.** This is the subtle one, and getting
 it wrong resurrects cancelled appointments in people's diaries: a redelivered `BOOKING_CONFIRMED` for a
 booking that has since been cancelled would, read literally, ask for the event to be present. So the event
-type means only *"this booking's calendar state may have changed"* and the booking's **current** status
+type means only _"this booking's calendar state may have changed"_ and the booking's **current** status
 decides what that state is — exactly the reasoning `loadBookingFacts` already applies to notifications one
 function up. `PENDING` and `EXPIRED` map to no opinion at all (§3.8); `COMPLETED` and `NO_SHOW` map to
 PRESENT, because removing a past appointment from somebody's diary is rewriting their history.
@@ -588,14 +587,14 @@ Two smaller rules, each with a test:
 - **A new desire resets a parked row.** What failed is not what is being asked for now, so a row parked
   `FAILED` against version 1 gets a fresh attempt budget for version 2.
 - **The desire is recorded even while the integration is `NEEDS_RECONNECT`.** The desire is ours, the grant
-  is Google's. Skipping would lose the booking entirely; recording is what makes a reconnection *resume*,
+  is Google's. Skipping would lose the booking entirely; recording is what makes a reconnection _resume_,
   and the processor holds the row until somebody re-consents.
 
 ### An intermittent worth knowing about, characterised in §7.9
 
 ## 7.6 What step 9 landed
 
-`calendar.sweeper.ts` (9 tests) and the `worker.ts` wiring that finally *starts* the `calendar-sync`
+`calendar.sweeper.ts` (9 tests) and the `worker.ts` wiring that finally _starts_ the `calendar-sync`
 consumer — until this step it existed with no producer running and nothing consuming it.
 
 **Three things depend on the sweep and nothing else.** The backfill draining at all, since
@@ -604,7 +603,7 @@ an hour out has no job pointing at it; and recovery when Redis loses a job, sinc
 and a job is only a prompt.
 
 **Two passes, stale claims first**, so a row a dead worker left `SYNCING` goes back out in the same pass
-rather than waiting another interval. `attempts` is deliberately *not* reset by the reclaim: the claim
+rather than waiting another interval. `attempts` is deliberately _not_ reset by the reclaim: the claim
 already counted the try, and a worker that died mid-call may well have died because of it.
 
 **What is never swept**, each with a test:
@@ -639,19 +638,19 @@ Redis, so nothing is lost — but the shutdown log would claim a clean drain tha
 
 Rule 4, and with a wrinkle worth stating: **the dispatcher's calendar leg writes rows either way.** It
 cannot ask whether Google is configured, because a tenant's mappings are data rather than config. What is
-absent without credentials is anything that could *drain* those rows — the same shape as running without
+absent without credentials is anything that could _drain_ those rows — the same shape as running without
 Redis, and recorded as such in §8.3. The worker says so at boot rather than leaving it to be inferred.
 
 ## 7.7 What step 10 landed
 
 `renderCalendarDisconnected` in `@bam/notification-engine` (8 tests) and
 `apps/worker/src/calendar/calendar.disconnected.ts`, the trigger. The last seam phase 5 left is closed:
-`CALENDAR_DISCONNECTED` had an enum value, a template *name* and a designed dedupe key, and no renderer.
+`CALENDAR_DISCONNECTED` had an enum value, a template _name_ and a designed dedupe key, and no renderer.
 
 **`templates.test.ts` was inverted, not deleted.** Its "refuses a type with no template" case asserted
 `isRenderable(CALENDAR_DISCONNECTED) === false` — "the last one left: staff-facing, and it arrives with
 Google Calendar". It has arrived, so the assertion now says `true`, and a second line proves the gate still
-*can* say no by asking about a type that does not exist. The point the test was making outlived the fact it
+_can_ say no by asking about a type that does not exist. The point the test was making outlived the fact it
 was asserting.
 
 ### The line the template exists for
@@ -662,7 +661,7 @@ was asserting.
 PRD §9.10's promise said to the person worried about it, and asserted to appear **before** the call to
 action — somebody who reads two lines and stops must still have been reassured. Modelled on
 `renderPaymentFailed` because it is the same genre: an alarming subject line that must not read as an
-outage. Both share the shape *state the problem, state what still works, then ask for the one action*, and
+outage. Both share the shape _state the problem, state what still works, then ask for the one action_, and
 the middle part is the one that is easy to omit and expensive to.
 
 ### Where it is written from, and why that is unusual
@@ -680,20 +679,20 @@ half that earns an email.
 
 ### Two rules about the recipient
 
-**Once per UTC day**, keyed `(integrationId, dayIso)`. A dead grant fails *every* queued row, so without the
+**Once per UTC day**, keyed `(integrationId, dayIso)`. A dead grant fails _every_ queued row, so without the
 key this sends one email per booking — which is how a well-meant alert becomes the reason somebody filters
 our address. The caveat phase 5 designed in stands: a UTC day means the nag lands on the day's first failure
 whenever that is, not at a civilised hour.
 
 **To whoever consented, while they are still of this organization.** Only they can re-consent to their own
 Google account. The fallback needs stating precisely, because the obvious implementation is dead code:
-`CalendarIntegration.userId` is NOT NULL and cascades, so the consenting *user* is always present and a
+`CalendarIntegration.userId` is NOT NULL and cascades, so the consenting _user_ is always present and a
 `?? owner` on the relation can never fire. What is reachable is that their **membership** has gone — removed
 or suspended while the account lives on — and mailing a departed colleague about a clinic's diary is useless
 and a small disclosure besides. So the test is an ACTIVE membership, not the existence of a row, and this
 supersedes §6's looser wording above.
 
-The trigger never throws. A failure to *tell* somebody the sync is broken must not also fail the sync work
+The trigger never throws. A failure to _tell_ somebody the sync is broken must not also fail the sync work
 that discovered it — the row is already marked, and that is the durable part.
 
 ## 7.8 What step 11 landed
@@ -727,7 +726,7 @@ plausible support-scam sentence both collapse to `unknown`.
 
 **Retry is absent rather than disabled when it could not work.** `POST /sync` refuses a non-ACTIVE
 integration with `CALENDAR_INTEGRATION_INACTIVE`, so a visible-but-dead button would only produce an error
-message. The re-point warning is shown *before* the choice for the same reason: known limit 6 is not
+message. The re-point warning is shown _before_ the choice for the same reason: known limit 6 is not
 something to discover afterwards.
 
 **The connect target comes from the membership when there is one.** A `PROVIDER` holds
@@ -746,17 +745,17 @@ query string.
 
 `outbox.dispatcher.test.ts`'s last test asserts that a claim with `batchSize: 2` returns 2. It has
 intermittently seen **3**. It appeared during step 8 — which added queries to `dispatchOne` and so changed
-the dispatcher's timing — and the same *class* of flake is already documented in this package's
+the dispatcher's timing — and the same _class_ of flake is already documented in this package's
 `vitest.config.ts`, where an earlier one "needed only a slower dispatcher file to surface".
 
 What was ruled out, so nobody repeats it:
 
-| Hypothesis | How it was tested | Result |
-| --- | --- | --- |
-| The claim SQL is wrong | Direct probe: 3 rows, `batchSize: 2` | Returned 2 |
-| Parameterised `LIMIT` is mis-bound | Probe of the same raw statement | Returned 2 |
+| Hypothesis                                    | How it was tested                                                        | Result        |
+| --------------------------------------------- | ------------------------------------------------------------------------ | ------------- |
+| The claim SQL is wrong                        | Direct probe: 3 rows, `batchSize: 2`                                     | Returned 2    |
+| Parameterised `LIMIT` is mis-bound            | Probe of the same raw statement                                          | Returned 2    |
 | Concurrent claims corrupt the bound parameter | 200 rounds of two concurrent `batchSize: 50` claims followed by one at 2 | 0 over-claims |
-| Another test file writing concurrently | Every pairing of the calendar files with the dispatcher file | All green |
+| Another test file writing concurrently        | Every pairing of the calendar files with the dispatcher file             | All green     |
 
 It needs the full seven-file suite, and it did not reproduce in ten consecutive runs once instrumentation
 was added — which is itself evidence that it is timing-sensitive rather than logical.
@@ -777,7 +776,7 @@ first.
 2. **Unverified-app cap of 100 connected users**, and a consent warning screen, until §4 completes.
 3. **Redis is required to drain, and so is `hasGoogleCalendar`.** Rows are written either way — the
    dispatcher's calendar leg cannot ask whether Google is configured, because a tenant's mappings are data
-   rather than config — but without Redis *or* without credentials nothing consumes them, and they accumulate
+   rather than config — but without Redis _or_ without credentials nothing consumes them, and they accumulate
    PENDING exactly as notifications do. The worker says which at boot.
 4. **No rate-limit token bucket.** Google allows roughly 600 queries per minute per user; the backfill is the
    only burst and the sweep's batch size is the throttle. The thing to add when a large tenant connects.
@@ -796,7 +795,7 @@ first.
    sweep's five-minute reclaim instead — correct, but it means the Retry button is not a universal
    unstick-everything control, and nothing on screen says so.
 10. **No screen shows per-booking sync state.** The integrations page aggregates counts; a provider asking
-    "did *this* appointment reach my calendar" has no answer short of looking at Google. `calendar_event_mappings`
+    "did _this_ appointment reach my calendar" has no answer short of looking at Google. `calendar_event_mappings`
     holds it, so this is a view nobody has built rather than data nobody has.
 
 ## 8.1 Forward note for part 2
@@ -835,106 +834,106 @@ written for.
 
 ### A. Connect
 
-| | Check |
-| --- | --- |
-| A1 | `/dashboard/integrations` shows "no Google account is connected yet", not an error. |
-| A2 | With `GOOGLE_*` unset the same screen says the **platform** has not set it up — different words, and the reason `configured` is reported rather than inferred. |
-| A3 | Connect opens Google's consent screen in the **same tab**. |
-| A4 | The consent screen asks for calendar events and the account's address, and **nothing else** — this is the assertion that catches a scope added by accident. |
-| A5 | The unverified-app warning appears. Expected until §4 completes; note the wording for the verification submission. |
-| A6 | Accepting returns to `/dashboard/integrations` with a green "connected" message. |
-| A7 | The panel names the Google account, which may differ from the login address. |
-| A8 | `select sealed_refresh_token from calendar_integrations` is a `v1.…` envelope and contains nothing resembling a token. |
+|     | Check                                                                                                                                                          |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1  | `/dashboard/integrations` shows "no Google account is connected yet", not an error.                                                                            |
+| A2  | With `GOOGLE_*` unset the same screen says the **platform** has not set it up — different words, and the reason `configured` is reported rather than inferred. |
+| A3  | Connect opens Google's consent screen in the **same tab**.                                                                                                     |
+| A4  | The consent screen asks for calendar events and the account's address, and **nothing else** — this is the assertion that catches a scope added by accident.    |
+| A5  | The unverified-app warning appears. Expected until §4 completes; note the wording for the verification submission.                                             |
+| A6  | Accepting returns to `/dashboard/integrations` with a green "connected" message.                                                                               |
+| A7  | The panel names the Google account, which may differ from the login address.                                                                                   |
+| A8  | `select sealed_refresh_token from calendar_integrations` is a `v1.…` envelope and contains nothing resembling a token.                                         |
 
 ### B. Refuse, and refuse oddly
 
-| | Check |
-| --- | --- |
-| B1 | Cancelling at Google returns with "you cancelled", and `calendar_integrations` is empty. |
-| B2 | Re-using the returned URL a second time says the link expired. |
-| B3 | Opening the callback URL in a browser signed in as somebody else is refused. |
-| B4 | Unticking the calendar permission on the consent screen produces the missing-scope message, and the row is `NEEDS_RECONNECT` — **not** ACTIVE. |
-| B5 | Appending `?calendar=<script>alert(1)</script>` to the screen renders the generic message and no script. |
+|     | Check                                                                                                                                          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Cancelling at Google returns with "you cancelled", and `calendar_integrations` is empty.                                                       |
+| B2  | Re-using the returned URL a second time says the link expired.                                                                                 |
+| B3  | Opening the callback URL in a browser signed in as somebody else is refused.                                                                   |
+| B4  | Unticking the calendar permission on the consent screen produces the missing-scope message, and the row is `NEEDS_RECONNECT` — **not** ACTIVE. |
+| B5  | Appending `?calendar=<script>alert(1)</script>` to the screen renders the generic message and no script.                                       |
 
 ### C. Choose a calendar, and the backfill
 
-| | Check |
-| --- | --- |
-| C1 | The picker lists only calendars the account can **write** to. Share one read-only with the test account and confirm it is absent. |
-| C2 | Selecting one reports how many appointments were queued. |
-| C3 | Within a sweep interval, those appointments appear in Google. |
-| C4 | The title reads `{service} — {customer}`; the description carries the phone, the reference and a staff link. |
-| C5 | **The event has no attendees** and the customer received no mail from Google. |
-| C6 | The event's span is the appointment, not the appointment plus buffers. |
-| C7 | A **cancelled** and a **pending** booking did *not* appear. |
-| C8 | Selecting the same calendar again queues nothing and creates no duplicate events. |
+|     | Check                                                                                                                             |
+| --- | --------------------------------------------------------------------------------------------------------------------------------- |
+| C1  | The picker lists only calendars the account can **write** to. Share one read-only with the test account and confirm it is absent. |
+| C2  | Selecting one reports how many appointments were queued.                                                                          |
+| C3  | Within a sweep interval, those appointments appear in Google.                                                                     |
+| C4  | The title reads `{service} — {customer}`; the description carries the phone, the reference and a staff link.                      |
+| C5  | **The event has no attendees** and the customer received no mail from Google.                                                     |
+| C6  | The event's span is the appointment, not the appointment plus buffers.                                                            |
+| C7  | A **cancelled** and a **pending** booking did _not_ appear.                                                                       |
+| C8  | Selecting the same calendar again queues nothing and creates no duplicate events.                                                 |
 
 ### D. The booking lifecycle
 
-| | Check |
-| --- | --- |
-| D1 | A new booking appears in Google within a sweep interval. |
-| D2 | Rescheduling **moves** the existing event rather than creating a second one. |
-| D3 | Cancelling greys it out — it is still visible, not deleted. |
-| D4 | Reinstating a cancelled booking reuses the same event. This is what `PATCH status: cancelled` buys over `DELETE` (§2.3). |
-| D5 | Deleting the event by hand in Google and then rescheduling **recreates** it. |
+|     | Check                                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------------------------ |
+| D1  | A new booking appears in Google within a sweep interval.                                                                 |
+| D2  | Rescheduling **moves** the existing event rather than creating a second one.                                             |
+| D3  | Cancelling greys it out — it is still visible, not deleted.                                                              |
+| D4  | Reinstating a cancelled booking reuses the same event. This is what `PATCH status: cancelled` buys over `DELETE` (§2.3). |
+| D5  | Deleting the event by hand in Google and then rescheduling **recreates** it.                                             |
 
 ### E. Re-pointing
 
-| | Check |
-| --- | --- |
-| E1 | Choosing a different calendar warns *before* the choice that existing events stay put. |
-| E2 | After the change, new bookings go to the new calendar and the old events are still in the old one (known limit 6). |
-| E3 | `calendar_mappings` has the old row `active = false` rather than deleted. |
+|     | Check                                                                                                              |
+| --- | ------------------------------------------------------------------------------------------------------------------ |
+| E1  | Choosing a different calendar warns _before_ the choice that existing events stay put.                             |
+| E2  | After the change, new bookings go to the new calendar and the old events are still in the old one (known limit 6). |
+| E3  | `calendar_mappings` has the old row `active = false` rather than deleted.                                          |
 
 ### F. Failure and retry
 
-| | Check |
-| --- | --- |
-| F1 | Stop the worker, make a booking, restart it: the appointment arrives. The row was the commitment. |
-| F2 | Flush Redis with rows PENDING; the sweep re-enqueues them. |
-| F3 | Park a row by hand (`sync_status = 'FAILED'`) — the screen says "sync failed / retry scheduled" with a Retry button. |
-| F4 | Retry moves it back to PENDING and it syncs. |
-| F5 | Throughout, **every booking is still CONFIRMED**. This is §25.6's promise and the one box that must never be ticked with a caveat. |
+|     | Check                                                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | Stop the worker, make a booking, restart it: the appointment arrives. The row was the commitment.                                  |
+| F2  | Flush Redis with rows PENDING; the sweep re-enqueues them.                                                                         |
+| F3  | Park a row by hand (`sync_status = 'FAILED'`) — the screen says "sync failed / retry scheduled" with a Retry button.               |
+| F4  | Retry moves it back to PENDING and it syncs.                                                                                       |
+| F5  | Throughout, **every booking is still CONFIRMED**. This is §25.6's promise and the one box that must never be ticked with a caveat. |
 
 ### G. Revocation ★ — the assertion no test can make
 
-| | Check |
-| --- | --- |
-| G1 | Revoke access at `myaccount.google.com` → Security → Third-party access. |
-| G2 | Make a booking. The worker's next attempt classifies `invalid_grant` and sets `NEEDS_RECONNECT`. |
-| G3 | The screen shows the reconnect banner, **not** the sync-failed one — the ordering §7.8 exists for. |
-| G4 | The `CALENDAR_DISCONNECTED` email arrives, addressed to the person who consented. |
-| G5 | It leads with "your bookings are safe" **before** asking for anything. |
-| G6 | A second failure the same day sends **no** second email. |
-| G7 | Reconnecting resumes: the queued rows drain without pressing Retry. |
+|     | Check                                                                                              |
+| --- | -------------------------------------------------------------------------------------------------- |
+| G1  | Revoke access at `myaccount.google.com` → Security → Third-party access.                           |
+| G2  | Make a booking. The worker's next attempt classifies `invalid_grant` and sets `NEEDS_RECONNECT`.   |
+| G3  | The screen shows the reconnect banner, **not** the sync-failed one — the ordering §7.8 exists for. |
+| G4  | The `CALENDAR_DISCONNECTED` email arrives, addressed to the person who consented.                  |
+| G5  | It leads with "your bookings are safe" **before** asking for anything.                             |
+| G6  | A second failure the same day sends **no** second email.                                           |
+| G7  | Reconnecting resumes: the queued rows drain without pressing Retry.                                |
 
 ### H. Disconnect
 
-| | Check |
-| --- | --- |
-| H1 | The confirmation dialog says events already in Google stay there. |
-| H2 | After disconnecting, `sealed_refresh_token` and `sealed_access_token` are **null**. |
-| H3 | The events are still in Google. |
-| H4 | The account no longer lists the app under third-party access. |
-| H5 | New bookings produce no calendar rows. |
-| H6 | Reconnecting the same account **updates** the existing row rather than adding a second. |
+|     | Check                                                                                   |
+| --- | --------------------------------------------------------------------------------------- |
+| H1  | The confirmation dialog says events already in Google stay there.                       |
+| H2  | After disconnecting, `sealed_refresh_token` and `sealed_access_token` are **null**.     |
+| H3  | The events are still in Google.                                                         |
+| H4  | The account no longer lists the app under third-party access.                           |
+| H5  | New bookings produce no calendar rows.                                                  |
+| H6  | Reconnecting the same account **updates** the existing row rather than adding a second. |
 
 ### I. Permissions and language
 
-| | Check |
-| --- | --- |
-| I1 | A `PROVIDER` sees the Calendar nav item and can connect only their own diary. |
-| I2 | An `ASSISTANT` does not see the item at all. |
-| I3 | An owner can connect on behalf of any provider, and sees every connection; a provider sees only theirs. |
-| I4 | An English organization gets an English screen, an English email, and a reconnect link with `/en/`. |
-| I5 | Tab order and focus rings work through the picker; the health badge's meaning survives with colour off. |
+|     | Check                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------- |
+| I1  | A `PROVIDER` sees the Calendar nav item and can connect only their own diary.                           |
+| I2  | An `ASSISTANT` does not see the item at all.                                                            |
+| I3  | An owner can connect on behalf of any provider, and sees every connection; a provider sees only theirs. |
+| I4  | An English organization gets an English screen, an English email, and a reconnect link with `/en/`.     |
+| I5  | Tab order and focus rings work through the picker; the health badge's meaning survives with colour off. |
 
 ## 9.3 What ticking these boxes closes
 
-Tech-impl §44's three reachable exit criteria: *confirmed bookings create calendar events* (C, D),
-*calendar failures do not invalidate bookings* (F5), and *revoked access is detected and displayed*
-(G). The fourth — *external busy periods affect slot results* — is part 2's and cannot be walked here.
+Tech-impl §44's three reachable exit criteria: _confirmed bookings create calendar events_ (C, D),
+_calendar failures do not invalidate bookings_ (F5), and _revoked access is detected and displayed_
+(G). The fourth — _external busy periods affect slot results_ — is part 2's and cannot be walked here.
 
 ---
 
@@ -948,19 +947,19 @@ no user had ever seen the feature and nothing had to be taken away from anyone. 
 [google-calendar-feature-code-review.md](google-calendar-feature-code-review.md) had just found that the
 first real connection would fail anyway: the OAuth flow requests `calendar.events`, and the calendar
 picker then calls `calendarList.list`, which that scope does not authorize. So the feature would have
-been shipped un-walked *and* broken on its first screen.
+been shipped un-walked _and_ broken on its first screen.
 
 ## 10.1 What is commented out
 
 Four seams. Everything else is untouched — the parking is deliberately at the edges, so the diff is
 small and the thing being restored is the wiring rather than the logic.
 
-| Where | What | Effect |
-|---|---|---|
-| [apps/api/src/app.ts](../apps/api/src/app.ts) | the `integrationRoutes` registration and its two imports | `/v1/integrations/*` 404s. Note it no longer **503**s — an unmounted module and an unconfigured one are different answers, which is why §7.2's two tests had to be skipped rather than re-pointed. |
-| [apps/worker/src/outbox/outbox.dispatcher.ts](../apps/worker/src/outbox/outbox.dispatcher.ts) | the `dispatchCalendarLeg` call inside `dispatchOutboxBatch` | No `calendar_event_mappings` rows are written at all. `calendarQueued` stays on `DispatchSummary` and stays 0. |
-| [apps/worker/src/worker.ts](../apps/worker/src/worker.ts) | `createCalendarWorker` / `startCalendarSweeper`, the `calendar?` field, both shutdown calls | The `calendar-sync` queue exists with no consumer, as before this epic. The boot log now says so unconditionally instead of only when `GOOGLE_*` is absent. |
-| [apps/web/src/components/dashboard-shell.tsx](../apps/web/src/components/dashboard-shell.tsx) and the route folder | the nav item; `dashboard/integrations` renamed to `dashboard/_integrations` | No nav item and no route. The leading underscore is Next's private-folder convention, so the page still typechecks and still builds — it simply is not routable. |
+| Where                                                                                                              | What                                                                                        | Effect                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [apps/api/src/app.ts](../apps/api/src/app.ts)                                                                      | the `integrationRoutes` registration and its two imports                                    | `/v1/integrations/*` 404s. Note it no longer **503**s — an unmounted module and an unconfigured one are different answers, which is why §7.2's two tests had to be skipped rather than re-pointed. |
+| [apps/worker/src/outbox/outbox.dispatcher.ts](../apps/worker/src/outbox/outbox.dispatcher.ts)                      | the `dispatchCalendarLeg` call inside `dispatchOutboxBatch`                                 | No `calendar_event_mappings` rows are written at all. `calendarQueued` stays on `DispatchSummary` and stays 0.                                                                                     |
+| [apps/worker/src/worker.ts](../apps/worker/src/worker.ts)                                                          | `createCalendarWorker` / `startCalendarSweeper`, the `calendar?` field, both shutdown calls | The `calendar-sync` queue exists with no consumer, as before this epic. The boot log now says so unconditionally instead of only when `GOOGLE_*` is absent.                                        |
+| [apps/web/src/components/dashboard-shell.tsx](../apps/web/src/components/dashboard-shell.tsx) and the route folder | the nav item; `dashboard/integrations` renamed to `dashboard/_integrations`                 | No nav item and no route. The leading underscore is Next's private-folder convention, so the page still typechecks and still builds — it simply is not routable.                                   |
 
 Parking the dispatcher leg **as well as** the worker's consumer is the one choice here worth stating.
 Either alone would stop calendar events reaching Google. Only the leg stops rows accruing for a drain
@@ -994,7 +993,7 @@ Two suites are skipped whole, each behind a `const parked = true` that is the on
 - `apps/worker/src/calendar/calendar.leg.test.ts` (15) — nine drive through `dispatchOutboxBatch`.
 
 Neither was re-pointed at the new behaviour. A suite rewritten to assert 404 would be green, would prove
-nothing, and would have to be written back from scratch — and the six leg tests that *would* still pass
+nothing, and would have to be written back from scratch — and the six leg tests that _would_ still pass
 are not worth keeping alone, because "the leg runs on the same claim" is the property that file exists to
 assert.
 

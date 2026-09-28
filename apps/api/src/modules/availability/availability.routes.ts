@@ -216,7 +216,10 @@ export const availabilityRoutes: FastifyPluginAsyncZod = async (app) => {
       });
 
       // The version the caller now holds, so a second save needs no extra GET.
-      return { items: rows.map(toWorkingHoursResponse), fingerprint: fingerprintWorkingHours(rows) };
+      return {
+        items: rows.map(toWorkingHoursResponse),
+        fingerprint: fingerprintWorkingHours(rows),
+      };
     },
   );
 

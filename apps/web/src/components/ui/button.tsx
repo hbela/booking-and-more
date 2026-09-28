@@ -50,7 +50,9 @@ export function Button({
   // `type` defaults to "button" rather than the HTML default of "submit": most
   // buttons here sit inside a form and are not its submit action, and an
   // accidental submit is a silent, expensive bug on a booking form.
-  return <button type={type} className={cn(buttonRecipe({ variant, size }), className)} {...rest} />;
+  return (
+    <button type={type} className={cn(buttonRecipe({ variant, size }), className)} {...rest} />
+  );
 }
 
 /**

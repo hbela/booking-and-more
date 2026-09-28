@@ -60,7 +60,10 @@ const PARAMETER_PROPERTIES: Record<string, { type: string[]; description?: strin
   notes: { type: ["string", "null"] },
   reference: { type: ["string", "null"] },
   reason: { type: ["string", "null"] },
-  answer: { type: ["string", "null"], description: "Only an answer grounded in the business facts block." },
+  answer: {
+    type: ["string", "null"],
+    description: "Only an answer grounded in the business facts block.",
+  },
 };
 
 const RESPONSE_SCHEMA: Anthropic.Tool["input_schema"] = {
@@ -99,7 +102,13 @@ export class AnthropicIntentInterpreter implements IntentInterpreter {
       max_tokens: this.config.maxOutputTokens,
       system: buildSystemPrompt(input),
       messages: buildUserMessages(input),
-      tools: [{ name: "emit_command", description: "Return the validated customer intent.", input_schema: RESPONSE_SCHEMA }],
+      tools: [
+        {
+          name: "emit_command",
+          description: "Return the validated customer intent.",
+          input_schema: RESPONSE_SCHEMA,
+        },
+      ],
       tool_choice: { type: "tool", name: "emit_command" },
     });
     const completion = await stream.finalMessage();

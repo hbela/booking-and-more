@@ -203,14 +203,7 @@ export function buildMonthGrid(month: YearMonth): DayCell[][] {
  * 28 February rather than to 3 March.
  */
 export type CalendarKey =
-  | "ArrowLeft"
-  | "ArrowRight"
-  | "ArrowUp"
-  | "ArrowDown"
-  | "Home"
-  | "End"
-  | "PageUp"
-  | "PageDown";
+  "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End" | "PageUp" | "PageDown";
 
 export function nextFocusedDay(
   from: DateOnly,
@@ -352,8 +345,7 @@ export function firstAvailableDay(
 ): DateOnly | null {
   const candidates = [...summaries.entries()]
     .filter(
-      ([date, summary]) =>
-        summary.count > 0 && monthOf(date) === month && !isBefore(date, today),
+      ([date, summary]) => summary.count > 0 && monthOf(date) === month && !isBefore(date, today),
     )
     .map(([date]) => date)
     .sort();

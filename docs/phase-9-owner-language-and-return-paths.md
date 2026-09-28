@@ -198,7 +198,7 @@ templates, so none of which `next-intl` can reach. The result was `24,990.00 Ft`
 owes `24 990,00 Ft`, in English.
 
 **The Payment Link locale does not survive the payment.** This is the part that looks fixed and is not:
-`?locale=hu` genuinely localizes the checkout page *including* its number formatting, and it is easy to
+`?locale=hu` genuinely localizes the checkout page _including_ its number formatting, and it is easy to
 assume the customer Stripe creates at the end of that session inherits it. It does not — Checkout populates
 `preferred_locales` from the payer's **browser**. A Hungarian owner forwarding the link to a colleague on an
 English laptop decided the language of that organization's invoices for the life of the subscription.
@@ -259,7 +259,7 @@ symptom arrived alongside the language one and reads like part of it.
 - Unit: `app-url.test.ts` covers the prefix rule in both directions and the unrecognised-locale fallback.
 - Unit: `billing.test.ts` asserts the portal session is created with the tenant's locale and a locale-correct
   `return_url`, and that the payment link is created with an `after_completion` redirect to the same.
-- Integration: `stripe.processor.test.ts` asserts the customer is pinned to the *tenant's* language rather
+- Integration: `stripe.processor.test.ts` asserts the customer is pinned to the _tenant's_ language rather
   than anything Stripe reported, that a refused language call still activates the organization, and that a
   session carrying no customer asks for nothing — `customers.update(undefined)` is a 400, not a no-op.
 - Manual: [phase-9-manual-test-checklist.md](phase-9-manual-test-checklist.md) gains an English-organization

@@ -214,13 +214,9 @@ For TypeScript you don't need a special Billingo SDK. REST is enough.
 For example:
 
 ```ts
-const BILLINGO_BASE_URL =
-  process.env.BILLINGO_BASE_URL ?? "https://api.billingo.hu/v3";
+const BILLINGO_BASE_URL = process.env.BILLINGO_BASE_URL ?? "https://api.billingo.hu/v3";
 
-async function billingoRequest<T>(
-  path: string,
-  init: RequestInit = {}
-): Promise<T> {
+async function billingoRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BILLINGO_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -233,9 +229,7 @@ async function billingoRequest<T>(
   if (!response.ok) {
     const body = await response.text();
 
-    throw new Error(
-      `Billingo API error ${response.status}: ${body}`
-    );
+    throw new Error(`Billingo API error ${response.status}: ${body}`);
   }
 
   return response.json() as Promise<T>;
@@ -376,7 +370,7 @@ fastify.post("/webhooks/stripe", async (request, reply) => {
   const event = stripe.webhooks.constructEvent(
     rawBody,
     signature!,
-    process.env.STRIPE_WEBHOOK_SECRET!
+    process.env.STRIPE_WEBHOOK_SECRET!,
   );
 
   switch (event.type) {
@@ -404,16 +398,13 @@ So in Fastify we'll configure raw-body handling specifically for this route.
 Conceptually:
 
 ```ts
-async function handleStripeInvoicePaid(
-  stripeInvoice: Stripe.Invoice
-) {
+async function handleStripeInvoicePaid(stripeInvoice: Stripe.Invoice) {
   const customerId = stripeInvoice.customer as string;
 
   const customer = await stripe.customers.retrieve(customerId);
 
   // 1. Find/create Billingo Partner
-  const partnerId =
-    await getOrCreateBillingoPartner(customer);
+  const partnerId = await getOrCreateBillingoPartner(customer);
 
   // 2. Generate invoice
   await createBillingoInvoice({
@@ -441,13 +432,9 @@ async function createBillingoInvoice({
     body: JSON.stringify({
       partner_id: partnerId,
 
-      block_id: Number(
-        process.env.BILLINGO_DOCUMENT_BLOCK_ID
-      ),
+      block_id: Number(process.env.BILLINGO_DOCUMENT_BLOCK_ID),
 
-      bank_account_id: Number(
-        process.env.BILLINGO_BANK_ACCOUNT_ID
-      ),
+      bank_account_id: Number(process.env.BILLINGO_BANK_ACCOUNT_ID),
 
       type: "invoice",
 
@@ -464,15 +451,12 @@ async function createBillingoInvoice({
 
       items: [
         {
-          product_id: Number(
-            process.env.BILLINGO_PRODUCT_ID
-          ),
+          product_id: Number(process.env.BILLINGO_PRODUCT_ID),
           quantity: 1,
         },
       ],
 
-      comment:
-        `Stripe invoice: ${stripeInvoice.id}`,
+      comment: `Stripe invoice: ${stripeInvoice.id}`,
     }),
   });
 }

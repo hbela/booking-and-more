@@ -202,14 +202,14 @@ export function ProviderDelegates({
   }
 
   function scopeLabel(scope: DelegationScope): string {
-    return scope === "AVAILABILITY"
-      ? t("delegateScopeAvailability")
-      : t("delegateScopeBookings");
+    return scope === "AVAILABILITY" ? t("delegateScopeAvailability") : t("delegateScopeBookings");
   }
 
   return (
     <Card
-      title={providerName === undefined ? t("delegates") : t("delegatesFor", { name: providerName })}
+      title={
+        providerName === undefined ? t("delegates") : t("delegatesFor", { name: providerName })
+      }
       description={canManage ? t("delegatesHint") : t("delegatesHintProvider")}
       actions={
         <span className="flex gap-2">

@@ -122,10 +122,7 @@ export function ServicesScreen(): React.ReactElement {
                   const archived = service.archivedAt !== null;
 
                   return (
-                    <tr
-                      key={service.id}
-                      className="border-b border-line"
-                    >
+                    <tr key={service.id} className="border-b border-line">
                       <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {service.name}
                         <span className="block font-mono text-xs text-ink-subtle">
@@ -291,11 +288,9 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
         />
 
         <ErrorText>{error}</ErrorText>
-        {slugTaken ? (
-          <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p>
-        ) : null}
+        {slugTaken ? <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p> : null}
 
-        <Button type="submit" disabled={mutation.isPending} >
+        <Button type="submit" disabled={mutation.isPending}>
           {t("create")}
         </Button>
       </form>
@@ -390,10 +385,10 @@ function EditServicePanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose} >
+          <Button variant="secondary" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>
@@ -495,7 +490,9 @@ function TranslationsPanel({
                   rows={5}
                   maxLength={4000}
                   name={`description-${locale}`}
-                  defaultValue={existing?.description ?? (isOriginal ? service.description ?? "" : "")}
+                  defaultValue={
+                    existing?.description ?? (isOriginal ? (service.description ?? "") : "")
+                  }
                   disabled={locked}
                 />
               </Field>
@@ -506,10 +503,10 @@ function TranslationsPanel({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending} >
+          <Button type="submit" disabled={save.isPending}>
             {t("save")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose} >
+          <Button variant="secondary" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>

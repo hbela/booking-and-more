@@ -38,13 +38,13 @@ accidentally undo one:
 - **No booking is deleted, altered or hidden.** There is no foreign key from a booking to a working
   hours row, so removing Tuesday leaves every Tuesday booking intact — visible in the diary, with its
   confirmation sent, its manage link working, and its reminder still due. `checkStillOwed` keys on
-  booking *status*, never on the schedule.
+  booking _status_, never on the schedule.
 - **Nobody can be double-booked into the stranded time.** `capacity_reservations` is the single
   authority for "is this time taken" (rule 14) and is independent of the schedule. The stranded
   booking still holds its slot against the exclusion constraint.
 - **No new booking lands in removed hours**, because searches read the new schedule immediately.
 - **A reschedule cannot make it worse**: both the customer and staff paths go through
-  `assertSlotIsOffered`, so a booking can only move *into* the current schedule.
+  `assertSlotIsOffered`, so a booking can only move _into_ the current schedule.
 
 ## 1.2 What actually goes wrong
 
@@ -77,7 +77,7 @@ one is usually intentional.
 
 ## 2.2 It judges the appointment, not the occupied span
 
-The slot search requires the *whole* occupied window — before-buffer, appointment, after-buffer —
+The slot search requires the _whole_ occupied window — before-buffer, appointment, after-buffer —
 inside free time, and is right to: it decides whether a booking may be made, and preparation cannot
 happen before the provider has arrived (phase-3, `generateSlots`).
 
@@ -87,7 +87,7 @@ appointment whose ten-minute after-buffer runs past a 17:00 close — a warning 
 booking that was legitimately made, and the fastest way to train somebody to dismiss the dialog
 without reading it.
 
-Excluding buffers can only ever produce *fewer* warnings, never a missed one: a buffer cannot make the
+Excluding buffers can only ever produce _fewer_ warnings, never a missed one: a buffer cannot make the
 appointment itself uncovered. So this is an asymmetry with `assertSlotIsOffered` and not a
 disagreement with it. Recorded here because it looks like an oversight and is not.
 
@@ -182,18 +182,18 @@ the decision needs (rule 6).
 
 ## 3.3 API
 
-| File | Change |
-| --- | --- |
-| `schedule-conflicts.service.ts` | new — both halves of this record, one class |
-| `availability.service.ts` | the guard on `setWorkingHours`, `createException`, `updateException`; `assertNothingStranded` |
-| `availability.schemas.ts` | `acknowledgeAffectedBookings` on the three bodies |
-| `availability.routes.ts` | passes the flag and `now` |
-| `booking.schemas.ts` | `outsideSchedule` on the booking response |
-| `booking.routes.ts` | one `annotate` call per page; `toBookingResponse` takes the reason |
+| File                            | Change                                                                                        |
+| ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `schedule-conflicts.service.ts` | new — both halves of this record, one class                                                   |
+| `availability.service.ts`       | the guard on `setWorkingHours`, `createException`, `updateException`; `assertNothingStranded` |
+| `availability.schemas.ts`       | `acknowledgeAffectedBookings` on the three bodies                                             |
+| `availability.routes.ts`        | passes the flag and `now`                                                                     |
+| `booking.schemas.ts`            | `outsideSchedule` on the booking response                                                     |
+| `booking.routes.ts`             | one `annotate` call per page; `toBookingResponse` takes the reason                            |
 
 `updateException` merges `type`, `locationId` and `serviceId` against the stored row the same way it
 already merged the times — a PATCH moving only the end must still be judged with the scope the row
-already has. It also passes `replacesExceptionId`, without which shrinking a closure *off* a booking
+already has. It also passes `replacesExceptionId`, without which shrinking a closure _off_ a booking
 would be refused for the booking it is being shrunk off.
 
 `acknowledgeAffectedBookings` is stripped explicitly before the update rather than left to
@@ -220,28 +220,28 @@ carries its own word rather than relying on the tint (WCAG 1.4.1), with the spec
 
 # 4. Verification
 
-| Failure                                                        | Prevented by                                              | Test                                                        |
-| -------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
-| Hours removed under a confirmed booking, silently              | 409 on the unacknowledged save                            | "refuses a save that would leave a booking outside…"        |
-| A 409 that had already written the hours                        | the check runs before `replaceWorkingHours`               | "changes nothing when it refuses"                            |
-| An owner unable to make a change they mean to                   | the acknowledgement                                       | "lets the same change through once it is acknowledged"       |
-| A dialog on every save, which nobody reads                      | §2.2, §2.3                                                | "says nothing about a change that strands nobody"            |
-| Time off booked over an appointment, silently                   | the same gate on `UNAVAILABLE`                            | "refuses time off booked over an appointment…"               |
-| An extra opening interrogated for no reason                     | `ADDITIONAL_AVAILABILITY` adds time and strands nothing   | "lets an extra opening through without asking"               |
-| A closure counted against itself while being shrunk             | `replacesExceptionId`                                     | "does not count a closure against itself…"                   |
-| Stranding a booking by unticking a box                          | inactive rows are excluded, as the search excludes them   | "treats switching a period off the same as deleting it"      |
-| Every save noisy because of last year's appointments            | §2.3 — future and live only                               | "ignores a booking already in the past", "…cancelled"        |
-| A stale flag surviving a schedule changed back                  | §2.6 — derived, never stored                              | "marks one on the list, and clears it when the hours…"       |
-| Cross-tenant read while gathering affected bookings             | `tenantId` in every read (rule 5)                         | "refuses to read another tenant's diary while answering"     |
-| The two reason enums drifting apart silently                    | one assertion over both                                   | `schedule-conflicts.contract.test.ts`                        |
-| A dialog opening on an unrelated error                          | the code is checked, not just the status                  | `affected-bookings.test.ts`                                  |
+| Failure                                              | Prevented by                                            | Test                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
+| Hours removed under a confirmed booking, silently    | 409 on the unacknowledged save                          | "refuses a save that would leave a booking outside…"     |
+| A 409 that had already written the hours             | the check runs before `replaceWorkingHours`             | "changes nothing when it refuses"                        |
+| An owner unable to make a change they mean to        | the acknowledgement                                     | "lets the same change through once it is acknowledged"   |
+| A dialog on every save, which nobody reads           | §2.2, §2.3                                              | "says nothing about a change that strands nobody"        |
+| Time off booked over an appointment, silently        | the same gate on `UNAVAILABLE`                          | "refuses time off booked over an appointment…"           |
+| An extra opening interrogated for no reason          | `ADDITIONAL_AVAILABILITY` adds time and strands nothing | "lets an extra opening through without asking"           |
+| A closure counted against itself while being shrunk  | `replacesExceptionId`                                   | "does not count a closure against itself…"               |
+| Stranding a booking by unticking a box               | inactive rows are excluded, as the search excludes them | "treats switching a period off the same as deleting it"  |
+| Every save noisy because of last year's appointments | §2.3 — future and live only                             | "ignores a booking already in the past", "…cancelled"    |
+| A stale flag surviving a schedule changed back       | §2.6 — derived, never stored                            | "marks one on the list, and clears it when the hours…"   |
+| Cross-tenant read while gathering affected bookings  | `tenantId` in every read (rule 5)                       | "refuses to read another tenant's diary while answering" |
+| The two reason enums drifting apart silently         | one assertion over both                                 | `schedule-conflicts.contract.test.ts`                    |
+| A dialog opening on an unrelated error               | the code is checked, not just the status                | `affected-bookings.test.ts`                              |
 
 Twelve integration tests in `availability.test.ts`, 16 engine unit tests, five client-narrowing tests,
 one contract test. `pnpm lint && pnpm check-types && pnpm test && pnpm build` all pass.
 
 A save that acknowledges, and a booking made between the two requests, is covered by construction
 rather than by a test: the acknowledged call runs the same check and simply does not refuse. The
-window it closes is that the *list* can be stale, not that the write is unguarded.
+window it closes is that the _list_ can be stale, not that the write is unguarded.
 
 ---
 

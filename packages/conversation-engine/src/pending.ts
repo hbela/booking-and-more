@@ -12,10 +12,7 @@ import { ALLOWED, refuse, type Decision } from "./types.js";
  */
 
 /** The confirm tools. Read tools execute immediately and have nothing to confirm. */
-export type ConfirmableTool =
-  | "confirmBooking"
-  | "confirmReschedule"
-  | "confirmCancellation";
+export type ConfirmableTool = "confirmBooking" | "confirmReschedule" | "confirmCancellation";
 
 export type PendingActionStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
 
@@ -29,9 +26,7 @@ export interface PendingActionView {
 }
 
 export type PendingActionRefusal =
-  | "PENDING_ACTION_EXPIRED"
-  | "PENDING_ACTION_ALREADY_USED"
-  | "PENDING_ACTION_WRONG_SESSION";
+  "PENDING_ACTION_EXPIRED" | "PENDING_ACTION_ALREADY_USED" | "PENDING_ACTION_WRONG_SESSION";
 
 function instantOf(value: string | number | Date): number {
   return value instanceof Date ? value.getTime() : new Date(value).getTime();

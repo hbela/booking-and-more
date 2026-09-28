@@ -180,14 +180,14 @@ export class AvailabilityService {
         providerId,
         expectedFingerprint: args.expectedFingerprint,
         rows: entries.map((entry) => ({
-        weekday: entry.weekday,
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        locationId: entry.locationId ?? null,
-        validFrom:
-          entry.validFrom === undefined || entry.validFrom === null
-            ? null
-            : new Date(`${entry.validFrom}T00:00:00Z`),
+          weekday: entry.weekday,
+          startTime: entry.startTime,
+          endTime: entry.endTime,
+          locationId: entry.locationId ?? null,
+          validFrom:
+            entry.validFrom === undefined || entry.validFrom === null
+              ? null
+              : new Date(`${entry.validFrom}T00:00:00Z`),
           validUntil:
             entry.validUntil === undefined || entry.validUntil === null
               ? null

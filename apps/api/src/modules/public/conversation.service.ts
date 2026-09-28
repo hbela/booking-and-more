@@ -407,8 +407,11 @@ export class ConversationService {
 
     if (outcome.message !== undefined) {
       return this.reply({
-        session: args.session, tenant: args.tenant, collected: args.collected,
-        message: outcome.message, countTurn: true,
+        session: args.session,
+        tenant: args.tenant,
+        collected: args.collected,
+        message: outcome.message,
+        countTurn: true,
       });
     }
 
