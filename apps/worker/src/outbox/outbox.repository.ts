@@ -57,24 +57,27 @@ export interface ClaimOptions {
  * the attempt ceiling and parks the row for a human.
  */
 export async function claimOutboxEvents(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "$queryRaw">,
   options: ClaimOptions,
 ): Promise<ClaimedOutboxEvent[]> {
+  // Evaluate the limited, locking selection once. An UPDATE join must not
+  // rescan it as rows become PROCESSING and expand the set beyond batchSize.
   const rows = await prisma.$queryRaw<ClaimedRow[]>(Prisma.sql`
-    UPDATE outbox_events AS e
-    SET status = 'PROCESSING',
-        claimed_at = now(),
-        attempts = e.attempts + 1
-    FROM (
+    WITH claimed AS MATERIALIZED (
       SELECT id
       FROM outbox_events
       WHERE (status = 'PENDING' AND available_at <= now())
          OR (status = 'PROCESSING'
              AND claimed_at < now() - make_interval(secs => ${options.staleClaimSeconds}))
-      ORDER BY available_at ASC
+      ORDER BY available_at ASC, id ASC
       FOR UPDATE SKIP LOCKED
       LIMIT ${options.batchSize}
-    ) AS claimed
+    )
+    UPDATE outbox_events AS e
+    SET status = 'PROCESSING',
+        claimed_at = now(),
+        attempts = e.attempts + 1
+    FROM claimed
     WHERE e.id = claimed.id
     RETURNING e.id,
               e.tenant_id,

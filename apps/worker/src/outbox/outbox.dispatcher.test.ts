@@ -3,6 +3,7 @@ import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { createLogger } from "@bam/observability";
 
 import { dispatchOutboxBatch } from "./outbox.dispatcher.js";
+import { claimOutboxEvents } from "./outbox.repository.js";
 import { QueueNames, type QueueRegistry } from "../queues.js";
 
 /**
@@ -599,6 +600,25 @@ describe.skipIf(!databaseUrl)("outbox dispatcher", () => {
       });
 
       expect(summary.claimed).toBe(2);
+    });
+
+    it("keeps the batch bounded with a nested-loop query plan", async () => {
+      await Promise.all([
+        writeEvent("BOOKING_CONFIRMED"),
+        writeEvent("BOOKING_RESCHEDULED"),
+        writeEvent("BOOKING_CANCELLED"),
+      ]);
+      const rows = await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SET LOCAL plan_cache_mode = force_generic_plan`;
+        await tx.$executeRaw`SET LOCAL enable_hashjoin = off`;
+        await tx.$executeRaw`SET LOCAL enable_mergejoin = off`;
+        await tx.$executeRaw`SET LOCAL enable_material = off`;
+        await tx.$executeRaw`SET LOCAL enable_indexscan = off`;
+        await tx.$executeRaw`SET LOCAL enable_bitmapscan = off`;
+        return claimOutboxEvents(tx, { batchSize: 2, staleClaimSeconds: 300 });
+      });
+      expect(rows).toHaveLength(2);
+      expect(await prisma.outboxEvent.count({ where: { tenantId, status: "PENDING" } })).toBe(1);
     });
   });
 });
