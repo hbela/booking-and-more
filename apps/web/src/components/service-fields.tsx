@@ -112,7 +112,6 @@ export function ServiceFields({
           required
           minLength={2}
           maxLength={160}
-          
         />
       </Field>
 
@@ -124,7 +123,6 @@ export function ServiceFields({
             onChange({ slug: event.target.value });
           }}
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
-          
         />
       </Field>
       <p className="text-xs text-ink-subtle">{t("slugHint")}</p>
@@ -143,7 +141,6 @@ export function ServiceFields({
           }}
           rows={3}
           maxLength={4000}
-          
         />
       </Field>
 
@@ -218,7 +215,6 @@ export function ServiceFields({
             onChange={(event) => {
               onChange({ currency: event.target.value });
             }}
-            
           >
             {CURRENCIES.map((code) => (
               <option key={code} value={code}>

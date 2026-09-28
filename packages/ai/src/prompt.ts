@@ -98,9 +98,7 @@ export function buildSystemPrompt(input: InterpretationInput): string {
 }
 
 function sanitizeContext(value: string): string {
-  return value
-    .replace(/<\/?business-facts>/giu, " ")
-    .slice(0, 20_000);
+  return value.replace(/<\/?business-facts>/giu, " ").slice(0, 20_000);
 }
 
 function renderCatalogue(input: InterpretationInput): string {

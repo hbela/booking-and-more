@@ -4,9 +4,7 @@ import {
   type FingerprintableWorkingHours,
 } from "./working-hours-fingerprint.js";
 
-function period(
-  overrides: Partial<FingerprintableWorkingHours> = {},
-): FingerprintableWorkingHours {
+function period(overrides: Partial<FingerprintableWorkingHours> = {}): FingerprintableWorkingHours {
   return {
     locationId: null,
     weekday: 1,

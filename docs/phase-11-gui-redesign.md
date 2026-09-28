@@ -30,7 +30,7 @@ started to cost something:
 - **Four colour tokens, teal, described in their own comment as a placeholder.** Everything else was stock
   Tailwind `slate-*`, spelled out at each of 294 call sites.
 - **No fonts at all** — the default `system-ui` stack, on a product whose default language is Hungarian.
-- **No component library.** The design system was three exported *strings* — `inputClass`, `buttonClass`,
+- **No component library.** The design system was three exported _strings_ — `inputClass`, `buttonClass`,
   `secondaryButtonClass` — at the bottom of a 547-line feature file, imported by 14 others. Composition was
   string interpolation, so `` `${inputClass} max-w-sm` `` worked only by luck of declaration order.
 - **Three separate `Section` implementations and two incompatible `Field`s**, one per feature file that
@@ -49,10 +49,10 @@ started to cost something:
 
 `projects/13796210681603381949` — "Booking and More — Cobalt", holding two design systems:
 
-| | asset | mode | seed |
-|---|---|---|---|
-| **Cobalt Day** | `assets/5906614718078353848` | `LIGHT` | `#1f5cd4` |
-| **Cobalt Night** | `assets/8917453693549482204` | `DARK` | `#6f9ff7` |
+|                  | asset                        | mode    | seed      |
+| ---------------- | ---------------------------- | ------- | --------- |
+| **Cobalt Day**   | `assets/5906614718078353848` | `LIGHT` | `#1f5cd4` |
+| **Cobalt Night** | `assets/8917453693549482204` | `DARK`  | `#6f9ff7` |
 
 Both carry a full `designMd` — Material-3 token names in YAML front-matter, a typography scale, a spacing
 map, and prose covering brand, colour, type, layout, elevation, shape, per-component rules and
@@ -69,7 +69,7 @@ Two practical notes for whoever generates more screens:
    `public/hero-booking.jpg` came from. No separate image model was needed.
 
 The earlier `projects/32805612233801258` ("Soft Premium Booking Experience", plum `#4a154b`, rose
-secondary, warm ivory) is the rejected direction. Its DESIGN.md *structure* was forked; its palette and
+secondary, warm ivory) is the rejected direction. Its DESIGN.md _structure_ was forked; its palette and
 compositions were not — those layouts were composed for a warm plum, and reading them as the spec for a
 cobalt product would import decisions nobody made.
 
@@ -114,34 +114,34 @@ The neutral ramp is re-tinted to the **same hue** at chroma ≤ 0.033, so greys 
 beside it, and is declared as **`--color-slate-*`, deliberately shadowing Tailwind's own slate**. That is
 not cosmetic — it is what makes the migration safe (§2.5).
 
-| | oklch | hex | | oklch | hex |
-|---|---|---|---|---|---|
-| brand-50 | `0.972 0.013 262` | `#f1f6ff` | slate-50 | `0.984 0.003 262` | `#f9fafc` |
-| brand-100 | `0.936 0.028 262` | `#e0eafd` | slate-100 | `0.968 0.006 262` | `#f2f4f9` |
-| brand-200 | `0.885 0.052 262` | `#c7dafc` | slate-200 | `0.928 0.012 262` | `#e3e7ef` |
-| brand-300 | `0.812 0.087 262` | `#a3c2fb` | slate-300 | `0.866 0.018 262` | `#cdd3df` |
-| brand-400 | `0.706 0.140 262` | `#6f9ff7` | slate-400 | `0.700 0.028 262` | `#959fb0` |
-| brand-500 | `0.606 0.180 262` | `#427cec` | slate-500 | `0.551 0.033 262` | `#677286` |
+|               | oklch             | hex           |           | oklch             | hex       |
+| ------------- | ----------------- | ------------- | --------- | ----------------- | --------- |
+| brand-50      | `0.972 0.013 262` | `#f1f6ff`     | slate-50  | `0.984 0.003 262` | `#f9fafc` |
+| brand-100     | `0.936 0.028 262` | `#e0eafd`     | slate-100 | `0.968 0.006 262` | `#f2f4f9` |
+| brand-200     | `0.885 0.052 262` | `#c7dafc`     | slate-200 | `0.928 0.012 262` | `#e3e7ef` |
+| brand-300     | `0.812 0.087 262` | `#a3c2fb`     | slate-300 | `0.866 0.018 262` | `#cdd3df` |
+| brand-400     | `0.706 0.140 262` | `#6f9ff7`     | slate-400 | `0.700 0.028 262` | `#959fb0` |
+| brand-500     | `0.606 0.180 262` | `#427cec`     | slate-500 | `0.551 0.033 262` | `#677286` |
 | **brand-600** | `0.512 0.196 262` | **`#1f5cd4`** | slate-600 | `0.446 0.032 262` | `#4b5566` |
-| brand-700 | `0.438 0.176 262` | `#1248b1` | slate-700 | `0.371 0.031 262` | `#374051` |
-| brand-800 | `0.375 0.146 262` | `#0f398d` | slate-800 | `0.280 0.030 262` | `#212938` |
-| brand-900 | `0.320 0.118 262` | `#0d2d6e` | slate-900 | `0.213 0.028 262` | `#121926` |
-| brand-950 | `0.235 0.088 262` | `#051a47` | slate-950 | `0.152 0.026 262` | `#060b17` |
+| brand-700     | `0.438 0.176 262` | `#1248b1`     | slate-700 | `0.371 0.031 262` | `#374051` |
+| brand-800     | `0.375 0.146 262` | `#0f398d`     | slate-800 | `0.280 0.030 262` | `#212938` |
+| brand-900     | `0.320 0.118 262` | `#0d2d6e`     | slate-900 | `0.213 0.028 262` | `#121926` |
+| brand-950     | `0.235 0.088 262` | `#051a47`     | slate-950 | `0.152 0.026 262` | `#060b17` |
 
 **Contrast, computed rather than eyeballed** (WCAG 2.1 relative luminance; PRD §12.4 requires AA):
 
-| pair | ratio | needs |
-|---|---|---|
-| white on `brand-600` — primary button, light | **5.93** | 4.5 |
-| `brand-700` link on white | **8.14** | 4.5 |
-| `brand-600` focus ring on white | **5.93** | 3.0 |
-| `slate-900` body on white | **17.61** | 4.5 |
-| `slate-600` muted on white | **7.57** | 4.5 |
-| `slate-500` subtle on white | **4.83** | 4.5 |
-| `slate-100` body on dark surface | **16.84** | 4.5 |
-| `slate-400` muted on dark surface | **6.92** | 4.5 |
-| `brand-400` link / ring on dark surface | **7.00** | 4.5 / 3.0 |
-| `slate-950` on `brand-400` — primary button, dark | **7.44** | 4.5 |
+| pair                                              | ratio     | needs     |
+| ------------------------------------------------- | --------- | --------- |
+| white on `brand-600` — primary button, light      | **5.93**  | 4.5       |
+| `brand-700` link on white                         | **8.14**  | 4.5       |
+| `brand-600` focus ring on white                   | **5.93**  | 3.0       |
+| `slate-900` body on white                         | **17.61** | 4.5       |
+| `slate-600` muted on white                        | **7.57**  | 4.5       |
+| `slate-500` subtle on white                       | **4.83**  | 4.5       |
+| `slate-100` body on dark surface                  | **16.84** | 4.5       |
+| `slate-400` muted on dark surface                 | **6.92**  | 4.5       |
+| `brand-400` link / ring on dark surface           | **7.00**  | 4.5 / 3.0 |
+| `slate-950` on `brand-400` — primary button, dark | **7.44**  | 4.5       |
 
 Two results worth carrying:
 
@@ -166,14 +166,14 @@ for a card edge or a row divider, which WCAG asks nothing of — they separate c
 loses nothing but tidiness.
 
 It is not fine for the edge of a **control**. WCAG 2.1 **1.4.11 Non-text Contrast** requires 3:1 for the
-visual boundary that tells you where an input or a secondary button *is*, and a text field whose only
+visual boundary that tells you where an input or a secondary button _is_, and a text field whose only
 affordance is a 1.5:1 hairline is a field some people cannot find.
 
 So the two tokens carry different obligations, and `--line-strong` is not the next step down the ramp:
 
-| | light | dark |
-|---|---|---|
-| `--line` — separators, card edges | `slate-200` | `oklch(0.31 0.03 262)` |
+|                                      | light                                                                   | dark                                                                      |
+| ------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `--line` — separators, card edges    | `slate-200`                                                             | `oklch(0.31 0.03 262)`                                                    |
 | `--line-strong` — control boundaries | `oklch(0.64 0.028 262)` = `#838d9e` (3.36:1 on white, 3.21:1 on raised) | `oklch(0.52 0.032 262)` = `#5f697c` (3.35:1 on surface, 3.03:1 on raised) |
 
 Both clear 3:1 against the raised surface as well as the plain one, because a field inside a card is the
@@ -187,11 +187,11 @@ accident, and it should not be "softened" later.
 **`@custom-variant dark`, with two branches.** There are three states and a bare media query gets two of
 them wrong:
 
-| attribute | OS | wanted |
-|---|---|---|
-| none | dark | dark — media branch |
-| `data-theme="light"` | dark | light — the media branch must *not* fire |
-| `data-theme="dark"` | light | dark — the media branch *cannot* fire |
+| attribute            | OS    | wanted                                   |
+| -------------------- | ----- | ---------------------------------------- |
+| none                 | dark  | dark — media branch                      |
+| `data-theme="light"` | dark  | light — the media branch must _not_ fire |
+| `data-theme="dark"`  | light | dark — the media branch _cannot_ fire    |
 
 Hence a guarded media branch plus an attribute branch. Both wrapped in `:where()` so they stay at zero
 specificity and a `dark:` utility never outranks a plain one by accident.
@@ -259,16 +259,16 @@ reverses one without noticing there was a decision:
 
 Each increment ends green on `pnpm lint && pnpm check-types && pnpm test`.
 
-| # | what | status |
-|---|---|---|
-| 1 | Token foundations — `globals.css`, fonts, theme cookie + script, toggle | **done** |
-| 2 | `components/ui/*` and the deprecation shims in `dashboard-shell.tsx` | **done** |
-| 3 | Public low-coupling screens — landing, auth, invitation, 404 — and the hero image | **done** |
-| 4 | Booking flow ⚠ | **done** (restyled in place — see §3.3) |
-| 5 | Dashboard chrome, bookings, services, locations | **done** |
-| 6 | Providers ⚠, availability | **done** |
-| 7 | Subscription, admin, platform | **done** |
-| 8 | Icon and manifest; final sweep; shim deletion (§3.4) | **done** |
+| #   | what                                                                              | status                                  |
+| --- | --------------------------------------------------------------------------------- | --------------------------------------- |
+| 1   | Token foundations — `globals.css`, fonts, theme cookie + script, toggle           | **done**                                |
+| 2   | `components/ui/*` and the deprecation shims in `dashboard-shell.tsx`              | **done**                                |
+| 3   | Public low-coupling screens — landing, auth, invitation, 404 — and the hero image | **done**                                |
+| 4   | Booking flow ⚠                                                                    | **done** (restyled in place — see §3.3) |
+| 5   | Dashboard chrome, bookings, services, locations                                   | **done**                                |
+| 6   | Providers ⚠, availability                                                         | **done**                                |
+| 7   | Subscription, admin, platform                                                     | **done**                                |
+| 8   | Icon and manifest; final sweep; shim deletion (§3.4)                              | **done**                                |
 
 **Result:** no `dark:` variant and no `slate-*`/`brand-N`/`red-N`/`amber-N`/`emerald-N` class remains
 anywhere in `apps/web/src`. The compiled stylesheet went from 40,589 to 31,115 bytes — a 23% drop, because
@@ -281,7 +281,7 @@ Worth stating plainly, because the diff is small and the effect is not.
 **Increment 1 touched no component file.** It rewrote `globals.css`, added
 `lib/{cn,theme-preference,theme-script,use-edit-panel}.ts`, wired `next/font`, and added the theme script
 to the two documents. Because `--color-slate-*` is redefined rather than replaced, and because
-`@custom-variant dark` compiles every existing `dark:` utility into *both* a guarded media branch and an
+`@custom-variant dark` compiles every existing `dark:` utility into _both_ a guarded media branch and an
 attribute branch, all 294 `slate-*` classes and all 166 `dark:` classes across the 23 untouched components
 re-tinted and became toggle-aware at once. Verified in the compiled CSS:
 
@@ -306,7 +306,7 @@ characterisation test, so the restyle diff would be readable. **That was not don
 
 Reading the file settled it: every piece of styling there is a `className` string, with no logic
 entangled in any of them. So the restyle is a set of string replacements that cannot reach the state
-machine, the hold timer, the `Idempotency-Key` wiring or the `pagehide` release — whereas *moving* five
+machine, the hold timer, the `Idempotency-Key` wiring or the `pagehide` release — whereas _moving_ five
 steps and a live five-minute hold into new modules is real risk, taken to make a diff prettier.
 
 The characterisation test went with it, and that is the honest cost: it existed to protect the
@@ -345,15 +345,15 @@ now exports exactly four things: `DashboardContext`, `useDashboardContext`, `use
 
 94 call sites moved to `components/ui/*`:
 
-| from | to | count |
-|---|---|---|
-| `<input className={inputClass}>` | `<Input>` | 48 |
-| `<select className={inputClass}>` | `<Select>` | 14 |
-| `<textarea className={inputClass}>` | `<Textarea>` | 2 |
-| `<button className={buttonClass}>` | `<Button>` | 15 |
-| `<button className={secondaryButtonClass}>` | `<Button variant="secondary">` | 9 |
-| `<Link className={buttonClass}>` | `<ButtonLink>` | 5 |
-| `<a className={buttonClass}>` | plain `<a>` + `buttonRecipe()` | 1 |
+| from                                        | to                             | count |
+| ------------------------------------------- | ------------------------------ | ----- |
+| `<input className={inputClass}>`            | `<Input>`                      | 48    |
+| `<select className={inputClass}>`           | `<Select>`                     | 14    |
+| `<textarea className={inputClass}>`         | `<Textarea>`                   | 2     |
+| `<button className={buttonClass}>`          | `<Button>`                     | 15    |
+| `<button className={secondaryButtonClass}>` | `<Button variant="secondary">` | 9     |
+| `<Link className={buttonClass}>`            | `<ButtonLink>`                 | 5     |
+| `<a className={buttonClass}>`               | plain `<a>` + `buttonRecipe()` | 1     |
 
 The last row is the one that had to be decided rather than scripted: `subscription-screen.tsx`'s payment
 link leaves the app for Stripe's hosted page, so it must stay an `<a>` and bypass the locale-aware router.
@@ -387,7 +387,7 @@ the product's blue-tinted neutral instead of Tailwind's. That is a safety net, n
 - **`components/locations-screen.tsx` began with a UTF-8 BOM**, now stripped and guarded by
   `src/encoding.test.ts`. **The associated mojibake report was wrong**: the em dashes in that file, including
   the user-visible `"—"` empty-address fallback, were always correct UTF-8. The corruption was in the
-  *reading* — a tool opening a BOM'd file without `utf-8-sig` renders them as `â€”`. Recorded because the
+  _reading_ — a tool opening a BOM'd file without `utf-8-sig` renders them as `â€”`. Recorded because the
   same false positive will otherwise be "found" again.
 
 Two more came out of the first hands-on walk of the deployed app (2026-08-15), both on
@@ -397,15 +397,15 @@ Two more came out of the first hands-on walk of the deployed app (2026-08-15), b
   `components/auth-header.tsx`, which is mounted on the signed-out site root and on the platform admin
   shell — and nowhere else. `DashboardShell` hand-rolls its own header, so a signed-in tenant user, who
   visits neither of those screens, could change neither theme nor language from inside the application.
-  Both controls now sit in that header. The lesson is the general one: a control added to *the* header is
+  Both controls now sit in that header. The lesson is the general one: a control added to _the_ header is
   only added to the headers that exist, and this app has two.
 - **Every provider was told their own diary was archived.** The members table's Diary column read
   `providers.find(…) ?? t("diaryArchived")`, and the providers query is `enabled` only for a holder of
   `member:manage`. A `PROVIDER` holds `member:read` and not `member:manage`, so the list never loaded, the
   lookup always missed, and the fallback fired for every linked member on the screen. Not a redesign
   regression — it shipped with phase-9's provider onboarding — but it is what a real provider account saw
-  first. The fix is in the type: the list reaches the column as `Provider[] | null`, `null` meaning *not
-  fetched*, and the decision moved into a pure `lib/member-diary.ts` with `resolveDiaryState`. A diary
+  first. The fix is in the type: the list reaches the column as `Provider[] | null`, `null` meaning _not
+  fetched_, and the decision moved into a pure `lib/member-diary.ts` with `resolveDiaryState`. A diary
   missing **from** a list we hold is archived; not holding the list says nothing about it, and reports
   `diaryLinked` — "Linked" — instead. `[]` and `null` are now different answers, which is the whole bug.
 
@@ -415,8 +415,8 @@ zero call sites and restyles the whole application. The constants are deleted in
 imports them — never both in one step, because 14 files import them.
 
 **Risk register.** `booking-flow.tsx` — 645 lines, five internal steps, and a live 5-minute hold, so the
-state machine is *moved*, never rewritten, behind a characterisation test written first. `providers-screen.tsx`
-— 1,169 lines, split into parts *before* restyling so the diff is readable. `app/not-found.tsx` — its own
+state machine is _moved_, never rewritten, behind a characterisation test written first. `providers-screen.tsx`
+— 1,169 lines, split into parts _before_ restyling so the diff is readable. `app/not-found.tsx` — its own
 `<html>` document above `[locale]`, cannot use `next-intl`, keeps its bilingual literals, and needs its own
 copy of the theme script. `locations-screen.tsx` — carries a UTF-8 BOM and mojibake, including a `—` that
 renders to users as the empty-address fallback.
@@ -435,7 +435,7 @@ uses when it reads the route directory off disk:
    and border pair ≥ 3:1. It also **catches the deliberate duplication in §2.4 drifting apart**, which is
    otherwise invisible until someone reports it.
 2. **`messages/messages.test.ts`** — `hu.json` and `en.json` hold identical key sets. Nothing enforced this
-   before and this phase adds keys to both. Written *before* the keys.
+   before and this phase adds keys to both. Written _before_ the keys.
 3. **`lib/theme-preference.test.ts`** — cookie parsing, mirroring how `locale-preference` is used.
 4. **A BOM guard** — no file under `src/` begins with U+FEFF.
 5. **A characterisation test for the booking step machine** (increment 4).

@@ -47,8 +47,8 @@ The second half is the endpoint chat already uses, unchanged. There is no voice 
 path, no voice branch in the service. `channel` on the session records how the customer is talking to us, and
 the `voice_interactions` row records what one recording cost — nothing else in the system is aware.
 
-This is deliberate and it is the epic's own exit criterion. PRD §4.2 states the principle: *forms, chat, and
-voice use the same backend operations.* The cheapest way to keep that true is to make it structurally
+This is deliberate and it is the epic's own exit criterion. PRD §4.2 states the principle: _forms, chat, and
+voice use the same backend operations._ The cheapest way to keep that true is to make it structurally
 impossible to violate.
 
 ---
@@ -168,15 +168,15 @@ harder.
 
 # 9. What was built
 
-| Area | Files |
-|---|---|
-| Upload validation | `apps/api/src/modules/public/audio.ts` — `sniffAudio`, `validateAudio` |
-| Route | `POST /v1/public/conversations/:id/transcriptions` in `conversation.routes.ts`, `@fastify/multipart` registered inside that plugin only |
-| Service | `ConversationService.transcribe` — quota gate, provider call, `usage_events`, `voice_interactions` |
-| Provider | `packages/ai/src/transcription.ts` (`OpenAITranscriptionProvider`), `FakeTranscriptionProvider` |
-| Sweeps | `apps/worker/src/conversations/conversation.sweeper.ts` — session and pending-action expiry, orphaned-hold release, 30-day transcript erasure |
-| Web | `components/push-to-talk-button.tsx` (RecordingState, elapsed counter, Escape to abandon, `speak()`), transcript review inside `conversation-panel.tsx` |
-| Tests | `apps/api/src/voice.test.ts` (15), `apps/worker/src/conversations/conversation.sweeper.test.ts` (5) |
+| Area              | Files                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upload validation | `apps/api/src/modules/public/audio.ts` — `sniffAudio`, `validateAudio`                                                                                  |
+| Route             | `POST /v1/public/conversations/:id/transcriptions` in `conversation.routes.ts`, `@fastify/multipart` registered inside that plugin only                 |
+| Service           | `ConversationService.transcribe` — quota gate, provider call, `usage_events`, `voice_interactions`                                                      |
+| Provider          | `packages/ai/src/transcription.ts` (`OpenAITranscriptionProvider`), `FakeTranscriptionProvider`                                                         |
+| Sweeps            | `apps/worker/src/conversations/conversation.sweeper.ts` — session and pending-action expiry, orphaned-hold release, 30-day transcript erasure           |
+| Web               | `components/push-to-talk-button.tsx` (RecordingState, elapsed counter, Escape to abandon, `speak()`), transcript review inside `conversation-panel.tsx` |
+| Tests             | `apps/api/src/voice.test.ts` (15), `apps/worker/src/conversations/conversation.sweeper.test.ts` (5)                                                     |
 
 The microphone is a **toggle, not a press-and-hold gesture**: a gesture has no keyboard equivalent,
 and PRD §12.4 is not satisfied by a control only a mouse can operate.

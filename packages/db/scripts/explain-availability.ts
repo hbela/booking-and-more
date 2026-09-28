@@ -43,7 +43,16 @@ const DEFAULT_MINIMUM_NOTICE_MINUTES = 0;
 const DEFAULT_MAXIMUM_ADVANCE_DAYS = 180;
 const DEFAULT_SLOT_INTERVAL_MINUTES = 15;
 
-const WEEKDAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const WEEKDAY_NAMES = [
+  "",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
 
 function flagValue(args: string[], flag: string): string | undefined {
   const at = args.indexOf(flag);
@@ -53,7 +62,8 @@ function flagValue(args: string[], flag: string): string | undefined {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const slug = args[0];
-  const date = args.find((arg) => /^\d{4}-\d{2}-\d{2}$/.test(arg)) ?? new Date().toISOString().slice(0, 10);
+  const date =
+    args.find((arg) => /^\d{4}-\d{2}-\d{2}$/.test(arg)) ?? new Date().toISOString().slice(0, 10);
   const serviceFilter = flagValue(args, "--service");
   const providerFilter = flagValue(args, "--provider");
 
@@ -77,7 +87,9 @@ async function main(): Promise<void> {
 
     const weekday = weekdayOf(date);
     console.log(`Organization : ${tenant.name} (${tenant.slug}) — status ${tenant.status}`);
-    console.log(`Date         : ${date} (${WEEKDAY_NAMES[weekday] ?? "?"}, ISO weekday ${String(weekday)})`);
+    console.log(
+      `Date         : ${date} (${WEEKDAY_NAMES[weekday] ?? "?"}, ISO weekday ${String(weekday)})`,
+    );
     console.log("");
 
     // Gate 0 — where the schedules actually are.
@@ -222,7 +234,8 @@ async function main(): Promise<void> {
         // the horizon from — not the zone this script happens to run in.
         const today = dateOnlyAt(Date.now(), provider.timezone);
         const horizon = addDaysToDateOnly(today, advance);
-        const noticeCloses = notice > 0 ? `, and nothing sooner than ${String(notice)} minutes away` : "";
+        const noticeCloses =
+          notice > 0 ? `, and nothing sooner than ${String(notice)} minutes away` : "";
 
         console.log(
           `    booking window: ${today} … ${horizon}  (advance ${String(advance)} days, notice ${String(notice)}m)`,
@@ -269,7 +282,8 @@ async function main(): Promise<void> {
           if (validUntil !== null && date > validUntil) reasons.push(`ended ${validUntil}`);
 
           const minutes = spanMinutes(row.startTime, row.endTime);
-          if (minutes < required) reasons.push(`only ${String(minutes)}m long, needs ${String(required)}m`);
+          if (minutes < required)
+            reasons.push(`only ${String(minutes)}m long, needs ${String(required)}m`);
 
           console.log(
             `      ${row.startTime}–${row.endTime}${row.locationId === null ? "" : " (at one location)"} — ${
@@ -311,7 +325,9 @@ async function main(): Promise<void> {
           select: { bookingId: true, startAt: true, endAt: true },
         });
 
-        console.log(`      ${String(reservations.length)} reservation(s) occupying time near this date`);
+        console.log(
+          `      ${String(reservations.length)} reservation(s) occupying time near this date`,
+        );
 
         // The verdict, from the engine itself rather than from anything here.
         const slots = generateSlots({

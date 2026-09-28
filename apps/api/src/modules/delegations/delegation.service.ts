@@ -84,10 +84,7 @@ export class DelegationService {
    * eligibility rule would then live in `apps/web` as a role-string comparison
    * — rule 10 broken at the place it matters most (§5.1).
    */
-  async listCandidates(args: {
-    tenantId: string;
-    providerId: string;
-  }): Promise<CandidateMember[]> {
+  async listCandidates(args: { tenantId: string; providerId: string }): Promise<CandidateMember[]> {
     const provider = await this.requireProvider(args.tenantId, args.providerId);
 
     const [memberships, existing] = await Promise.all([
@@ -103,8 +100,7 @@ export class DelegationService {
           // The membership that *is* this diary already holds the `:own`
           // permissions; a grant would add nothing and would later be misread as
           // the source of that access (§2.2).
-          membership.providerId !== provider.id &&
-          roleCanReceiveDelegation(membership.role),
+          membership.providerId !== provider.id && roleCanReceiveDelegation(membership.role),
       )
       .map((membership) => ({
         membershipId: membership.id,

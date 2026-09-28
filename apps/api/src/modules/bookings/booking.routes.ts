@@ -217,8 +217,11 @@ export const bookingRoutes: FastifyPluginAsyncZod = async (app) => {
         now: new Date(),
       });
 
-      return pageOf(rows, query.limit, (row) => row.startAt.toISOString(), (row) =>
-        toBookingResponse(row, stranded.get(row.id) ?? null),
+      return pageOf(
+        rows,
+        query.limit,
+        (row) => row.startAt.toISOString(),
+        (row) => toBookingResponse(row, stranded.get(row.id) ?? null),
       );
     },
   );

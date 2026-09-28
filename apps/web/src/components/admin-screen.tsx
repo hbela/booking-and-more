@@ -35,9 +35,7 @@ export function AdminScreen(): React.ReactElement {
       return (
         <Card title={t("signedOutTitle")}>
           <p className="text-sm text-ink-muted">{t("signedOutHint")}</p>
-          <ButtonLink href="/sign-in" >
-            {t("signedOutLink")}
-          </ButtonLink>
+          <ButtonLink href="/sign-in">{t("signedOutLink")}</ButtonLink>
         </Card>
       );
     }
@@ -48,9 +46,7 @@ export function AdminScreen(): React.ReactElement {
       return (
         <Card title={t("notAdminTitle")}>
           <p className="text-sm text-ink-muted">{t("notAdminHint")}</p>
-          <ButtonLink href="/dashboard" >
-            {t("notAdminLink")}
-          </ButtonLink>
+          <ButtonLink href="/dashboard">{t("notAdminLink")}</ButtonLink>
         </Card>
       );
     }
@@ -58,9 +54,7 @@ export function AdminScreen(): React.ReactElement {
     return (
       <Card title={t("platformAdminTitle")}>
         <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
-        <ButtonLink href="/admin/platform" >
-          {t("platformAdminLink")}
-        </ButtonLink>
+        <ButtonLink href="/admin/platform">{t("platformAdminLink")}</ButtonLink>
       </Card>
     );
   }

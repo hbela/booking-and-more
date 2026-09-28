@@ -171,8 +171,7 @@ describe.skipIf(parked || !databaseUrl)("calendar leg", () => {
       },
     });
 
-  const rows = () =>
-    prisma.calendarEventMapping.findMany({ where: { tenantId, bookingId } });
+  const rows = () => prisma.calendarEventMapping.findMany({ where: { tenantId, bookingId } });
 
   // -------------------------------------------------------------------------
   // The happy path, through the real dispatcher

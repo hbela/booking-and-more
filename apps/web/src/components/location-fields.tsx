@@ -90,7 +90,6 @@ export function LocationFields({
           required
           minLength={2}
           maxLength={160}
-          
         />
       </Field>
 
@@ -101,7 +100,6 @@ export function LocationFields({
           onChange={(event) => {
             onChange({ type: event.target.value as LocationType });
           }}
-          
         >
           {TYPES.map((value) => (
             <option key={value} value={value}>
@@ -120,7 +118,6 @@ export function LocationFields({
           }}
           required={needsAddress}
           maxLength={200}
-          
         />
       </Field>
 
@@ -132,7 +129,6 @@ export function LocationFields({
             onChange({ addressLine2: event.target.value });
           }}
           maxLength={200}
-          
         />
       </Field>
 
@@ -160,7 +156,6 @@ export function LocationFields({
               onChange({ city: event.target.value });
             }}
             maxLength={120}
-            
           />
         </Field>
 
@@ -189,7 +184,6 @@ export function LocationFields({
             onChange({ timezone: event.target.value });
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
-          
         />
       </Field>
       {zones.length === 0 ? null : (
@@ -204,9 +198,7 @@ export function LocationFields({
       {/* Stored but unread until the public map (phase-2 §5.5). Behind a
           disclosure so it is reachable without being in anybody's way. */}
       <details>
-        <summary className="cursor-pointer text-sm text-ink-muted">
-          {t("coordinates")}
-        </summary>
+        <summary className="cursor-pointer text-sm text-ink-muted">{t("coordinates")}</summary>
 
         <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
           <Field id={`${idPrefix}-latitude`} label={t("latitude")}>

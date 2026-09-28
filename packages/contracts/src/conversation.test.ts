@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  INTENT_PARAMETERS,
-  conversationIntentSchema,
-  parseCommand,
-} from "./conversation.js";
+import { INTENT_PARAMETERS, conversationIntentSchema, parseCommand } from "./conversation.js";
 
 /**
  * tech-impl §21's rule, tested: never execute parameters before validating them

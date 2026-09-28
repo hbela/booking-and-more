@@ -41,9 +41,7 @@ export function Icon({
       strokeWidth={1.75}
       className={cn("shrink-0", className)}
       focusable="false"
-      {...(title === undefined
-        ? { "aria-hidden": true }
-        : { role: "img", "aria-label": title })}
+      {...(title === undefined ? { "aria-hidden": true } : { role: "img", "aria-label": title })}
     />
   );
 }

@@ -41,7 +41,10 @@ export function ApiStatus(): React.ReactElement {
       className="border-line bg-surface rounded-xl border p-6"
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id="api-status-heading" className="text-ink text-sm font-semibold tracking-wide uppercase">
+        <h2
+          id="api-status-heading"
+          className="text-ink text-sm font-semibold tracking-wide uppercase"
+        >
           {t("heading")}
         </h2>
         {/* The badge carries a word, never a bare coloured dot: colour alone

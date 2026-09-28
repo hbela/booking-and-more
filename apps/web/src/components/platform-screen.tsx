@@ -187,25 +187,19 @@ export function PlatformScreen(): React.ReactElement {
           }}
         >
           <Field id="name" label={t("name")}>
-            <Input id="name" name="name" required  />
+            <Input id="name" name="name" required />
           </Field>
 
           <Field id="domain" label={t("domain")}>
-            <Input
-              id="domain"
-              name="domain"
-              required
-              placeholder="wellness.hu"
-              
-            />
+            <Input id="domain" name="domain" required placeholder="wellness.hu" />
           </Field>
 
           <Field id="slug" label={t("slug")}>
-            <Input id="slug" name="slug" required placeholder="wellness"  />
+            <Input id="slug" name="slug" required placeholder="wellness" />
           </Field>
 
           <Field id="mode" label={t("mode")}>
-            <Select id="mode" name="mode" defaultValue="PROSPECT" >
+            <Select id="mode" name="mode" defaultValue="PROSPECT">
               <option value="PROSPECT">{t("modeProspect")}</option>
               <option value="INTERNAL">{t("modeInternal")}</option>
             </Select>
@@ -221,7 +215,6 @@ export function PlatformScreen(): React.ReactElement {
               name="defaultLanguage"
               defaultValue="hu"
               aria-describedby="defaultLanguage-hint"
-              
             >
               <option value="hu">{t("languageHu")}</option>
               <option value="en">{t("languageEn")}</option>
@@ -232,16 +225,16 @@ export function PlatformScreen(): React.ReactElement {
           </Field>
 
           <Field id="ownerName" label={t("ownerName")}>
-            <Input id="ownerName" name="ownerName" required  />
+            <Input id="ownerName" name="ownerName" required />
           </Field>
 
           <Field id="ownerEmail" label={t("ownerEmail")}>
-            <Input id="ownerEmail" name="ownerEmail" type="email" required  />
+            <Input id="ownerEmail" name="ownerEmail" type="email" required />
           </Field>
 
           <div className="sm:col-span-2 flex flex-col gap-2">
             <ErrorText>{formError}</ErrorText>
-            <Button type="submit"  disabled={provision.isPending}>
+            <Button type="submit" disabled={provision.isPending}>
               {provision.isPending ? t("provisioning") : t("provision")}
             </Button>
           </div>
@@ -253,7 +246,7 @@ export function PlatformScreen(): React.ReactElement {
           type="search"
           value={search}
           placeholder={t("searchPlaceholder")}
-          
+
           onChange={(event) => {
             setSearch(event.target.value);
           }}
@@ -279,17 +272,12 @@ export function PlatformScreen(): React.ReactElement {
             </thead>
             <tbody>
               {organizations.data?.items.map((organization) => (
-                <tr
-                  key={organization.id}
-                  className="border-b border-line align-top"
-                >
+                <tr key={organization.id} className="border-b border-line align-top">
                   <td className="py-3 pr-4">
                     <div className="font-medium">{organization.name}</div>
                     {/* The domain is the identity (§2.3), so it is shown before
                         the slug rather than after it. */}
-                    <div className="text-xs text-ink-muted">
-                      {organization.domain ?? "—"}
-                    </div>
+                    <div className="text-xs text-ink-muted">{organization.domain ?? "—"}</div>
                     <div className="text-xs text-ink-subtle">/{organization.slug}</div>
                   </td>
 
@@ -299,14 +287,10 @@ export function PlatformScreen(): React.ReactElement {
                         column dropped it, so an operator looking for a person
                         by the name they know them by found only an address. */}
                     {organization.owner?.name ? (
-                      <div className="text-xs text-ink-muted">
-                        {organization.owner.name}
-                      </div>
+                      <div className="text-xs text-ink-muted">{organization.owner.name}</div>
                     ) : null}
                     {organization.owner?.accepted === false ? (
-                      <div className="text-xs text-warning">
-                        {t("ownerPending")}
-                      </div>
+                      <div className="text-xs text-warning">{t("ownerPending")}</div>
                     ) : null}
                   </td>
 

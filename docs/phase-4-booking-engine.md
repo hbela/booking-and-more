@@ -209,7 +209,7 @@ Four decisions worth keeping:
   make the engine do fourteen days of work to answer a question about one, on every date the customer tries.
   The public search is rate-limited to 30/minute and this adds at most one request per attempt. The schema
   caps a single search at 62 days, so the window has room to grow if 14 proves short.
-- **The grouping is by *local* calendar day** (`lib/next-available.ts`). A slot is an instant; which day it
+- **The grouping is by _local_ calendar day** (`lib/next-available.ts`). A slot is an instant; which day it
   falls on is a question only a zone can answer, and the times beside it are rendered by `Intl` in the
   browser's zone. Grouping by the UTC day instead would file every evening appointment east of Greenwich
   under the wrong heading — visibly wrong for the last slot of the day, and only then.

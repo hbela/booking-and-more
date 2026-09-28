@@ -12,7 +12,12 @@
  * that metering can happen in a transaction this package cannot see.
  */
 
-export { conversationUnavailable, getAnthropic, isConfigured, resetAnthropicClient } from "./client.js";
+export {
+  conversationUnavailable,
+  getAnthropic,
+  isConfigured,
+  resetAnthropicClient,
+} from "./client.js";
 export type { AnthropicConfig } from "./client.js";
 
 export { AnthropicIntentInterpreter } from "./interpreter.js";
