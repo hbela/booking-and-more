@@ -159,9 +159,15 @@ export function DashboardShell({
           {context.tenants.length > 1 ? (
             <label htmlFor="tenant" className="flex items-center gap-2 text-sm">
               <span className="sr-only">{t("tenant")}</span>
+              {/* Bound to the tenant `/v1/me` resolved, never to `tenantId`'s
+                  fallback. With several memberships and a session that has
+                  selected none, the API resolves no tenant and grants no
+                  permissions; showing the fallback here made the first business
+                  look selected, and choosing it again fired no change, so there
+                  was no way out but to pick another one and come back. */}
               <select
                 id="tenant"
-                value={context.tenantId ?? ""}
+                value={context.me?.tenant?.id ?? ""}
                 onChange={(event) => {
                   const next = event.target.value;
                   void apiFetch(`/v1/tenants/${next}/activate`, { method: "POST" }).then(() => {
@@ -172,6 +178,11 @@ export function DashboardShell({
                 }}
                 className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 py-2"
               >
+                {context.me?.tenant ? null : (
+                  <option value="" disabled>
+                    {t("chooseTenant")}
+                  </option>
+                )}
                 {context.tenants.map((tenant) => (
                   <option key={tenant.id} value={tenant.id}>
                     {tenant.name}

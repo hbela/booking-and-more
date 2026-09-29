@@ -96,6 +96,7 @@
     "loading": "Loading…",
     "signOut": "Sign out",
     "tenant": "Business",
+    "chooseTenant": "Choose a business…",
     "members": "Members",
     "name": "Name",
     "email": "Email",
