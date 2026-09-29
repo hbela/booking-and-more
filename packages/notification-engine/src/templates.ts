@@ -321,7 +321,7 @@ const SUBSCRIPTION_CONFIRMED_COPY: Record<
       button: "Ugrás a vezérlőpultra",
       fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
       manage:
-        "A számlázást — bankkártya módosítása, számlák letöltése, lemondás — a vezérlőpult Előfizetés oldalán kezelheti.",
+        "Bankkártyáját a vezérlőpult Előfizetés oldaláról módosíthatja, és előfizetését is ott mondhatja le. A számlák a Billingo rendszerében készülnek.",
       signoff: "Üdvözlettel,\na Booking and More csapata",
     },
   },
@@ -340,7 +340,7 @@ const SUBSCRIPTION_CONFIRMED_COPY: Record<
       button: "Go to your dashboard",
       fallback: "If the button does not work, paste this address into your browser:",
       manage:
-        "You can change your card, download invoices or cancel from the Subscription page in your dashboard.",
+        "You can change your card or cancel your subscription from the Subscription page in your dashboard. Invoices are issued through Billingo.",
       signoff: "Best regards,\nthe Booking and More team",
     },
   },

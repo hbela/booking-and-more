@@ -146,7 +146,7 @@
     "subscriptionActive": "Az előfizetése aktív — minden funkció elérhető.",
     "subscriptionEnding": "Az előfizetése le fog járni. Addig bármikor újraindíthatja.",
     "manageBilling": "Számlázás kezelése",
-    "manageBillingHint": "Bankkártya módosítása, számlák letöltése vagy lemondás. Utána visszahozzuk erre az oldalra.",
+    "manageBillingHint": "A Stripe felületén módosíthatja bankkártyáját vagy lemondhatja előfizetését. Ezután visszairányítjuk erre az oldalra. A számlák a Billingo rendszerében készülnek.",
     "trialOffer": "{days} nap ingyenesen. A bankkártyát most megadja, de a próbaidőszak végéig nem terheljük meg, és addig bármikor lemondhatja.",
     "trialAlreadyUsed": "Ez a szervezet már igénybe vette az ingyenes próbaidőszakot, ezért a számlázás azonnal indul.",
     "startTrial": "Ingyenes próbaidőszak indítása",

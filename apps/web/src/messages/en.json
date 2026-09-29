@@ -146,7 +146,7 @@
     "subscriptionActive": "Your subscription is active — everything is unlocked.",
     "subscriptionEnding": "Your subscription is set to end. You can restart it any time before then.",
     "manageBilling": "Manage billing",
-    "manageBillingHint": "Change your card, download invoices, or cancel. We will bring you back here afterwards.",
+    "manageBillingHint": "Change your card or cancel your subscription in Stripe. We’ll bring you back here afterwards. Invoices are issued through Billingo.",
     "trialOffer": "{days} days free. We take your card now but charge nothing until the trial ends, and you can cancel at any time before then.",
     "trialAlreadyUsed": "This organization has already used its free trial, so billing starts straight away.",
     "startTrial": "Start my free trial",
