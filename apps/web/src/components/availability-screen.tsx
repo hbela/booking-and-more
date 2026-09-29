@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { apiFetch, type AssignedService, type Paginated, type Provider } from "@/lib/api-client";
+import {
+  ApiError,
+  apiFetch,
+  type AssignedService,
+  type Paginated,
+  type Provider,
+} from "@/lib/api-client";
 import { diaryScopeFor } from "@/lib/delegation";
 import { AvailabilityExceptions } from "./availability-exceptions";
 import { ProviderDelegates } from "./provider-delegates";
@@ -94,7 +100,18 @@ export function AvailabilityScreen(): React.ReactElement {
     queryFn: () =>
       apiFetch<Provider>(`/v1/providers/${providerId!}`, { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && providerId !== null,
+    // A 404 here is an answer, not a blip: see `providerArchived` below.
+    retry: (failures, error) => !isProviderNotFound(error) && failures < 1,
   });
+
+  // The provider row is gone from this caller's view. For a PROVIDER that can
+  // only mean archived: `Membership.providerId` is a same-tenant foreign key
+  // with `SetNull`, so a row that no longer existed would have unlinked them
+  // and landed on `notLinked` instead. Archiving leaves the link in place, and
+  // every availability endpoint 404s on an archived provider — so without this
+  // the screen rendered three editors whose every request failed, and the
+  // provider was shown a bare "Provider not found" about themselves.
+  const providerArchived = isProviderNotFound(provider.error);
 
   // Working hours on a provider who offers nothing produce no bookable slots,
   // and the screen would otherwise look complete. This is the last place the
@@ -140,6 +157,14 @@ export function AvailabilityScreen(): React.ReactElement {
                   t("notDelegated")
                 : t("notLinked")}
           </p>
+        </Section>
+      ) : providerArchived ? (
+        <Section title={t("title")}>
+          <Callout tone="action">
+            {context.me.membership?.role === "PROVIDER"
+              ? t("providerArchivedOwn")
+              : t("providerArchivedOther")}
+          </Callout>
         </Section>
       ) : (
         <>
@@ -191,4 +216,8 @@ export function AvailabilityScreen(): React.ReactElement {
       )}
     </DashboardShell>
   );
+}
+
+function isProviderNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.code === "PROVIDER_NOT_FOUND";
 }

@@ -13,6 +13,7 @@ import {
   type AssignedService,
   type Invitation,
   type Location,
+  type Member,
   type Paginated,
   type Provider,
   type ProviderInvitation,
@@ -123,6 +124,22 @@ export function ProvidersScreen(): React.ReactElement {
       apiFetch<{ items: Invitation[] }>("/v1/members/invitations", { tenantId: context.tenantId }),
     enabled: Boolean(context.tenantId) && context.can("member:read"),
   });
+
+  // Who signs in *as* each provider, so archiving one can say whose login it
+  // takes away. Archiving keeps `Membership.providerId` but every availability
+  // and booking endpoint 404s on an archived provider, so the person is left
+  // signed in to a diary that answers "not found" — what happened on staging
+  // on 2026-09-29, one click after three edits.
+  const members = useQuery({
+    queryKey: ["members", context.tenantId],
+    queryFn: () => apiFetch<{ items: Member[] }>("/v1/members", { tenantId: context.tenantId }),
+    enabled: Boolean(context.tenantId) && context.can("member:read"),
+  });
+
+  const loginFor = (providerId: string): Member | undefined =>
+    (members.data?.items ?? []).find(
+      (member) => member.providerId === providerId && member.status === "ACTIVE",
+    );
 
   const changeApproval = useMutation({
     mutationFn: (provider: Provider) =>
@@ -366,6 +383,15 @@ export function ProvidersScreen(): React.ReactElement {
                             )}
                             <RowButton
                               onClick={() => {
+                                const login = loginFor(provider.id);
+                                const question = login
+                                  ? t("archiveConfirmLinked", {
+                                      name: provider.displayName,
+                                      email: login.user.email,
+                                    })
+                                  : t("archiveConfirm", { name: provider.displayName });
+                                if (!window.confirm(question)) return;
+
                                 void apiFetch(`/v1/providers/${provider.id}`, {
                                   method: "DELETE",
                                   tenantId: context.tenantId,
