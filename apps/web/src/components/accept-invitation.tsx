@@ -6,7 +6,7 @@ import { getPathname, useRouter } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { signOut, useSession } from "@/lib/auth-client";
-import { Field } from "./auth-form";
+import { AuthForm, Field } from "./auth-form";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
 import { ErrorText } from "./ui/field";
@@ -188,14 +188,22 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
             <p className="text-ink-muted">
               {state.details ? t("signInAs", { email: state.details.email }) : t("signInFirst")}
             </p>
-            <Button
-              className="self-start"
-              onClick={() => {
-                router.push("/sign-in");
+            {/* Signed in here rather than on /sign-in. That page lands on
+                /dashboard, so somebody who already owns one organization signed
+                in, found themselves in it, and never came back to accept — the
+                invitation stayed PENDING while they believed they had joined. */}
+            <AuthForm
+              mode="sign-in"
+              onAuthenticated={() => {
+                router.refresh();
+                // Straight to accepting: the lookup is already in hand, and the
+                // API decides whether the account matches the invitation.
+                setState(
+                  state.details ? { kind: "accepting", details: state.details } : { kind: "checking" },
+                );
+                return Promise.resolve();
               }}
-            >
-              {t("goToSignIn")}
-            </Button>
+            />
           </>
         ) : null}
 

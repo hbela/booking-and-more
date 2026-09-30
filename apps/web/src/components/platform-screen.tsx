@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ApiError, apiFetch, type MeResponse } from "@/lib/api-client";
@@ -70,6 +70,19 @@ export function PlatformScreen(): React.ReactElement {
    * away loses it, which is why the resend action exists.
    */
   const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
+  /**
+   * The banner renders at the top of the page while the resend action lives in
+   * a table row, often below the fold — so a successful resend used to look
+   * exactly like a button that did nothing. Scrolled to and focused instead.
+   */
+  const acceptUrlRef = useRef<HTMLDivElement>(null);
+  const [resendError, setResendError] = useState<{ id: string; message: string } | null>(null);
+
+  useEffect(() => {
+    if (acceptUrl === null) return;
+    acceptUrlRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    acceptUrlRef.current?.focus({ preventScroll: true });
+  }, [acceptUrl]);
 
   const organizations = useQuery({
     queryKey: ["platform", "organizations", search],
@@ -110,8 +123,18 @@ export function PlatformScreen(): React.ReactElement {
       apiFetch<{ acceptUrl: string }>(`/v1/platform/organizations/${id}/resend-invitation`, {
         method: "POST",
       }),
+    onMutate: () => {
+      setResendError(null);
+    },
     onSuccess: (result) => {
       setAcceptUrl(result.acceptUrl);
+    },
+    // Without this a refusal (409 already accepted, 404, 403) was silent.
+    onError: (error: unknown, id) => {
+      setResendError({
+        id,
+        message: error instanceof ApiError ? error.message : t("resendFailed"),
+      });
     },
   });
 
@@ -140,6 +163,8 @@ export function PlatformScreen(): React.ReactElement {
 
       {acceptUrl === null ? null : (
         <div
+          ref={acceptUrlRef}
+          tabIndex={-1}
           role="status"
           className="flex flex-col gap-2 rounded-xl border border-success-surface bg-success-surface text-on-success-surface p-4 text-sm"
         >
@@ -329,6 +354,10 @@ export function PlatformScreen(): React.ReactElement {
                         >
                           {t("resendInvitation")}
                         </button>
+                      ) : null}
+
+                      {resendError?.id === organization.id ? (
+                        <ErrorText>{resendError.message}</ErrorText>
                       ) : null}
 
                       {organization.status === "CLOSED" ? null : (
