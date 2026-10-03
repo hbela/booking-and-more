@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–7 done).
+**Document version:** 1.0 — 2026-10-03. **Done** bar §5.1, the by-hand visual walk.
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -90,7 +90,7 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 | 5    | Badge (our tones as extra variants), Alert for Callout, Table                               | done                                                                        |
 | 6    | Dialog / AlertDialog for existing modals only                                               | done                                                                        |
 | 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar, skeleton | done (skeleton, tooltip, tabs, sonner; sidebar and dropdown-menu not taken) |
-| 8    | Delete unused wrappers and recipes                                                          |                                                                             |
+| 8    | Delete unused wrappers and recipes                                                          | done                                                                        |
 
 ## 3.1 Step 1
 
@@ -98,13 +98,6 @@ No visual change was intended and none should be visible: the radius scale shadc
 (`--radius-sm` … `--radius-xl`) is set to Tailwind's own defaults, and the aliases are new names only.
 `tw-animate-css` is imported for Radix enter/exit animations. Verified with `pnpm check-types`, `pnpm lint`,
 `pnpm test` (332 → 335 tests) and a production `next build`.
-
-# 4. Verification, every step
-
-- `pnpm --filter @bam/web lint && pnpm --filter @bam/web check-types && pnpm --filter @bam/web test`
-- `pnpm --filter @bam/web test:e2e`
-- By hand: light, dark, forced-light on a dark OS; keyboard tab-through with a visible ring; 44px targets at
-  phone width; `hu` and `en`.
 
 ## 3.2 Step 2 — Button
 
@@ -309,3 +302,45 @@ read. `sonner` brought `next-themes`, which this app does not use, and it was re
 
 Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (69 passed). No e2e
 covers a toast yet.
+
+## 3.9 Step 8 — cleanup
+
+- **Leftover hand-styled controls**, found by grepping for raw `<button>`/`<input>` and `border-line-strong`
+  outside `components/ui/`: the working-hours editor's "Add period" and "Remove" are `RowButton`s, the chat
+  message field is `Input`, the chat's catalogue choices use `buttonVariants`, and the providers screen's
+  unavailable "Invite" no longer re-applies the old row-action classes over the new ones.
+- **A latent white-labelling bug** on the manage-booking page: "Cancel booking" painted the danger fill with
+  `text-on-booking` (formerly `text-on-accent`), the text colour for the _tenant's_ brand. Identical today;
+  the day a tenant brands their booking page with a pale colour, `--on-booking` turns dark and the red button
+  gets dark text, an untested pair. It is now `Button variant="destructive"`, whose `--on-primary` /
+  `--danger` pair is asserted.
+- **`ui/icon.tsx` is deleted.** It called itself "the only way a lucide icon enters the app" and had no
+  importer even before this phase — six files imported lucide directly at `2152eae`, every shadcn component
+  does, and current `lucide-react` sets `aria-hidden` by default, which was the wrapper's whole point.
+- **Kept deliberately:** the underlined text-buttons inside sentences and tables (platform screen,
+  verify-email banner), the assistant's pressed-state list items, and the public booking page's own
+  controls, which are `booking-*`-styled on purpose (§2.2). `ui/dialog.tsx` stays installed and unused
+  (§3.7).
+
+Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (69 passed, 2 of 2
+runs).
+
+# 4. Verification, every step
+
+- `pnpm --filter @bam/web lint && pnpm --filter @bam/web check-types && pnpm --filter @bam/web test`
+- `pnpm --filter @bam/web test:e2e`
+- By hand: light, dark, forced-light on a dark OS; keyboard tab-through with a visible ring; 44px targets at
+  phone width; `hu` and `en`.
+
+# 5. Known limits
+
+1. **No by-hand visual walk has been done.** Every step passed types, lint, unit tests, a production build
+   and e2e, but nobody has looked at each screen in light, dark and forced-light-on-a-dark-OS, at phone
+   width, in both languages. The intended visual changes are listed per step above; anything else is a bug.
+2. **No e2e covers a toast or the affected-bookings `AlertDialog`** (§3.7). `useConfirm` and the
+   availability tabs have browser tests of their own; those two do not.
+3. **The shadcn CLI needs supervision on every `add`** (§3.3, §3.7): rewrite `from "cn"` to `@/lib/utils`,
+   remove the npm package `cn` it installs, refuse to overwrite an adapted component, and check what else it
+   added — `next-themes` arrived with `sonner`.
+4. **Row actions are below the 44px target** — `RowButton` / `RowLink`, now also "Add period" and "Remove"
+   in the working-hours editor — as they were before this phase.

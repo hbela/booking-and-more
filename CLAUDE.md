@@ -187,20 +187,26 @@ different host rather than an error. Redis now has a `requirepass`. ·
 pass: four placeholder teal tokens, no fonts, and a design system that was three exported class-name
 _strings_ at the bottom of a feature file. Rebuilt on a deep blue at oklch hue 262, a semantic token layer,
 and a real `components/ui/`. **Read its §2.2 before using a colour**: there are two ramps, `brand-*` for
-product chrome and `accent-*` for the public booking page, and mixing them throws away the only thing that
+product chrome and `booking-*` (formerly `accent-*`) for the public booking page, and mixing them throws away the only thing that
 makes PRD §9.1 white-labelling a data change later. §2.4 is why `color-scheme` may never be `light dark`
 again and why the dark block is deliberately duplicated; §2.5 is why redefining `--color-slate-*` rather
 than replacing it is what lets the migration land one screen at a time. **§2.6 lists what must not be
 "improved"** — five accessibility decisions with written rationale that a redesign is exactly the moment to
 reverse by accident. Google Stitch is used as the visual specification and **its generated HTML is never
 shipped** (§2.1) ·
-[Phase 11 — shadcn/ui adoption](docs/phase-11-shadcn-adoption.md) (**in progress**). `components/ui/` is
-moving onto shadcn components one family at a time. **Never run `shadcn init`** — it rewrites
+[Phase 11 — shadcn/ui adoption](docs/phase-11-shadcn-adoption.md) (done bar its §5.1 visual walk). Every
+primitive in `components/ui/` is now a shadcn component or a thin composition of one (`FormField`,
+`DataTable`, `useConfirm`, `PageLoading`). **Never run `shadcn init`** — it rewrites
 `globals.css`; shadcn's variable names are a `:root` alias layer onto the phase-11 tokens (§2.1), and a
 test fails if one becomes a second palette. The booking-page ramp is now **`booking-*`, not `accent-*`**,
 because shadcn owns `accent` (§2.2). §2.4 is the checklist every `shadcn add` gets reviewed against —
-focus ring, 44px targets, `type="button"`, locale `Link` — and §3.3 is why every `add` needs `from "cn"` rewritten to `@/lib/utils` and its `package.json` diff read (the CLI once installed an unrelated npm package called `cn`) — and §2.6 of phase 11 still stands: native
-selects, no edit dialogs.
+focus ring, 44px targets, `type="button"`, locale `Link`. **Every `add` needs supervising** (§5.3): it
+writes `from "cn"`, which must become `@/lib/utils`; it installs an unrelated npm package called `cn` every
+time, which must be removed; and it offers to overwrite adapted components, which must be refused. §2.6 of
+phase 11 still stands: native selects, no edit dialogs — `AlertDialog` only replaced confirmations that were already modal. Two that
+bite: **Radix returns focus to a `Trigger`, and every dialog here is opened from code**, so the adapted
+`AlertDialogContent` remembers its opener (§3.7); and **Radix unmounts inactive tabs**, so a tab holding
+unsaved state must be `forceMount`ed (§3.8).
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

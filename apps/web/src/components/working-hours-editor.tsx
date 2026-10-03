@@ -33,6 +33,7 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Checkbox } from "./ui/checkbox";
+import { RowButton } from "./ui/table";
 
 /**
  * "Last changed by Réka, 10 minutes ago."
@@ -308,8 +309,7 @@ export function WorkingHoursEditor({
                   <span className="w-28 text-sm font-medium">
                     {t(`weekday.${String(weekday)}`)}
                   </span>
-                  <button
-                    type="button"
+                  <RowButton
                     onClick={() => {
                       setWeek((current) =>
                         current === null
@@ -317,10 +317,9 @@ export function WorkingHoursEditor({
                           : { ...current, [weekday]: [...(current[weekday] ?? []), emptyPeriod()] },
                       );
                     }}
-                    className="rounded-md border border-line-strong px-2 py-1 text-xs"
                   >
                     {t("addPeriod")}
-                  </button>
+                  </RowButton>
                   {(week[weekday] ?? []).length === 0 ? (
                     <span className="text-xs text-ink-subtle">{t("closed")}</span>
                   ) : null}
@@ -432,13 +431,7 @@ function PeriodRow({
           <span>{t("toMidnight")}</span>
         </label>
 
-        <button
-          type="button"
-          onClick={onRemove}
-          className="rounded-md border border-line-strong px-2 py-1 text-xs"
-        >
-          {t("remove")}
-        </button>
+        <RowButton onClick={onRemove}>{t("remove")}</RowButton>
       </div>
 
       <details open={scoped}>

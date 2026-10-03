@@ -15,6 +15,7 @@ import {
   type ReschedulePreview,
 } from "@/lib/api-client";
 import { BookingRow, BookingSection, formatDateTime } from "./booking-flow";
+import { Button } from "./ui/button";
 
 /**
  * What a customer reaches from their confirmation link. tech-impl §16, §28.
@@ -219,14 +220,17 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
 
               <div className="flex gap-3">
                 {cancelPreview.data.allowed ? (
-                  <button
-                    type="button"
+                  // `destructive`, not a booking-coloured button: red is a
+                  // warning, not the tenant's brand. It used to pair the danger
+                  // fill with the *booking* text colour, which white-labelling
+                  // would one day turn dark (phase-11-shadcn-adoption §3.9).
+                  <Button
+                    variant="destructive"
                     disabled={confirmCancel.isPending}
                     onClick={() => confirmCancel.mutate("")}
-                    className="bg-danger text-on-booking min-h-11 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
                   >
                     {t("confirmCancel")}
-                  </button>
+                  </Button>
                 ) : null}
                 <button type="button" onClick={() => setMode("view")} className="text-sm underline">
                   {t("keep")}

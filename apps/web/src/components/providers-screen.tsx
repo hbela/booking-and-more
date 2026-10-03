@@ -399,7 +399,7 @@ export function ProvidersScreen(): React.ReactElement {
                               }}
                               aria-disabled="true"
                               aria-describedby={INVITE_HINT_ID}
-                              className="border-line-strong text-ink-subtle rounded-md border px-2 py-1 text-xs"
+                              className="text-ink-subtle"
                             >
                               {t("invite")}
                             </RowButton>

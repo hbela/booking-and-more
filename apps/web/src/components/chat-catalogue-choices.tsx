@@ -1,5 +1,7 @@
 import React from "react";
 import type { ConversationProvider, ConversationService } from "../lib/conversation-client";
+import { cn } from "../lib/utils";
+import { buttonVariants } from "./ui/button";
 
 export function ChatCatalogueChoices({
   services,
@@ -14,8 +16,11 @@ export function ChatCatalogueChoices({
   disabled: boolean;
   onPick: (name: string) => void;
 }): React.ReactElement {
-  const buttonClass =
-    "min-h-11 w-full rounded-lg border border-line-strong bg-surface-raised px-4 py-3 text-left text-sm hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60";
+  // The outline button as a full-width, left-aligned choice card.
+  const buttonClass = cn(
+    buttonVariants({ variant: "outline" }),
+    "w-full justify-start py-3 text-left",
+  );
   return (
     <>
       {services?.length ? (

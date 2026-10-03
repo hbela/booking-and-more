@@ -17,6 +17,7 @@ import {
   type ConversationTurn,
 } from "@/lib/conversation-client";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { Link } from "@/i18n/navigation";
 import { renderMessage } from "@/lib/conversation-messages";
 import { ChatCatalogueChoices } from "./chat-catalogue-choices";
@@ -481,7 +482,7 @@ function ChatConversation({
             <label className="col-span-2 mb-1 text-sm font-medium" htmlFor="chat-message">
               {t.placeholder}
             </label>
-            <input
+            <Input
               id="chat-message"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -502,7 +503,7 @@ function ChatConversation({
               aria-describedby="chat-limits"
               disabled={!available || busy || closed || !session}
               placeholder={t.placeholder}
-              className="min-h-12 min-w-0 rounded-lg border border-line-strong bg-surface px-4"
+              className="min-h-12 px-4"
             />
             <Tooltip>
               <TooltipTrigger asChild>
