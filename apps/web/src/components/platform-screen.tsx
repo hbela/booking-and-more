@@ -54,6 +54,7 @@ function textField(data: FormData, key: string): string {
 
 export function PlatformScreen(): React.ReactElement {
   const t = useTranslations("platform");
+  const common = useTranslations("common");
   const queryClient = useQueryClient();
 
   const me = useQuery({
@@ -194,6 +195,7 @@ export function PlatformScreen(): React.ReactElement {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-ink-muted">{t("provisionExplanation")}</p>
+          <p className="text-sm text-ink-muted">{common("requiredFieldsNote")}</p>
 
           <form
             ref={provisionFormRef}

@@ -16,7 +16,8 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "cancel": "Cancel",
-    "saved": "Saved."
+    "saved": "Saved.",
+    "requiredFieldsNote": "Fields marked * are required."
   },
   "patientQr": {
     "title": "Patient QR codes",

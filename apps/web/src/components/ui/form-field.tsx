@@ -35,7 +35,21 @@ export function FormField({
 }): React.ReactElement {
   return (
     <Field data-invalid={error ? true : undefined} className="gap-1.5">
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      {/* The asterisk follows the control's own `required` attribute, so the
+          mark and the browser's check can never disagree and no call site has
+          to remember it. It is a CSS `::after`, not an element: `content: "*" /
+          ""` gives it empty alt text, so it is in neither the label's text nor
+          its accessible name — a screen reader already announces "required"
+          from the attribute, and a star in the text broke every
+          `getByLabel("Email", { exact: true })`. Pair it with a "Fields marked
+          * are required" line on the form; the symbol alone is a convention,
+          not a label. */}
+      <FieldLabel
+        htmlFor={id}
+        className="after:text-destructive group-has-[:required]/field:after:-ml-1 group-has-[:required]/field:after:content-['*'_/_'']"
+      >
+        {label}
+      </FieldLabel>
       {children}
       {error ? (
         <FieldError id={`${id}-error`}>{error}</FieldError>

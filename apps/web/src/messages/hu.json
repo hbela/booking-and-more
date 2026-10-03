@@ -16,7 +16,8 @@
     "themeLight": "Világos",
     "themeDark": "Sötét",
     "cancel": "Mégse",
-    "saved": "Mentve."
+    "saved": "Mentve.",
+    "requiredFieldsNote": "A *-gal jelölt mezők kitöltése kötelező."
   },
   "patientQr": {
     "title": "Páciens QR-kódok",
