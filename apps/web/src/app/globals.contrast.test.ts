@@ -138,7 +138,8 @@ function contrast(foreground: Rgb, background: Rgb): number {
 }
 
 /**
- * Text pairs need 4.5:1 (WCAG 1.4.3). Ring and control-boundary pairs need
+ * Text pairs need 4.5:1 (WCAG 1.4.3). `--on-primary` on `--danger` is the
+ * destructive button's label. Ring and control-boundary pairs need
  * 3:1 (1.4.11). Anything not listed here is decorative by decision, not by
  * oversight — `--line` is the only such token, and it draws separators.
  */
@@ -152,14 +153,15 @@ const TEXT_PAIRS: [string, string][] = [
   ["--ink-muted", "--surface-sunken"],
   ["--on-primary", "--primary"],
   ["--on-primary-surface", "--primary-surface"],
-  ["--on-accent", "--accent"],
-  ["--on-accent-surface", "--accent-surface"],
+  ["--on-booking", "--booking"],
+  ["--on-booking-surface", "--booking-surface"],
   ["--danger", "--surface"],
   ["--success", "--surface"],
   ["--warning", "--surface"],
   ["--danger", "--surface-raised"],
   ["--success", "--surface-raised"],
   ["--warning", "--surface-raised"],
+  ["--on-primary", "--danger"],
   ["--on-danger-surface", "--danger-surface"],
   ["--on-success-surface", "--success-surface"],
   ["--on-warning-surface", "--warning-surface"],
@@ -171,7 +173,7 @@ const NON_TEXT_PAIRS: [string, string][] = [
   ["--line-strong", "--surface"],
   ["--line-strong", "--surface-raised"],
   ["--primary", "--surface"],
-  ["--accent", "--surface"],
+  ["--booking", "--surface"],
 ];
 
 describe.each([
@@ -214,9 +216,41 @@ describe("the light block", () => {
 
   // brand-500 is 3.95:1 on white. It reads as a usable link colour and is not,
   // so the stylesheet must never hand it to a text token.
-  it("never uses brand-500 or accent-500 for a text token", () => {
+  it("never uses brand-500 or booking-500 for a text token", () => {
     for (const [fg] of TEXT_PAIRS) {
-      expect(light.get(fg)).not.toMatch(/--(?:color-)?(?:brand|accent)-500/);
+      expect(light.get(fg)).not.toMatch(/--(?:color-)?(?:brand|booking)-500/);
     }
+  });
+});
+
+// phase-11-shadcn-adoption §2.1. shadcn components read their own variable
+// names; those must be aliases onto the tokens asserted above, never a second
+// palette, or every pair this file checks stops describing what ships.
+describe("the shadcn alias layer", () => {
+  const aliases = declarations(block(/^:root\s*\{/m));
+
+  it("points every colour alias at a token the theme blocks declare", () => {
+    for (const [name, value] of aliases) {
+      if (name === "--radius") continue;
+      const target = /^var\((--[\w-]+)\)$/.exec(value)?.[1];
+      expect(target, `${name} must be a bare var() alias, got ${value}`).toBeDefined();
+      expect(light.has(target ?? ""), `${name} → ${String(target)} is not a theme token`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("is not redeclared by any theme block", () => {
+    for (const name of aliases.keys()) {
+      expect(light.has(name), `${name} is set in the light block`).toBe(false);
+      expect(systemDark.has(name), `${name} is set in the dark block`).toBe(false);
+    }
+  });
+
+  // These two carry WCAG 1.4.11: shadcn draws control edges with
+  // `border-input` and focus with `ring-ring`.
+  it("draws control boundaries and focus rings with the 3:1 tokens", () => {
+    expect(aliases.get("--input")).toBe("var(--line-strong)");
+    expect(aliases.get("--ring")).toBe("var(--focus-ring)");
   });
 });

@@ -18,8 +18,9 @@ import { diaryScopeFor } from "@/lib/delegation";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
 import { Button } from "./ui/button";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 
 /**
@@ -110,26 +111,26 @@ export function BookingsScreen(): React.ReactElement {
     <DashboardShell context={context}>
       <Section title={t("title")}>
         <div className="flex flex-wrap gap-3">
-          <Field id="bookings-from" label={t("from")}>
+          <FormField id="bookings-from" label={t("from")}>
             <Input
               id="bookings-from"
               type="date"
               value={from}
               onChange={(event) => setFrom(event.target.value)}
             />
-          </Field>
-          <Field id="bookings-to" label={t("to")}>
+          </FormField>
+          <FormField id="bookings-to" label={t("to")}>
             <Input
               id="bookings-to"
               type="date"
               value={to}
               onChange={(event) => setTo(event.target.value)}
             />
-          </Field>
+          </FormField>
 
           {canSelectProvider && providerOptions.length > 0 ? (
-            <Field id="bookings-provider" label={t("provider")}>
-              <Select
+            <FormField id="bookings-provider" label={t("provider")}>
+              <NativeSelect
                 id="bookings-provider"
                 value={providerId}
                 onChange={(event) => setProviderId(event.target.value)}
@@ -143,12 +144,12 @@ export function BookingsScreen(): React.ReactElement {
                     {provider.displayName}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </NativeSelect>
+            </FormField>
           ) : null}
 
-          <Field id="bookings-status" label={t("statusLabel")}>
-            <Select
+          <FormField id="bookings-status" label={t("statusLabel")}>
+            <NativeSelect
               id="bookings-status"
               value={status}
               onChange={(event) => setStatus(event.target.value)}
@@ -161,8 +162,8 @@ export function BookingsScreen(): React.ReactElement {
                   </option>
                 ),
               )}
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
         </div>
 
         {bookings.isPending ? <p>{t("loading")}</p> : null}
@@ -363,7 +364,7 @@ function StatusBadge({ status }: { status: BookingStatus }): React.ReactElement 
 /**
  * A quiet action on a booking card.
  *
- * `<Button variant="secondary">`, **not** the primary variant with overrides
+ * `<Button variant="outline">`, **not** the default variant with overrides
  * bolted on. That is what this used to do, back when styling was shared as
  * interpolated strings, and it rendered an invisible button: the primary recipe
  * carries `bg-primary text-white`, and appending `bg-transparent text-ink` did
@@ -388,7 +389,7 @@ function ActionButton({
 }): React.ReactElement {
   return (
     <Button
-      variant="secondary"
+      variant="outline"
       type="button"
       onClick={onClick}
       disabled={disabled}

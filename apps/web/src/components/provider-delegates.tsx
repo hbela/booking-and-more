@@ -16,8 +16,8 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
 import { Card } from "./ui/card";
-import { ErrorText, Field, TextField } from "./ui/field";
-import { Select } from "./ui/input";
+import { ErrorText, FormField, TextField } from "./ui/form-field";
+import { NativeSelect } from "./ui/native-select";
 import { DataTable, RowButton, Td, Th } from "./ui/table";
 
 const SCOPES: DelegationScope[] = ["AVAILABILITY", "BOOKINGS"];
@@ -216,7 +216,7 @@ export function ProviderDelegates({
           {canManage && mode === "idle" ? (
             <>
               <Button
-                variant="secondary"
+                variant="outline"
                 onClick={() => {
                   setMode("assign");
                   setError(null);
@@ -226,7 +226,7 @@ export function ProviderDelegates({
                 {t("delegateAdd")}
               </Button>
               <Button
-                variant="secondary"
+                variant="outline"
                 onClick={() => {
                   setMode("invite");
                   setError(null);
@@ -240,7 +240,7 @@ export function ProviderDelegates({
           {/* Only as a row panel. Inline on the availability screen there is
               nothing to close — the panel is the page. */}
           {onClose === undefined ? null : (
-            <Button variant="secondary" onClick={onClose}>
+            <Button variant="outline" onClick={onClose}>
               {t("delegateClose")}
             </Button>
           )}
@@ -349,8 +349,8 @@ export function ProviderDelegates({
         <div className="flex flex-col gap-3">
           {mode === "assign" ? (
             <>
-              <Field id="delegate-candidate" label={t("delegateChoose")}>
-                <Select
+              <FormField id="delegate-candidate" label={t("delegateChoose")}>
+                <NativeSelect
                   id="delegate-candidate"
                   value={candidateId}
                   onChange={(event) => {
@@ -364,8 +364,8 @@ export function ProviderDelegates({
                       {entry.name} ({entry.email})
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </NativeSelect>
+              </FormField>
 
               {candidates.isSuccess && available.length === 0 ? (
                 <Callout tone="action">{t("delegateNoCandidates")}</Callout>
@@ -430,7 +430,7 @@ export function ProviderDelegates({
             >
               {mode === "assign" ? t("delegateGrant") : t("delegateSendInvite")}
             </Button>
-            <Button variant="secondary" onClick={reset}>
+            <Button variant="outline" onClick={reset}>
               {t("delegateCancel")}
             </Button>
           </div>

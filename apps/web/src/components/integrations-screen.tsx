@@ -20,8 +20,8 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 
 interface IntegrationsResponse {
@@ -201,8 +201,8 @@ export function IntegrationsScreen(): React.ReactElement {
             {/* An owner picks whose diary; a provider has only their own and is
                 not asked. */}
             {ownProviderId === null && canManageProviders ? (
-              <Field id="integration-provider" label={t("connectFor")}>
-                <Select
+              <FormField id="integration-provider" label={t("connectFor")}>
+                <NativeSelect
                   id="integration-provider"
                   value={connectFor}
                   onChange={(event) => {
@@ -214,8 +214,8 @@ export function IntegrationsScreen(): React.ReactElement {
                       {provider.displayName}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </NativeSelect>
+              </FormField>
             ) : null}
 
             <Button
@@ -279,7 +279,7 @@ export function IntegrationsScreen(): React.ReactElement {
                       {(calendars.data?.items ?? []).map((calendar) => (
                         <li key={calendar.id} className="flex flex-wrap items-center gap-2">
                           <Button
-                            variant={calendar.selected ? "secondary" : "primary"}
+                            variant={calendar.selected ? "outline" : "default"}
                             size="sm"
                             disabled={select.isPending}
                             onClick={() => {
@@ -318,7 +318,7 @@ export function IntegrationsScreen(): React.ReactElement {
             <div className="flex flex-wrap gap-2">
               {integration.status === "ACTIVE" && picking !== integration.id ? (
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={() => {
                     setError(null);
@@ -333,7 +333,7 @@ export function IntegrationsScreen(): React.ReactElement {
                   work — see `canRetry`. */}
               {canRetry(health) ? (
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   disabled={retry.isPending}
                   onClick={() => {
@@ -347,7 +347,7 @@ export function IntegrationsScreen(): React.ReactElement {
 
               {integration.status !== "DISCONNECTED" ? (
                 <Button
-                  variant="danger"
+                  variant="destructive"
                   size="sm"
                   disabled={disconnect.isPending}
                   onClick={() => {

@@ -8,8 +8,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText } from "./ui/field";
-import { Input, Select, Textarea } from "./ui/input";
+import { ErrorText } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
+import { Textarea } from "./ui/textarea";
 
 const LANGUAGES = ["hu", "en", "de", "fr"] as const;
 const LANGUAGE_LABELS = { hu: "hungarian", en: "english", de: "german", fr: "french" } as const;
@@ -190,13 +192,13 @@ export function BusinessKnowledge({
           >
             <label>
               {t("language")}
-              <Select name="locale" defaultValue={locale}>
+              <NativeSelect name="locale" defaultValue={locale}>
                 {LANGUAGES.map((language) => (
                   <option key={language} value={language}>
                     {t(LANGUAGE_LABELS[language])}
                   </option>
                 ))}
-              </Select>
+              </NativeSelect>
             </label>
             <label>
               {t("question")}

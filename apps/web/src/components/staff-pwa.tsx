@@ -162,7 +162,7 @@ export function InstallApp({
   return (
     <div className="flex flex-col items-start gap-2">
       <Button
-        variant="secondary"
+        variant="outline"
         disabled={busy}
         onClick={() => void install()}
         aria-expanded={help}

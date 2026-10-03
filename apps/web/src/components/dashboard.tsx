@@ -6,10 +6,11 @@ import { useTranslations } from "next-intl";
 import { ApiError, apiFetch, type Member, type Paginated, type Provider } from "@/lib/api-client";
 import { resolveDiaryState } from "@/lib/member-diary";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
-import { Button, ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
 import { BusinessKnowledge } from "./business-knowledge";
@@ -251,7 +252,9 @@ function PendingPanel({
         <p className="text-sm text-ink-muted">{t("daysRemaining", { days: daysRemaining })}</p>
       )}
 
-      <ButtonLink href="/dashboard/subscription">{t("subscribeCta")}</ButtonLink>
+      <Button asChild>
+        <Link href="/dashboard/subscription">{t("subscribeCta")}</Link>
+      </Button>
     </Card>
   );
 }
@@ -275,7 +278,9 @@ function PlatformAdminPanel(): React.ReactElement {
     <Card title={t("platformAdminTitle")}>
       <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
 
-      <ButtonLink href="/admin">{t("platformAdminLink")}</ButtonLink>
+      <Button asChild>
+        <Link href="/admin">{t("platformAdminLink")}</Link>
+      </Button>
     </Card>
   );
 }
@@ -306,7 +311,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
           mutation.mutate();
         }}
       >
-        <Field id="tenant-name" label={t("name")}>
+        <FormField id="tenant-name" label={t("name")}>
           <Input
             id="tenant-name"
             value={name}
@@ -325,9 +330,9 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
             }}
             required
           />
-        </Field>
+        </FormField>
 
-        <Field id="tenant-slug" label={t("slug")}>
+        <FormField id="tenant-slug" label={t("slug")}>
           <Input
             id="tenant-slug"
             value={slug}
@@ -337,7 +342,7 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
             required
             className="font-mono"
           />
-        </Field>
+        </FormField>
 
         <ErrorText>{error}</ErrorText>
 
@@ -470,7 +475,7 @@ function MemberDiary({
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-2">
         <span className="sr-only">{t("linkDiary")}</span>
-        <Select
+        <NativeSelect
           defaultValue=""
           disabled={link.isPending}
           onChange={(event) => {
@@ -485,7 +490,7 @@ function MemberDiary({
               {provider.displayName}
             </option>
           ))}
-        </Select>
+        </NativeSelect>
       </label>
       {available.length === 0 && !optional ? (
         <span className="text-xs text-ink-subtle">{t("noDiaryToLink")}</span>

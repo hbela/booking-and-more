@@ -2,11 +2,11 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signOut } from "@/lib/auth-client";
 import { LocaleSwitcher } from "./locale-switcher";
-import { Button, ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
 import { ThemeToggle } from "./ui/theme-toggle";
 
 /**
@@ -45,7 +45,7 @@ export function AuthHeader({ signOutTo }: { signOutTo: string }): React.ReactEle
           reader was aiming at. */}
       {me.isPending ? null : me.data ? (
         <Button
-          variant="secondary"
+          variant="outline"
           size="sm"
           onClick={() => {
             void signOut().then(() => {
@@ -59,9 +59,9 @@ export function AuthHeader({ signOutTo }: { signOutTo: string }): React.ReactEle
           {dashboard("signOut")}
         </Button>
       ) : (
-        <ButtonLink href="/sign-in" variant="secondary" size="sm">
-          {auth("signIn")}
-        </ButtonLink>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/sign-in">{auth("signIn")}</Link>
+        </Button>
       )}
     </div>
   );

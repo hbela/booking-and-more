@@ -25,8 +25,9 @@ import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Textarea } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
 
@@ -425,7 +426,7 @@ function EditServicePanel({
           <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>
@@ -530,7 +531,7 @@ function TranslationsPanel({
 
           return (
             <div key={locale} className="flex flex-col gap-2">
-              <Field id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
+              <FormField id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
                 <Input
                   id={`name-${locale}`}
                   name={`name-${locale}`}
@@ -538,9 +539,9 @@ function TranslationsPanel({
                   placeholder={service.name}
                   disabled={locked}
                 />
-              </Field>
+              </FormField>
 
-              <Field
+              <FormField
                 id={`description-${locale}`}
                 label={`${locale.toUpperCase()} — ${t("description")}`}
                 hint={t("serviceDescriptionHint")}
@@ -555,7 +556,7 @@ function TranslationsPanel({
                   }
                   disabled={locked}
                 />
-              </Field>
+              </FormField>
             </div>
           );
         })}
@@ -567,7 +568,7 @@ function TranslationsPanel({
           <Button type="submit" disabled={save.isPending}>
             {t("save")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>

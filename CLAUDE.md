@@ -193,7 +193,14 @@ again and why the dark block is deliberately duplicated; §2.5 is why redefining
 than replacing it is what lets the migration land one screen at a time. **§2.6 lists what must not be
 "improved"** — five accessibility decisions with written rationale that a redesign is exactly the moment to
 reverse by accident. Google Stitch is used as the visual specification and **its generated HTML is never
-shipped** (§2.1).
+shipped** (§2.1) ·
+[Phase 11 — shadcn/ui adoption](docs/phase-11-shadcn-adoption.md) (**in progress**). `components/ui/` is
+moving onto shadcn components one family at a time. **Never run `shadcn init`** — it rewrites
+`globals.css`; shadcn's variable names are a `:root` alias layer onto the phase-11 tokens (§2.1), and a
+test fails if one becomes a second palette. The booking-page ramp is now **`booking-*`, not `accent-*`**,
+because shadcn owns `accent` (§2.2). §2.4 is the checklist every `shadcn add` gets reviewed against —
+focus ring, 44px targets, `type="button"`, locale `Link` — and §3.3 is why every `add` needs `from "cn"` rewritten to `@/lib/utils` and its `package.json` diff read (the CLI once installed an unrelated npm package called `cn`) — and §2.6 of phase 11 still stands: native
+selects, no edit dialogs.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

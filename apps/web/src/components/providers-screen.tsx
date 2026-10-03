@@ -42,8 +42,9 @@ import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Callout, CalloutLink } from "./ui/callout";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 import { RowButton, RowLink } from "./ui/table";
 
@@ -627,7 +628,7 @@ function InvitePanel({
             </div>
           </details>
 
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             {t("close")}
           </Button>
         </div>
@@ -656,7 +657,7 @@ function InvitePanel({
             <Button type="submit" disabled={send.isPending}>
               {alreadyInvited ? t("reinvite") : t("sendInvitation")}
             </Button>
-            <Button variant="secondary" type="button" onClick={onClose}>
+            <Button variant="outline" type="button" onClick={onClose}>
               {t("cancel")}
             </Button>
           </div>
@@ -891,8 +892,8 @@ function CreateProviderPanel({
             base location" is a state an owner may want to return to. */}
         {locations && locations.length > 0 ? (
           <>
-            <Field id="new-provider-location" label={t("defaultLocation")}>
-              <Select
+            <FormField id="new-provider-location" label={t("defaultLocation")}>
+              <NativeSelect
                 id="new-provider-location"
                 value={defaultLocationId}
                 onChange={(event) => {
@@ -905,8 +906,8 @@ function CreateProviderPanel({
                     {location.name}
                   </option>
                 ))}
-              </Select>
-            </Field>
+              </NativeSelect>
+            </FormField>
             <p className="text-xs text-ink-subtle">{t("defaultLocationHint")}</p>
           </>
         ) : null}
@@ -980,7 +981,7 @@ function EditProviderPanel({
           <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>
@@ -1232,7 +1233,7 @@ function AssignmentsPanel({
             <Button type="submit" disabled={save.isPending}>
               {t("save")}
             </Button>
-            <Button variant="secondary" type="button" onClick={onClose}>
+            <Button variant="outline" type="button" onClick={onClose}>
               {t("cancel")}
             </Button>
           </div>
@@ -1281,7 +1282,7 @@ function ServiceOverrides({
       <summary className="cursor-pointer text-xs text-ink-muted">{t("customise")}</summary>
 
       <div className="mt-2 flex flex-col gap-2 border-l border-line pl-3">
-        <Field id={`duration-${service.id}`} label={t("customDuration")}>
+        <FormField id={`duration-${service.id}`} label={t("customDuration")}>
           <Input
             id={`duration-${service.id}`}
             type="number"
@@ -1295,7 +1296,7 @@ function ServiceOverrides({
             placeholder={String(service.durationMinutes)}
             className="w-32"
           />
-        </Field>
+        </FormField>
         <p className="text-xs text-ink-subtle">
           {t("inheritsDuration", { count: service.durationMinutes })}
         </p>
@@ -1304,7 +1305,7 @@ function ServiceOverrides({
           <p className="text-xs text-ink-subtle">{t("priceOverrideNeedsBasePrice")}</p>
         ) : (
           <>
-            <Field id={`price-${service.id}`} label={`${t("customPrice")} (${currency})`}>
+            <FormField id={`price-${service.id}`} label={`${t("customPrice")} (${currency})`}>
               <Input
                 id={`price-${service.id}`}
                 type="number"
@@ -1323,7 +1324,7 @@ function ServiceOverrides({
                 }}
                 className="w-32"
               />
-            </Field>
+            </FormField>
             <p className="text-xs text-ink-subtle">
               {t("inheritsPrice", { price: formatMoney(service.priceMinor, currency, locale) })}
             </p>

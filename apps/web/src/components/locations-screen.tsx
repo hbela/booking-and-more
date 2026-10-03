@@ -16,7 +16,7 @@ import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText } from "./ui/field";
+import { ErrorText } from "./ui/form-field";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
 
@@ -309,7 +309,7 @@ function EditLocationPanel({
           <Button type="submit" disabled={save.isPending}>
             {t("saveChanges")}
           </Button>
-          <Button variant="secondary" type="button" onClick={onClose}>
+          <Button variant="outline" type="button" onClick={onClose}>
             {t("cancel")}
           </Button>
         </div>

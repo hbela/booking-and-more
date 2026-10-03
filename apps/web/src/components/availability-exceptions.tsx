@@ -17,8 +17,9 @@ import { formatInZone, resolveInZone, toLocalInputValue } from "@/lib/exception-
 import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 import { RowButton } from "./ui/table";
 
 /** How far ahead the list looks by default, matching the API's own default. */
@@ -167,7 +168,7 @@ export function AvailabilityExceptions({
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
-        <Field id="exception-range-from" label={t("rangeFrom")}>
+        <FormField id="exception-range-from" label={t("rangeFrom")}>
           <Input
             id="exception-range-from"
             type="date"
@@ -176,8 +177,8 @@ export function AvailabilityExceptions({
               setFrom(event.target.value);
             }}
           />
-        </Field>
-        <Field id="exception-range-to" label={t("rangeTo")}>
+        </FormField>
+        <FormField id="exception-range-to" label={t("rangeTo")}>
           <Input
             id="exception-range-to"
             type="date"
@@ -186,7 +187,7 @@ export function AvailabilityExceptions({
               setTo(event.target.value);
             }}
           />
-        </Field>
+        </FormField>
       </div>
 
       {(exceptions.data?.items.length ?? 0) === 0 ? (
@@ -268,8 +269,8 @@ export function AvailabilityExceptions({
         <h3 className="text-sm font-medium">{draft.id === null ? t("add") : t("editException")}</h3>
 
         <div className="flex flex-wrap items-end gap-3">
-          <Field id="exception-type" label={t("type.label")}>
-            <Select
+          <FormField id="exception-type" label={t("type.label")}>
+            <NativeSelect
               id="exception-type"
               value={draft.type}
               onChange={(event) => {
@@ -278,10 +279,10 @@ export function AvailabilityExceptions({
             >
               <option value="UNAVAILABLE">{t("type.UNAVAILABLE")}</option>
               <option value="ADDITIONAL_AVAILABILITY">{t("type.ADDITIONAL_AVAILABILITY")}</option>
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
 
-          <Field id="exception-start" label={t("from")}>
+          <FormField id="exception-start" label={t("from")}>
             <Input
               id="exception-start"
               type="datetime-local"
@@ -291,9 +292,9 @@ export function AvailabilityExceptions({
               }}
               required
             />
-          </Field>
+          </FormField>
 
-          <Field id="exception-end" label={t("to")}>
+          <FormField id="exception-end" label={t("to")}>
             <Input
               id="exception-end"
               type="datetime-local"
@@ -303,12 +304,12 @@ export function AvailabilityExceptions({
               }}
               required
             />
-          </Field>
+          </FormField>
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <Field id="exception-location" label={t("location")}>
-            <Select
+          <FormField id="exception-location" label={t("location")}>
+            <NativeSelect
               id="exception-location"
               value={draft.locationId}
               onChange={(event) => {
@@ -321,11 +322,11 @@ export function AvailabilityExceptions({
                   {location.locationName}
                 </option>
               ))}
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
 
-          <Field id="exception-service" label={t("service")}>
-            <Select
+          <FormField id="exception-service" label={t("service")}>
+            <NativeSelect
               id="exception-service"
               value={draft.serviceId}
               onChange={(event) => {
@@ -338,10 +339,10 @@ export function AvailabilityExceptions({
                   {service.serviceName}
                 </option>
               ))}
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
 
-          <Field id="exception-reason" label={t("reason")}>
+          <FormField id="exception-reason" label={t("reason")}>
             <Input
               id="exception-reason"
               value={draft.reason}
@@ -349,7 +350,7 @@ export function AvailabilityExceptions({
                 setDraft((current) => ({ ...current, reason: event.target.value }));
               }}
             />
-          </Field>
+          </FormField>
         </div>
 
         {/* Before the request, not after. A reading the clocks jumped over is
@@ -366,7 +367,7 @@ export function AvailabilityExceptions({
           </Button>
           {draft.id === null ? null : (
             <Button
-              variant="secondary"
+              variant="outline"
               type="button"
               onClick={() => {
                 setDraft(emptyDraft());

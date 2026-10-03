@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api-client";
 import { tenantAppPaths, type AppAudience, type AppLocale } from "@/lib/tenant-pwa";
 import { Brand } from "./brand";
 import { InstallApp } from "./staff-pwa";
-import { buttonRecipe } from "./ui/button";
+import { buttonVariants } from "./ui/button";
 import { LocaleSwitcher } from "./locale-switcher";
 
 export function TenantAppInstall({
@@ -64,7 +64,7 @@ export function TenantAppInstall({
           {/* Full navigation avoids carrying an install prompt from a different manifest. */}
           <a
             href={tenantAppPaths(tenantSlug, audience, locale).launch}
-            className={buttonRecipe({ variant: "secondary" })}
+            className={buttonVariants({ variant: "outline" })}
           >
             {t("continue")}
           </a>

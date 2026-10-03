@@ -7,9 +7,9 @@ import { SUBSCRIPTION_OFFERS, isLiveSubscription, type SubscribablePlan } from "
 import { ApiError, apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
-import { Button, buttonRecipe } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText } from "./ui/field";
+import { ErrorText } from "./ui/form-field";
 
 type Plan = SubscribablePlan;
 
@@ -243,14 +243,15 @@ export function SubscriptionScreen(): React.ReactElement {
         ) : sent ? (
           <>
             <p role="status">{t("paymentLinkSent", { email: sent.emailedTo })}</p>
-            {/* A real <a>, not ButtonLink: this leaves the app for Stripe's
-                hosted page, so it must not go through the locale-aware router.
-                The recipe gives it the button's styling without its element. */}
+            {/* A real <a>, not `Button asChild` around a locale `Link`: this
+                leaves the app for Stripe's hosted page, so it must not go
+                through the locale-aware router. `buttonVariants` gives it the
+                button's styling without its element. */}
             <a
               href={sent.paymentUrl}
               target="_blank"
               rel="noreferrer noopener"
-              className={buttonRecipe()}
+              className={buttonVariants()}
             >
               {sent.trial ? t("goToTrial") : t("goToPayment")}
             </a>

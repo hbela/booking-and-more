@@ -18,8 +18,8 @@ import { WorkingHoursEditor } from "./working-hours-editor";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
 import { Callout, CalloutLink } from "./ui/callout";
-import { Field } from "./ui/field";
-import { Select } from "./ui/input";
+import { FormField } from "./ui/form-field";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 
 /**
@@ -170,8 +170,8 @@ export function AvailabilityScreen(): React.ReactElement {
         <>
           {canSelectProvider && options.length > 0 ? (
             <Section title={t("title")}>
-              <Field id="availability-provider" label={t("provider")}>
-                <Select
+              <FormField id="availability-provider" label={t("provider")}>
+                <NativeSelect
                   id="availability-provider"
                   value={providerId}
                   onChange={(event) => {
@@ -184,8 +184,8 @@ export function AvailabilityScreen(): React.ReactElement {
                       {entry.displayName}
                     </option>
                   ))}
-                </Select>
-              </Field>
+                </NativeSelect>
+              </FormField>
             </Section>
           ) : null}
 

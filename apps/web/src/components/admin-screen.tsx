@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { AdminShell } from "./admin-shell";
-import { ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
+import { Link } from "@/i18n/navigation";
 import { Card } from "./ui/card";
 
 /**
@@ -35,7 +36,9 @@ export function AdminScreen(): React.ReactElement {
       return (
         <Card title={t("signedOutTitle")}>
           <p className="text-sm text-ink-muted">{t("signedOutHint")}</p>
-          <ButtonLink href="/sign-in">{t("signedOutLink")}</ButtonLink>
+          <Button asChild>
+            <Link href="/sign-in">{t("signedOutLink")}</Link>
+          </Button>
         </Card>
       );
     }
@@ -46,7 +49,9 @@ export function AdminScreen(): React.ReactElement {
       return (
         <Card title={t("notAdminTitle")}>
           <p className="text-sm text-ink-muted">{t("notAdminHint")}</p>
-          <ButtonLink href="/dashboard">{t("notAdminLink")}</ButtonLink>
+          <Button asChild>
+            <Link href="/dashboard">{t("notAdminLink")}</Link>
+          </Button>
         </Card>
       );
     }
@@ -54,7 +59,9 @@ export function AdminScreen(): React.ReactElement {
     return (
       <Card title={t("platformAdminTitle")}>
         <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
-        <ButtonLink href="/admin/platform">{t("platformAdminLink")}</ButtonLink>
+        <Button asChild>
+          <Link href="/admin/platform">{t("platformAdminLink")}</Link>
+        </Button>
       </Card>
     );
   }

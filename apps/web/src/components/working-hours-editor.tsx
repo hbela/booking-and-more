@@ -28,8 +28,9 @@ import { useDashboardContext } from "./dashboard-shell";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 
 /**
  * "Last changed by Réka, 10 minutes ago."
@@ -261,7 +262,7 @@ export function WorkingHoursEditor({
             </span>
             <span className="text-xs">{t("scheduleMovedHint")}</span>
             <Button
-              variant="secondary"
+              variant="outline"
               type="button"
               onClick={() => {
                 setConflict(null);
@@ -434,8 +435,8 @@ function PeriodRow({
         <summary className="cursor-pointer text-xs text-ink-muted">{t("periodOptions")}</summary>
 
         <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
-          <Field id="period-location" label={t("location")}>
-            <Select
+          <FormField id="period-location" label={t("location")}>
+            <NativeSelect
               value={period.locationId ?? ""}
               onChange={(event) => {
                 onChange({ locationId: event.target.value === "" ? null : event.target.value });
@@ -447,13 +448,13 @@ function PeriodRow({
                   {location.locationName}
                 </option>
               ))}
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
 
           {/* Date-only, and it stays a string all the way to the wire: the
               server reads it as midnight UTC, so a value carrying a local
               offset lands a day out everywhere east of Greenwich. */}
-          <Field id="period-valid-from" label={t("validFrom")}>
+          <FormField id="period-valid-from" label={t("validFrom")}>
             <Input
               type="date"
               value={period.validFrom ?? ""}
@@ -461,9 +462,9 @@ function PeriodRow({
                 onChange({ validFrom: event.target.value === "" ? null : event.target.value });
               }}
             />
-          </Field>
+          </FormField>
 
-          <Field id="period-valid-until" label={t("validUntil")}>
+          <FormField id="period-valid-until" label={t("validUntil")}>
             <Input
               type="date"
               value={period.validUntil ?? ""}
@@ -471,7 +472,7 @@ function PeriodRow({
                 onChange({ validUntil: event.target.value === "" ? null : event.target.value });
               }}
             />
-          </Field>
+          </FormField>
 
           <label className="flex items-center gap-2 self-end text-sm">
             <input

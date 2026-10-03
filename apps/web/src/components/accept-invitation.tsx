@@ -9,7 +9,7 @@ import { signOut, useSession } from "@/lib/auth-client";
 import { AuthForm, Field } from "./auth-form";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
-import { ErrorText } from "./ui/field";
+import { ErrorText } from "./ui/form-field";
 
 interface InvitationDetails {
   organizationName: string;

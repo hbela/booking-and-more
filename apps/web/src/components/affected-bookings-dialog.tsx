@@ -110,7 +110,7 @@ export function AffectedBookingsDialog({
       <p className="text-sm text-ink-muted">{t("affectedNoNotice")}</p>
 
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Button variant="secondary" onClick={onCancel} disabled={busy}>
+        <Button variant="outline" onClick={onCancel} disabled={busy}>
           {t("affectedCancel")}
         </Button>
         <Button onClick={onConfirm} disabled={busy}>

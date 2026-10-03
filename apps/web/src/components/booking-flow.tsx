@@ -36,7 +36,7 @@ import type { DateOnly } from "@bam/availability-engine";
 import { BookingCalendar } from "./booking-calendar";
 import { ServiceDescription } from "./service-description";
 import { LocaleSwitcher } from "./locale-switcher";
-import { ErrorText } from "./ui/field";
+import { ErrorText } from "./ui/form-field";
 import { ThemeToggle } from "./ui/theme-toggle";
 import { Brand } from "./brand";
 import { ArrowRight, CalendarDays, Check, Clock3 } from "lucide-react";
@@ -426,7 +426,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
   if (tenant.isError) return <p className="p-8">{t("notFound")}</p>;
 
   return (
-    // Everything below styles itself with `accent-*`, never `brand-*`: this is
+    // Everything below styles itself with `booking-*`, never `brand-*`: this is
     // the one screen that belongs to the tenant rather than to us, and
     // `book/page.tsx` wraps it in the element that will one day carry their
     // colour (phase-11 §2.2).
@@ -436,7 +436,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
       </div>
       <header className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-accent-surface text-on-accent-surface">
+          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-xl bg-booking-surface text-on-booking-surface">
             <CalendarDays size={24} aria-hidden="true" />
           </div>
           <h1 className="font-display text-ink text-3xl font-bold tracking-tight sm:text-4xl">
@@ -463,7 +463,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
 
       <Steps current={step} />
       {service && step !== "service" && step !== "success" ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-surface px-6 py-4 text-on-accent-surface">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-booking-surface px-6 py-4 text-on-booking-surface">
           <span className="font-semibold">{service.name}</span>
           <span className="flex items-center gap-2 text-sm tabular-nums">
             <Clock3 size={16} aria-hidden="true" />
@@ -487,11 +487,11 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(null);
                     setStep("provider");
                   }}
-                  className="hover:bg-accent-surface w-full rounded-xl p-5 text-left transition-colors"
+                  className="hover:bg-booking-surface w-full rounded-xl p-5 text-left transition-colors"
                 >
                   <span className="flex items-center justify-between gap-4 font-semibold">
                     {item.name}
-                    <ArrowRight size={18} aria-hidden="true" className="shrink-0 text-accent" />
+                    <ArrowRight size={18} aria-hidden="true" className="shrink-0 text-booking" />
                   </span>
                   <span className="text-ink-muted mt-2 block text-sm">
                     {t("minutes", { count: item.durationMinutes })}
@@ -523,7 +523,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                   setProviderId(null);
                   setStep("time");
                 }}
-                className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
+                className="border-line-strong hover:border-booking hover:bg-booking-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
               >
                 <span className="font-medium">{t("anyProvider")}</span>
               </button>
@@ -536,7 +536,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                     setProviderId(item.id);
                     setStep("time");
                   }}
-                  className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
+                  className="border-line-strong hover:border-booking hover:bg-booking-surface min-h-16 w-full rounded-xl border p-5 text-left transition-colors"
                 >
                   <span className="font-medium">{item.displayName}</span>
                   {item.description ? (
@@ -593,7 +593,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
                           type="button"
                           disabled={takeHold.isPending}
                           onClick={() => takeHold.mutate(slot)}
-                          className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 w-full rounded-full border px-3 py-2 text-sm transition-colors disabled:opacity-60"
+                          className="border-line-strong hover:border-booking hover:bg-booking-surface min-h-11 w-full rounded-full border px-3 py-2 text-sm transition-colors disabled:opacity-60"
                         >
                           <time dateTime={slot.startAt}>{formatTime(slot.startAt, locale)}</time>
                         </button>
@@ -675,7 +675,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
           <p className="text-sm">
             {t("manageHint")}{" "}
             <a
-              className="text-accent font-medium underline underline-offset-2"
+              className="text-booking font-medium underline underline-offset-2"
               href={`/booking/manage/${encodeURIComponent(currentBooking.managementToken)}`}
             >
               {t("manageLink")}
@@ -727,7 +727,7 @@ function NextAvailable({
       <button
         type="button"
         onClick={() => onPick(day.date)}
-        className="border-line-strong hover:border-accent hover:bg-accent-surface min-h-11 self-start rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+        className="border-line-strong hover:border-booking hover:bg-booking-surface min-h-11 self-start rounded-lg border px-3 py-2 text-left text-sm transition-colors"
       >
         <span className="block font-medium">{formatDay(day.date, locale, today)}</span>
         <span className="text-ink-muted block text-xs">
@@ -820,7 +820,7 @@ function DetailsStep({
         <button
           type="submit"
           disabled={pending || remaining <= 0 || fullName.trim() === "" || contactMissing}
-          className="bg-accent text-on-accent hover:bg-accent-hover min-h-11 w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          className="bg-booking text-on-booking hover:bg-booking-hover min-h-11 w-full rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? t("confirming") : t("confirm")}
         </button>
@@ -940,8 +940,8 @@ function Steps({ current }: { current: Step }): React.ReactElement {
                 aria-hidden="true"
                 className={cn(
                   "flex size-9 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                  done && "bg-accent border-accent text-on-accent",
-                  currentStep && "border-accent text-accent border-2",
+                  done && "bg-booking border-booking text-on-booking",
+                  currentStep && "border-booking text-booking border-2",
                   !done && !currentStep && "border-line-strong text-ink-subtle",
                 )}
               >
@@ -1001,7 +1001,7 @@ function BackButton({
     <button
       type="button"
       onClick={onClick}
-      className="text-accent hover:text-accent-hover inline-flex min-h-11 items-center self-start text-sm font-medium underline underline-offset-2"
+      className="text-booking hover:text-booking-hover inline-flex min-h-11 items-center self-start text-sm font-medium underline underline-offset-2"
     >
       {label}
     </button>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
 import { tenantQrTarget } from "@/lib/tenant-pwa";
 import { Section } from "./ui/section";
-import { buttonRecipe } from "./ui/button";
+import { buttonVariants } from "./ui/button";
 
 export function PatientQrCodes({ slug, assistant }: { slug: string; assistant: boolean }) {
   const t = useTranslations("patientQr");
@@ -31,7 +31,7 @@ export function PatientQrCodes({ slug, assistant }: { slug: string; assistant: b
               <a
                 href={qr}
                 download={`${slug}-${destination}-${locale}.svg`}
-                className={buttonRecipe({ variant: "secondary" })}
+                className={buttonVariants({ variant: "outline" })}
               >
                 {t("download", { destination: t(destination) })}
               </a>

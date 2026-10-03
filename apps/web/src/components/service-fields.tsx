@@ -9,8 +9,10 @@ import {
   DEFAULT_MAXIMUM_ADVANCE_DAYS,
   type FormMode,
 } from "@/lib/catalogue-form";
-import { Field } from "./ui/field";
-import { Input, Select, Textarea } from "./ui/input";
+import { FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
+import { Textarea } from "./ui/textarea";
 
 /** What the currency picker offers. The API accepts any ISO 4217 code. */
 const CURRENCIES = ["HUF", "EUR", "USD", "GBP"] as const;
@@ -102,7 +104,7 @@ export function ServiceFields({
 
   return (
     <>
-      <Field id={`${idPrefix}-name`} label={t("name")}>
+      <FormField id={`${idPrefix}-name`} label={t("name")}>
         <Input
           id={`${idPrefix}-name`}
           value={state.name}
@@ -113,9 +115,9 @@ export function ServiceFields({
           minLength={2}
           maxLength={160}
         />
-      </Field>
+      </FormField>
 
-      <Field id={`${idPrefix}-slug`} label={t("slug")}>
+      <FormField id={`${idPrefix}-slug`} label={t("slug")}>
         <Input
           id={`${idPrefix}-slug`}
           value={state.slug}
@@ -124,10 +126,10 @@ export function ServiceFields({
           }}
           pattern="[a-z0-9]+(-[a-z0-9]+)*"
         />
-      </Field>
+      </FormField>
       <p className="text-xs text-ink-subtle">{t("slugHint")}</p>
 
-      <Field
+      <FormField
         id={`${idPrefix}-description`}
         label={t("description")}
         hint={t("serviceDescriptionHint")}
@@ -141,10 +143,10 @@ export function ServiceFields({
           }}
           rows={3}
         />
-      </Field>
+      </FormField>
 
       <div className="flex flex-wrap gap-3">
-        <Field id={`${idPrefix}-duration`} label={t("durationMinutes")}>
+        <FormField id={`${idPrefix}-duration`} label={t("durationMinutes")}>
           <Input
             id={`${idPrefix}-duration`}
             type="number"
@@ -158,9 +160,9 @@ export function ServiceFields({
             required
             className="w-32"
           />
-        </Field>
+        </FormField>
 
-        <Field id={`${idPrefix}-buffer-before`} label={t("bufferBefore")}>
+        <FormField id={`${idPrefix}-buffer-before`} label={t("bufferBefore")}>
           <Input
             id={`${idPrefix}-buffer-before`}
             type="number"
@@ -173,9 +175,9 @@ export function ServiceFields({
             }}
             className="w-32"
           />
-        </Field>
+        </FormField>
 
-        <Field id={`${idPrefix}-buffer-after`} label={t("bufferAfter")}>
+        <FormField id={`${idPrefix}-buffer-after`} label={t("bufferAfter")}>
           <Input
             id={`${idPrefix}-buffer-after`}
             type="number"
@@ -188,12 +190,12 @@ export function ServiceFields({
             }}
             className="w-32"
           />
-        </Field>
+        </FormField>
       </div>
       <p className="text-xs text-ink-subtle">{t("bufferHint")}</p>
 
       <div className="flex flex-wrap gap-3">
-        <Field id={`${idPrefix}-price`} label={t("priceOptional")}>
+        <FormField id={`${idPrefix}-price`} label={t("priceOptional")}>
           <Input
             id={`${idPrefix}-price`}
             type="number"
@@ -205,10 +207,10 @@ export function ServiceFields({
             }}
             className="w-40"
           />
-        </Field>
+        </FormField>
 
-        <Field id={`${idPrefix}-currency`} label={t("currency")}>
-          <Select
+        <FormField id={`${idPrefix}-currency`} label={t("currency")}>
+          <NativeSelect
             id={`${idPrefix}-currency`}
             value={state.currency}
             onChange={(event) => {
@@ -220,12 +222,12 @@ export function ServiceFields({
                 {code}
               </option>
             ))}
-          </Select>
-        </Field>
+          </NativeSelect>
+        </FormField>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Field id={`${idPrefix}-notice`} label={t("minimumNotice")}>
+        <FormField id={`${idPrefix}-notice`} label={t("minimumNotice")}>
           <Input
             id={`${idPrefix}-notice`}
             type="number"
@@ -237,12 +239,12 @@ export function ServiceFields({
             }}
             className="w-40"
           />
-        </Field>
+        </FormField>
 
         {/* The horizon is spelled out live, because the number alone does not
             say what it does: `1` reads as a mild restriction and means today
             and tomorrow only. See `advanceNote`. */}
-        <Field
+        <FormField
           id={`${idPrefix}-advance`}
           label={t("maximumAdvance")}
           hint={advance.key === "advanceShort" ? undefined : t(advance.key, { days: advance.days })}
@@ -268,7 +270,7 @@ export function ServiceFields({
               {t("advanceShort", { days: advance.days })}
             </p>
           ) : null}
-        </Field>
+        </FormField>
       </div>
       {/* Blank is not zero here: blank inherits, zero means "up to the last
           second". The hint says so because the input cannot. */}

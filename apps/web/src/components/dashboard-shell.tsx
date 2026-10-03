@@ -12,6 +12,8 @@ import { navFor } from "@/lib/dashboard-nav";
 import { hasNoOrganization } from "@/lib/organization-state";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
+import { Button } from "./ui/button";
+import { NativeSelect } from "./ui/native-select";
 import { Brand } from "./brand";
 import { InstallApp } from "./staff-pwa";
 
@@ -165,7 +167,7 @@ export function DashboardShell({
                   permissions; showing the fallback here made the first business
                   look selected, and choosing it again fired no change, so there
                   was no way out but to pick another one and come back. */}
-              <select
+              <NativeSelect
                 id="tenant"
                 value={context.me?.tenant?.id ?? ""}
                 onChange={(event) => {
@@ -176,7 +178,7 @@ export function DashboardShell({
                     void queryClient.invalidateQueries();
                   });
                 }}
-                className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 py-2"
+                className="w-auto"
               >
                 {context.me?.tenant ? null : (
                   <option value="" disabled>
@@ -188,21 +190,20 @@ export function DashboardShell({
                     {tenant.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           ) : null}
 
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={() => {
               void signOut().then(() => {
                 router.push("/sign-in");
               });
             }}
-            className="min-h-11 rounded-lg border border-line-strong px-4 py-2 text-sm hover:bg-surface-raised"
           >
             {t("signOut")}
-          </button>
+          </Button>
         </div>
       </header>
 

@@ -17,7 +17,7 @@ import { twMerge } from "tailwind-merge";
  *                                        // wins, which is not the caller's
  * ```
  *
- * With `cn()`, `cn(inputRecipe(), "px-4")` drops the recipe's `px-*` and keeps
+ * With `cn()`, `cn(buttonVariants(), "px-4")` drops the recipe's `px-*` and keeps
  * `px-4`, so a component's own class always overrides the default it was given.
  * That is what makes a variant recipe safe to expose.
  */

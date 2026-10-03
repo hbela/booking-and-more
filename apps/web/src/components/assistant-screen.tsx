@@ -5,9 +5,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
-import { Button, ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
+import { Link } from "@/i18n/navigation";
 import { Card } from "./ui/card";
-import { ErrorText } from "./ui/field";
+import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { conversationListQuery } from "@/lib/conversation-list-query";
 
@@ -97,7 +98,9 @@ export function AssistantScreen(): React.ReactElement {
     return (
       <DashboardShell context={context}>
         <Card title={t("title")} description={t("planRequired")}>
-          <ButtonLink href="/dashboard/subscription">{t("viewSubscription")}</ButtonLink>
+          <Button asChild>
+            <Link href="/dashboard/subscription">{t("viewSubscription")}</Link>
+          </Button>
         </Card>
       </DashboardShell>
     );
@@ -172,7 +175,7 @@ export function AssistantScreen(): React.ReactElement {
               />
             </label>
             <Button
-              variant="secondary"
+              variant="outline"
               disabled={!date}
               onClick={() => {
                 setDate("");
@@ -232,7 +235,7 @@ export function AssistantScreen(): React.ReactElement {
           </div>
           <div className="mt-4 flex items-center gap-3">
             <Button
-              variant="secondary"
+              variant="outline"
               disabled={offset === 0 || conversations.isFetching}
               onClick={() => {
                 setOffset(offset - 25);
@@ -243,7 +246,7 @@ export function AssistantScreen(): React.ReactElement {
             </Button>
             <span className="text-sm">{t("page", { number: offset / 25 + 1 })}</span>
             <Button
-              variant="secondary"
+              variant="outline"
               disabled={conversations.isFetching || (conversations.data?.items.length ?? 0) < 25}
               onClick={() => {
                 setOffset(offset + 25);

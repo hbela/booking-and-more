@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { NativeSelect } from "./native-select";
 import {
   THEME_PREFERENCE_COOKIE,
   THEME_PREFERENCE_MAX_AGE,
@@ -61,17 +62,17 @@ export function ThemeToggle(): React.ReactElement {
   return (
     <label className="flex flex-col gap-1 text-sm">
       <span className="text-ink-subtle">{t("theme")}</span>
-      <select
+      <NativeSelect
         value={choice}
         onChange={(event) => {
           apply(event.target.value as Choice);
         }}
-        className="border-line-strong text-ink min-h-11 rounded-lg border bg-surface px-3 py-2"
+        className="w-auto"
       >
         <option value="system">{t("themeSystem")}</option>
         <option value="light">{t("themeLight")}</option>
         <option value="dark">{t("themeDark")}</option>
-      </select>
+      </NativeSelect>
     </label>
   );
 }

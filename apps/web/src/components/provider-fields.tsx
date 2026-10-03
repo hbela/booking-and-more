@@ -11,8 +11,9 @@ import {
   textValue,
   type FormMode,
 } from "@/lib/catalogue-form";
-import { Field } from "./ui/field";
-import { Input, Textarea } from "./ui/input";
+import { FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 
 /**
  * One field set, used by both the create panel and the edit panel.
@@ -92,7 +93,7 @@ export function ProviderFields({
 
   return (
     <>
-      <Field id={`${idPrefix}-name`} label={t("name")}>
+      <FormField id={`${idPrefix}-name`} label={t("name")}>
         <Input
           id={`${idPrefix}-name`}
           value={state.displayName}
@@ -103,9 +104,9 @@ export function ProviderFields({
           minLength={2}
           maxLength={160}
         />
-      </Field>
+      </FormField>
 
-      <Field id={`${idPrefix}-description`} label={t("description")}>
+      <FormField id={`${idPrefix}-description`} label={t("description")}>
         <Textarea
           id={`${idPrefix}-description`}
           value={state.description}
@@ -115,13 +116,13 @@ export function ProviderFields({
           rows={3}
           maxLength={4000}
         />
-      </Field>
+      </FormField>
 
       <div className="flex flex-wrap gap-3">
         {/* Required. A provider is a diary rather than a login, so this address
             signs nobody in — it is how the person behind the diary is reached at
             all, including by the invitation that would later give them one. */}
-        <Field id={`${idPrefix}-email`} label={t("email")}>
+        <FormField id={`${idPrefix}-email`} label={t("email")}>
           <Input
             id={`${idPrefix}-email`}
             type="email"
@@ -131,9 +132,9 @@ export function ProviderFields({
             }}
             required
           />
-        </Field>
+        </FormField>
 
-        <Field id={`${idPrefix}-phone`} label={t("phone")}>
+        <FormField id={`${idPrefix}-phone`} label={t("phone")}>
           <Input
             id={`${idPrefix}-phone`}
             type="tel"
@@ -143,13 +144,13 @@ export function ProviderFields({
             }}
             maxLength={40}
           />
-        </Field>
+        </FormField>
       </div>
 
       {/* A suggestion list, not a constraint: `list` leaves the input free text,
           so a browser that cannot enumerate zones degrades to typing one rather
           than to being unable to set one. The server validates either way. */}
-      <Field id={`${idPrefix}-timezone`} label={t("timezone")}>
+      <FormField id={`${idPrefix}-timezone`} label={t("timezone")}>
         <Input
           id={`${idPrefix}-timezone`}
           value={state.timezone}
@@ -158,7 +159,7 @@ export function ProviderFields({
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
         />
-      </Field>
+      </FormField>
       {zones.length === 0 ? null : (
         <datalist id={`${idPrefix}-zones`}>
           {zones.map((zone) => (
@@ -193,7 +194,7 @@ export function ProviderFields({
       </fieldset>
 
       <div className="flex flex-wrap gap-3">
-        <Field id={`${idPrefix}-notice`} label={t("minimumNotice")}>
+        <FormField id={`${idPrefix}-notice`} label={t("minimumNotice")}>
           <Input
             id={`${idPrefix}-notice`}
             type="number"
@@ -205,12 +206,12 @@ export function ProviderFields({
             }}
             className="w-40"
           />
-        </Field>
+        </FormField>
 
         {/* Spelled out live — see the same field in `service-fields.tsx`, and
             `advanceNote` for the incident behind it. The shorter of this and
             the service's wins, so a healthy number here can still be overruled. */}
-        <Field
+        <FormField
           id={`${idPrefix}-advance`}
           label={t("maximumAdvance")}
           hint={advance.key === "advanceShort" ? undefined : t(advance.key, { days: advance.days })}
@@ -233,7 +234,7 @@ export function ProviderFields({
               {t("advanceShort", { days: advance.days })}
             </p>
           ) : null}
-        </Field>
+        </FormField>
       </div>
       <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>
 

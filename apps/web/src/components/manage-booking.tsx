@@ -222,7 +222,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
                     type="button"
                     disabled={confirmCancel.isPending}
                     onClick={() => confirmCancel.mutate("")}
-                    className="bg-danger text-on-accent min-h-11 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
+                    className="bg-danger text-on-booking min-h-11 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
                   >
                     {t("confirmCancel")}
                   </button>
@@ -273,7 +273,7 @@ function ReschedulePreviewPanel({
           type="button"
           disabled={pending}
           onClick={() => onConfirm(preview.proposed.startAt)}
-          className="bg-accent text-on-accent hover:bg-accent-hover min-h-11 self-start rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
+          className="bg-booking text-on-booking hover:bg-booking-hover min-h-11 self-start rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60"
         >
           {t("confirmMove")}
         </button>

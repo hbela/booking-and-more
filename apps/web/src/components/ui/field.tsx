@@ -1,109 +1,238 @@
-import { cn } from "@/lib/cn";
-import { Input } from "./input";
+"use client";
 
-/**
- * A labelled control.
- *
- * **Deliberately the same name and props as the `Field` that lived in
- * `dashboard-shell.tsx`**, so the six `*-fields.tsx` files that use it need an
- * import path change and nothing else. The label wraps the control, so the
- * association holds even if somebody forgets to match `htmlFor` to `id`.
- *
- * There were two incompatible `Field`s in the app: this one, which takes the
- * control as children, and one in `auth-form.tsx` that rendered its own input.
- * They were never in conflict — they are two different components. This is
- * `Field`; the other is {@link TextField} below.
- */
-export function Field({
-  id,
-  label,
-  hint,
-  error,
-  children,
-}: {
-  id: string;
-  label: string;
-  /** Guidance shown before anything goes wrong. */
-  hint?: string | undefined;
-  /** Shown instead of the hint once it does. */
-  error?: string | undefined;
-  children: React.ReactNode;
-}): React.ReactElement {
+import { useMemo } from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+
+function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-ink text-sm font-medium">
-        {label}
-      </label>
+    <fieldset
+      data-slot="field-set"
+      className={cn(
+        "flex flex-col gap-6",
+        "has-[>[data-slot=checkbox-group]]:gap-3 has-[>[data-slot=radio-group]]:gap-3",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-      {/* Nothing is cloned or injected — the caller passes a real element and
-          sets its own `id`, which keeps this out of the way of a `<select>`, a
-          checkbox group, or a control with its own state.
-          The trade is that a caller using `hint`/`error` must point the control
-          at `{id}-hint` / `{id}-error` with `aria-describedby` itself.
-          {@link TextField} does that wiring; use it whenever the control is a
-          plain input, which is most of the time. */}
-      {children}
+function FieldLegend({
+  className,
+  variant = "legend",
+  ...props
+}: React.ComponentProps<"legend"> & { variant?: "legend" | "label" }) {
+  return (
+    <legend
+      data-slot="field-legend"
+      data-variant={variant}
+      className={cn(
+        "mb-3 font-medium",
+        "data-[variant=legend]:text-base",
+        "data-[variant=label]:text-sm",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
-      {error ? (
-        <p id={`${id}-error`} role="alert" className="text-danger text-sm">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${id}-hint`} className="text-ink-muted text-sm">
-          {hint}
-        </p>
-      ) : null}
+function FieldGroup({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="field-group"
+      className={cn(
+        "group/field-group @container/field-group flex w-full flex-col gap-7 data-[slot=checkbox-group]:gap-3 [&>[data-slot=field-group]]:gap-4",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+const fieldVariants = cva("group/field flex w-full gap-3 data-[invalid=true]:text-destructive", {
+  variants: {
+    orientation: {
+      // Registry: "flex-col [&>*]:w-full [&>.sr-only]:w-auto". Dropped because it
+      // overrides a control's own width — location-fields.tsx has `w-20` and
+      // `w-32` inputs (phase-11-shadcn-adoption §3.3). Controls are full-width
+      // by their own classes already.
+      vertical: ["flex-col"],
+      horizontal: [
+        "flex-row items-center",
+        "[&>[data-slot=field-label]]:flex-auto",
+        "has-[>[data-slot=field-content]]:items-start has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+      ],
+      responsive: [
+        "flex-col @md/field-group:flex-row @md/field-group:items-center [&>*]:w-full @md/field-group:[&>*]:w-auto [&>.sr-only]:w-auto",
+        "@md/field-group:[&>[data-slot=field-label]]:flex-auto",
+        "@md/field-group:has-[>[data-slot=field-content]]:items-start @md/field-group:has-[>[data-slot=field-content]]:[&>[role=checkbox],[role=radio]]:mt-px",
+      ],
+    },
+  },
+  defaultVariants: {
+    orientation: "vertical",
+  },
+});
+
+function Field({
+  className,
+  orientation = "vertical",
+  ...props
+}: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
+  return (
+    <div
+      role="group"
+      data-slot="field"
+      data-orientation={orientation}
+      className={cn(fieldVariants({ orientation }), className)}
+      {...props}
+    />
+  );
+}
+
+function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="field-content"
+      className={cn("group/field-content flex flex-1 flex-col gap-1.5 leading-snug", className)}
+      {...props}
+    />
+  );
+}
+
+function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>) {
+  return (
+    <Label
+      data-slot="field-label"
+      className={cn(
+        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50",
+        "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-4",
+        "has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary/5 dark:has-data-[state=checked]:bg-primary/10",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="field-label"
+      className={cn(
+        "flex w-fit items-center gap-2 text-sm leading-snug font-medium group-data-[disabled=true]/field:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
+  return (
+    <p
+      data-slot="field-description"
+      className={cn(
+        "text-sm leading-normal font-normal text-muted-foreground group-has-[[data-orientation=horizontal]]/field:text-balance",
+        "last:mt-0 nth-last-2:-mt-1 [[data-variant=legend]+&]:-mt-1.5",
+        "[&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function FieldSeparator({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"div"> & {
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      data-slot="field-separator"
+      data-content={!!children}
+      className={cn(
+        "relative -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2",
+        className,
+      )}
+      {...props}
+    >
+      <Separator className="absolute inset-0 top-1/2" />
+      {children && (
+        <span
+          className="relative mx-auto block w-fit bg-background px-2 text-muted-foreground"
+          data-slot="field-separator-content"
+        >
+          {children}
+        </span>
+      )}
     </div>
   );
 }
 
-/**
- * Label plus input in one, i.e. what `auth-form.tsx` called `Field`.
- *
- * For the common case where the control is a plain text input and there is
- * nothing to configure. Anything else — a select, a checkbox, a group, a
- * control with its own state — uses {@link Field} and passes the control in.
- */
-export function TextField({
-  id,
-  label,
-  hint,
-  error,
+function FieldError({
   className,
-  ...rest
-}: {
-  id: string;
-  label: string;
-  hint?: string | undefined;
-  error?: string | undefined;
-} & Omit<React.ComponentPropsWithRef<"input">, "id">): React.ReactElement {
+  children,
+  errors,
+  ...props
+}: React.ComponentProps<"div"> & {
+  errors?: Array<{ message?: string } | undefined>;
+}) {
+  const content = useMemo(() => {
+    if (children) {
+      return children;
+    }
+
+    if (!errors?.length) {
+      return null;
+    }
+
+    const uniqueErrors = [...new Map(errors.map((error) => [error?.message, error])).values()];
+
+    if (uniqueErrors.length === 1) {
+      return uniqueErrors[0]?.message;
+    }
+
+    return (
+      <ul className="ml-4 flex list-disc flex-col gap-1">
+        {uniqueErrors.map((error, index) => error?.message && <li key={index}>{error.message}</li>)}
+      </ul>
+    );
+  }, [children, errors]);
+
+  if (!content) {
+    return null;
+  }
+
   return (
-    <Field id={id} label={label} hint={hint} error={error}>
-      <Input
-        id={id}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-        className={cn(error && "border-danger", className)}
-        {...rest}
-      />
-    </Field>
+    <div
+      role="alert"
+      data-slot="field-error"
+      className={cn("text-sm font-normal text-destructive", className)}
+      {...props}
+    >
+      {content}
+    </div>
   );
 }
 
-/**
- * An error that is not attached to a field.
- *
- * `role="alert"` so it interrupts — this is the "something went wrong" case,
- * unlike {@link ./callout.tsx}'s `role="note"`, which is "here is what to do
- * next" and must not. Returns null when empty so callers can pass a possibly
- * absent message without guarding.
- */
-export function ErrorText({ children }: { children: React.ReactNode }): React.ReactElement | null {
-  if (!children) return null;
-
-  return (
-    <p role="alert" className="text-danger text-sm">
-      {children}
-    </p>
-  );
-}
+export {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+  FieldContent,
+  FieldTitle,
+};

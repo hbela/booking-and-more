@@ -16,10 +16,12 @@ import {
   type ConversationSlot,
   type ConversationTurn,
 } from "@/lib/conversation-client";
-import { Button, ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
+import { Link } from "@/i18n/navigation";
 import { renderMessage } from "@/lib/conversation-messages";
 import { ChatCatalogueChoices } from "./chat-catalogue-choices";
 import { Brand } from "./brand";
+import { NativeSelect } from "@/components/ui/native-select";
 
 type Locale = "en" | "hu" | "de" | "fr";
 const languageNames = { hu: "Magyar", en: "English", de: "Deutsch", fr: "Français" } as const;
@@ -371,17 +373,17 @@ function ChatConversation({
           </h1>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-sm text-ink-muted">{t.language}</span>
-            <select
+            <NativeSelect
               value={language}
               onChange={(event) => onLanguageChange(event.target.value as Locale)}
-              className="min-h-11 rounded-lg border border-line-strong bg-surface px-3 text-ink"
+              className="w-auto"
             >
               {Object.entries(languageNames).map(([value, label]) => (
                 <option key={value} value={value} lang={value}>
                   {label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
             <RefreshCw size={16} aria-hidden />
@@ -517,13 +519,13 @@ function ChatConversation({
               <Send size={17} aria-hidden />
             </Button>
           </form>
-          <ButtonLink
-            href={bookingHref}
+          <Button
+            asChild
             variant="ghost"
             className="mt-3 w-full underline-offset-4 hover:underline"
           >
-            {t.form}
-          </ButtonLink>
+            <Link href={bookingHref}>{t.form}</Link>
+          </Button>
         </footer>
       </section>
     </div>
@@ -544,7 +546,7 @@ function SlotChoices({
       {slots.map((slot, index) => (
         <li key={`${slot.providerId}-${slot.startAt}`}>
           <Button
-            variant="secondary"
+            variant="outline"
             className="h-full w-full flex-col"
             onClick={() => onPick(index + 1)}
           >
@@ -592,7 +594,7 @@ function Confirmation({
         <Button disabled={busy} onClick={onConfirm}>
           {t.confirm}
         </Button>
-        <Button variant="secondary" disabled={busy} onClick={onDecline}>
+        <Button variant="outline" disabled={busy} onClick={onDecline}>
           {t.decline}
         </Button>
       </div>

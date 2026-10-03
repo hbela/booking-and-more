@@ -3,7 +3,8 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AuthHeader } from "@/components/auth-header";
 import { Brand } from "@/components/brand";
 import { InstallApp } from "@/components/staff-pwa";
-import { ButtonLink } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { Link } from "@/i18n/navigation";
 import { CalendarDays, Smartphone, Users } from "lucide-react";
 
 export default async function HomePage({
@@ -73,10 +74,12 @@ export default async function HomePage({
               <li>{t("staffLaunch")}</li>
             </ol>
             <div className="mt-auto flex flex-wrap gap-3 pt-4">
-              <ButtonLink href="/dashboard">{t("staffOpen")}</ButtonLink>
-              <ButtonLink href="/sign-up" variant="secondary">
-                {t("ownerStart")}
-              </ButtonLink>
+              <Button asChild>
+                <Link href="/dashboard">{t("staffOpen")}</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/sign-up">{t("ownerStart")}</Link>
+              </Button>
             </div>
           </section>
           <section

@@ -7,8 +7,9 @@ import { ApiError, apiFetch, type MeResponse } from "@/lib/api-client";
 import { useSignInRedirect } from "./dashboard-shell";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { ErrorText, Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { ErrorText, FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 
 /**
@@ -211,31 +212,31 @@ export function PlatformScreen(): React.ReactElement {
             });
           }}
         >
-          <Field id="name" label={t("name")}>
+          <FormField id="name" label={t("name")}>
             <Input id="name" name="name" required />
-          </Field>
+          </FormField>
 
-          <Field id="domain" label={t("domain")}>
+          <FormField id="domain" label={t("domain")}>
             <Input id="domain" name="domain" required placeholder="wellness.hu" />
-          </Field>
+          </FormField>
 
-          <Field id="slug" label={t("slug")}>
+          <FormField id="slug" label={t("slug")}>
             <Input id="slug" name="slug" required placeholder="wellness" />
-          </Field>
+          </FormField>
 
-          <Field id="mode" label={t("mode")}>
-            <Select id="mode" name="mode" defaultValue="PROSPECT">
+          <FormField id="mode" label={t("mode")}>
+            <NativeSelect id="mode" name="mode" defaultValue="PROSPECT">
               <option value="PROSPECT">{t("modeProspect")}</option>
               <option value="INTERNAL">{t("modeInternal")}</option>
-            </Select>
-          </Field>
+            </NativeSelect>
+          </FormField>
 
           {/* A select rather than a text input, matching `mode`: the API takes
               a two-value enum, and a free-text field would turn a closed set
               into a 400 for anybody who typed `en-GB`. The markup default and
               the schema default are both `hu` so they cannot drift. */}
-          <Field id="defaultLanguage" label={t("language")}>
-            <Select
+          <FormField id="defaultLanguage" label={t("language")}>
+            <NativeSelect
               id="defaultLanguage"
               name="defaultLanguage"
               defaultValue="hu"
@@ -243,19 +244,19 @@ export function PlatformScreen(): React.ReactElement {
             >
               <option value="hu">{t("languageHu")}</option>
               <option value="en">{t("languageEn")}</option>
-            </Select>
+            </NativeSelect>
             <span id="defaultLanguage-hint" className="text-xs text-ink-subtle">
               {t("languageHint")}
             </span>
-          </Field>
+          </FormField>
 
-          <Field id="ownerName" label={t("ownerName")}>
+          <FormField id="ownerName" label={t("ownerName")}>
             <Input id="ownerName" name="ownerName" required />
-          </Field>
+          </FormField>
 
-          <Field id="ownerEmail" label={t("ownerEmail")}>
+          <FormField id="ownerEmail" label={t("ownerEmail")}>
             <Input id="ownerEmail" name="ownerEmail" type="email" required />
-          </Field>
+          </FormField>
 
           <div className="sm:col-span-2 flex flex-col gap-2">
             <ErrorText>{formError}</ErrorText>

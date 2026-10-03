@@ -133,7 +133,7 @@ export function BookingCalendar({
           onClick={() => {
             onMonthChange(addMonths(month, -1));
           }}
-          className="border-line-strong hover:border-accent hover:bg-accent-surface flex size-11 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-strong disabled:hover:bg-transparent"
+          className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-strong disabled:hover:bg-transparent"
         >
           <span aria-hidden="true">‹</span>
         </button>
@@ -146,7 +146,7 @@ export function BookingCalendar({
           onClick={() => {
             onMonthChange(addMonths(month, 1));
           }}
-          className="border-line-strong hover:border-accent hover:bg-accent-surface flex size-11 items-center justify-center rounded-lg border transition-colors"
+          className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors"
         >
           <span aria-hidden="true">›</span>
         </button>
@@ -269,8 +269,8 @@ function Day({
         }}
         className={cn(
           "relative flex min-h-11 w-full flex-col items-center justify-center rounded-lg text-sm transition-colors",
-          isSelected && "bg-accent text-on-accent font-semibold",
-          !isSelected && bookable && "hover:bg-accent-surface text-ink font-medium",
+          isSelected && "bg-booking text-on-booking font-semibold",
+          !isSelected && bookable && "hover:bg-booking-surface text-ink font-medium",
           !isSelected && !bookable && "text-ink-subtle cursor-not-allowed",
           isToday && !isSelected && "ring-line-strong ring-1 ring-inset",
         )}
@@ -282,7 +282,7 @@ function Day({
           aria-hidden="true"
           className={cn(
             "mt-0.5 size-1 rounded-full",
-            bookable ? (isSelected ? "bg-on-accent" : "bg-accent") : "bg-transparent",
+            bookable ? (isSelected ? "bg-on-booking" : "bg-booking") : "bg-transparent",
           )}
         />
       </button>

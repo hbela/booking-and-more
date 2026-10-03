@@ -1,7 +1,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ButtonLink } from "./ui/button";
+import { Button } from "./ui/button";
+import { Link } from "@/i18n/navigation";
 import { Card } from "./ui/card";
 
 /**
@@ -41,7 +42,9 @@ export function NoOrganizationPanel({
     return (
       <Card title={admin("platformAdminTitle")}>
         <p className="text-sm text-ink-muted">{admin("platformAdminHint")}</p>
-        <ButtonLink href="/admin">{admin("platformAdminLink")}</ButtonLink>
+        <Button asChild>
+          <Link href="/admin">{admin("platformAdminLink")}</Link>
+        </Button>
       </Card>
     );
   }
@@ -49,7 +52,9 @@ export function NoOrganizationPanel({
   return (
     <Card title={t("noOrganizationTitle")}>
       <p className="text-sm text-ink-muted">{t("noOrganizationHint")}</p>
-      <ButtonLink href="/dashboard">{t("noOrganizationLink")}</ButtonLink>
+      <Button asChild>
+        <Link href="/dashboard">{t("noOrganizationLink")}</Link>
+      </Button>
     </Card>
   );
 }

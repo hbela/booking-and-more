@@ -56,12 +56,12 @@ export default async function BookPage({
   return (
     // The seam for PRD §9.1 white-label branding (phase-11 §2.2).
     //
-    // Everything inside `BookingFlow` styles itself with `accent-*` utilities,
-    // which `@theme inline` compiles to `var(--accent)` — so redefining that
+    // Everything inside `BookingFlow` styles itself with `booking-*` utilities,
+    // which `@theme inline` compiles to `var(--booking)` — so redefining that
     // variable on this element re-colours the whole subtree and nothing else in
     // the product. Today it resolves to the product blue and this wrapper
     // changes nothing visible; when a tenant's colour arrives it becomes a
-    // `style={{ "--accent": tenant.brandColor }}` here and no other file moves.
+    // `style={{ "--booking": tenant.brandColor }}` here and no other file moves.
     //
     // When that day comes, the supplied colour must be contrast-checked
     // server-side before it lands here, or a tenant can make their own booking

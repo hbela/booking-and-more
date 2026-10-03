@@ -97,6 +97,11 @@ So there are two ramps:
   booking page is wrapped in an element that sets `--accent` from a variable rather than reading the ramp
   directly. When §9.1 arrives it is a data change: read the tenant's hex, set it on that wrapper.
 
+> **Renamed 2026-10-03:** this ramp and its semantic tokens are now `booking-*` / `--booking`, because
+> shadcn/ui uses `accent` for its hover surface — see
+> [phase-11-shadcn-adoption.md](phase-11-shadcn-adoption.md) §2.2. The rule below is unchanged; read
+> `accent` as `booking`.
+
 **Product chrome must never reference `accent-*`, and the booking page must never reference `brand-*`.**
 That is the whole discipline; if the two are mixed the split has bought nothing.
 

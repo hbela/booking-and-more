@@ -3,8 +3,9 @@
 import { useTranslations } from "next-intl";
 import type { Location, LocationType } from "@/lib/api-client";
 import { numberValue, supportedTimeZones, textValue, type FormMode } from "@/lib/catalogue-form";
-import { Field } from "./ui/field";
-import { Input, Select } from "./ui/input";
+import { FormField } from "./ui/form-field";
+import { Input } from "./ui/input";
+import { NativeSelect } from "./ui/native-select";
 
 const TYPES: LocationType[] = ["PHYSICAL", "ONLINE", "HOME_VISIT", "TELEPHONE"];
 
@@ -80,7 +81,7 @@ export function LocationFields({
 
   return (
     <>
-      <Field id={`${idPrefix}-name`} label={t("name")}>
+      <FormField id={`${idPrefix}-name`} label={t("name")}>
         <Input
           id={`${idPrefix}-name`}
           value={state.name}
@@ -91,10 +92,10 @@ export function LocationFields({
           minLength={2}
           maxLength={160}
         />
-      </Field>
+      </FormField>
 
-      <Field id={`${idPrefix}-type`} label={t("type")}>
-        <Select
+      <FormField id={`${idPrefix}-type`} label={t("type")}>
+        <NativeSelect
           id={`${idPrefix}-type`}
           value={state.type}
           onChange={(event) => {
@@ -106,10 +107,10 @@ export function LocationFields({
               {t(`locationType.${value}`)}
             </option>
           ))}
-        </Select>
-      </Field>
+        </NativeSelect>
+      </FormField>
 
-      <Field id={`${idPrefix}-address`} label={t("address")}>
+      <FormField id={`${idPrefix}-address`} label={t("address")}>
         <Input
           id={`${idPrefix}-address`}
           value={state.addressLine1}
@@ -119,9 +120,9 @@ export function LocationFields({
           required={needsAddress}
           maxLength={200}
         />
-      </Field>
+      </FormField>
 
-      <Field id={`${idPrefix}-address-2`} label={t("addressLine2")}>
+      <FormField id={`${idPrefix}-address-2`} label={t("addressLine2")}>
         <Input
           id={`${idPrefix}-address-2`}
           value={state.addressLine2}
@@ -130,12 +131,12 @@ export function LocationFields({
           }}
           maxLength={200}
         />
-      </Field>
+      </FormField>
 
       {/* Postcode before city: that is the order a Hungarian address is written
           and read ("1134 Budapest"). */}
       <div className="flex flex-wrap gap-3">
-        <Field id={`${idPrefix}-postal-code`} label={t("postalCode")}>
+        <FormField id={`${idPrefix}-postal-code`} label={t("postalCode")}>
           <Input
             id={`${idPrefix}-postal-code`}
             value={state.postalCode}
@@ -146,9 +147,9 @@ export function LocationFields({
             maxLength={20}
             className="w-32"
           />
-        </Field>
+        </FormField>
 
-        <Field id={`${idPrefix}-city`} label={t("city")}>
+        <FormField id={`${idPrefix}-city`} label={t("city")}>
           <Input
             id={`${idPrefix}-city`}
             value={state.city}
@@ -157,12 +158,12 @@ export function LocationFields({
             }}
             maxLength={120}
           />
-        </Field>
+        </FormField>
 
         {/* Free text rather than a 250-entry select: that would be 250 message
             keys in two languages for no gain. Upper-cased on submit, as the
             schema does. */}
-        <Field id={`${idPrefix}-country`} label={t("countryCode")}>
+        <FormField id={`${idPrefix}-country`} label={t("countryCode")}>
           <Input
             id={`${idPrefix}-country`}
             value={state.countryCode}
@@ -173,10 +174,10 @@ export function LocationFields({
             pattern="[A-Za-z]{2}"
             className="w-20"
           />
-        </Field>
+        </FormField>
       </div>
 
-      <Field id={`${idPrefix}-timezone`} label={t("timezone")}>
+      <FormField id={`${idPrefix}-timezone`} label={t("timezone")}>
         <Input
           id={`${idPrefix}-timezone`}
           value={state.timezone}
@@ -185,7 +186,7 @@ export function LocationFields({
           }}
           list={zones.length === 0 ? undefined : `${idPrefix}-zones`}
         />
-      </Field>
+      </FormField>
       {zones.length === 0 ? null : (
         <datalist id={`${idPrefix}-zones`}>
           {zones.map((zone) => (
@@ -201,7 +202,7 @@ export function LocationFields({
         <summary className="cursor-pointer text-sm text-ink-muted">{t("coordinates")}</summary>
 
         <div className="mt-2 flex flex-wrap gap-3 border-l border-line pl-3">
-          <Field id={`${idPrefix}-latitude`} label={t("latitude")}>
+          <FormField id={`${idPrefix}-latitude`} label={t("latitude")}>
             <Input
               id={`${idPrefix}-latitude`}
               type="number"
@@ -214,9 +215,9 @@ export function LocationFields({
               }}
               className="w-40"
             />
-          </Field>
+          </FormField>
 
-          <Field id={`${idPrefix}-longitude`} label={t("longitude")}>
+          <FormField id={`${idPrefix}-longitude`} label={t("longitude")}>
             <Input
               id={`${idPrefix}-longitude`}
               type="number"
@@ -229,7 +230,7 @@ export function LocationFields({
               }}
               className="w-40"
             />
-          </Field>
+          </FormField>
         </div>
       </details>
     </>

@@ -6,7 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signIn, signUp } from "@/lib/auth-client";
 import { Button } from "./ui/button";
-import { ErrorText, TextField } from "./ui/field";
+import { ErrorText, TextField } from "./ui/form-field";
 
 /**
  * Where a freshly signed-in person belongs.
@@ -146,8 +146,8 @@ export function AuthForm({
  * It kept the name `Field` deliberately. There were two components called that
  * — this one, which owns its input, and `dashboard-shell.tsx`'s, which wraps an
  * arbitrary control. They were never in conflict; they are `TextField` and
- * `Field` in `components/ui`, and this local name survives only until its two
- * callers move over.
+ * `FormField` in `components/ui/form-field.tsx`, and this local name survives
+ * only until its two callers move over.
  */
 export function Field({
   id,
