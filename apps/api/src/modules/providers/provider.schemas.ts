@@ -147,3 +147,13 @@ export type UpdateProviderBody = z.infer<typeof updateProviderBodySchema>;
 export type ListProvidersQuery = z.infer<typeof listProvidersQuerySchema>;
 export type ProviderServiceInput = z.infer<typeof providerServiceSchema>;
 export type ProviderResponse = z.infer<typeof providerResponseSchema>;
+
+/**
+ * `POST /v1/providers` only. Says how the new diary got its login, so the
+ * screen does not report an invitation that was never sent: a member of the
+ * organization whose address it is — the owner who also treats patients, most
+ * often — is linked rather than invited (docs/phase-9-owner-as-provider.md §2.2).
+ */
+export const createProviderResponseSchema = providerResponseSchema.extend({
+  onboarding: z.enum(["INVITED", "LINKED"]),
+});

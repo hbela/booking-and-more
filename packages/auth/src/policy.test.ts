@@ -8,6 +8,7 @@ import {
   Permissions,
   ROLE_PERMISSIONS,
   Roles,
+  roleCanHoldDiary,
   roleCanReceiveDelegation,
   type Role,
 } from "./roles.js";
@@ -26,6 +27,9 @@ import {
   canManageIntegration,
   canChangeMemberRole,
   canHoldTenantMembership,
+  findCrossTenantRoleConflict,
+  isProviderMembership,
+  type HeldMembership,
   canManageProviderBookings,
   canReadProviderBookings,
   isMemberOf,
@@ -714,5 +718,102 @@ describe("delegation table invariants", () => {
     for (const permission of DELEGATED_PERMISSIONS) {
       expect(permission.endsWith(":delegated")).toBe(true);
     }
+  });
+});
+
+describe("owner here, provider elsewhere — docs/phase-9-owner-as-provider.md §2.4", () => {
+  const owner = (tenantId: string, providerId: string | null = null): HeldMembership => ({
+    tenantId,
+    role: Roles.OWNER,
+    providerId,
+  });
+  const member = (
+    tenantId: string,
+    role: Role,
+    providerId: string | null = null,
+  ): HeldMembership => ({
+    tenantId,
+    role,
+    providerId,
+  });
+
+  it("lets a diary be held by OWNER, ADMIN and PROVIDER, and not by an ASSISTANT", () => {
+    expect(roleCanHoldDiary(Roles.OWNER)).toBe(true);
+    expect(roleCanHoldDiary(Roles.ADMIN)).toBe(true);
+    expect(roleCanHoldDiary(Roles.PROVIDER)).toBe(true);
+    expect(roleCanHoldDiary(Roles.ASSISTANT)).toBe(false);
+    expect(roleCanHoldDiary(Roles.CUSTOMER)).toBe(false);
+  });
+
+  it("counts a diary as what makes somebody a provider — except an owner's own", () => {
+    expect(isProviderMembership(member(TENANT_A, Roles.PROVIDER))).toBe(true);
+    expect(isProviderMembership(member(TENANT_A, Roles.ADMIN, "p1"))).toBe(true);
+    expect(isProviderMembership(member(TENANT_A, Roles.ADMIN))).toBe(false);
+    expect(isProviderMembership(owner(TENANT_A, "p1"))).toBe(false);
+  });
+
+  it("lets an owner treat patients in their own clinic", () => {
+    expect(findCrossTenantRoleConflict(owner(TENANT_A, "p1"), [owner(TENANT_A)])).toBeNull();
+  });
+
+  it("lets an owner own several organizations, and hold a diary in one of them", () => {
+    expect(findCrossTenantRoleConflict(owner(TENANT_B), [owner(TENANT_A, "p1")])).toBeNull();
+    expect(findCrossTenantRoleConflict(owner(TENANT_B, "p2"), [owner(TENANT_A)])).toBeNull();
+  });
+
+  it("lets a provider work at two organizations", () => {
+    expect(
+      findCrossTenantRoleConflict(member(TENANT_B, Roles.PROVIDER, "p2"), [
+        member(TENANT_A, Roles.PROVIDER, "p1"),
+      ]),
+    ).toBeNull();
+  });
+
+  it("refuses an owner a provider membership elsewhere", () => {
+    expect(
+      findCrossTenantRoleConflict(member(TENANT_B, Roles.PROVIDER, "p2"), [owner(TENANT_A)]),
+    ).toBe("OWNER_ELSEWHERE");
+    // An ADMIN given a diary is a provider by another name.
+    expect(
+      findCrossTenantRoleConflict(member(TENANT_B, Roles.ADMIN, "p2"), [owner(TENANT_A)]),
+    ).toBe("OWNER_ELSEWHERE");
+  });
+
+  it("refuses a provider ownership elsewhere", () => {
+    expect(
+      findCrossTenantRoleConflict(owner(TENANT_B), [member(TENANT_A, Roles.PROVIDER, "p1")]),
+    ).toBe("PROVIDER_ELSEWHERE");
+  });
+
+  it("is symmetric: neither order of operations reaches the forbidden state", () => {
+    const ownThenProvide = findCrossTenantRoleConflict(member(TENANT_B, Roles.PROVIDER), [
+      owner(TENANT_A),
+    ]);
+    const provideThenOwn = findCrossTenantRoleConflict(owner(TENANT_A), [
+      member(TENANT_B, Roles.PROVIDER),
+    ]);
+
+    expect(ownThenProvide).not.toBeNull();
+    expect(provideThenOwn).not.toBeNull();
+  });
+
+  it("leaves non-provider roles alone in both directions", () => {
+    expect(
+      findCrossTenantRoleConflict(member(TENANT_B, Roles.ADMIN), [owner(TENANT_A)]),
+    ).toBeNull();
+    expect(
+      findCrossTenantRoleConflict(member(TENANT_B, Roles.ASSISTANT), [owner(TENANT_A)]),
+    ).toBeNull();
+    expect(
+      findCrossTenantRoleConflict(owner(TENANT_B), [member(TENANT_A, Roles.ASSISTANT)]),
+    ).toBeNull();
+  });
+
+  it("ignores what the person already holds in the same organization", () => {
+    // Promoting a provider to owner of their own clinic is a role change there,
+    // not a second organization.
+    expect(
+      findCrossTenantRoleConflict(owner(TENANT_A, "p1"), [member(TENANT_A, Roles.PROVIDER, "p1")]),
+    ).toBeNull();
   });
 });

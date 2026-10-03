@@ -147,6 +147,15 @@ emails it, and acceptance links the membership in the same transaction that burn
 phase-2-3 §5.11. **Read its §2.7 before touching `claimInvitation`** — the link is made _inside_ the
 acceptance transaction, and the unique index that decides the race is also what leaves the invitation
 PENDING for a second try. Its §2.9 is why a `PROVIDER` now sees three navigation items rather than seven ·
+[Phase 9 — the owner as a provider](docs/phase-9-owner-as-provider.md) (done bar its §5 manual walk). An
+owner who treats patients holds their own diary as an **OWNER membership with `providerId` set** — a
+link, never a second membership or a demotion — and a provider may work at several organizations.
+**Read its §2.4 before touching any write that sets a membership's role or diary**: somebody who owns an
+organization may not be a provider at another, and the reverse, enforced in both directions by
+`findCrossTenantRoleConflict` and `assertRoleCompatibleAcrossTenants`, which locks the person's `users`
+row because no constraint can see across tenants. It is checked at acceptance and _not_ at invitation,
+so that one clinic is never told what another customer's address owns. §2.5 is why an invitation can no
+longer demote an owner ·
 [Phases 2–3 — owner management](docs/phase-2-3-owner-management.md) (done bar its §6.2 manual walk). The
 catalogue and availability screens were create-only, and two of them destroyed data on every save. **Read its
 §2 before touching any whole-set `PUT`** — the rule is that such a body may only be built from a full read of

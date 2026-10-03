@@ -170,7 +170,10 @@
     "noOrganizationLink": "Vissza az áttekintéshez",
     "planProfessionalPlus": "Professional Plus",
     "planProfessionalPlusDescription": "A Professional minden funkciója havi 300, legfeljebb napi 30 beszélgetéssel. Egy chat legfeljebb 5 perc.",
-    "chatUsage": "Havi beszélgetések: {used} / {limit}. Hátralévő: {remaining}. A keret minden UTC hónap elején megújul."
+    "chatUsage": "Havi beszélgetések: {used} / {limit}. Hátralévő: {remaining}. A keret minden UTC hónap elején megújul.",
+    "linkDiaryOptionalPrompt": "Rendel is? Naptár hozzárendelése…",
+    "unlinkDiary": "Naptár leválasztása",
+    "unlinkDiaryConfirm": "Leválasztja {name} tagot erről a naptárról? A naptár és a foglalásai megmaradnak, csak már nem az övé."
   },
   "invitation": {
     "title": "Meghívó",
@@ -187,7 +190,9 @@
     "goToAvailability": "Munkaidő beállítása",
     "wrongUser": "Ezt a meghívót a(z) {invited} címre állítottuk ki, Ön viszont {current} néven van bejelentkezve.",
     "signOutAndContinue": "Kijelentkezés és folytatás {email} néven",
-    "wrongUserHint": "A kijelentkezés csak ezt a böngészőt érinti. Utána bármikor visszajelentkezhet."
+    "wrongUserHint": "A kijelentkezés csak ezt a böngészőt érinti. Utána bármikor visszajelentkezhet.",
+    "roleConflictOwnerElsewhere": "Ez a fiók egy másik szervezet tulajdonosa, a tulajdonos pedig nem dolgozhat szolgáltatóként máshol. Fogadja el a meghívót egy másik fiókkal, vagy kérje, hogy a szervezet másik címre küldje.",
+    "roleConflictProviderElsewhere": "Ez a fiók egy másik szervezetnél szolgáltatóként dolgozik, a szolgáltató pedig nem lehet szervezet tulajdonosa. Fogadja el a meghívót egy másik fiókkal."
   },
   "catalogue": {
     "loading": "Betöltés…",
@@ -320,7 +325,11 @@
     "inviteLinkOnceHint": "Csak akkor kell, ha az e-mail nem érkezik meg. Egyszer jelenik meg — csak a kivonatát tároljuk, így később nem hívható elő.",
     "inviteFailed": "A meghívót nem sikerült elküldeni. Kérjük, próbálja újra.",
     "manageAssistant": "Asszisztens kezelése",
-    "close": "Bezárás"
+    "close": "Bezárás",
+    "providerCreatedAndLinked": "A szolgáltató létrejött, és az ezzel az e-mail-címmel rendelkező meglévő taghoz kapcsoltuk. Meghívóra nem volt szükség.",
+    "thisIsYou": "Ön",
+    "claimDiary": "Ez én vagyok",
+    "claimDiaryConfirm": "Hozzákapcsolja {name} naptárát a saját fiókjához? Akkor válassza, ha Ön is fogad pácienseket. A jelenlegi szerepköre megmarad."
   },
   "availability": {
     "loading": "Betöltés…",

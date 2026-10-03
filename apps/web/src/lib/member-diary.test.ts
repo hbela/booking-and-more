@@ -78,11 +78,18 @@ describe("resolveDiaryState", () => {
     });
   });
 
-  it("says nothing about an owner or an assistant with no diary", () => {
-    for (const role of ["OWNER", "ADMIN", "ASSISTANT"]) {
+  it("offers, without warning, a diary to an owner or administrator who has none", () => {
+    // docs/phase-9-owner-as-provider.md §2.3 — the owner who also treats patients.
+    for (const role of ["OWNER", "ADMIN"]) {
       expect(resolveDiaryState({ member: member({ role }), providers: [] })).toEqual({
-        kind: "none",
+        kind: "optional",
       });
     }
+  });
+
+  it("says nothing about an assistant with no diary, which could not hold one", () => {
+    expect(resolveDiaryState({ member: member({ role: "ASSISTANT" }), providers: [] })).toEqual({
+      kind: "none",
+    });
   });
 });

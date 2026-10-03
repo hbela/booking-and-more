@@ -175,9 +175,10 @@ export interface Member {
   role: string;
   status: string;
   /**
-   * The diary this membership holds. Null on every non-provider member, and on
-   * a PROVIDER it is the difference between a working login and one whose every
-   * permission matches nothing — which is why the members table shows it.
+   * The diary this membership holds. On a PROVIDER it is the difference between
+   * a working login and one whose every permission matches nothing — which is
+   * why the members table shows it. An OWNER or ADMIN may hold one too, when
+   * they also treat patients (docs/phase-9-owner-as-provider.md §2.1).
    */
   providerId: string | null;
   joinedAt: string | null;

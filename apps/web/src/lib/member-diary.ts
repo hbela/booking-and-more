@@ -28,7 +28,13 @@ export type DiaryState =
   | { kind: "linked" }
   /** Linked, and absent from a list we do hold — archived since linking. */
   | { kind: "archived" }
-  /** No diary, and none wanted: an owner or an assistant. */
+  /**
+   * No diary, and none needed — but one may be linked: an owner or an
+   * administrator who also treats patients (docs/phase-9-owner-as-provider.md
+   * §2.3). Not a warning; most owners never see patients.
+   */
+  | { kind: "optional" }
+  /** No diary, and none possible: an assistant, whose role holds no `:own` permission. */
   | { kind: "none" }
   /** A PROVIDER with no diary: every `:own` permission matches nothing. */
   | { kind: "missing" };
@@ -47,7 +53,12 @@ export function resolveDiaryState(args: {
     return providers === null ? { kind: "linked" } : { kind: "archived" };
   }
 
-  // Only PROVIDER memberships need one. An owner or an assistant with no diary
-  // is the normal case and deserves no warning.
-  return member.role === "PROVIDER" ? { kind: "missing" } : { kind: "none" };
+  // Only PROVIDER memberships need one. An owner or an administrator with no
+  // diary is the normal case and deserves no warning, but may take one. An
+  // assistant may not: the API refuses it, because the link would match no
+  // permission they hold.
+  if (member.role === "PROVIDER") return { kind: "missing" };
+  return member.role === "OWNER" || member.role === "ADMIN"
+    ? { kind: "optional" }
+    : { kind: "none" };
 }

@@ -110,6 +110,17 @@ export const ErrorCodes = {
    */
   DELEGATION_TARGET_INELIGIBLE: "DELEGATION_TARGET_INELIGIBLE",
 
+  // --- Memberships across organizations ------------------------------------
+  /**
+   * The change would make somebody an owner in one organization and a provider
+   * in another (docs/phase-9-owner-as-provider.md §2.4). `details.conflict` is
+   * `OWNER_ELSEWHERE` or `PROVIDER_ELSEWHERE`.
+   *
+   * Not `FORBIDDEN`: the invitation page reads 409 `FORBIDDEN` as "signed in as
+   * the wrong person" and offers to sign them out, which is no way out of this.
+   */
+  MEMBERSHIP_ROLE_CONFLICT: "MEMBERSHIP_ROLE_CONFLICT",
+
   // --- Calendar integrations (Epic 6) --------------------------------------
   /**
    * The connection exists but cannot do work: disconnected, or waiting for a

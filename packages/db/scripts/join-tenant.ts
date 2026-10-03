@@ -78,6 +78,34 @@ async function main(): Promise<void> {
       providerId = provider.id;
     }
 
+    // Owner here, provider elsewhere: refused, as every API path refuses it
+    // (docs/phase-9-owner-as-provider.md §2.4). The canonical rule is
+    // `findCrossTenantRoleConflict` in @bam/auth/policy.ts, deliberately not
+    // imported, for the reason grant-platform-admin.ts gives: @bam/auth depends
+    // on @bam/db, so the import would be cyclic. A script that skipped it would
+    // be the easiest way to build a state the product says cannot exist.
+    const elsewhere = await prisma.membership.findMany({
+      where: { userId: user.id, tenantId: { not: tenant.id } },
+      select: { role: true, providerId: true, tenant: { select: { slug: true } } },
+    });
+    const isProvider = (m: { role: string; providerId: string | null }): boolean =>
+      m.role !== "OWNER" && (m.role === "PROVIDER" || m.providerId !== null);
+    const conflict =
+      isProvider({ role, providerId }) && elsewhere.some((m) => m.role === "OWNER")
+        ? "owns another organization and cannot also be a provider here"
+        : role === "OWNER" && elsewhere.some(isProvider)
+          ? "is a provider at another organization and cannot also own one"
+          : null;
+
+    if (conflict !== null) {
+      console.error(
+        `${email} ${conflict}:\n` +
+          elsewhere.map((m) => `  - ${m.tenant.slug} (${m.role})`).join("\n") +
+          "\n\nUse a separate account for the other role.",
+      );
+      process.exit(1);
+    }
+
     const membership = await prisma.membership.upsert({
       where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
       update: { role: role as "OWNER", status: "ACTIVE", providerId },

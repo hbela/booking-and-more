@@ -11,6 +11,7 @@ import { Card } from "./ui/card";
 import { ErrorText, Field } from "./ui/field";
 import { Input, Select } from "./ui/input";
 import { Section } from "./ui/section";
+import { RowButton } from "./ui/table";
 import { BusinessKnowledge } from "./business-knowledge";
 import { PatientQrCodes } from "./patient-qr-codes";
 import { ArrowUpRight, CalendarDays, Clock3, Bot } from "lucide-react";
@@ -386,7 +387,7 @@ function MemberDiary({
   const [error, setError] = useState<string | null>(null);
 
   const link = useMutation({
-    mutationFn: (providerId: string) =>
+    mutationFn: (providerId: string | null) =>
       apiFetch(`/v1/members/${member.id}`, {
         method: "PATCH",
         tenantId,
@@ -404,18 +405,50 @@ function MemberDiary({
 
   const state = resolveDiaryState({ member, providers });
 
+  // An owner or administrator holds a diary by choice — they also treat
+  // patients — so it can be let go again from here. A PROVIDER's cannot: their
+  // diary is the whole of their job, and unlinking would strand them with
+  // `:own` permissions over nothing (docs/phase-9-owner-as-provider.md §2.3).
+  const unlink =
+    canManage && member.role !== "PROVIDER" ? (
+      <RowButton
+        disabled={link.isPending}
+        onClick={() => {
+          if (!window.confirm(t("unlinkDiaryConfirm", { name: member.user.name }))) return;
+          setError(null);
+          link.mutate(null);
+        }}
+      >
+        {t("unlinkDiary")}
+      </RowButton>
+    ) : null;
+
+  const linked = (label: React.ReactNode): React.ReactElement =>
+    unlink === null ? (
+      <span>{label}</span>
+    ) : (
+      <div className="flex flex-col items-start gap-1">
+        <span>{label}</span>
+        {unlink}
+        <ErrorText>{error}</ErrorText>
+      </div>
+    );
+
   switch (state.kind) {
     // Named rather than ticked: "which diary" is the useful answer.
     case "named":
-      return <span>{state.displayName}</span>;
+      return linked(state.displayName);
     // Linked, but unnameable — see resolveDiaryState for why that is not the
     // same as archived, and what claiming otherwise did to every provider.
     case "linked":
-      return <span>{t("diaryLinked")}</span>;
+      return linked(t("diaryLinked"));
     case "archived":
-      return <span>{t("diaryArchived")}</span>;
+      return linked(t("diaryArchived"));
     case "none":
       return <span className="text-ink-subtle">—</span>;
+    case "optional":
+      if (!canManage) return <span className="text-ink-subtle">—</span>;
+      break;
     case "missing":
       break;
   }
@@ -431,6 +464,8 @@ function MemberDiary({
     return <span className="text-warning">{t("diaryMissing")}</span>;
   }
 
+  const optional = state.kind === "optional";
+
   return (
     <div className="flex flex-col gap-1">
       <label className="flex items-center gap-2">
@@ -444,7 +479,7 @@ function MemberDiary({
             link.mutate(event.target.value);
           }}
         >
-          <option value="">{t("linkDiaryPrompt")}</option>
+          <option value="">{optional ? t("linkDiaryOptionalPrompt") : t("linkDiaryPrompt")}</option>
           {available.map((provider) => (
             <option key={provider.id} value={provider.id}>
               {provider.displayName}
@@ -452,7 +487,7 @@ function MemberDiary({
           ))}
         </Select>
       </label>
-      {available.length === 0 ? (
+      {available.length === 0 && !optional ? (
         <span className="text-xs text-ink-subtle">{t("noDiaryToLink")}</span>
       ) : null}
       <ErrorText>{error}</ErrorText>

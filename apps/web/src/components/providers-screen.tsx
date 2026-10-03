@@ -141,6 +141,39 @@ export function ProvidersScreen(): React.ReactElement {
       (member) => member.providerId === providerId && member.status === "ACTIVE",
     );
 
+  // "This is me": the owner — or an administrator — who also treats patients
+  // claims a diary that was created under another address
+  // (docs/phase-9-owner-as-provider.md §2.3). Offered only to somebody who
+  // holds no diary yet and whose role can use one; asked as a permission rather
+  // than a role (rule 10). The PATCH is the caller's own membership, which the
+  // route allows because a link grants a subset of what they already hold.
+  const myMembership = context.me?.membership ?? null;
+  const canClaimDiary =
+    canInvite &&
+    context.can("availability:manage:own") &&
+    myMembership !== null &&
+    myMembership.providerId === null;
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  const claimDiary = useMutation({
+    mutationFn: (provider: Provider) =>
+      apiFetch(`/v1/members/${myMembership?.id ?? ""}`, {
+        method: "PATCH",
+        tenantId: context.tenantId,
+        body: { providerId: provider.id },
+      }),
+    onMutate: () => {
+      setClaimError(null);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["members"] });
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+    onError: (cause: unknown) => {
+      setClaimError(cause instanceof ApiError ? cause.message : t("genericError"));
+    },
+  });
+
   const changeApproval = useMutation({
     mutationFn: (provider: Provider) =>
       apiFetch<Provider>(`/v1/providers/${provider.id}/booking-approval`, {
@@ -257,6 +290,9 @@ export function ProvidersScreen(): React.ReactElement {
                     <tr key={provider.id} className="border-b border-line">
                       <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
                         {provider.displayName}
+                        {myMembership?.providerId === provider.id ? (
+                          <span className="text-ink-subtle"> · {t("thisIsYou")}</span>
+                        ) : null}
                       </td>
                       <td className="py-2 pr-4 text-ink-muted">{provider.timezone}</td>
                       <td className="py-2 pr-4">
@@ -325,7 +361,28 @@ export function ProvidersScreen(): React.ReactElement {
                                 membership to the diary — lived on different
                                 screens and the second was never built
                                 (phase-9-provider-onboarding §1). */}
-                            {!canInvite ? null : provider.email === null ? (
+                            {canClaimDiary && loginFor(provider.id) === undefined ? (
+                              <RowButton
+                                disabled={claimDiary.isPending}
+                                onClick={() => {
+                                  if (
+                                    !window.confirm(
+                                      t("claimDiaryConfirm", { name: provider.displayName }),
+                                    )
+                                  ) {
+                                    return;
+                                  }
+                                  claimDiary.mutate(provider);
+                                }}
+                              >
+                                {t("claimDiary")}
+                              </RowButton>
+                            ) : null}
+                            {/* A diary somebody already signs in as needs no
+                                invitation — the API would only refuse it. That
+                                includes the owner's own (§2.2). */}
+                            {!canInvite ||
+                            loginFor(provider.id) !== undefined ? null : provider.email === null ? (
                               // aria-disabled on a live button rather than
                               // `disabled`, so a keyboard user still reaches it
                               // and hears why. Same reasoning as the nav's
@@ -423,6 +480,7 @@ export function ProvidersScreen(): React.ReactElement {
         {(providers.data?.items.length ?? 0) > 0 ? <Callout>{t("approvalHint")}</Callout> : null}
 
         <ErrorText>{approvalError}</ErrorText>
+        <ErrorText>{claimError}</ErrorText>
 
         {/* One node, referenced by every disabled Invite button, so the reason
             is announced rather than left to be guessed from a grey button. */}
@@ -694,11 +752,14 @@ function CreateProviderPanel({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const provider = await apiFetch<Provider>("/v1/providers", {
-        method: "POST",
-        tenantId,
-        body: providerBodyFrom(state, "create"),
-      });
+      const provider = await apiFetch<Provider & { onboarding: "INVITED" | "LINKED" }>(
+        "/v1/providers",
+        {
+          method: "POST",
+          tenantId,
+          body: providerBodyFrom(state, "create"),
+        },
+      );
 
       const services =
         serviceRows === null ? { services: [] } : buildProviderServicesBody(serviceRows);
@@ -729,6 +790,8 @@ function CreateProviderPanel({
       } catch (cause) {
         throw new AssignmentFailed(cause);
       }
+
+      return provider.onboarding;
     },
     onSuccess: () => {
       setState(providerStateFrom());
@@ -759,7 +822,16 @@ function CreateProviderPanel({
   return (
     <Card title={t("addProvider")}>
       <p className="text-sm text-ink-muted">{t("addProviderHint")}</p>
-      {mutation.isSuccess ? <p role="status">{t("providerCreatedAndInvited")}</p> : null}
+      {/* Linked rather than invited when the address is a member's own — the
+          owner who also treats patients (docs/phase-9-owner-as-provider.md
+          §2.2). Saying "invited" there would send them looking for an email. */}
+      {mutation.isSuccess ? (
+        <p role="status">
+          {mutation.data === "LINKED"
+            ? t("providerCreatedAndLinked")
+            : t("providerCreatedAndInvited")}
+        </p>
+      ) : null}
 
       <form
         className="flex flex-col gap-3"

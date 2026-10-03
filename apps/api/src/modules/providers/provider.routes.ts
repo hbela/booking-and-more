@@ -18,6 +18,7 @@ import { ProviderService } from "./provider.service.js";
 import {
   bookingApprovalBodySchema,
   createProviderBodySchema,
+  createProviderResponseSchema,
   listProvidersQuerySchema,
   providerLocationResponseSchema,
   providerResponseSchema,
@@ -147,15 +148,15 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
         tags: ["providers"],
         summary: "Create a provider",
         description:
-          "Creates the provider and queues a single-use onboarding invitation to their email. Acceptance sets up their login and links it to their own diary.",
+          "Creates the provider and queues a single-use onboarding invitation to their email. Acceptance sets up their login and links it to their own diary. When the email already belongs to a member of this organization who holds no diary — typically the owner, who also treats patients — that membership is linked instead and no invitation is sent; `onboarding` says which happened.",
         body: createProviderBodySchema,
-        response: { 201: providerResponseSchema, ...commonErrorResponses },
+        response: { 201: createProviderResponseSchema, ...commonErrorResponses },
       },
     },
     async (request, reply) => {
       const tenant = request.tenant!;
 
-      const { provider, invitation } = await app.prisma.$transaction(async (tx) => {
+      const { provider, login } = await app.prisma.$transaction(async (tx) => {
         const provider = await service.create(
           {
             tenantId: tenant.id,
@@ -164,7 +165,7 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
           },
           tx,
         );
-        const invitation = await memberships.inviteProvider(
+        const login = await memberships.linkOrInviteProvider(
           {
             tenantId: tenant.id,
             provider,
@@ -174,15 +175,27 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
           },
           tx,
         );
-        return { provider, invitation };
+        return { provider, login };
       });
 
-      request.audit({
-        action: "membership.invited",
-        entityType: "Invitation",
-        entityId: invitation.invitationId,
-        after: { email: invitation.email, role: "PROVIDER", providerId: provider.id },
-      });
+      if (login.kind === "INVITED") {
+        request.audit({
+          action: "membership.invited",
+          entityType: "Invitation",
+          entityId: login.invitationId,
+          after: { email: login.email, role: "PROVIDER", providerId: provider.id },
+        });
+      } else {
+        // The same action the Members screen's link writes, so one query finds
+        // every way a membership came to hold a diary.
+        request.audit({
+          action: "membership.provider_linked",
+          entityType: "Membership",
+          entityId: login.membershipId,
+          before: { providerId: null },
+          after: { providerId: provider.id, userId: login.userId },
+        });
+      }
 
       request.audit({
         action: "provider.created",
@@ -191,7 +204,7 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
         after: toProviderResponse(provider),
       });
 
-      return reply.status(201).send(toProviderResponse(provider));
+      return reply.status(201).send({ ...toProviderResponse(provider), onboarding: login.kind });
     },
   );
 

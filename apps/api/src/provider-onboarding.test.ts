@@ -176,15 +176,31 @@ describe.skipIf(!databaseUrl)("provider onboarding", () => {
 
   it("rolls back provider creation when an onboarding invitation cannot be issued", async () => {
     const site = await clinic("rollback");
+    // Until docs/phase-9-owner-as-provider.md this used the owner's own
+    // address, which is now linked rather than refused (§2.2). A member who
+    // already holds a diary still cannot be given a second one, so the
+    // invitation is still the only option, and it still refuses.
+    const colleague = await signUp("rollback-colleague");
+    await app.prisma.membership.create({
+      data: {
+        tenantId: site.tenantId,
+        userId: colleague.id,
+        role: "ADMIN",
+        providerId: site.providerId,
+      },
+    });
+
     const response = await app.inject({
       method: "POST",
       url: "/v1/providers",
       headers: as(site.cookie, site.tenantId),
-      payload: { displayName: "Must not remain", email: site.email },
+      payload: { displayName: "Must not remain", email: colleague.email },
     });
     expect(response.statusCode).toBe(409);
     expect(
-      await app.prisma.provider.count({ where: { tenantId: site.tenantId, email: site.email } }),
+      await app.prisma.provider.count({
+        where: { tenantId: site.tenantId, email: colleague.email },
+      }),
     ).toBe(0);
     expect(
       await app.prisma.outboxEvent.count({

@@ -3,6 +3,7 @@ import type { PrismaClient, Tenant } from "@bam/db";
 import { Roles } from "@bam/auth";
 import { ConflictError, ErrorCodes, ValidationError } from "@bam/contracts";
 import { RESERVED_SLUGS, type CreateTenantBody, type UpdateTenantBody } from "./tenant.schemas.js";
+import { assertRoleCompatibleAcrossTenants } from "../memberships/role-compatibility.js";
 
 /**
  * Tenant lifecycle. Business rules live here, not in the route handler
@@ -52,6 +53,16 @@ export class TenantService {
             ...(input.contactPhone === undefined ? {} : { contactPhone: input.contactPhone }),
             status: "TRIAL",
           },
+        });
+
+        // A provider at another organization may not own one
+        // (docs/phase-9-owner-as-provider.md §2.4). After the tenant insert so
+        // the proposal has a tenant id; the refusal rolls the tenant back too.
+        await assertRoleCompatibleAcrossTenants(tx, {
+          userId: creatorUserId,
+          tenantId: tenant.id,
+          role: Roles.OWNER,
+          providerId: null,
         });
 
         await tx.membership.create({

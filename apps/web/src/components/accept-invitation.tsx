@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { getPathname, useRouter } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
@@ -66,6 +66,22 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
   const session = useSession();
   const [state, setState] = useState<State>({ kind: "checking" });
 
+  // The accept POST is sent at most once per token. It burns the token, so a
+  // second request can only be refused with "This invitation link is not
+  // valid", and whichever response lands last decides what the page says. Two
+  // things re-ran it: React Strict Mode running effects twice in development,
+  // and — in production too — the session updating just after an in-page
+  // sign-in, which changed this effect's dependencies while the first request
+  // was still in flight. The invitee joined and was told the link was invalid.
+  //
+  // A ref rather than state, because it must survive Strict Mode's simulated
+  // unmount and must not itself cause a render. The session address is read
+  // through a ref for the same reason: it is only needed if the request fails,
+  // and making it a dependency is what caused the second run.
+  const acceptSentFor = useRef<string | null>(null);
+  const signedInAsRef = useRef("");
+  signedInAsRef.current = session.data?.user.email ?? "";
+
   useEffect(() => {
     if (state.kind !== "accepted" || state.role !== "PROVIDER") return;
     // A full navigation reads the newly issued session cookie and avoids stale
@@ -118,9 +134,10 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
 
   useEffect(() => {
     if (state.kind !== "accepting") return;
+    if (acceptSentFor.current === token) return;
+    acceptSentFor.current = token;
 
     const { details } = state;
-    const signedInAs = session.data?.user.email ?? "";
 
     void apiFetch<{ tenantId: string; role: string }>("/v1/invitations/accept", {
       method: "POST",
@@ -130,12 +147,31 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
         setState({ kind: "accepted", role: result.role });
       })
       .catch((error: unknown) => {
+        // Refused, so the token was not burned: a retry after signing in as the
+        // right person must be allowed to send it again.
+        acceptSentFor.current = null;
+
         // 409 + FORBIDDEN is `acceptInvitation`'s "this belongs to somebody
         // else". Branching on the error rather than comparing the two addresses
         // here keeps the server as the one that decides; the client only picks
         // which way out to offer.
         if (error instanceof ApiError && error.status === 409 && error.code === "FORBIDDEN") {
-          setState({ kind: "wrong-user", details, signedInAs });
+          setState({ kind: "wrong-user", details, signedInAs: signedInAsRef.current });
+          return;
+        }
+
+        // Owner here, provider elsewhere (docs/phase-9-owner-as-provider.md
+        // §2.4). Its own code precisely so it does not land in the branch
+        // above: signing out is no way out of this, a second account is.
+        if (error instanceof ApiError && error.code === "MEMBERSHIP_ROLE_CONFLICT") {
+          setState({
+            kind: "failed",
+            message:
+              (error.details as { conflict?: string } | undefined)?.conflict ===
+              "PROVIDER_ELSEWHERE"
+                ? t("roleConflictProviderElsewhere")
+                : t("roleConflictOwnerElsewhere"),
+          });
           return;
         }
 
@@ -144,7 +180,7 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
           message: error instanceof ApiError ? error.message : t("genericError"),
         });
       });
-  }, [state, session.data?.user.email, token, t]);
+  }, [state, token, t]);
 
   return (
     // Deliberately not `ui/auth-layout.tsx`, which is an async server component
@@ -199,7 +235,9 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
                 // Straight to accepting: the lookup is already in hand, and the
                 // API decides whether the account matches the invitation.
                 setState(
-                  state.details ? { kind: "accepting", details: state.details } : { kind: "checking" },
+                  state.details
+                    ? { kind: "accepting", details: state.details }
+                    : { kind: "checking" },
                 );
                 return Promise.resolve();
               }}

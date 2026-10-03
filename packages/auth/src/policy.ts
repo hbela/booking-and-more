@@ -2,6 +2,7 @@ import {
   DELEGATION_SCOPE_PERMISSIONS,
   Permissions,
   ROLE_PERMISSIONS,
+  Roles,
   type DelegationScope,
   type Permission,
   type Role,
@@ -397,6 +398,71 @@ export function canHoldTenantMembership(user: { isPlatformAdmin: boolean }): boo
  */
 export function canBecomePlatformAdmin(user: { membershipCount: number }): boolean {
   return user.membershipCount === 0;
+}
+
+/** The part of a membership the cross-tenant role rule reads. */
+export interface HeldMembership {
+  tenantId: string;
+  role: Role;
+  providerId: string | null;
+}
+
+/**
+ * Does this membership make its holder a provider *there*?
+ *
+ * A PROVIDER, or anybody else holding a diary — an ADMIN with a diary treats
+ * patients as surely as a PROVIDER does. An OWNER with a diary is the exception
+ * and deliberately so: that is an owner who also works in their own clinic
+ * (docs/phase-9-owner-as-provider.md §2.1), and an owner of two clinics who
+ * treats patients at one of them is still only an owner.
+ */
+export function isProviderMembership(
+  membership: Pick<HeldMembership, "role" | "providerId">,
+): boolean {
+  if (membership.role === Roles.OWNER) return false;
+  return membership.role === Roles.PROVIDER || membership.providerId !== null;
+}
+
+export type CrossTenantRoleConflict =
+  /** The person owns another organization, and this would make them a provider here. */
+  | "OWNER_ELSEWHERE"
+  /** The person is a provider at another organization, and this would make them an owner here. */
+  | "PROVIDER_ELSEWHERE";
+
+/**
+ * May a person hold `proposed` alongside the memberships they already have?
+ *
+ * The rule (docs/phase-9-owner-as-provider.md §2.4): somebody who owns an
+ * organization may not be a provider at another one, and a provider at one may
+ * not own another. A provider may work at as many organizations as will have
+ * them, and an owner may own as many as they like.
+ *
+ * Two shapes, one per direction, and both are needed for the reason
+ * `canHoldTenantMembership` gives: a one-way guard is satisfied by doing the two
+ * steps in the other order.
+ *
+ * `held` may include memberships in `proposed.tenantId` — they are skipped,
+ * since the proposal replaces whatever the person holds there. Statuses are
+ * deliberately not read: a SUSPENDED membership can be reactivated by its own
+ * organization alone, so ignoring it would let the rule be beaten by waiting.
+ *
+ * Returns the conflict, or null when there is none.
+ */
+export function findCrossTenantRoleConflict(
+  proposed: HeldMembership,
+  held: readonly HeldMembership[],
+): CrossTenantRoleConflict | null {
+  const elsewhere = held.filter((membership) => membership.tenantId !== proposed.tenantId);
+
+  if (isProviderMembership(proposed) && elsewhere.some((m) => m.role === Roles.OWNER)) {
+    return "OWNER_ELSEWHERE";
+  }
+
+  if (proposed.role === Roles.OWNER && elsewhere.some(isProviderMembership)) {
+    return "PROVIDER_ELSEWHERE";
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

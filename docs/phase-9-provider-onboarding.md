@@ -16,6 +16,11 @@ automatically navigate to their own availability dashboard with a fresh session 
 
 The design history below describes the earlier, separate invitation step.
 
+**October 2026:** when the address belongs to a member of the same organization who holds no diary —
+typically the owner, who also treats patients — creation links that membership instead of inviting,
+and the response says `onboarding: "LINKED"`. Before this, that case rolled the create back. See
+[phase-9-owner-as-provider.md](phase-9-owner-as-provider.md) §2.2.
+
 ## Implementation Record
 
 **Document version:** 1.0 — built 2026-08-04.

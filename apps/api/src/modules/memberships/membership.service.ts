@@ -1,6 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { DelegationScope, Prisma, PrismaClient } from "@bam/db";
-import { canHoldTenantMembership, INVITABLE_ROLES, Roles, type Role } from "@bam/auth";
+import {
+  canHoldTenantMembership,
+  INVITABLE_ROLES,
+  roleCanHoldDiary,
+  Roles,
+  type Role,
+} from "@bam/auth";
 import {
   ConflictError,
   ErrorCodes,
@@ -8,6 +14,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "@bam/contracts";
+import { assertRoleCompatibleAcrossTenants } from "./role-compatibility.js";
 
 export interface InviteInput {
   tenantId: string;
@@ -100,10 +107,23 @@ export class MembershipService {
       await this.assertNotLastOwner(tenantId, membershipId);
     }
 
-    return this.prisma.membership.update({
-      where: { id: membershipId },
-      data: { role },
-      include: { user: { select: { id: true, name: true, email: true } } },
+    return this.prisma.$transaction(async (tx) => {
+      // Promoting a provider elsewhere to owner here, or demoting an owner with
+      // a diary to an ADMIN-with-a-diary while they own another clinic — the
+      // rule is about the result, so it is asked of the result
+      // (docs/phase-9-owner-as-provider.md §2.4).
+      await assertRoleCompatibleAcrossTenants(tx, {
+        userId: membership.userId,
+        tenantId,
+        role,
+        providerId: membership.providerId,
+      });
+
+      return tx.membership.update({
+        where: { id: membershipId },
+        data: { role },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
     });
   }
 
@@ -125,6 +145,17 @@ export class MembershipService {
     }
 
     if (providerId !== null) {
+      // An ASSISTANT holds no `:own` permission, so a diary on that membership
+      // would authorise nothing and say nothing about it — the silent no-op
+      // phase-9-provider-onboarding exists to remove. An OWNER or ADMIN may
+      // hold one (docs/phase-9-owner-as-provider.md §2.1).
+      if (!roleCanHoldDiary(membership.role)) {
+        throw new ValidationError(
+          `A member with the ${membership.role} role cannot hold a diary. Change their role first.`,
+          { field: "providerId" },
+        );
+      }
+
       const provider = await this.prisma.provider.findFirst({
         where: { id: providerId, tenantId, archivedAt: null },
         select: { id: true },
@@ -150,10 +181,22 @@ export class MembershipService {
       }
     }
 
-    return this.prisma.membership.update({
-      where: { id: membershipId },
-      data: { providerId },
-      include: { user: { select: { id: true, name: true, email: true } } },
+    return this.prisma.$transaction(async (tx) => {
+      // Only a link can make somebody a provider; unlinking never conflicts.
+      if (providerId !== null) {
+        await assertRoleCompatibleAcrossTenants(tx, {
+          userId: membership.userId,
+          tenantId,
+          role: membership.role,
+          providerId,
+        });
+      }
+
+      return tx.membership.update({
+        where: { id: membershipId },
+        data: { providerId },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
     });
   }
 
@@ -431,6 +474,62 @@ export class MembershipService {
 
       throw error;
     }
+  }
+
+  /**
+   * Give a newly created provider a login: link an existing member, or invite.
+   * docs/phase-9-owner-as-provider.md §2.2.
+   *
+   * `POST /v1/providers` issues the login in the same transaction as the row.
+   * When the address already belongs to a member of this organization,
+   * {@link inviteProvider} can only refuse, and before this method that refusal
+   * rolled the create back. The commonest case was the owner who also treats
+   * patients and entered their own address: they could not add themselves.
+   *
+   * So a member with no diary, whose role can use one, is linked here and sent
+   * nothing. They sign in already, and an invitation would be a token for an
+   * account they have. Everybody else takes the existing path, including its
+   * refusals.
+   *
+   * Only for a provider created in `transaction`. Unlike {@link linkProvider},
+   * it does not re-check that the diary is free and live, because the caller
+   * created it a moment ago in the same transaction.
+   */
+  async linkOrInviteProvider(
+    input: InviteProviderInput,
+    transaction: Prisma.TransactionClient,
+  ): Promise<
+    | ({ kind: "INVITED" } & InviteResult & { email: string })
+    | { kind: "LINKED"; membershipId: string; userId: string }
+  > {
+    const email = input.provider.email?.trim().toLowerCase();
+
+    const member =
+      email === undefined || email === ""
+        ? null
+        : await transaction.membership.findFirst({
+            where: { tenantId: input.tenantId, user: { email } },
+            select: { id: true, userId: true, role: true, providerId: true },
+          });
+
+    if (member === null || member.providerId !== null || !roleCanHoldDiary(member.role)) {
+      // Not a member, or a member this cannot help. `inviteProvider` says which.
+      return { kind: "INVITED", ...(await this.inviteProvider(input, transaction)) };
+    }
+
+    await assertRoleCompatibleAcrossTenants(transaction, {
+      userId: member.userId,
+      tenantId: input.tenantId,
+      role: member.role,
+      providerId: input.provider.id,
+    });
+
+    await transaction.membership.update({
+      where: { id: member.id },
+      data: { providerId: input.provider.id },
+    });
+
+    return { kind: "LINKED", membershipId: member.id, userId: member.userId };
   }
 
   /**
@@ -804,11 +903,31 @@ export class MembershipService {
           }
         }
 
+        const existing = await tx.membership.findUnique({
+          where: { tenantId_userId: { tenantId: invitation.tenantId, userId } },
+          select: { role: true, providerId: true },
+        });
+
+        // An invitation never demotes an owner. The update branch below takes
+        // the invited role, and `assertNotLastOwner` does not run here, so an
+        // owner accepting a lower invitation into their own organization could
+        // otherwise leave it with nobody who can manage billing or undo the
+        // change (docs/phase-9-owner-as-provider.md §2.5). The diary still
+        // applies — that is an owner who also treats patients.
+        const role = existing?.role === Roles.OWNER ? Roles.OWNER : invitation.role;
+
+        await assertRoleCompatibleAcrossTenants(tx, {
+          userId,
+          tenantId: invitation.tenantId,
+          role,
+          providerId: invitation.providerId ?? existing?.providerId ?? null,
+        });
+
         const membership = await tx.membership.upsert({
           where: { tenantId_userId: { tenantId: invitation.tenantId, userId } },
           // Already a member somehow — take the invited role rather than failing.
           update: {
-            role: invitation.role,
+            role,
             status: "ACTIVE",
             joinedAt: new Date(),
             // Only ever set, never cleared: a plain ADMIN invitation accepted by

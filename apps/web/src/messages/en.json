@@ -170,7 +170,10 @@
     "noOrganizationLink": "Go to the overview",
     "planProfessionalPlus": "Professional Plus",
     "planProfessionalPlusDescription": "Everything in Professional with 300 chats/month, up to 30/day. Each chat lasts up to 5 minutes.",
-    "chatUsage": "Monthly chats: {used} / {limit}. Remaining: {remaining}. Resets at the start of each UTC month."
+    "chatUsage": "Monthly chats: {used} / {limit}. Remaining: {remaining}. Resets at the start of each UTC month.",
+    "linkDiaryOptionalPrompt": "Also treats patients? Link a diary…",
+    "unlinkDiary": "Unlink diary",
+    "unlinkDiaryConfirm": "Unlink {name} from this diary? The diary and its bookings stay; it just stops being theirs."
   },
   "invitation": {
     "title": "Invitation",
@@ -187,7 +190,9 @@
     "goToAvailability": "Set up my working hours",
     "wrongUser": "This invitation was issued to {invited}, but you are signed in as {current}.",
     "signOutAndContinue": "Sign out and continue as {email}",
-    "wrongUserHint": "Signing out here only affects this browser. You can sign back in afterwards."
+    "wrongUserHint": "Signing out here only affects this browser. You can sign back in afterwards.",
+    "roleConflictOwnerElsewhere": "This account owns another organization, and an owner cannot also work as a provider somewhere else. Accept this invitation with a separate account, or ask the organization to invite a different address.",
+    "roleConflictProviderElsewhere": "This account works as a provider at another organization, and a provider cannot also own one. Accept this invitation with a separate account."
   },
   "catalogue": {
     "loading": "Loading…",
@@ -320,7 +325,11 @@
     "inviteLinkOnceHint": "Only needed if the email does not arrive. Shown once — we store only a hash of it, so it cannot be recovered later.",
     "inviteFailed": "The invitation could not be sent. Please try again.",
     "manageAssistant": "Manage assistant",
-    "close": "Close"
+    "close": "Close",
+    "providerCreatedAndLinked": "Provider created and linked to the existing member with that email address. No invitation was needed.",
+    "thisIsYou": "you",
+    "claimDiary": "This is me",
+    "claimDiaryConfirm": "Link {name}'s diary to your own account? Use this if you also treat patients. You keep your current role."
   },
   "availability": {
     "loading": "Loading…",

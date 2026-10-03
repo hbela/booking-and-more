@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { PrismaClient } from "@bam/db";
-import { canHoldTenantMembership, Roles } from "@bam/auth";
+import { canHoldTenantMembership, findCrossTenantRoleConflict, Roles } from "@bam/auth";
 import {
   ConflictError,
   daysUntil,
@@ -333,12 +333,35 @@ export class PlatformService {
   private async assertOwnerMayHoldMembership(email: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { email },
-      select: { isPlatformAdmin: true },
+      select: {
+        isPlatformAdmin: true,
+        memberships: { select: { tenantId: true, role: true, providerId: true } },
+      },
     });
 
     if (user && !canHoldTenantMembership(user)) {
       throw new ForbiddenError(
         "That user is a platform administrator and cannot own an organization.",
+      );
+    }
+
+    // A provider at another organization may not own one
+    // (docs/phase-9-owner-as-provider.md §2.4). Acceptance enforces this anyway;
+    // checked here as well because an operator may see every tenant, so they
+    // can be told now rather than after the prospect has been emailed a link
+    // that will refuse them. The proposed tenant does not exist yet, so its id
+    // is one no membership can carry.
+    if (
+      user &&
+      findCrossTenantRoleConflict(
+        { tenantId: "", role: Roles.OWNER, providerId: null },
+        user.memberships,
+      ) !== null
+    ) {
+      throw new ConflictError(
+        ErrorCodes.MEMBERSHIP_ROLE_CONFLICT,
+        "That address works as a provider at another organization, and a provider cannot also own one. Ask the owner for a separate address.",
+        { field: "ownerEmail", conflict: "PROVIDER_ELSEWHERE" },
       );
     }
   }

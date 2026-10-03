@@ -284,3 +284,17 @@ export const DELEGATED_PERMISSIONS: readonly Permission[] = Object.values(
 export function roleCanReceiveDelegation(role: Role): boolean {
   return ROLE_PERMISSIONS[role].some((permission) => DELEGATED_PERMISSIONS.includes(permission));
 }
+
+/**
+ * Can a membership with this role hold a diary of its own?
+ *
+ * Asked as a permission question for the same reason `roleCanReceiveDelegation`
+ * is (rule 10): a diary is what the `:own` permissions match against, so a role
+ * without one would hold a link that authorises nothing — the silent no-op
+ * docs/phase-9-provider-onboarding.md exists to remove. Today that is OWNER,
+ * ADMIN and PROVIDER; an owner who treats patients is an OWNER membership with
+ * `providerId` set (docs/phase-9-owner-as-provider.md §2.1).
+ */
+export function roleCanHoldDiary(role: Role): boolean {
+  return ROLE_PERMISSIONS[role].includes(Permissions.AVAILABILITY_MANAGE_OWN);
+}
