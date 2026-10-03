@@ -1,5 +1,6 @@
 "use client";
 
+import { ListLoading, PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -98,7 +99,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
     onError: (cause: ApiError) => setError(cause.message),
   });
 
-  if (booking.isPending) return <p className="p-8">{t("loading")}</p>;
+  if (booking.isPending) return <PageLoading label={t("loading")} />;
   if (booking.isError) return <p className="p-8">{t("notFound")}</p>;
 
   const data = booking.data;
@@ -206,7 +207,7 @@ export function ManageBooking({ token }: { token: string }): React.ReactElement 
 
       {mode === "cancel" ? (
         <BookingSection title={t("cancel")}>
-          {cancelPreview.isPending ? <p>{t("loading")}</p> : null}
+          {cancelPreview.isPending ? <ListLoading label={t("loading")} /> : null}
 
           {cancelPreview.data ? (
             <div className="flex flex-col gap-3">

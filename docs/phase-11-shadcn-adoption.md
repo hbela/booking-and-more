@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–6 done).
+**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–7 done).
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -79,18 +79,18 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 
 # 3. Steps
 
-| Step | What                                                                                        | State |
-| ---- | ------------------------------------------------------------------------------------------- | ----- |
-| 0    | This record                                                                                 | done  |
-| 1    | `accent` → `booking` rename; alias layer; `tw-animate-css`; `components.json`               | done  |
-| 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)                        | done  |
-| 3    | Input, Textarea, Label, NativeSelect, Field                                                 | done  |
-| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                              | done  |
-| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                              | done  |
-| 5    | Badge (our tones as extra variants), Alert for Callout, Table                               | done  |
-| 6    | Dialog / AlertDialog for existing modals only                                               | done  |
-| 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar, skeleton |       |
-| 8    | Delete unused wrappers and recipes                                                          |       |
+| Step | What                                                                                        | State                                                                       |
+| ---- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 0    | This record                                                                                 | done                                                                        |
+| 1    | `accent` → `booking` rename; alias layer; `tw-animate-css`; `components.json`               | done                                                                        |
+| 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)                        | done                                                                        |
+| 3    | Input, Textarea, Label, NativeSelect, Field                                                 | done                                                                        |
+| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                              | done                                                                        |
+| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                              | done                                                                        |
+| 5    | Badge (our tones as extra variants), Alert for Callout, Table                               | done                                                                        |
+| 6    | Dialog / AlertDialog for existing modals only                                               | done                                                                        |
+| 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar, skeleton | done (skeleton, tooltip, tabs, sonner; sidebar and dropdown-menu not taken) |
+| 8    | Delete unused wrappers and recipes                                                          |                                                                             |
 
 ## 3.1 Step 1
 
@@ -275,3 +275,37 @@ The npm package `cn` was installed and removed again.
 Phase-11 §2.6's Dialog bullet is amended in place: still **no edit dialog**, only these confirmations, which
 were modal already. Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e`
 (68 passed, 2 of 2 runs).
+
+## 3.8 Step 7 — Skeleton, Tooltip, Tabs, Sonner
+
+The owner chose four of the six candidates on 2026-10-03; the Sidebar and the dropdown menu were not taken.
+Each `add` was answered "no" to overwriting `button`, had `"cn"` rewritten, and had its `package.json` diff
+read. `sonner` brought `next-themes`, which this app does not use, and it was removed.
+
+- **Skeleton.** `ui/loading.tsx` adds `PageLoading` (16 full-screen "Loading…" paragraphs) and `ListLoading`
+  (9 in-card ones). Both keep the word: it moves into a visually hidden span inside `role="status"`, and the
+  shapes are `aria-hidden`. The shapes are generic rather than per-screen copies. `Skeleton` uses `bg-muted`
+  — the registry's `bg-accent` is our raised surface and practically invisible on a card — and stops
+  pulsing under `prefers-reduced-motion`, the app's first use of that query. A button whose own label turns
+  into "Loading…" was left alone.
+- **Tooltip** on the two icon-only controls: the booking calendar's month arrows (now lucide chevrons rather
+  than `‹ ›`) and the chat's send button. `TooltipProvider` sits once in `[locale]/layout.tsx`; this
+  registry version does not wrap each tooltip in its own and Radix throws without one. Tooltips repeat an
+  existing `aria-label` and are never the only place information lives — a phone cannot hover.
+- **Tabs** on the availability screen: weekly hours, exceptions, delegates. **Every panel is `forceMount`**
+  and hides itself when inactive: Radix unmounts inactive panels by default, which would discard an
+  unsaved week in the working-hours editor. `e2e/availability-tabs.spec.ts` adds a period, switches away and
+  back, and counts the row while its tab is hidden; with `forceMount` removed from that panel the test
+  fails, which was checked. The delegates tab appears only when `ProviderDelegates` would render, through the
+  newly exported `canSeeProviderDelegates`, so an ADMIN is never shown an empty tab. Inactive triggers are
+  `text-muted-foreground` (a tested pair) rather than `text-foreground/60`, the list is 44px and scrolls
+  sideways on a phone, and panels keep their focus outline.
+- **Sonner**, for "it worked" only: the assistant and business-description saves (their inline "saved"
+  paragraphs are gone) and the provider, location and assignment edit panels, which used to close without
+  a word. New key `common.saved`. Anything a person must read, copy or act on — invitation and payment
+  links, errors — stays inline, because a toast disappears and cannot be hovered on a phone. The registry
+  read the theme from `next-themes`; ours resolves `data-theme`, falling back to the OS, exactly as
+  globals.css does.
+
+Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (69 passed). No e2e
+covers a toast yet.

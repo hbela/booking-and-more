@@ -6,6 +6,8 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { QueryProvider } from "@/lib/query-provider";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeScript } from "@/components/theme-script";
 import { StaffPwa } from "@/components/staff-pwa";
 import "../globals.css";
@@ -112,7 +114,12 @@ export default async function LocaleLayout({
       <body suppressHydrationWarning>
         <NextIntlClientProvider>
           <QueryProvider>
-            <StaffPwa>{children}</StaffPwa>
+            {/* Radix requires one provider above every tooltip; it also shares
+                the open delay between them (phase-11-shadcn-adoption §3.8). */}
+            <TooltipProvider>
+              <StaffPwa>{children}</StaffPwa>
+              <Toaster />
+            </TooltipProvider>
           </QueryProvider>
         </NextIntlClientProvider>
       </body>

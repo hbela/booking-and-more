@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { knowledgeCharacters, type Language } from "@bam/contracts";
 import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
 import { useState } from "react";
@@ -75,7 +76,7 @@ export function ServicesScreen(): React.ReactElement {
 
   // A signed-out visitor is redirected from an effect, not from render.
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every

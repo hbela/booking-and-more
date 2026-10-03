@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -74,7 +75,7 @@ export function Dashboard(): React.ReactElement {
   // Almost always "not signed in" — send them to sign-in rather than showing a
   // dead dashboard. The redirect itself happens in an effect, not here.
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   return (

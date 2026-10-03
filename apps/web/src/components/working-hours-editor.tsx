@@ -1,5 +1,6 @@
 "use client";
 
+import { ListLoading } from "./ui/loading";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -287,7 +288,7 @@ export function WorkingHoursEditor({
         )}
 
         {week === null ? (
-          <p className="text-sm text-ink-muted">{t("loading")}</p>
+          <ListLoading label={t("loading")} />
         ) : (
           <form
             className="flex flex-col gap-4"

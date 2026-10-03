@@ -1,5 +1,6 @@
 "use client";
 
+import { ListLoading, PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -93,7 +94,7 @@ export function BookingsScreen(): React.ReactElement {
   });
 
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every
@@ -166,7 +167,7 @@ export function BookingsScreen(): React.ReactElement {
           </FormField>
         </div>
 
-        {bookings.isPending ? <p>{t("loading")}</p> : null}
+        {bookings.isPending ? <ListLoading label={t("loading")} /> : null}
         {bookings.data?.items.length === 0 ? <p>{t("empty")}</p> : null}
 
         <ul className="flex flex-col gap-3">

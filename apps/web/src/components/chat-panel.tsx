@@ -22,6 +22,7 @@ import { renderMessage } from "@/lib/conversation-messages";
 import { ChatCatalogueChoices } from "./chat-catalogue-choices";
 import { Brand } from "./brand";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Locale = "en" | "hu" | "de" | "fr";
 const languageNames = { hu: "Magyar", en: "English", de: "Deutsch", fr: "Français" } as const;
@@ -503,21 +504,26 @@ function ChatConversation({
               placeholder={t.placeholder}
               className="min-h-12 min-w-0 rounded-lg border border-line-strong bg-surface px-4"
             />
-            <Button
-              type="submit"
-              disabled={
-                !available ||
-                busy ||
-                closed ||
-                !session ||
-                !draft.trim() ||
-                Array.from(draft.trim()).length >
-                  Math.min(turn?.maxMessageCharacters ?? 500, turn?.charactersRemaining ?? 5000)
-              }
-              aria-label={t.send}
-            >
-              <Send size={17} aria-hidden />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="submit"
+                  disabled={
+                    !available ||
+                    busy ||
+                    closed ||
+                    !session ||
+                    !draft.trim() ||
+                    Array.from(draft.trim()).length >
+                      Math.min(turn?.maxMessageCharacters ?? 500, turn?.charactersRemaining ?? 5000)
+                  }
+                  aria-label={t.send}
+                >
+                  <Send size={17} aria-hidden />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t.send}</TooltipContent>
+            </Tooltip>
           </form>
           <Button
             asChild

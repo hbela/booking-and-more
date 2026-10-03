@@ -1,5 +1,6 @@
 "use client";
 
+import { ListLoading, PageLoading } from "./ui/loading";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -140,10 +141,10 @@ export function PlatformScreen(): React.ReactElement {
     },
   });
 
-  if (me.isPending) return <p className="p-8">{t("loading")}</p>;
+  if (me.isPending) return <PageLoading label={t("loading")} />;
 
   // Redirected from an effect, so render something harmless meanwhile.
-  if (!me.data) return <p className="p-8">{t("loading")}</p>;
+  if (!me.data) return <PageLoading label={t("loading")} />;
 
   // The API refuses these routes regardless; this only avoids showing a screen
   // whose every request would 403.
@@ -284,7 +285,7 @@ export function PlatformScreen(): React.ReactElement {
           }}
         />
 
-        {organizations.isPending ? <p>{t("loading")}</p> : null}
+        {organizations.isPending ? <ListLoading label={t("loading")} /> : null}
         {organizations.error ? <ErrorText>{t("loadFailed")}</ErrorText> : null}
 
         {organizations.data?.items.length === 0 ? (

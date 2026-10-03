@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
@@ -29,7 +30,7 @@ export function AdminScreen(): React.ReactElement {
   return <AdminShell>{body()}</AdminShell>;
 
   function body(): React.ReactElement {
-    if (me.isPending) return <p>{t("loading")}</p>;
+    if (me.isPending) return <PageLoading label={t("loading")} />;
 
     // No session. A 401 is the ordinary answer here rather than an error.
     if (!me.data) {

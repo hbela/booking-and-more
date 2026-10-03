@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +14,8 @@ import {
 } from "@/lib/api-client";
 import { diaryScopeFor } from "@/lib/delegation";
 import { AvailabilityExceptions } from "./availability-exceptions";
-import { ProviderDelegates } from "./provider-delegates";
+import { canSeeProviderDelegates, ProviderDelegates } from "./provider-delegates";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { WorkingHoursEditor } from "./working-hours-editor";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
@@ -129,7 +131,7 @@ export function AvailabilityScreen(): React.ReactElement {
   const offersNothing = assigned.isSuccess && assigned.data.items.length === 0;
 
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every
@@ -142,6 +144,8 @@ export function AvailabilityScreen(): React.ReactElement {
       </DashboardShell>
     );
   }
+
+  const showDelegates = providerId !== null && canSeeProviderDelegates(context, providerId);
 
   return (
     <DashboardShell context={context}>
@@ -202,19 +206,38 @@ export function AvailabilityScreen(): React.ReactElement {
           ) : null}
 
           {context.tenantId ? (
-            <>
-              <WorkingHoursEditor
-                tenantId={context.tenantId}
-                providerId={providerId}
-                timezone={provider.data?.timezone ?? null}
-              />
-              <AvailabilityExceptions
-                tenantId={context.tenantId}
-                providerId={providerId}
-                timezone={provider.data?.timezone ?? null}
-              />
-              <ProviderDelegates tenantId={context.tenantId} providerId={providerId} />
-            </>
+            // Three independent jobs on one diary, so tabs rather than one long
+            // page (phase-11-shadcn-adoption §3.8). Every panel is `forceMount`:
+            // Radix would otherwise unmount the working-hours editor on a tab
+            // switch and silently discard an unsaved week.
+            <Tabs defaultValue="hours">
+              <TabsList aria-label={t("title")}>
+                <TabsTrigger value="hours">{t("workingHours")}</TabsTrigger>
+                <TabsTrigger value="exceptions">{t("exceptions")}</TabsTrigger>
+                {showDelegates ? (
+                  <TabsTrigger value="delegates">{t("delegates")}</TabsTrigger>
+                ) : null}
+              </TabsList>
+              <TabsContent value="hours" forceMount>
+                <WorkingHoursEditor
+                  tenantId={context.tenantId}
+                  providerId={providerId}
+                  timezone={provider.data?.timezone ?? null}
+                />
+              </TabsContent>
+              <TabsContent value="exceptions" forceMount>
+                <AvailabilityExceptions
+                  tenantId={context.tenantId}
+                  providerId={providerId}
+                  timezone={provider.data?.timezone ?? null}
+                />
+              </TabsContent>
+              {showDelegates ? (
+                <TabsContent value="delegates" forceMount>
+                  <ProviderDelegates tenantId={context.tenantId} providerId={providerId} />
+                </TabsContent>
+              ) : null}
+            </Tabs>
           ) : null}
         </>
       )}

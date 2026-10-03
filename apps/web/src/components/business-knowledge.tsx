@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { ListLoading } from "./ui/loading";
 import { useState } from "react";
 import { knowledgeCharacters, type Language } from "@bam/contracts";
 import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
@@ -71,6 +73,7 @@ export function BusinessKnowledge({
         body: profile,
       }),
     onSuccess: () => {
+      toast.success(t("saved"));
       setProfileChanges({});
       void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
       void client.invalidateQueries({ queryKey: ["assistant-settings", tenantId] });
@@ -157,10 +160,9 @@ export function BusinessKnowledge({
                   {t("save")}
                 </Button>
               ) : null}
-              {save.isSuccess ? <p role="status">{t("saved")}</p> : null}
             </form>
           ) : settings.isPending ? (
-            <p>{t("loading")}</p>
+            <ListLoading label={t("loading")} />
           ) : null}
         </CardContent>
       </Card>
@@ -226,7 +228,7 @@ export function BusinessKnowledge({
             </form>
           ) : null}
           {faqs.isPending ? (
-            <p>{t("loading")}</p>
+            <ListLoading label={t("loading")} />
           ) : faqs.data?.items.length === 0 ? (
             <p>{t("empty")}</p>
           ) : null}

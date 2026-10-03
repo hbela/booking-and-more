@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { API_BASE_URL } from "@/lib/api-origin";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -422,7 +423,7 @@ export function BookingFlow({ tenantSlug }: { tenantSlug: string }): React.React
     },
   });
 
-  if (tenant.isPending) return <p className="p-8">{t("loading")}</p>;
+  if (tenant.isPending) return <PageLoading label={t("loading")} />;
   if (tenant.isError) return <p className="p-8">{t("notFound")}</p>;
 
   return (

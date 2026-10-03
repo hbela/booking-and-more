@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { ListLoading, PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -86,9 +88,12 @@ export function AssistantScreen(): React.ReactElement {
         tenantId: context.tenantId,
         body,
       }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["assistant-settings"] }),
+    onSuccess: () => {
+      toast.success(t("saved"));
+      void client.invalidateQueries({ queryKey: ["assistant-settings"] });
+    },
   });
-  if (context.isPending || !context.me) return <p className="p-8">{t("loading")}</p>;
+  if (context.isPending || !context.me) return <PageLoading label={t("loading")} />;
   if (!context.can("conversation:read:all"))
     return (
       <DashboardShell context={context}>
@@ -138,7 +143,6 @@ export function AssistantScreen(): React.ReactElement {
           </CardHeader>
           <CardContent>
             {settings.error || save.isError ? <ErrorText>{t("error")}</ErrorText> : null}
-            {save.isSuccess ? <p role="status">{t("saved")}</p> : null}
             {settings.data ? (
               <form
                 className="grid gap-4"
@@ -173,7 +177,7 @@ export function AssistantScreen(): React.ReactElement {
                 </Button>
               </form>
             ) : (
-              <p>{t("loading")}</p>
+              <ListLoading label={t("loading")} />
             )}
           </CardContent>
         </Card>
@@ -209,7 +213,7 @@ export function AssistantScreen(): React.ReactElement {
             </div>
             <p className="mb-3 text-xs text-ink-muted">{t("dateHint")}</p>
             {conversations.isPending ? (
-              <p>{t("loading")}</p>
+              <ListLoading label={t("loading")} />
             ) : conversations.data?.items.length === 0 ? (
               <p>{t("noConversations")}</p>
             ) : null}

@@ -15,7 +15,8 @@
     "themeSystem": "Rendszer szerint",
     "themeLight": "Világos",
     "themeDark": "Sötét",
-    "cancel": "Mégse"
+    "cancel": "Mégse",
+    "saved": "Mentve."
   },
   "patientQr": {
     "title": "Páciens QR-kódok",

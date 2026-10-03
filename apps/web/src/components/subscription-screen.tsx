@@ -1,5 +1,6 @@
 "use client";
 
+import { PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -123,7 +124,7 @@ export function SubscriptionScreen(): React.ReactElement {
   });
 
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every

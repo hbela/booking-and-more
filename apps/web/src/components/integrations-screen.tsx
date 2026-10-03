@@ -1,5 +1,6 @@
 "use client";
 
+import { ListLoading, PageLoading } from "./ui/loading";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -165,7 +166,7 @@ export function IntegrationsScreen(): React.ReactElement {
   });
 
   if (context.isPending || !context.me) {
-    return <p className="p-8">{dashboard("loading")}</p>;
+    return <PageLoading label={dashboard("loading")} />;
   }
 
   const configured = integrations.data?.configured ?? false;
@@ -280,7 +281,7 @@ export function IntegrationsScreen(): React.ReactElement {
               {picking === integration.id ? (
                 <Section title={t("chooseCalendar")}>
                   {calendars.isPending ? (
-                    <p className="text-sm text-ink-muted">{dashboard("loading")}</p>
+                    <ListLoading label={dashboard("loading")} />
                   ) : calendars.isError ? (
                     <ErrorText>{t("calendarsUnavailable")}</ErrorText>
                   ) : (

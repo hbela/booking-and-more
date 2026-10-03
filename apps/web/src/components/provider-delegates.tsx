@@ -10,7 +10,7 @@ import {
   type DelegationScope,
   type ProviderDelegation,
 } from "@/lib/api-client";
-import { useDashboardContext } from "./dashboard-shell";
+import { useDashboardContext, type DashboardContext } from "./dashboard-shell";
 import type { EditPanel } from "@/lib/use-edit-panel";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -23,6 +23,19 @@ import { Checkbox } from "./ui/checkbox";
 import { useConfirm } from "./ui/confirm-dialog";
 
 const SCOPES: DelegationScope[] = ["AVAILABILITY", "BOOKINGS"];
+
+/**
+ * Whether {@link ProviderDelegates} renders anything for this caller. Exported
+ * so a container can leave out the frame around it — the availability screen's
+ * tab — rather than show an empty one. An ADMIN sees neither branch: they may
+ * edit this schedule and may not see who else runs it.
+ */
+export function canSeeProviderDelegates(
+  context: Pick<DashboardContext, "can" | "me">,
+  providerId: string,
+): boolean {
+  return context.can("delegation:manage") || context.me?.membership?.providerId === providerId;
+}
 
 /**
  * Who assists on this diary.
@@ -80,6 +93,7 @@ export function ProviderDelegates({
 
   const canManage = context.can("delegation:manage");
   const isOwnDiary = context.me?.membership?.providerId === providerId;
+  const visible = canSeeProviderDelegates(context, providerId);
 
   const [mode, setMode] = useState<"idle" | "assign" | "invite">("idle");
   const [candidateId, setCandidateId] = useState("");
@@ -174,7 +188,7 @@ export function ProviderDelegates({
 
   // An ADMIN reaches neither branch: they may edit this schedule and may not
   // see who else runs it.
-  if (!canManage && !isOwnDiary) return null;
+  if (!visible) return null;
 
   const rows = delegations.data?.items ?? [];
   const available = (candidates.data?.items ?? []).filter((entry) => !entry.alreadyDelegated);

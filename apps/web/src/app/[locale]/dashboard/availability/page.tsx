@@ -1,3 +1,4 @@
+import { PageLoading } from "@/components/ui/loading";
 import { Suspense } from "react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AvailabilityScreen } from "@/components/availability-screen";
@@ -15,7 +16,7 @@ export default async function AvailabilityPage({
   // passes it — and `useSearchParams` in a client component needs a Suspense
   // boundary above it, or the route cannot be prerendered at all.
   return (
-    <Suspense fallback={<p className="p-8">{t("loading")}</p>}>
+    <Suspense fallback={<PageLoading label={t("loading")} />}>
       <AvailabilityScreen />
     </Suspense>
   );

@@ -15,7 +15,8 @@
     "themeSystem": "System",
     "themeLight": "Light",
     "themeDark": "Dark",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "saved": "Saved."
   },
   "patientQr": {
     "title": "Patient QR codes",

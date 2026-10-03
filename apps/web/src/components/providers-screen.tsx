@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { PageLoading } from "./ui/loading";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
@@ -222,7 +224,7 @@ export function ProvidersScreen(): React.ReactElement {
 
   // A signed-out visitor is redirected from an effect, not from render.
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every
@@ -963,6 +965,7 @@ function EditProviderPanel({
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const common = useTranslations("common");
   const queryClient = useQueryClient();
 
   const original = providerStateFrom(provider);
@@ -978,6 +981,7 @@ function EditProviderPanel({
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["providers"] });
+      toast.success(common("saved"));
       onClose();
     },
     onError: (cause: unknown) => {
@@ -1058,6 +1062,7 @@ function AssignmentsPanel({
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const common = useTranslations("common");
   const locale = useLocale();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -1141,6 +1146,7 @@ function AssignmentsPanel({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["provider-services"] });
       void queryClient.invalidateQueries({ queryKey: ["provider-locations"] });
+      toast.success(common("saved"));
       onClose();
     },
     onError: (cause: unknown) => {

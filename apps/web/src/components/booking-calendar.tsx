@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/cn";
 import {
   addMonths,
@@ -126,30 +128,40 @@ export function BookingCalendar({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          disabled={!canGoBack}
-          aria-label={t("previousMonth")}
-          onClick={() => {
-            onMonthChange(addMonths(month, -1));
-          }}
-          className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-strong disabled:hover:bg-transparent"
-        >
-          <span aria-hidden="true">‹</span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              disabled={!canGoBack}
+              aria-label={t("previousMonth")}
+              onClick={() => {
+                onMonthChange(addMonths(month, -1));
+              }}
+              className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line-strong disabled:hover:bg-transparent"
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{t("previousMonth")}</TooltipContent>
+        </Tooltip>
 
         <p className="font-display text-base font-semibold">{formatMonth(month, locale)}</p>
 
-        <button
-          type="button"
-          aria-label={t("nextMonth")}
-          onClick={() => {
-            onMonthChange(addMonths(month, 1));
-          }}
-          className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors"
-        >
-          <span aria-hidden="true">›</span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={t("nextMonth")}
+              onClick={() => {
+                onMonthChange(addMonths(month, 1));
+              }}
+              className="border-line-strong hover:border-booking hover:bg-booking-surface flex size-11 items-center justify-center rounded-lg border transition-colors"
+            >
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{t("nextMonth")}</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Six rows of height reserved, so a five-row month followed by a six-row

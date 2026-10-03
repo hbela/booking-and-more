@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -66,7 +68,7 @@ export function LocationsScreen(): React.ReactElement {
 
   // A signed-out visitor is redirected from an effect, not from render.
   if (context.isPending || !context.me) {
-    return <p className="p-8">{t("loading")}</p>;
+    return <PageLoading label={t("loading")} />;
   }
 
   // Signed in, but there is no organization to scope this screen to. Every
@@ -266,6 +268,7 @@ function EditLocationPanel({
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const common = useTranslations("common");
   const queryClient = useQueryClient();
 
   const original = locationStateFrom(location);
@@ -281,6 +284,7 @@ function EditLocationPanel({
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["locations"] });
+      toast.success(common("saved"));
       onClose();
     },
     onError: (cause: unknown) => {
