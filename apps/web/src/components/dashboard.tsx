@@ -7,7 +7,7 @@ import { ApiError, apiFetch, type Member, type Paginated, type Provider } from "
 import { resolveDiaryState } from "@/lib/member-diary";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -226,35 +226,40 @@ function PendingPanel({
   ];
 
   return (
-    <Card title={t("pendingTitle", { organization: organizationName })}>
-      <p className="text-sm text-ink-muted">{t("pendingIntro")}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("pendingTitle", { organization: organizationName })}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("pendingIntro")}</p>
 
-      <ol className="flex flex-col gap-3">
-        {steps.map((step, index) => (
-          <li key={step.key} className="flex gap-3 text-sm">
-            <span
-              aria-hidden="true"
-              className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
-                step.active ? "bg-primary text-white" : "bg-surface-sunken text-ink-subtle"
-              }`}
-            >
-              {index + 1}
-            </span>
-            <span className={step.active ? "" : "text-ink-subtle"}>{t(step.key)}</span>
-          </li>
-        ))}
-      </ol>
+        <ol className="flex flex-col gap-3">
+          {steps.map((step, index) => (
+            <li key={step.key} className="flex gap-3 text-sm">
+              <span
+                aria-hidden="true"
+                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                  step.active ? "bg-primary text-white" : "bg-surface-sunken text-ink-subtle"
+                }`}
+              >
+                {index + 1}
+              </span>
+              <span className={step.active ? "" : "text-ink-subtle"}>{t(step.key)}</span>
+            </li>
+          ))}
+        </ol>
 
-      {/* Null means no deadline at all — an internal organization — which is
+        {/* Null means no deadline at all — an internal organization — which is
           not the same as none left, so nothing is rendered rather than
           "0 days" (phase-9 §2.2). */}
-      {daysRemaining === null ? null : (
-        <p className="text-sm text-ink-muted">{t("daysRemaining", { days: daysRemaining })}</p>
-      )}
+        {daysRemaining === null ? null : (
+          <p className="text-sm text-ink-muted">{t("daysRemaining", { days: daysRemaining })}</p>
+        )}
 
-      <Button asChild>
-        <Link href="/dashboard/subscription">{t("subscribeCta")}</Link>
-      </Button>
+        <Button asChild>
+          <Link href="/dashboard/subscription">{t("subscribeCta")}</Link>
+        </Button>
+      </CardContent>
     </Card>
   );
 }
@@ -275,12 +280,17 @@ function PlatformAdminPanel(): React.ReactElement {
   const t = useTranslations("admin");
 
   return (
-    <Card title={t("platformAdminTitle")}>
-      <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("platformAdminTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
 
-      <Button asChild>
-        <Link href="/admin">{t("platformAdminLink")}</Link>
-      </Button>
+        <Button asChild>
+          <Link href="/admin">{t("platformAdminLink")}</Link>
+        </Button>
+      </CardContent>
     </Card>
   );
 }
@@ -300,56 +310,61 @@ function CreateTenantPanel({ onCreated }: { onCreated: () => void }): React.Reac
   });
 
   return (
-    <Card title={t("createTenant")}>
-      <p className="text-sm text-ink-muted">{t("createTenantHint")}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("createTenant")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("createTenantHint")}</p>
 
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          mutation.mutate();
-        }}
-      >
-        <FormField id="tenant-name" label={t("name")}>
-          <Input
-            id="tenant-name"
-            value={name}
-            onChange={(event) => {
-              const value = event.target.value;
-              setName(value);
-              // Suggest a slug, but leave it editable — it becomes a public URL.
-              setSlug(
-                value
-                  .toLowerCase()
-                  .normalize("NFD")
-                  .replace(/[̀-ͯ]/g, "")
-                  .replace(/[^a-z0-9]+/g, "-")
-                  .replace(/^-+|-+$/g, ""),
-              );
-            }}
-            required
-          />
-        </FormField>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            mutation.mutate();
+          }}
+        >
+          <FormField id="tenant-name" label={t("name")}>
+            <Input
+              id="tenant-name"
+              value={name}
+              onChange={(event) => {
+                const value = event.target.value;
+                setName(value);
+                // Suggest a slug, but leave it editable — it becomes a public URL.
+                setSlug(
+                  value
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[̀-ͯ]/g, "")
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, ""),
+                );
+              }}
+              required
+            />
+          </FormField>
 
-        <FormField id="tenant-slug" label={t("slug")}>
-          <Input
-            id="tenant-slug"
-            value={slug}
-            onChange={(event) => {
-              setSlug(event.target.value);
-            }}
-            required
-            className="font-mono"
-          />
-        </FormField>
+          <FormField id="tenant-slug" label={t("slug")}>
+            <Input
+              id="tenant-slug"
+              value={slug}
+              onChange={(event) => {
+                setSlug(event.target.value);
+              }}
+              required
+              className="font-mono"
+            />
+          </FormField>
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending}>
-          {t("create")}
-        </Button>
-      </form>
+          <Button type="submit" disabled={mutation.isPending}>
+            {t("create")}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   );
 }

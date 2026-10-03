@@ -24,7 +24,7 @@ import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashbo
 import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -287,37 +287,44 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
   });
 
   return (
-    <Card title={t("addService")}>
-      <p className="text-sm text-ink-muted">{t("addServiceHint")}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("addService")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("addServiceHint")}</p>
 
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          setSlugTaken(false);
-          mutation.mutate();
-        }}
-      >
-        <ServiceFields
-          state={state}
-          idPrefix="new-service"
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            setSlugTaken(false);
+            mutation.mutate();
           }}
-        />
+        >
+          <ServiceFields
+            state={state}
+            idPrefix="new-service"
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
 
-        <KnowledgeBudget
-          tenantId={tenantId}
-          baseDescriptionChange={knowledgeCharacters(state.description)}
-        />
-        <ErrorText>{error}</ErrorText>
-        {slugTaken ? <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p> : null}
+          <KnowledgeBudget
+            tenantId={tenantId}
+            baseDescriptionChange={knowledgeCharacters(state.description)}
+          />
+          <ErrorText>{error}</ErrorText>
+          {slugTaken ? (
+            <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p>
+          ) : null}
 
-        <Button type="submit" disabled={mutation.isPending}>
-          {t("create")}
-        </Button>
-      </form>
+          <Button type="submit" disabled={mutation.isPending}>
+            {t("create")}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -380,57 +387,62 @@ function EditServicePanel({
   });
 
   return (
-    <Card title={t("editService")} {...panelProps}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          save.mutate();
-        }}
-      >
-        <ServiceFields
-          state={state}
-          idPrefix={`edit-service-${service.id}`}
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>{t("editService")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            save.mutate();
           }}
-        />
+        >
+          <ServiceFields
+            state={state}
+            idPrefix={`edit-service-${service.id}`}
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
 
-        <KnowledgeBudget
-          tenantId={tenantId}
-          baseDescriptionChange={
-            knowledgeCharacters(state.description) - knowledgeCharacters(service.description)
-          }
-        />
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">{t("offeredBy")}</span>
-          {detail.data === undefined ? null : detail.data.providers.length === 0 ? (
-            <p className="text-sm text-ink-muted">{t("noProvidersAssigned")}</p>
-          ) : (
-            <ul className="text-sm text-ink-muted">
-              {detail.data.providers.map((entry) => (
-                <li key={entry.providerId}>
-                  {entry.displayName}
-                  {entry.active ? "" : ` · ${t("inactive")}`}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="text-xs text-ink-subtle">{t("offeredByHint")}</p>
-        </div>
+          <KnowledgeBudget
+            tenantId={tenantId}
+            baseDescriptionChange={
+              knowledgeCharacters(state.description) - knowledgeCharacters(service.description)
+            }
+          />
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">{t("offeredBy")}</span>
+            {detail.data === undefined ? null : detail.data.providers.length === 0 ? (
+              <p className="text-sm text-ink-muted">{t("noProvidersAssigned")}</p>
+            ) : (
+              <ul className="text-sm text-ink-muted">
+                {detail.data.providers.map((entry) => (
+                  <li key={entry.providerId}>
+                    {entry.displayName}
+                    {entry.active ? "" : ` · ${t("inactive")}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-ink-subtle">{t("offeredByHint")}</p>
+          </div>
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {t("saveChanges")}
-          </Button>
-          <Button variant="outline" type="button" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-        </div>
-      </form>
+          <div className="flex gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {t("saveChanges")}
+            </Button>
+            <Button variant="outline" type="button" onClick={onClose}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -499,80 +511,85 @@ function TranslationsPanel({
   });
 
   return (
-    <Card title={t("translationsFor", { name: service.name })}>
-      <form
-        onChange={(event) => {
-          const data = new FormData(event.currentTarget);
-          setChanges(
-            Object.fromEntries(
-              LOCALES.filter((locale) => locale !== defaultLanguage).map((locale) => [
-                locale,
-                (textField(data, `name-${locale}`)
-                  ? knowledgeCharacters(textField(data, `description-${locale}`))
-                  : 0) -
-                  knowledgeCharacters(
-                    service.translations.find((entry) => entry.locale === locale)?.description,
-                  ),
-              ]),
-            ),
-          );
-        }}
-        className="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          save.mutate(event.currentTarget);
-        }}
-      >
-        {LOCALES.map((locale) => {
-          const existing = service.translations.find((entry) => entry.locale === locale);
-          const isOriginal = locale === defaultLanguage;
-          const locked = isOriginal;
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("translationsFor", { name: service.name })}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          onChange={(event) => {
+            const data = new FormData(event.currentTarget);
+            setChanges(
+              Object.fromEntries(
+                LOCALES.filter((locale) => locale !== defaultLanguage).map((locale) => [
+                  locale,
+                  (textField(data, `name-${locale}`)
+                    ? knowledgeCharacters(textField(data, `description-${locale}`))
+                    : 0) -
+                    knowledgeCharacters(
+                      service.translations.find((entry) => entry.locale === locale)?.description,
+                    ),
+                ]),
+              ),
+            );
+          }}
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            save.mutate(event.currentTarget);
+          }}
+        >
+          {LOCALES.map((locale) => {
+            const existing = service.translations.find((entry) => entry.locale === locale);
+            const isOriginal = locale === defaultLanguage;
+            const locked = isOriginal;
 
-          return (
-            <div key={locale} className="flex flex-col gap-2">
-              <FormField id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
-                <Input
-                  id={`name-${locale}`}
-                  name={`name-${locale}`}
-                  defaultValue={existing?.name ?? (isOriginal ? service.name : "")}
-                  placeholder={service.name}
-                  disabled={locked}
-                />
-              </FormField>
+            return (
+              <div key={locale} className="flex flex-col gap-2">
+                <FormField id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
+                  <Input
+                    id={`name-${locale}`}
+                    name={`name-${locale}`}
+                    defaultValue={existing?.name ?? (isOriginal ? service.name : "")}
+                    placeholder={service.name}
+                    disabled={locked}
+                  />
+                </FormField>
 
-              <FormField
-                id={`description-${locale}`}
-                label={`${locale.toUpperCase()} — ${t("description")}`}
-                hint={t("serviceDescriptionHint")}
-              >
-                <Textarea
+                <FormField
                   id={`description-${locale}`}
-                  aria-describedby={`description-${locale}-hint`}
-                  rows={5}
-                  name={`description-${locale}`}
-                  defaultValue={
-                    existing?.description ?? (isOriginal ? (service.description ?? "") : "")
-                  }
-                  disabled={locked}
-                />
-              </FormField>
-            </div>
-          );
-        })}
+                  label={`${locale.toUpperCase()} — ${t("description")}`}
+                  hint={t("serviceDescriptionHint")}
+                >
+                  <Textarea
+                    id={`description-${locale}`}
+                    aria-describedby={`description-${locale}-hint`}
+                    rows={5}
+                    name={`description-${locale}`}
+                    defaultValue={
+                      existing?.description ?? (isOriginal ? (service.description ?? "") : "")
+                    }
+                    disabled={locked}
+                  />
+                </FormField>
+              </div>
+            );
+          })}
 
-        <KnowledgeBudget tenantId={tenantId} changes={changes} />
-        <ErrorText>{error}</ErrorText>
+          <KnowledgeBudget tenantId={tenantId} changes={changes} />
+          <ErrorText>{error}</ErrorText>
 
-        <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {t("save")}
-          </Button>
-          <Button variant="outline" type="button" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-        </div>
-      </form>
+          <div className="flex gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {t("save")}
+            </Button>
+            <Button variant="outline" type="button" onClick={onClose}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   );
 }

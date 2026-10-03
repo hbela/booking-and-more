@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { Card } from "./card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 
 /**
  * The frame around a credential form: sign-in, sign-up, and the invitation
@@ -33,15 +33,16 @@ export async function AuthLayout({
           {common("appName")}
         </p>
 
-        <Card className="gap-6">
-          <div className="flex flex-col gap-2">
-            <h1 className="font-display text-ink text-2xl font-bold tracking-tight">{title}</h1>
-            {description === undefined ? null : (
-              <p className="text-ink-muted text-sm">{description}</p>
-            )}
-          </div>
+        <Card>
+          <CardHeader>
+            {/* The page's only heading, so an <h1> rather than CardTitle's <h2>. */}
+            <CardTitle asChild>
+              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+            </CardTitle>
+            {description === undefined ? null : <CardDescription>{description}</CardDescription>}
+          </CardHeader>
 
-          {children}
+          <CardContent>{children}</CardContent>
         </Card>
       </div>
     </main>

@@ -41,7 +41,7 @@ import { ProviderDelegates } from "./provider-delegates";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
 import { Callout, CalloutLink } from "./ui/callout";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -599,70 +599,75 @@ function InvitePanel({
   });
 
   return (
-    <Card title={t("inviteTitle", { name: provider.displayName })} {...panelProps}>
-      {sent ? (
-        <div className="flex flex-col gap-3">
-          <p role="status" className="text-sm">
-            {t("inviteSent", { email: sent.email })}
-          </p>
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>{t("inviteTitle", { name: provider.displayName })}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {sent ? (
+          <div className="flex flex-col gap-3">
+            <p role="status" className="text-sm">
+              {t("inviteSent", { email: sent.email })}
+            </p>
 
-          {/* Collapsed, deliberately. The email is the mechanism; this is the
+            {/* Collapsed, deliberately. The email is the mechanism; this is the
               escape hatch for the case where the worker booted without a mail
               key and wrote SKIPPED rather than a fake SENT
               (phase-9-owner-onboarding-emails §2). Shown once — only a hash of
               the token is stored, so it cannot be recovered afterwards. */}
-          <details>
-            <summary className="cursor-pointer text-xs text-ink-muted">
-              {t("inviteLinkFallback")}
-            </summary>
-            <div className="mt-2 flex flex-col gap-2">
-              <p className="text-xs text-ink-subtle">{t("inviteLinkOnceHint")}</p>
-              <Input
-                readOnly
-                value={sent.acceptUrl}
-                aria-label={t("inviteLinkFallback")}
-                onFocus={(event) => {
-                  event.currentTarget.select();
-                }}
-              />
-            </div>
-          </details>
+            <details>
+              <summary className="cursor-pointer text-xs text-ink-muted">
+                {t("inviteLinkFallback")}
+              </summary>
+              <div className="mt-2 flex flex-col gap-2">
+                <p className="text-xs text-ink-subtle">{t("inviteLinkOnceHint")}</p>
+                <Input
+                  readOnly
+                  value={sent.acceptUrl}
+                  aria-label={t("inviteLinkFallback")}
+                  onFocus={(event) => {
+                    event.currentTarget.select();
+                  }}
+                />
+              </div>
+            </details>
 
-          <Button variant="outline" type="button" onClick={onClose}>
-            {t("close")}
-          </Button>
-        </div>
-      ) : (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError(null);
-            send.mutate();
-          }}
-        >
-          <p className="text-sm text-ink-muted">
-            {t("inviteIntro", { email: provider.email ?? "" })}
-          </p>
-          <p className="text-sm text-ink-muted">{t("inviteWhatTheyGet")}</p>
-
-          {/* Said before the press, not after: re-inviting silently kills the
-              link the first email carried, and somebody halfway through using
-              it deserves to be the owner's decision rather than a surprise. */}
-          {alreadyInvited ? <Callout>{t("alreadyInvited")}</Callout> : null}
-
-          <ErrorText>{error}</ErrorText>
-
-          <div className="flex gap-3">
-            <Button type="submit" disabled={send.isPending}>
-              {alreadyInvited ? t("reinvite") : t("sendInvitation")}
-            </Button>
             <Button variant="outline" type="button" onClick={onClose}>
-              {t("cancel")}
+              {t("close")}
             </Button>
           </div>
-        </form>
-      )}
+        ) : (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setError(null);
+              send.mutate();
+            }}
+          >
+            <p className="text-sm text-ink-muted">
+              {t("inviteIntro", { email: provider.email ?? "" })}
+            </p>
+            <p className="text-sm text-ink-muted">{t("inviteWhatTheyGet")}</p>
+
+            {/* Said before the press, not after: re-inviting silently kills the
+              link the first email carried, and somebody halfway through using
+              it deserves to be the owner's decision rather than a surprise. */}
+            {alreadyInvited ? <Callout>{t("alreadyInvited")}</Callout> : null}
+
+            <ErrorText>{error}</ErrorText>
+
+            <div className="flex gap-3">
+              <Button type="submit" disabled={send.isPending}>
+                {alreadyInvited ? t("reinvite") : t("sendInvitation")}
+              </Button>
+              <Button variant="outline" type="button" onClick={onClose}>
+                {t("cancel")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -821,102 +826,107 @@ function CreateProviderPanel({
   });
 
   return (
-    <Card title={t("addProvider")}>
-      <p className="text-sm text-ink-muted">{t("addProviderHint")}</p>
-      {/* Linked rather than invited when the address is a member's own — the
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("addProvider")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("addProviderHint")}</p>
+        {/* Linked rather than invited when the address is a member's own — the
           owner who also treats patients (docs/phase-9-owner-as-provider.md
           §2.2). Saying "invited" there would send them looking for an email. */}
-      {mutation.isSuccess ? (
-        <p role="status">
-          {mutation.data === "LINKED"
-            ? t("providerCreatedAndLinked")
-            : t("providerCreatedAndInvited")}
-        </p>
-      ) : null}
-
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          mutation.mutate();
-        }}
-      >
-        <ProviderFields
-          state={state}
-          idPrefix="new-provider"
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
-          }}
-        />
-
-        {/* Absent when there are none: the amber notice at the top of the screen
-            already says to create a service first, and an empty fieldset here
-            would only repeat it. */}
-        {services && services.length > 0 && serviceRows ? (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium">{t("services")}</legend>
-            {services.map((service) => (
-              <label key={service.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={serviceRows.get(service.id)?.checked ?? false}
-                  onCheckedChange={(value) => {
-                    const checked = value === true;
-                    setServiceRows((current) => {
-                      const existing = current?.get(service.id);
-                      if (!current || !existing) return current;
-
-                      const next = new Map(current);
-                      next.set(service.id, { ...existing, checked });
-                      return next;
-                    });
-                  }}
-                />
-                <span>
-                  {service.name}
-                  <span className="text-ink-subtle">
-                    {" · "}
-                    {t("minutes", { count: service.durationMinutes })}
-                  </span>
-                </span>
-              </label>
-            ))}
-            <p className="text-xs text-ink-subtle">{t("assignOnCreateHint")}</p>
-          </fieldset>
+        {mutation.isSuccess ? (
+          <p role="status">
+            {mutation.data === "LINKED"
+              ? t("providerCreatedAndLinked")
+              : t("providerCreatedAndInvited")}
+          </p>
         ) : null}
 
-        {/* A select and not a checkbox list: this is where the provider is
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            mutation.mutate();
+          }}
+        >
+          <ProviderFields
+            state={state}
+            idPrefix="new-provider"
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
+
+          {/* Absent when there are none: the amber notice at the top of the screen
+            already says to create a service first, and an empty fieldset here
+            would only repeat it. */}
+          {services && services.length > 0 && serviceRows ? (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">{t("services")}</legend>
+              {services.map((service) => (
+                <label key={service.id} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={serviceRows.get(service.id)?.checked ?? false}
+                    onCheckedChange={(value) => {
+                      const checked = value === true;
+                      setServiceRows((current) => {
+                        const existing = current?.get(service.id);
+                        if (!current || !existing) return current;
+
+                        const next = new Map(current);
+                        next.set(service.id, { ...existing, checked });
+                        return next;
+                      });
+                    }}
+                  />
+                  <span>
+                    {service.name}
+                    <span className="text-ink-subtle">
+                      {" · "}
+                      {t("minutes", { count: service.durationMinutes })}
+                    </span>
+                  </span>
+                </label>
+              ))}
+              <p className="text-xs text-ink-subtle">{t("assignOnCreateHint")}</p>
+            </fieldset>
+          ) : null}
+
+          {/* A select and not a checkbox list: this is where the provider is
             based, not everywhere they may ever work. The blank option is kept
             selectable rather than being a placeholder that disappears — "no
             base location" is a state an owner may want to return to. */}
-        {locations && locations.length > 0 ? (
-          <>
-            <FormField id="new-provider-location" label={t("defaultLocation")}>
-              <NativeSelect
-                id="new-provider-location"
-                value={defaultLocationId}
-                onChange={(event) => {
-                  setDefaultLocationId(event.target.value);
-                }}
-              >
-                <option value="">{t("noDefaultLocation")}</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </FormField>
-            <p className="text-xs text-ink-subtle">{t("defaultLocationHint")}</p>
-          </>
-        ) : null}
+          {locations && locations.length > 0 ? (
+            <>
+              <FormField id="new-provider-location" label={t("defaultLocation")}>
+                <NativeSelect
+                  id="new-provider-location"
+                  value={defaultLocationId}
+                  onChange={(event) => {
+                    setDefaultLocationId(event.target.value);
+                  }}
+                >
+                  <option value="">{t("noDefaultLocation")}</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+              <p className="text-xs text-ink-subtle">{t("defaultLocationHint")}</p>
+            </>
+          ) : null}
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending}>
-          {t("create")}
-        </Button>
-      </form>
+          <Button type="submit" disabled={mutation.isPending}>
+            {t("create")}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -957,34 +967,39 @@ function EditProviderPanel({
   });
 
   return (
-    <Card title={t("editProvider")} {...panelProps}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          save.mutate();
-        }}
-      >
-        <ProviderFields
-          state={state}
-          idPrefix={`edit-provider-${provider.id}`}
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>{t("editProvider")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            save.mutate();
           }}
-        />
+        >
+          <ProviderFields
+            state={state}
+            idPrefix={`edit-provider-${provider.id}`}
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {t("saveChanges")}
-          </Button>
-          <Button variant="outline" type="button" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-        </div>
-      </form>
+          <div className="flex gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {t("saveChanges")}
+            </Button>
+            <Button variant="outline" type="button" onClick={onClose}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -1137,105 +1152,114 @@ function AssignmentsPanel({
   }
 
   return (
-    <Card title={t("assignments")} {...panelProps}>
-      {!ready ? (
-        <p className="text-sm text-ink-muted">{t("loadingAssignments")}</p>
-      ) : (
-        <form
-          className="flex flex-col gap-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError(null);
-            save.mutate();
-          }}
-        >
-          <fieldset className="flex flex-col gap-3">
-            <legend className="text-sm font-medium">{t("services")}</legend>
-            {services.data?.items.length === 0 ? (
-              <Callout tone="action">
-                {t.rich("needServicesFirst", {
-                  link: (chunks) => <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>,
-                })}
-              </Callout>
-            ) : (
-              services.data?.items.map((service) => {
-                const row = serviceRows?.get(service.id);
-                if (!row) return null;
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>{t("assignments")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {!ready ? (
+          <p className="text-sm text-ink-muted">{t("loadingAssignments")}</p>
+        ) : (
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setError(null);
+              save.mutate();
+            }}
+          >
+            <fieldset className="flex flex-col gap-3">
+              <legend className="text-sm font-medium">{t("services")}</legend>
+              {services.data?.items.length === 0 ? (
+                <Callout tone="action">
+                  {t.rich("needServicesFirst", {
+                    link: (chunks) => (
+                      <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>
+                    ),
+                  })}
+                </Callout>
+              ) : (
+                services.data?.items.map((service) => {
+                  const row = serviceRows?.get(service.id);
+                  if (!row) return null;
 
-                return (
-                  <div key={service.id} className="flex flex-col gap-1">
-                    <label className="flex items-center gap-2 text-sm">
+                  return (
+                    <div key={service.id} className="flex flex-col gap-1">
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={row.checked}
+                          onCheckedChange={(value) => {
+                            updateService(service.id, { checked: value === true });
+                          }}
+                        />
+                        <span>
+                          {service.name}
+                          <span className="text-ink-subtle">
+                            {" · "}
+                            {t("minutes", { count: service.durationMinutes })}
+                          </span>
+                        </span>
+                      </label>
+
+                      {row.checked ? (
+                        <ServiceOverrides
+                          service={service}
+                          row={row}
+                          locale={locale}
+                          onChange={(patch) => {
+                            updateService(service.id, patch);
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium">{t("locations")}</legend>
+              {locations.data?.items.length === 0 ? (
+                <Callout>
+                  {t.rich("noLocationsYet", {
+                    link: (chunks) => (
+                      <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>
+                    ),
+                  })}
+                </Callout>
+              ) : (
+                locations.data?.items.map((location) => {
+                  const row = locationRows?.get(location.id);
+                  if (!row) return null;
+
+                  return (
+                    <label key={location.id} className="flex items-center gap-2 text-sm">
                       <Checkbox
                         checked={row.checked}
                         onCheckedChange={(value) => {
-                          updateService(service.id, { checked: value === true });
+                          updateLocation(location.id, { checked: value === true });
                         }}
                       />
-                      <span>
-                        {service.name}
-                        <span className="text-ink-subtle">
-                          {" · "}
-                          {t("minutes", { count: service.durationMinutes })}
-                        </span>
-                      </span>
+                      <span>{location.name}</span>
                     </label>
+                  );
+                })
+              )}
+            </fieldset>
 
-                    {row.checked ? (
-                      <ServiceOverrides
-                        service={service}
-                        row={row}
-                        locale={locale}
-                        onChange={(patch) => {
-                          updateService(service.id, patch);
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-          </fieldset>
+            <ErrorText>{error}</ErrorText>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium">{t("locations")}</legend>
-            {locations.data?.items.length === 0 ? (
-              <Callout>
-                {t.rich("noLocationsYet", {
-                  link: (chunks) => <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>,
-                })}
-              </Callout>
-            ) : (
-              locations.data?.items.map((location) => {
-                const row = locationRows?.get(location.id);
-                if (!row) return null;
-
-                return (
-                  <label key={location.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={row.checked}
-                      onCheckedChange={(value) => {
-                        updateLocation(location.id, { checked: value === true });
-                      }}
-                    />
-                    <span>{location.name}</span>
-                  </label>
-                );
-              })
-            )}
-          </fieldset>
-
-          <ErrorText>{error}</ErrorText>
-
-          <div className="flex gap-3">
-            <Button type="submit" disabled={save.isPending}>
-              {t("save")}
-            </Button>
-            <Button variant="outline" type="button" onClick={onClose}>
-              {t("cancel")}
-            </Button>
-          </div>
-        </form>
-      )}
+            <div className="flex gap-3">
+              <Button type="submit" disabled={save.isPending}>
+                {t("save")}
+              </Button>
+              <Button variant="outline" type="button" onClick={onClose}>
+                {t("cancel")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
     </Card>
   );
 }

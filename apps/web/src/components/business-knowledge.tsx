@@ -7,7 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -100,149 +100,161 @@ export function BusinessKnowledge({
   });
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <Card title={t("title")} description={t("hint")}>
-        {settings.error || save.isError ? (
-          <ErrorText>
-            {isKnowledgeLimitError(save.error) ? budgetText("error") : t("error")}
-          </ErrorText>
-        ) : null}
-        {settings.data ? (
-          <form
-            onChange={(event) => {
-              const data = new FormData(event.currentTarget);
-              setProfileChanges(
-                Object.fromEntries(
-                  LANGUAGES.map((language) => [
-                    language,
-                    knowledgeCharacters(formText(data, `description-${language}`)) -
-                      knowledgeCharacters(settings.data?.[PROFILE_FIELDS[language]]),
-                  ]),
-                ),
-              );
-            }}
-            key={tenantId}
-            className="grid gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              save.mutate({
-                businessDescriptionHu: formText(data, "description-hu") || null,
-                businessDescriptionEn: formText(data, "description-en") || null,
-                businessDescriptionDe: formText(data, "description-de") || null,
-                businessDescriptionFr: formText(data, "description-fr") || null,
-              });
-            }}
-          >
-            {LANGUAGES.map((language) => (
-              <label key={language}>
-                {language.toUpperCase()} — {t("description")}
-                <Textarea
-                  name={`description-${language}`}
-                  lang={language}
-                  defaultValue={settings.data[PROFILE_FIELDS[language]] ?? ""}
-
-                  readOnly={!canManage}
-                />
-              </label>
-            ))}
-            <KnowledgeBudget tenantId={tenantId} changes={profileChanges} />
-            <p className="text-sm text-ink-muted">{t("translationHint")}</p>
-            {canManage ? (
-              <Button type="submit" disabled={save.isPending}>
-                {t("save")}
-              </Button>
-            ) : null}
-            {save.isSuccess ? <p role="status">{t("saved")}</p> : null}
-          </form>
-        ) : settings.isPending ? (
-          <p>{t("loading")}</p>
-        ) : null}
-      </Card>
-      <Card title={t("faqs")} description={t("faqHint")}>
-        {faqs.error || addFaq.isError || removeFaq.isError ? (
-          <ErrorText>
-            {isKnowledgeLimitError(addFaq.error) ? budgetText("error") : t("error")}
-          </ErrorText>
-        ) : null}
-        {canManage ? (
-          <form
-            onChange={(event) => {
-              const data = new FormData(event.currentTarget);
-              const language = LANGUAGES.find((entry) => entry === data.get("locale")) ?? "hu";
-              setFaqChanges({
-                [language]:
-                  knowledgeCharacters(formText(data, "question")) +
-                  knowledgeCharacters(formText(data, "answer")),
-              });
-            }}
-            className="grid gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = event.currentTarget;
-              const data = new FormData(form);
-              addFaq.mutate(
-                {
-                  locale: LANGUAGES.find((language) => language === data.get("locale")) ?? "hu",
-                  question: formText(data, "question"),
-                  answer: formText(data, "answer"),
-                },
-                { onSuccess: () => form.reset() },
-              );
-            }}
-          >
-            <label>
-              {t("language")}
-              <NativeSelect name="locale" defaultValue={locale}>
-                {LANGUAGES.map((language) => (
-                  <option key={language} value={language}>
-                    {t(LANGUAGE_LABELS[language])}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-            <label>
-              {t("question")}
-              <Input name="question" required />
-            </label>
-            <label>
-              {t("answer")}
-              <Textarea name="answer" required />
-            </label>
-            <KnowledgeBudget tenantId={tenantId} changes={faqChanges} />
-            <Button type="submit" disabled={addFaq.isPending}>
-              {t("addFaq")}
-            </Button>
-          </form>
-        ) : null}
-        {faqs.isPending ? (
-          <p>{t("loading")}</p>
-        ) : faqs.data?.items.length === 0 ? (
-          <p>{t("empty")}</p>
-        ) : null}
-        <ul className="grid gap-2">
-          {faqs.data?.items.map((faq) => (
-            <li
-              key={faq.id}
-              className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("title")}</CardTitle>
+          <CardDescription>{t("hint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {settings.error || save.isError ? (
+            <ErrorText>
+              {isKnowledgeLimitError(save.error) ? budgetText("error") : t("error")}
+            </ErrorText>
+          ) : null}
+          {settings.data ? (
+            <form
+              onChange={(event) => {
+                const data = new FormData(event.currentTarget);
+                setProfileChanges(
+                  Object.fromEntries(
+                    LANGUAGES.map((language) => [
+                      language,
+                      knowledgeCharacters(formText(data, `description-${language}`)) -
+                        knowledgeCharacters(settings.data?.[PROFILE_FIELDS[language]]),
+                    ]),
+                  ),
+                );
+              }}
+              key={tenantId}
+              className="grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                save.mutate({
+                  businessDescriptionHu: formText(data, "description-hu") || null,
+                  businessDescriptionEn: formText(data, "description-en") || null,
+                  businessDescriptionDe: formText(data, "description-de") || null,
+                  businessDescriptionFr: formText(data, "description-fr") || null,
+                });
+              }}
             >
-              <div>
-                <span className="text-xs text-ink-muted">{t(LANGUAGE_LABELS[faq.locale])}</span>
-                <p className="font-semibold">{faq.question}</p>
-                <p className="text-sm text-ink-muted">{faq.answer}</p>
-              </div>
+              {LANGUAGES.map((language) => (
+                <label key={language}>
+                  {language.toUpperCase()} — {t("description")}
+                  <Textarea
+                    name={`description-${language}`}
+                    lang={language}
+                    defaultValue={settings.data[PROFILE_FIELDS[language]] ?? ""}
+
+                    readOnly={!canManage}
+                  />
+                </label>
+              ))}
+              <KnowledgeBudget tenantId={tenantId} changes={profileChanges} />
+              <p className="text-sm text-ink-muted">{t("translationHint")}</p>
               {canManage ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={removeFaq.isPending}
-                  onClick={() => removeFaq.mutate(faq.id)}
-                >
-                  {t("delete")}
+                <Button type="submit" disabled={save.isPending}>
+                  {t("save")}
                 </Button>
               ) : null}
-            </li>
-          ))}
-        </ul>
+              {save.isSuccess ? <p role="status">{t("saved")}</p> : null}
+            </form>
+          ) : settings.isPending ? (
+            <p>{t("loading")}</p>
+          ) : null}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("faqs")}</CardTitle>
+          <CardDescription>{t("faqHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {faqs.error || addFaq.isError || removeFaq.isError ? (
+            <ErrorText>
+              {isKnowledgeLimitError(addFaq.error) ? budgetText("error") : t("error")}
+            </ErrorText>
+          ) : null}
+          {canManage ? (
+            <form
+              onChange={(event) => {
+                const data = new FormData(event.currentTarget);
+                const language = LANGUAGES.find((entry) => entry === data.get("locale")) ?? "hu";
+                setFaqChanges({
+                  [language]:
+                    knowledgeCharacters(formText(data, "question")) +
+                    knowledgeCharacters(formText(data, "answer")),
+                });
+              }}
+              className="grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const data = new FormData(form);
+                addFaq.mutate(
+                  {
+                    locale: LANGUAGES.find((language) => language === data.get("locale")) ?? "hu",
+                    question: formText(data, "question"),
+                    answer: formText(data, "answer"),
+                  },
+                  { onSuccess: () => form.reset() },
+                );
+              }}
+            >
+              <label>
+                {t("language")}
+                <NativeSelect name="locale" defaultValue={locale}>
+                  {LANGUAGES.map((language) => (
+                    <option key={language} value={language}>
+                      {t(LANGUAGE_LABELS[language])}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+              <label>
+                {t("question")}
+                <Input name="question" required />
+              </label>
+              <label>
+                {t("answer")}
+                <Textarea name="answer" required />
+              </label>
+              <KnowledgeBudget tenantId={tenantId} changes={faqChanges} />
+              <Button type="submit" disabled={addFaq.isPending}>
+                {t("addFaq")}
+              </Button>
+            </form>
+          ) : null}
+          {faqs.isPending ? (
+            <p>{t("loading")}</p>
+          ) : faqs.data?.items.length === 0 ? (
+            <p>{t("empty")}</p>
+          ) : null}
+          <ul className="grid gap-2">
+            {faqs.data?.items.map((faq) => (
+              <li
+                key={faq.id}
+                className="flex items-start justify-between gap-3 rounded-lg border border-line p-3"
+              >
+                <div>
+                  <span className="text-xs text-ink-muted">{t(LANGUAGE_LABELS[faq.locale])}</span>
+                  <p className="font-semibold">{faq.question}</p>
+                  <p className="text-sm text-ink-muted">{faq.answer}</p>
+                </div>
+                {canManage ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={removeFaq.isPending}
+                    onClick={() => removeFaq.mutate(faq.id)}
+                  >
+                    {t("delete")}
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </CardContent>
       </Card>
     </div>
   );

@@ -1,5 +1,5 @@
-import { cn } from "@/lib/cn";
-import { Card } from "./card";
+import { cn } from "@/lib/utils";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 
 /**
  * A titled region of a screen.
@@ -33,15 +33,26 @@ export function Section({
   className?: string | undefined;
   children: React.ReactNode;
 }): React.ReactElement {
+  const Heading = `h${headingLevel}` as const;
+
   if (variant === "card") {
     return (
-      <Card title={title} description={description} actions={actions} className={className}>
-        {children}
+      <Card className={className}>
+        {title === undefined && actions === undefined ? null : (
+          <CardHeader>
+            {title === undefined ? null : (
+              <CardTitle asChild>
+                <Heading>{title}</Heading>
+              </CardTitle>
+            )}
+            {description === undefined ? null : <CardDescription>{description}</CardDescription>}
+            {actions === undefined ? null : <CardAction>{actions}</CardAction>}
+          </CardHeader>
+        )}
+        <CardContent>{children}</CardContent>
       </Card>
     );
   }
-
-  const Heading = `h${headingLevel}` as const;
 
   return (
     <section className={cn("flex flex-col gap-3", className)}>

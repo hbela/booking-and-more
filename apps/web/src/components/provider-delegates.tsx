@@ -15,7 +15,7 @@ import type { EditPanel } from "@/lib/use-edit-panel";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
-import { Card } from "./ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { DataTable, RowButton, Td, Th } from "./ui/table";
@@ -207,13 +207,15 @@ export function ProviderDelegates({
   }
 
   return (
-    <Card
-      title={
-        providerName === undefined ? t("delegates") : t("delegatesFor", { name: providerName })
-      }
-      description={canManage ? t("delegatesHint") : t("delegatesHintProvider")}
-      actions={
-        <span className="flex gap-2">
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>
+          {providerName === undefined ? t("delegates") : t("delegatesFor", { name: providerName })}
+        </CardTitle>
+        <CardDescription>
+          {canManage ? t("delegatesHint") : t("delegatesHintProvider")}
+        </CardDescription>
+        <CardAction>
           {canManage && mode === "idle" ? (
             <>
               <Button
@@ -245,196 +247,198 @@ export function ProviderDelegates({
               {t("delegateClose")}
             </Button>
           )}
-        </span>
-      }
-      {...panelProps}
-    >
-      {error === null ? null : <ErrorText>{error}</ErrorText>}
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {error === null ? null : <ErrorText>{error}</ErrorText>}
 
-      {acceptUrl === null ? null : (
-        <Callout tone="action">
-          <span className="flex flex-col gap-1">
-            <span>{t("delegateInviteSent")}</span>
-            <code className="text-xs break-all">{acceptUrl}</code>
-            <span className="text-xs">{t("delegateInviteLinkOnce")}</span>
-          </span>
-        </Callout>
-      )}
+        {acceptUrl === null ? null : (
+          <Callout tone="action">
+            <span className="flex flex-col gap-1">
+              <span>{t("delegateInviteSent")}</span>
+              <code className="text-xs break-all">{acceptUrl}</code>
+              <span className="text-xs">{t("delegateInviteLinkOnce")}</span>
+            </span>
+          </Callout>
+        )}
 
-      {rows.length === 0 && mode === "idle" ? (
-        // The day-2 trap (§6.5): a provider added after the migration has no
-        // assistants and the front desk silently loses them. The provider's
-        // version of the message asks them to go and ask, because they cannot
-        // fix it themselves.
-        <Callout tone="action">
-          {canManage ? t("delegatesEmpty") : t("delegatesEmptyProvider")}
-        </Callout>
-      ) : null}
+        {rows.length === 0 && mode === "idle" ? (
+          // The day-2 trap (§6.5): a provider added after the migration has no
+          // assistants and the front desk silently loses them. The provider's
+          // version of the message asks them to go and ask, because they cannot
+          // fix it themselves.
+          <Callout tone="action">
+            {canManage ? t("delegatesEmpty") : t("delegatesEmptyProvider")}
+          </Callout>
+        ) : null}
 
-      {rows.length > 0 ? (
-        <DataTable
-          caption={t("delegates")}
-          head={
-            <tr>
-              <Th>{t("delegateMember")}</Th>
-              <Th>{t("delegateScopes")}</Th>
-              {canManage ? (
-                <Th>
-                  <span className="sr-only">{t("delegateActions")}</span>
-                </Th>
-              ) : null}
-            </tr>
-          }
-        >
-          {rows.map((row) => (
-            <tr key={row.member.membershipId}>
-              <Td>
-                <span className="flex flex-col">
-                  <span className="font-medium">{row.member.name}</span>
-                  <span className="text-ink-muted text-xs">{row.member.email}</span>
-                  {row.member.roleReceivesDelegations ? null : (
-                    // The grant survives a role change and confers nothing
-                    // (§2.8). Surfaced where it can be fixed.
-                    <Badge tone="warning" className="mt-1 self-start">
-                      {t("delegateStaleRole")}
-                    </Badge>
-                  )}
-                </span>
-              </Td>
-              <Td>
+        {rows.length > 0 ? (
+          <DataTable
+            caption={t("delegates")}
+            head={
+              <tr>
+                <Th>{t("delegateMember")}</Th>
+                <Th>{t("delegateScopes")}</Th>
                 {canManage ? (
-                  <span className="flex flex-wrap gap-3">
-                    {SCOPES.map((scope) => (
-                      <label key={scope} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={row.scopes.includes(scope)}
-                          disabled={busy}
-                          onCheckedChange={() => {
-                            toggleScope(row, scope);
-                          }}
-                        />
-                        {scopeLabel(scope)}
-                      </label>
-                    ))}
+                  <Th>
+                    <span className="sr-only">{t("delegateActions")}</span>
+                  </Th>
+                ) : null}
+              </tr>
+            }
+          >
+            {rows.map((row) => (
+              <tr key={row.member.membershipId}>
+                <Td>
+                  <span className="flex flex-col">
+                    <span className="font-medium">{row.member.name}</span>
+                    <span className="text-ink-muted text-xs">{row.member.email}</span>
+                    {row.member.roleReceivesDelegations ? null : (
+                      // The grant survives a role change and confers nothing
+                      // (§2.8). Surfaced where it can be fixed.
+                      <Badge tone="warning" className="mt-1 self-start">
+                        {t("delegateStaleRole")}
+                      </Badge>
+                    )}
                   </span>
-                ) : (
-                  // Read-only for the provider: text, not disabled checkboxes.
-                  // A disabled control invites the reader to try to enable it.
-                  <span className="text-sm">
-                    {row.scopes.map((scope) => scopeLabel(scope)).join(" · ")}
-                  </span>
-                )}
-              </Td>
-              {canManage ? (
-                <Td className="text-right">
-                  <RowButton
-                    disabled={busy}
-                    onClick={() => {
-                      if (!window.confirm(t("delegateRevokeConfirm", { name: row.member.name }))) {
-                        return;
-                      }
-                      revoke.mutate(row.member.membershipId);
-                    }}
-                  >
-                    {t("delegateRevoke")}
-                  </RowButton>
                 </Td>
-              ) : null}
-            </tr>
-          ))}
-        </DataTable>
-      ) : null}
-
-      {mode === "idle" ? null : (
-        <div className="flex flex-col gap-3">
-          {mode === "assign" ? (
-            <>
-              <FormField id="delegate-candidate" label={t("delegateChoose")}>
-                <NativeSelect
-                  id="delegate-candidate"
-                  value={candidateId}
-                  onChange={(event) => {
-                    setCandidateId(event.target.value);
-                  }}
-                  className="max-w-sm"
-                >
-                  <option value="">—</option>
-                  {available.map((entry) => (
-                    <option key={entry.membershipId} value={entry.membershipId}>
-                      {entry.name} ({entry.email})
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-
-              {candidates.isSuccess && available.length === 0 ? (
-                <Callout tone="action">{t("delegateNoCandidates")}</Callout>
-              ) : null}
-            </>
-          ) : (
-            <TextField
-              id="delegate-email"
-              label={t("delegateEmail")}
-              type="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-              }}
-              className="max-w-sm"
-            />
-          )}
-
-          <fieldset className="flex flex-col gap-2">
-            <legend className="text-ink text-sm font-medium">{t("delegateScopes")}</legend>
-            {SCOPES.map((scope) => (
-              <label key={scope} className="flex items-start gap-2 text-sm">
-                <Checkbox
-                  checked={draftScopes.includes(scope)}
-                  onCheckedChange={() => {
-                    toggleDraftScope(scope);
-                  }}
-                  className="mt-1"
-                />
-                <span className="flex flex-col">
-                  <span>{scopeLabel(scope)}</span>
-                  <span className="text-ink-muted text-xs">
-                    {scope === "AVAILABILITY"
-                      ? t("delegateScopeAvailabilityHint")
-                      : t("delegateScopeBookingsHint")}
-                  </span>
-                </span>
-              </label>
+                <Td>
+                  {canManage ? (
+                    <span className="flex flex-wrap gap-3">
+                      {SCOPES.map((scope) => (
+                        <label key={scope} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={row.scopes.includes(scope)}
+                            disabled={busy}
+                            onCheckedChange={() => {
+                              toggleScope(row, scope);
+                            }}
+                          />
+                          {scopeLabel(scope)}
+                        </label>
+                      ))}
+                    </span>
+                  ) : (
+                    // Read-only for the provider: text, not disabled checkboxes.
+                    // A disabled control invites the reader to try to enable it.
+                    <span className="text-sm">
+                      {row.scopes.map((scope) => scopeLabel(scope)).join(" · ")}
+                    </span>
+                  )}
+                </Td>
+                {canManage ? (
+                  <Td className="text-right">
+                    <RowButton
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          !window.confirm(t("delegateRevokeConfirm", { name: row.member.name }))
+                        ) {
+                          return;
+                        }
+                        revoke.mutate(row.member.membershipId);
+                      }}
+                    >
+                      {t("delegateRevoke")}
+                    </RowButton>
+                  </Td>
+                ) : null}
+              </tr>
             ))}
-          </fieldset>
+          </DataTable>
+        ) : null}
 
-          <div className="flex gap-2">
-            <Button
-              disabled={
-                busy ||
-                draftScopes.length === 0 ||
-                (mode === "assign" ? candidateId === "" : email.trim() === "")
-              }
-              onClick={() => {
-                if (draftScopes.length === 0) {
-                  setError(t("delegateNeedsOneScope"));
-                  return;
-                }
+        {mode === "idle" ? null : (
+          <div className="flex flex-col gap-3">
+            {mode === "assign" ? (
+              <>
+                <FormField id="delegate-candidate" label={t("delegateChoose")}>
+                  <NativeSelect
+                    id="delegate-candidate"
+                    value={candidateId}
+                    onChange={(event) => {
+                      setCandidateId(event.target.value);
+                    }}
+                    className="max-w-sm"
+                  >
+                    <option value="">—</option>
+                    {available.map((entry) => (
+                      <option key={entry.membershipId} value={entry.membershipId}>
+                        {entry.name} ({entry.email})
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
 
-                if (mode === "assign") {
-                  save.mutate({ membershipId: candidateId, scopes: draftScopes });
-                } else {
-                  invite.mutate({ email: email.trim(), scopes: draftScopes });
+                {candidates.isSuccess && available.length === 0 ? (
+                  <Callout tone="action">{t("delegateNoCandidates")}</Callout>
+                ) : null}
+              </>
+            ) : (
+              <TextField
+                id="delegate-email"
+                label={t("delegateEmail")}
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                }}
+                className="max-w-sm"
+              />
+            )}
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-ink text-sm font-medium">{t("delegateScopes")}</legend>
+              {SCOPES.map((scope) => (
+                <label key={scope} className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={draftScopes.includes(scope)}
+                    onCheckedChange={() => {
+                      toggleDraftScope(scope);
+                    }}
+                    className="mt-1"
+                  />
+                  <span className="flex flex-col">
+                    <span>{scopeLabel(scope)}</span>
+                    <span className="text-ink-muted text-xs">
+                      {scope === "AVAILABILITY"
+                        ? t("delegateScopeAvailabilityHint")
+                        : t("delegateScopeBookingsHint")}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            <div className="flex gap-2">
+              <Button
+                disabled={
+                  busy ||
+                  draftScopes.length === 0 ||
+                  (mode === "assign" ? candidateId === "" : email.trim() === "")
                 }
-              }}
-            >
-              {mode === "assign" ? t("delegateGrant") : t("delegateSendInvite")}
-            </Button>
-            <Button variant="outline" onClick={reset}>
-              {t("delegateCancel")}
-            </Button>
+                onClick={() => {
+                  if (draftScopes.length === 0) {
+                    setError(t("delegateNeedsOneScope"));
+                    return;
+                  }
+
+                  if (mode === "assign") {
+                    save.mutate({ membershipId: candidateId, scopes: draftScopes });
+                  } else {
+                    invite.mutate({ email: email.trim(), scopes: draftScopes });
+                  }
+                }}
+              >
+                {mode === "assign" ? t("delegateGrant") : t("delegateSendInvite")}
+              </Button>
+              <Button variant="outline" onClick={reset}>
+                {t("delegateCancel")}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </CardContent>
     </Card>
   );
 }

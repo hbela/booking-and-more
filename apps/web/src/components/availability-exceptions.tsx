@@ -16,7 +16,7 @@ import {
 import { formatInZone, resolveInZone, toLocalInputValue } from "@/lib/exception-time";
 import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -161,234 +161,241 @@ export function AvailabilityExceptions({
   });
 
   return (
-    <Card title={t("exceptions")}>
-      <p className="text-sm text-ink-muted">
-        {t("exceptionsHint")}
-        {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
-      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("exceptions")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">
+          {t("exceptionsHint")}
+          {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
+        </p>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <FormField id="exception-range-from" label={t("rangeFrom")}>
-          <Input
-            id="exception-range-from"
-            type="date"
-            value={from}
-            onChange={(event) => {
-              setFrom(event.target.value);
-            }}
-          />
-        </FormField>
-        <FormField id="exception-range-to" label={t("rangeTo")}>
-          <Input
-            id="exception-range-to"
-            type="date"
-            value={to}
-            onChange={(event) => {
-              setTo(event.target.value);
-            }}
-          />
-        </FormField>
-      </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <FormField id="exception-range-from" label={t("rangeFrom")}>
+            <Input
+              id="exception-range-from"
+              type="date"
+              value={from}
+              onChange={(event) => {
+                setFrom(event.target.value);
+              }}
+            />
+          </FormField>
+          <FormField id="exception-range-to" label={t("rangeTo")}>
+            <Input
+              id="exception-range-to"
+              type="date"
+              value={to}
+              onChange={(event) => {
+                setTo(event.target.value);
+              }}
+            />
+          </FormField>
+        </div>
 
-      {(exceptions.data?.items.length ?? 0) === 0 ? (
-        <p className="text-sm text-ink-muted">{t("noExceptions")}</p>
-      ) : (
-        <ul className="flex flex-col gap-2 text-sm">
-          {exceptions.data?.items.map((exception) => (
-            <li key={exception.id} className="flex flex-wrap items-center gap-2">
-              <span
-                className={
-                  exception.type === "UNAVAILABLE"
-                    ? "bg-danger-surface text-on-danger-surface rounded px-2 py-0.5 text-xs"
-                    : "bg-success-surface text-on-success-surface rounded px-2 py-0.5 text-xs"
-                }
-              >
-                {t(`type.${exception.type}`)}
-              </span>
-              <span>
-                {/* The provider's zone, not the reader's. Rendering with
+        {(exceptions.data?.items.length ?? 0) === 0 ? (
+          <p className="text-sm text-ink-muted">{t("noExceptions")}</p>
+        ) : (
+          <ul className="flex flex-col gap-2 text-sm">
+            {exceptions.data?.items.map((exception) => (
+              <li key={exception.id} className="flex flex-wrap items-center gap-2">
+                <span
+                  className={
+                    exception.type === "UNAVAILABLE"
+                      ? "bg-danger-surface text-on-danger-surface rounded px-2 py-0.5 text-xs"
+                      : "bg-success-surface text-on-success-surface rounded px-2 py-0.5 text-xs"
+                  }
+                >
+                  {t(`type.${exception.type}`)}
+                </span>
+                <span>
+                  {/* The provider's zone, not the reader's. Rendering with
                     toLocaleString() here was the mirror image of the input bug:
                     an admin abroad would enter 09:00 and be shown 08:00 back. */}
-                {timezone === null
-                  ? "…"
-                  : `${formatInZone(exception.startAt, timezone, locale)} – ${formatInZone(
-                      exception.endAt,
-                      timezone,
-                      locale,
-                    )}`}
-              </span>
-              {exception.reason ? (
-                <span className="text-ink-subtle">· {exception.reason}</span>
-              ) : null}
+                  {timezone === null
+                    ? "…"
+                    : `${formatInZone(exception.startAt, timezone, locale)} – ${formatInZone(
+                        exception.endAt,
+                        timezone,
+                        locale,
+                      )}`}
+                </span>
+                {exception.reason ? (
+                  <span className="text-ink-subtle">· {exception.reason}</span>
+                ) : null}
 
-              <RowButton
-                onClick={() => {
-                  if (timezone === null) return;
+                <RowButton
+                  onClick={() => {
+                    if (timezone === null) return;
 
-                  setError(null);
-                  setDraft({
-                    id: exception.id,
-                    type: exception.type,
-                    startAt: toLocalInputValue(exception.startAt, timezone),
-                    endAt: toLocalInputValue(exception.endAt, timezone),
-                    locationId: exception.locationId ?? "",
-                    serviceId: exception.serviceId ?? "",
-                    reason: exception.reason ?? "",
-                  });
+                    setError(null);
+                    setDraft({
+                      id: exception.id,
+                      type: exception.type,
+                      startAt: toLocalInputValue(exception.startAt, timezone),
+                      endAt: toLocalInputValue(exception.endAt, timezone),
+                      locationId: exception.locationId ?? "",
+                      serviceId: exception.serviceId ?? "",
+                      reason: exception.reason ?? "",
+                    });
+                  }}
+                >
+                  {t("edit")}
+                </RowButton>
+
+                <RowButton
+                  onClick={() => {
+                    void apiFetch(`/v1/availability-exceptions/${exception.id}`, {
+                      method: "DELETE",
+                      tenantId,
+                    }).then(() => {
+                      void queryClient.invalidateQueries({ queryKey: ["exceptions", providerId] });
+                    });
+                  }}
+                >
+                  {t("remove")}
+                </RowButton>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            // Unacknowledged first, always: the refusal is what carries the list.
+            save.mutate(false);
+          }}
+        >
+          <h3 className="text-sm font-medium">
+            {draft.id === null ? t("add") : t("editException")}
+          </h3>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <FormField id="exception-type" label={t("type.label")}>
+              <NativeSelect
+                id="exception-type"
+                value={draft.type}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, type: event.target.value }));
                 }}
               >
-                {t("edit")}
-              </RowButton>
+                <option value="UNAVAILABLE">{t("type.UNAVAILABLE")}</option>
+                <option value="ADDITIONAL_AVAILABILITY">{t("type.ADDITIONAL_AVAILABILITY")}</option>
+              </NativeSelect>
+            </FormField>
 
-              <RowButton
-                onClick={() => {
-                  void apiFetch(`/v1/availability-exceptions/${exception.id}`, {
-                    method: "DELETE",
-                    tenantId,
-                  }).then(() => {
-                    void queryClient.invalidateQueries({ queryKey: ["exceptions", providerId] });
-                  });
+            <FormField id="exception-start" label={t("from")}>
+              <Input
+                id="exception-start"
+                type="datetime-local"
+                value={draft.startAt}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, startAt: event.target.value }));
+                }}
+                required
+              />
+            </FormField>
+
+            <FormField id="exception-end" label={t("to")}>
+              <Input
+                id="exception-end"
+                type="datetime-local"
+                value={draft.endAt}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, endAt: event.target.value }));
+                }}
+                required
+              />
+            </FormField>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <FormField id="exception-location" label={t("location")}>
+              <NativeSelect
+                id="exception-location"
+                value={draft.locationId}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, locationId: event.target.value }));
                 }}
               >
-                {t("remove")}
-              </RowButton>
-            </li>
-          ))}
-        </ul>
-      )}
+                <option value="">{t("anyLocation")}</option>
+                {locations.data?.items.map((location) => (
+                  <option key={location.locationId} value={location.locationId}>
+                    {location.locationName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
 
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          // Unacknowledged first, always: the refusal is what carries the list.
-          save.mutate(false);
-        }}
-      >
-        <h3 className="text-sm font-medium">{draft.id === null ? t("add") : t("editException")}</h3>
+            <FormField id="exception-service" label={t("service")}>
+              <NativeSelect
+                id="exception-service"
+                value={draft.serviceId}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, serviceId: event.target.value }));
+                }}
+              >
+                <option value="">{t("anyService")}</option>
+                {services.data?.items.map((service) => (
+                  <option key={service.serviceId} value={service.serviceId}>
+                    {service.serviceName}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
 
-        <div className="flex flex-wrap items-end gap-3">
-          <FormField id="exception-type" label={t("type.label")}>
-            <NativeSelect
-              id="exception-type"
-              value={draft.type}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, type: event.target.value }));
-              }}
-            >
-              <option value="UNAVAILABLE">{t("type.UNAVAILABLE")}</option>
-              <option value="ADDITIONAL_AVAILABILITY">{t("type.ADDITIONAL_AVAILABILITY")}</option>
-            </NativeSelect>
-          </FormField>
+            <FormField id="exception-reason" label={t("reason")}>
+              <Input
+                id="exception-reason"
+                value={draft.reason}
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, reason: event.target.value }));
+                }}
+              />
+            </FormField>
+          </div>
 
-          <FormField id="exception-start" label={t("from")}>
-            <Input
-              id="exception-start"
-              type="datetime-local"
-              value={draft.startAt}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, startAt: event.target.value }));
-              }}
-              required
-            />
-          </FormField>
-
-          <FormField id="exception-end" label={t("to")}>
-            <Input
-              id="exception-end"
-              type="datetime-local"
-              value={draft.endAt}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, endAt: event.target.value }));
-              }}
-              required
-            />
-          </FormField>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-3">
-          <FormField id="exception-location" label={t("location")}>
-            <NativeSelect
-              id="exception-location"
-              value={draft.locationId}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, locationId: event.target.value }));
-              }}
-            >
-              <option value="">{t("anyLocation")}</option>
-              {locations.data?.items.map((location) => (
-                <option key={location.locationId} value={location.locationId}>
-                  {location.locationName}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-
-          <FormField id="exception-service" label={t("service")}>
-            <NativeSelect
-              id="exception-service"
-              value={draft.serviceId}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, serviceId: event.target.value }));
-              }}
-            >
-              <option value="">{t("anyService")}</option>
-              {services.data?.items.map((service) => (
-                <option key={service.serviceId} value={service.serviceId}>
-                  {service.serviceName}
-                </option>
-              ))}
-            </NativeSelect>
-          </FormField>
-
-          <FormField id="exception-reason" label={t("reason")}>
-            <Input
-              id="exception-reason"
-              value={draft.reason}
-              onChange={(event) => {
-                setDraft((current) => ({ ...current, reason: event.target.value }));
-              }}
-            />
-          </FormField>
-        </div>
-
-        {/* Before the request, not after. A reading the clocks jumped over is
+          {/* Before the request, not after. A reading the clocks jumped over is
             silently snapped by the engine, and a closure landing an hour from
             where it was typed is worth a sentence rather than a surprise. */}
-        <DstNotice resolution={start?.resolution} />
-        <DstNotice resolution={end?.resolution} />
+          <DstNotice resolution={start?.resolution} />
+          <DstNotice resolution={end?.resolution} />
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {draft.id === null ? t("add") : t("save")}
-          </Button>
-          {draft.id === null ? null : (
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => {
-                setDraft(emptyDraft());
-              }}
-            >
-              {t("cancel")}
+          <div className="flex gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {draft.id === null ? t("add") : t("save")}
             </Button>
-          )}
-        </div>
+            {draft.id === null ? null : (
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setDraft(emptyDraft());
+                }}
+              >
+                {t("cancel")}
+              </Button>
+            )}
+          </div>
 
-        <AffectedBookingsDialog
-          bookings={affected}
-          busy={save.isPending}
-          onConfirm={() => {
-            save.mutate(true);
-          }}
-          onCancel={() => {
-            setAffected(null);
-          }}
-        />
-      </form>
+          <AffectedBookingsDialog
+            bookings={affected}
+            busy={save.isPending}
+            onConfirm={() => {
+              save.mutate(true);
+            }}
+            onCancel={() => {
+              setAffected(null);
+            }}
+          />
+        </form>
+      </CardContent>
     </Card>
   );
 }

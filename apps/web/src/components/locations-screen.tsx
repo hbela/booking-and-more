@@ -15,7 +15,7 @@ import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashbo
 import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
@@ -223,29 +223,34 @@ function CreateLocationPanel({ tenantId }: { tenantId: string }): React.ReactEle
   });
 
   return (
-    <Card title={t("addLocation")}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          mutation.mutate();
-        }}
-      >
-        <LocationFields
-          state={state}
-          idPrefix="new-location"
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("addLocation")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            mutation.mutate();
           }}
-        />
+        >
+          <LocationFields
+            state={state}
+            idPrefix="new-location"
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <Button type="submit" disabled={mutation.isPending}>
-          {t("create")}
-        </Button>
-      </form>
+          <Button type="submit" disabled={mutation.isPending}>
+            {t("create")}
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   );
 }
@@ -286,34 +291,39 @@ function EditLocationPanel({
   });
 
   return (
-    <Card title={t("editLocation")} {...panelProps}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setError(null);
-          save.mutate();
-        }}
-      >
-        <LocationFields
-          state={state}
-          idPrefix={`edit-location-${location.id}`}
-          onChange={(patch) => {
-            setState((current) => ({ ...current, ...patch }));
+    <Card {...panelProps}>
+      <CardHeader>
+        <CardTitle>{t("editLocation")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setError(null);
+            save.mutate();
           }}
-        />
+        >
+          <LocationFields
+            state={state}
+            idPrefix={`edit-location-${location.id}`}
+            onChange={(patch) => {
+              setState((current) => ({ ...current, ...patch }));
+            }}
+          />
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        <div className="flex gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {t("saveChanges")}
-          </Button>
-          <Button variant="outline" type="button" onClick={onClose}>
-            {t("cancel")}
-          </Button>
-        </div>
-      </form>
+          <div className="flex gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {t("saveChanges")}
+            </Button>
+            <Button variant="outline" type="button" onClick={onClose}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
     </Card>
   );
 }

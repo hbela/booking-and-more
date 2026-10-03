@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { ApiError, apiFetch, type MeResponse } from "@/lib/api-client";
 import { useSignInRedirect } from "./dashboard-shell";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -186,85 +186,90 @@ export function PlatformScreen(): React.ReactElement {
         </div>
       )}
 
-      <Card title={t("provisionHeading")}>
-        <p className="text-sm text-ink-muted">{t("provisionExplanation")}</p>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("provisionHeading")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-muted">{t("provisionExplanation")}</p>
 
-        <form
-          ref={provisionFormRef}
-          className="grid gap-4 sm:grid-cols-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
+          <form
+            ref={provisionFormRef}
+            className="grid gap-4 sm:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
 
-            provision.mutate({
-              name: textField(data, "name"),
-              slug: textField(data, "slug"),
-              domain: textField(data, "domain"),
-              ownerName: textField(data, "ownerName"),
-              ownerEmail: textField(data, "ownerEmail"),
-              mode: textField(data, "mode") || "PROSPECT",
-              // The field that was missing, and the reason every owner was
-              // onboarded in Hungarian: the schema has accepted
-              // `defaultLanguage` since it was written, but nothing ever sent
-              // it, so its default won every time
-              // (docs/phase-9-owner-language-and-return-paths.md §1).
-              defaultLanguage: textField(data, "defaultLanguage") || "hu",
-            });
-          }}
-        >
-          <FormField id="name" label={t("name")}>
-            <Input id="name" name="name" required />
-          </FormField>
+              provision.mutate({
+                name: textField(data, "name"),
+                slug: textField(data, "slug"),
+                domain: textField(data, "domain"),
+                ownerName: textField(data, "ownerName"),
+                ownerEmail: textField(data, "ownerEmail"),
+                mode: textField(data, "mode") || "PROSPECT",
+                // The field that was missing, and the reason every owner was
+                // onboarded in Hungarian: the schema has accepted
+                // `defaultLanguage` since it was written, but nothing ever sent
+                // it, so its default won every time
+                // (docs/phase-9-owner-language-and-return-paths.md §1).
+                defaultLanguage: textField(data, "defaultLanguage") || "hu",
+              });
+            }}
+          >
+            <FormField id="name" label={t("name")}>
+              <Input id="name" name="name" required />
+            </FormField>
 
-          <FormField id="domain" label={t("domain")}>
-            <Input id="domain" name="domain" required placeholder="wellness.hu" />
-          </FormField>
+            <FormField id="domain" label={t("domain")}>
+              <Input id="domain" name="domain" required placeholder="wellness.hu" />
+            </FormField>
 
-          <FormField id="slug" label={t("slug")}>
-            <Input id="slug" name="slug" required placeholder="wellness" />
-          </FormField>
+            <FormField id="slug" label={t("slug")}>
+              <Input id="slug" name="slug" required placeholder="wellness" />
+            </FormField>
 
-          <FormField id="mode" label={t("mode")}>
-            <NativeSelect id="mode" name="mode" defaultValue="PROSPECT">
-              <option value="PROSPECT">{t("modeProspect")}</option>
-              <option value="INTERNAL">{t("modeInternal")}</option>
-            </NativeSelect>
-          </FormField>
+            <FormField id="mode" label={t("mode")}>
+              <NativeSelect id="mode" name="mode" defaultValue="PROSPECT">
+                <option value="PROSPECT">{t("modeProspect")}</option>
+                <option value="INTERNAL">{t("modeInternal")}</option>
+              </NativeSelect>
+            </FormField>
 
-          {/* A select rather than a text input, matching `mode`: the API takes
+            {/* A select rather than a text input, matching `mode`: the API takes
               a two-value enum, and a free-text field would turn a closed set
               into a 400 for anybody who typed `en-GB`. The markup default and
               the schema default are both `hu` so they cannot drift. */}
-          <FormField id="defaultLanguage" label={t("language")}>
-            <NativeSelect
-              id="defaultLanguage"
-              name="defaultLanguage"
-              defaultValue="hu"
-              aria-describedby="defaultLanguage-hint"
-            >
-              <option value="hu">{t("languageHu")}</option>
-              <option value="en">{t("languageEn")}</option>
-            </NativeSelect>
-            <span id="defaultLanguage-hint" className="text-xs text-ink-subtle">
-              {t("languageHint")}
-            </span>
-          </FormField>
+            <FormField id="defaultLanguage" label={t("language")}>
+              <NativeSelect
+                id="defaultLanguage"
+                name="defaultLanguage"
+                defaultValue="hu"
+                aria-describedby="defaultLanguage-hint"
+              >
+                <option value="hu">{t("languageHu")}</option>
+                <option value="en">{t("languageEn")}</option>
+              </NativeSelect>
+              <span id="defaultLanguage-hint" className="text-xs text-ink-subtle">
+                {t("languageHint")}
+              </span>
+            </FormField>
 
-          <FormField id="ownerName" label={t("ownerName")}>
-            <Input id="ownerName" name="ownerName" required />
-          </FormField>
+            <FormField id="ownerName" label={t("ownerName")}>
+              <Input id="ownerName" name="ownerName" required />
+            </FormField>
 
-          <FormField id="ownerEmail" label={t("ownerEmail")}>
-            <Input id="ownerEmail" name="ownerEmail" type="email" required />
-          </FormField>
+            <FormField id="ownerEmail" label={t("ownerEmail")}>
+              <Input id="ownerEmail" name="ownerEmail" type="email" required />
+            </FormField>
 
-          <div className="sm:col-span-2 flex flex-col gap-2">
-            <ErrorText>{formError}</ErrorText>
-            <Button type="submit" disabled={provision.isPending}>
-              {provision.isPending ? t("provisioning") : t("provision")}
-            </Button>
-          </div>
-        </form>
+            <div className="sm:col-span-2 flex flex-col gap-2">
+              <ErrorText>{formError}</ErrorText>
+              <Button type="submit" disabled={provision.isPending}>
+                {provision.isPending ? t("provisioning") : t("provision")}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
       </Card>
 
       <Section title={t("organizations")}>

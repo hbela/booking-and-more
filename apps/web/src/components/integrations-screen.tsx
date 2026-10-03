@@ -19,7 +19,7 @@ import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashbo
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
@@ -172,67 +172,72 @@ export function IntegrationsScreen(): React.ReactElement {
 
   return (
     <DashboardShell context={context}>
-      <Card title={t("title")}>
-        <p className="text-sm text-ink-muted">{t("intro")}</p>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("title")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-muted">{t("intro")}</p>
 
-        {/* Suspended, and it has to be: `useSearchParams` opts a component out
+          {/* Suspended, and it has to be: `useSearchParams` opts a component out
             of prerendering, and without a boundary the whole screen goes with
             it — which `next build` refuses rather than doing quietly. The
             fallback is `null` because there is genuinely nothing to say until
             the URL is known. Caught by the build, not by lint or tsc. */}
-        <Suspense fallback={null}>
-          <CallbackNotice />
-        </Suspense>
+          <Suspense fallback={null}>
+            <CallbackNotice />
+          </Suspense>
 
-        <ErrorText>{error}</ErrorText>
+          <ErrorText>{error}</ErrorText>
 
-        {/* Rule 4, on screen. "The platform has not set this up" and "nobody has
+          {/* Rule 4, on screen. "The platform has not set this up" and "nobody has
             connected yet" are the same empty list and need opposite words —
             which is exactly why the API reports `configured` rather than letting
             it be inferred. */}
-        {!configured ? (
-          <Callout tone="info">{t("notConfigured")}</Callout>
-        ) : rows.length === 0 ? (
-          <Callout tone="info">{t("noneConnected")}</Callout>
-        ) : null}
+          {!configured ? (
+            <Callout tone="info">{t("notConfigured")}</Callout>
+          ) : rows.length === 0 ? (
+            <Callout tone="info">{t("noneConnected")}</Callout>
+          ) : null}
 
-        {configured && mayConnect ? (
-          <div className="flex flex-wrap items-end gap-3">
-            {/* An owner picks whose diary; a provider has only their own and is
+          {configured && mayConnect ? (
+            <div className="flex flex-wrap items-end gap-3">
+              {/* An owner picks whose diary; a provider has only their own and is
                 not asked. */}
-            {ownProviderId === null && canManageProviders ? (
-              <FormField id="integration-provider" label={t("connectFor")}>
-                <NativeSelect
-                  id="integration-provider"
-                  value={connectFor}
-                  onChange={(event) => {
-                    setProviderId(event.target.value);
-                  }}
-                >
-                  {(providers.data?.items ?? []).map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.displayName}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </FormField>
-            ) : null}
+              {ownProviderId === null && canManageProviders ? (
+                <FormField id="integration-provider" label={t("connectFor")}>
+                  <NativeSelect
+                    id="integration-provider"
+                    value={connectFor}
+                    onChange={(event) => {
+                      setProviderId(event.target.value);
+                    }}
+                  >
+                    {(providers.data?.items ?? []).map((provider) => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.displayName}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              ) : null}
 
-            <Button
-              disabled={connect.isPending || connectFor === ""}
-              onClick={() => {
-                setError(null);
-                connect.mutate(connectFor);
-              }}
-            >
-              {connect.isPending ? dashboard("loading") : t("connect")}
-            </Button>
-          </div>
-        ) : null}
+              <Button
+                disabled={connect.isPending || connectFor === ""}
+                onClick={() => {
+                  setError(null);
+                  connect.mutate(connectFor);
+                }}
+              >
+                {connect.isPending ? dashboard("loading") : t("connect")}
+              </Button>
+            </div>
+          ) : null}
 
-        {configured && !mayConnect ? (
-          <p className="text-sm text-ink-subtle">{t("noDiaryToConnect")}</p>
-        ) : null}
+          {configured && !mayConnect ? (
+            <p className="text-sm text-ink-subtle">{t("noDiaryToConnect")}</p>
+          ) : null}
+        </CardContent>
       </Card>
 
       {rows.map((integration) => {
@@ -240,130 +245,137 @@ export function IntegrationsScreen(): React.ReactElement {
         const chosen = writeCalendarOf(integration);
 
         return (
-          <Card key={integration.id} title={integration.accountEmail}>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={healthTone(health)}>{t(`health.${health.kind}`)}</Badge>
-              {integration.providerName ? (
-                <span className="text-sm text-ink-muted">
-                  {t("forProvider", { provider: integration.providerName })}
-                </span>
+          <Card key={integration.id}>
+            <CardHeader>
+              <CardTitle>{integration.accountEmail}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={healthTone(health)}>{t(`health.${health.kind}`)}</Badge>
+                {integration.providerName ? (
+                  <span className="text-sm text-ink-muted">
+                    {t("forProvider", { provider: integration.providerName })}
+                  </span>
+                ) : null}
+              </div>
+
+              <HealthDetail health={health} />
+
+              {chosen ? (
+                <p className="text-sm text-ink-muted">
+                  {t("writingTo", {
+                    calendar: chosen.calendarName ?? chosen.externalCalendarId,
+                  })}
+                </p>
               ) : null}
-            </div>
 
-            <HealthDetail health={health} />
-
-            {chosen ? (
-              <p className="text-sm text-ink-muted">
-                {t("writingTo", {
-                  calendar: chosen.calendarName ?? chosen.externalCalendarId,
-                })}
-              </p>
-            ) : null}
-
-            {/* The calendar picker, opened on demand: it calls Google live, so
+              {/* The calendar picker, opened on demand: it calls Google live, so
                 it is not something to do on every page load. */}
-            {picking === integration.id ? (
-              <Section title={t("chooseCalendar")}>
-                {calendars.isPending ? (
-                  <p className="text-sm text-ink-muted">{dashboard("loading")}</p>
-                ) : calendars.isError ? (
-                  <ErrorText>{t("calendarsUnavailable")}</ErrorText>
-                ) : (
-                  <>
-                    {/* Said before the choice, not after it: re-pointing leaves
+              {picking === integration.id ? (
+                <Section title={t("chooseCalendar")}>
+                  {calendars.isPending ? (
+                    <p className="text-sm text-ink-muted">{dashboard("loading")}</p>
+                  ) : calendars.isError ? (
+                    <ErrorText>{t("calendarsUnavailable")}</ErrorText>
+                  ) : (
+                    <>
+                      {/* Said before the choice, not after it: re-pointing leaves
                         the events already written where they are, and that is
                         not something to discover afterwards (known limit 6). */}
-                    {chosen ? <Callout tone="action">{t("repointWarning")}</Callout> : null}
+                      {chosen ? <Callout tone="action">{t("repointWarning")}</Callout> : null}
 
-                    <ul className="flex flex-col gap-2">
-                      {(calendars.data?.items ?? []).map((calendar) => (
-                        <li key={calendar.id} className="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant={calendar.selected ? "outline" : "default"}
-                            size="sm"
-                            disabled={select.isPending}
-                            onClick={() => {
-                              setError(null);
-                              select.mutate({
-                                integrationId: integration.id,
-                                externalCalendarId: calendar.id,
-                                name: calendar.summary,
-                              });
-                            }}
-                          >
-                            {calendar.summary}
-                          </Button>
-                          {calendar.primary ? (
-                            <Badge tone="neutral">{t("primaryCalendar")}</Badge>
-                          ) : null}
-                          {calendar.selected ? <Badge tone="success">{t("current")}</Badge> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
+                      <ul className="flex flex-col gap-2">
+                        {(calendars.data?.items ?? []).map((calendar) => (
+                          <li key={calendar.id} className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant={calendar.selected ? "outline" : "default"}
+                              size="sm"
+                              disabled={select.isPending}
+                              onClick={() => {
+                                setError(null);
+                                select.mutate({
+                                  integrationId: integration.id,
+                                  externalCalendarId: calendar.id,
+                                  name: calendar.summary,
+                                });
+                              }}
+                            >
+                              {calendar.summary}
+                            </Button>
+                            {calendar.primary ? (
+                              <Badge tone="neutral">{t("primaryCalendar")}</Badge>
+                            ) : null}
+                            {calendar.selected ? (
+                              <Badge tone="success">{t("current")}</Badge>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setPicking(null);
-                  }}
-                >
-                  {t("cancel")}
-                </Button>
-              </Section>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              {integration.status === "ACTIVE" && picking !== integration.id ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setError(null);
-                    setPicking(integration.id);
-                  }}
-                >
-                  {chosen ? t("changeCalendar") : t("chooseCalendar")}
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setPicking(null);
+                    }}
+                  >
+                    {t("cancel")}
+                  </Button>
+                </Section>
               ) : null}
 
-              {/* §25.6's Retry. Absent rather than disabled when it could not
+              <div className="flex flex-wrap gap-2">
+                {integration.status === "ACTIVE" && picking !== integration.id ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setError(null);
+                      setPicking(integration.id);
+                    }}
+                  >
+                    {chosen ? t("changeCalendar") : t("chooseCalendar")}
+                  </Button>
+                ) : null}
+
+                {/* §25.6's Retry. Absent rather than disabled when it could not
                   work — see `canRetry`. */}
-              {canRetry(health) ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={retry.isPending}
-                  onClick={() => {
-                    setError(null);
-                    retry.mutate(integration.id);
-                  }}
-                >
-                  {retry.isPending ? dashboard("loading") : t("retry")}
-                </Button>
-              ) : null}
+                {canRetry(health) ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retry.isPending}
+                    onClick={() => {
+                      setError(null);
+                      retry.mutate(integration.id);
+                    }}
+                  >
+                    {retry.isPending ? dashboard("loading") : t("retry")}
+                  </Button>
+                ) : null}
 
-              {integration.status !== "DISCONNECTED" ? (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={disconnect.isPending}
-                  onClick={() => {
-                    setError(null);
-                    // The dialog says what disconnecting does *not* do, because
-                    // the events staying in Google is the surprising half —
-                    // they are real appointments somebody still has to attend.
-                    if (window.confirm(t("disconnectConfirm"))) {
-                      disconnect.mutate(integration.id);
-                    }
-                  }}
-                >
-                  {t("disconnect")}
-                </Button>
-              ) : null}
-            </div>
+                {integration.status !== "DISCONNECTED" ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={disconnect.isPending}
+                    onClick={() => {
+                      setError(null);
+                      // The dialog says what disconnecting does *not* do, because
+                      // the events staying in Google is the surprising half —
+                      // they are real appointments somebody still has to attend.
+                      if (window.confirm(t("disconnectConfirm"))) {
+                        disconnect.mutate(integration.id);
+                      }
+                    }}
+                  >
+                    {t("disconnect")}
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
           </Card>
         );
       })}

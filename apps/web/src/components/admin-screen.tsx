@@ -6,7 +6,7 @@ import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { AdminShell } from "./admin-shell";
 import { Button } from "./ui/button";
 import { Link } from "@/i18n/navigation";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * The admin section's landing page, and the one screen that has to make sense
@@ -34,11 +34,16 @@ export function AdminScreen(): React.ReactElement {
     // No session. A 401 is the ordinary answer here rather than an error.
     if (!me.data) {
       return (
-        <Card title={t("signedOutTitle")}>
-          <p className="text-sm text-ink-muted">{t("signedOutHint")}</p>
-          <Button asChild>
-            <Link href="/sign-in">{t("signedOutLink")}</Link>
-          </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("signedOutTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-ink-muted">{t("signedOutHint")}</p>
+            <Button asChild>
+              <Link href="/sign-in">{t("signedOutLink")}</Link>
+            </Button>
+          </CardContent>
         </Card>
       );
     }
@@ -47,21 +52,31 @@ export function AdminScreen(): React.ReactElement {
     // rather than leaving them on a page with nothing on it.
     if (!me.data.user.isPlatformAdmin) {
       return (
-        <Card title={t("notAdminTitle")}>
-          <p className="text-sm text-ink-muted">{t("notAdminHint")}</p>
-          <Button asChild>
-            <Link href="/dashboard">{t("notAdminLink")}</Link>
-          </Button>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("notAdminTitle")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-ink-muted">{t("notAdminHint")}</p>
+            <Button asChild>
+              <Link href="/dashboard">{t("notAdminLink")}</Link>
+            </Button>
+          </CardContent>
         </Card>
       );
     }
 
     return (
-      <Card title={t("platformAdminTitle")}>
-        <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
-        <Button asChild>
-          <Link href="/admin/platform">{t("platformAdminLink")}</Link>
-        </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("platformAdminTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-muted">{t("platformAdminHint")}</p>
+          <Button asChild>
+            <Link href="/admin/platform">{t("platformAdminLink")}</Link>
+          </Button>
+        </CardContent>
       </Card>
     );
   }

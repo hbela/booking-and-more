@@ -27,7 +27,7 @@ import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { useDashboardContext } from "./dashboard-shell";
 import { Button } from "./ui/button";
 import { Callout } from "./ui/callout";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
@@ -236,126 +236,133 @@ export function WorkingHoursEditor({
   }
 
   return (
-    <Card title={t("workingHours")}>
-      <p className="text-sm text-ink-muted">
-        {t("workingHoursHint")}
-        {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
-      </p>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("workingHours")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">
+          {t("workingHoursHint")}
+          {timezone === null ? "" : ` ${t("timesInZone", { zone: timezone })}`}
+        </p>
 
-      {stored.data?.lastChange ? (
-        <LastChange change={stored.data.lastChange} selfUserId={context.me?.user.id} />
-      ) : null}
+        {stored.data?.lastChange ? (
+          <LastChange change={stored.data.lastChange} selfUserId={context.me?.user.id} />
+        ) : null}
 
-      {/* The save was refused, so nothing on screen is lost — but it is also
+        {/* The save was refused, so nothing on screen is lost — but it is also
           not saved, and the only way forward is to look at their version first.
           `role="alert"`: it appears in response to a press, and the button that
           caused it does not otherwise change. */}
-      {conflict === null ? null : (
-        <Callout tone="action" role="alert">
-          <span className="flex flex-col items-start gap-2">
-            <span>
-              {conflict.change?.by
-                ? t("scheduleMovedBy", {
-                    name: conflict.change.by.name,
-                    when: formatRelativeAge(conflict.change.at, new Date(), locale),
-                  })
-                : t("scheduleMovedUnknown")}
+        {conflict === null ? null : (
+          <Callout tone="action" role="alert">
+            <span className="flex flex-col items-start gap-2">
+              <span>
+                {conflict.change?.by
+                  ? t("scheduleMovedBy", {
+                      name: conflict.change.by.name,
+                      when: formatRelativeAge(conflict.change.at, new Date(), locale),
+                    })
+                  : t("scheduleMovedUnknown")}
+              </span>
+              <span className="text-xs">{t("scheduleMovedHint")}</span>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setConflict(null);
+                  setError(null);
+                  // Re-seeds the form from their version through the effect above,
+                  // which discards what is on screen — which is why the hint says
+                  // so before the press rather than after.
+                  void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
+                }}
+              >
+                {t("scheduleMovedReload")}
+              </Button>
             </span>
-            <span className="text-xs">{t("scheduleMovedHint")}</span>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => {
-                setConflict(null);
-                setError(null);
-                // Re-seeds the form from their version through the effect above,
-                // which discards what is on screen — which is why the hint says
-                // so before the press rather than after.
-                void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
-              }}
-            >
-              {t("scheduleMovedReload")}
-            </Button>
-          </span>
-        </Callout>
-      )}
+          </Callout>
+        )}
 
-      {week === null ? (
-        <p className="text-sm text-ink-muted">{t("loading")}</p>
-      ) : (
-        <form
-          className="flex flex-col gap-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError(null);
-            setSaved(false);
-            setConflict(null);
-            // Unacknowledged: the first attempt is always the one that can be
-            // refused, so the list reaches the owner before the change lands.
-            save.mutate(false);
-          }}
-        >
-          {WEEKDAYS.map((weekday) => (
-            <div key={weekday} className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
-                <span className="w-28 text-sm font-medium">{t(`weekday.${String(weekday)}`)}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWeek((current) =>
-                      current === null
-                        ? current
-                        : { ...current, [weekday]: [...(current[weekday] ?? []), emptyPeriod()] },
-                    );
-                  }}
-                  className="rounded-md border border-line-strong px-2 py-1 text-xs"
-                >
-                  {t("addPeriod")}
-                </button>
-                {(week[weekday] ?? []).length === 0 ? (
-                  <span className="text-xs text-ink-subtle">{t("closed")}</span>
-                ) : null}
+        {week === null ? (
+          <p className="text-sm text-ink-muted">{t("loading")}</p>
+        ) : (
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setError(null);
+              setSaved(false);
+              setConflict(null);
+              // Unacknowledged: the first attempt is always the one that can be
+              // refused, so the list reaches the owner before the change lands.
+              save.mutate(false);
+            }}
+          >
+            {WEEKDAYS.map((weekday) => (
+              <div key={weekday} className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-28 text-sm font-medium">
+                    {t(`weekday.${String(weekday)}`)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWeek((current) =>
+                        current === null
+                          ? current
+                          : { ...current, [weekday]: [...(current[weekday] ?? []), emptyPeriod()] },
+                      );
+                    }}
+                    className="rounded-md border border-line-strong px-2 py-1 text-xs"
+                  >
+                    {t("addPeriod")}
+                  </button>
+                  {(week[weekday] ?? []).length === 0 ? (
+                    <span className="text-xs text-ink-subtle">{t("closed")}</span>
+                  ) : null}
+                </div>
+
+                {(week[weekday] ?? []).map((period, index) => (
+                  // Index is the right key here, and `id` would be the wrong one:
+                  // the API replaces the week by delete-then-insert, so every save
+                  // mints new row ids and keying on them would remount the whole
+                  // grid and drop focus mid-edit.
+                  <PeriodRow
+                    key={`${String(weekday)}-${String(index)}`}
+                    period={period}
+                    locations={locations.data?.items ?? []}
+                    onChange={(patch) => {
+                      update(weekday, index, patch);
+                    }}
+                    onRemove={() => {
+                      removePeriod(weekday, index);
+                    }}
+                  />
+                ))}
               </div>
+            ))}
 
-              {(week[weekday] ?? []).map((period, index) => (
-                // Index is the right key here, and `id` would be the wrong one:
-                // the API replaces the week by delete-then-insert, so every save
-                // mints new row ids and keying on them would remount the whole
-                // grid and drop focus mid-edit.
-                <PeriodRow
-                  key={`${String(weekday)}-${String(index)}`}
-                  period={period}
-                  locations={locations.data?.items ?? []}
-                  onChange={(patch) => {
-                    update(weekday, index, patch);
-                  }}
-                  onRemove={() => {
-                    removePeriod(weekday, index);
-                  }}
-                />
-              ))}
-            </div>
-          ))}
+            <ErrorText>{error}</ErrorText>
+            {saved ? <p className="text-success text-sm font-medium">{t("saved")}</p> : null}
 
-          <ErrorText>{error}</ErrorText>
-          {saved ? <p className="text-success text-sm font-medium">{t("saved")}</p> : null}
+            <Button type="submit" disabled={save.isPending}>
+              {t("save")}
+            </Button>
 
-          <Button type="submit" disabled={save.isPending}>
-            {t("save")}
-          </Button>
-
-          <AffectedBookingsDialog
-            bookings={affected}
-            busy={save.isPending}
-            onConfirm={() => {
-              save.mutate(true);
-            }}
-            onCancel={() => {
-              setAffected(null);
-            }}
-          />
-        </form>
-      )}
+            <AffectedBookingsDialog
+              bookings={affected}
+              busy={save.isPending}
+              onConfirm={() => {
+                save.mutate(true);
+              }}
+              onCancel={() => {
+                setAffected(null);
+              }}
+            />
+          </form>
+        )}
+      </CardContent>
     </Card>
   );
 }

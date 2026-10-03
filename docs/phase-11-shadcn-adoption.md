@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–3b done).
+**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–4 done).
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -86,7 +86,7 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 | 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)               | done  |
 | 3    | Input, Textarea, Label, NativeSelect, Field                                        | done  |
 | 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                     | done  |
-| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                     |       |
+| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                     | done  |
 | 5    | Badge (our tones as extra variants), Alert for Callout, Table, Separator, Skeleton |       |
 | 6    | Dialog / AlertDialog for existing modals only                                      |       |
 | 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar  |       |
@@ -186,3 +186,28 @@ conditions, and 12/12 when run alone. Not fixed here; the fix belongs in the tes
 
 Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (67 passed, 3 of 3
 consecutive runs).
+
+## 3.5 Step 4 — Card
+
+`ui/card.tsx` follows the registry's `card` (compared against `shadcn view card`), with four departures:
+
+- **`Card` renders `<section>`**, not `<div>`, and spreads its props onto it, so `useEditPanel`'s `panelProps`
+  (`id`, `ref`, `tabIndex={-1}`) still reach the DOM and the global focus ring still shows where focus
+  landed. Five edit panels depend on this.
+- **`CardTitle` is an `<h2>`**, not a `<div>` — the registry's would remove every card title from the
+  heading outline. Other levels go through `asChild`: `auth-layout.tsx` uses an `<h1>`, and `Section`'s card
+  variant now honours `headingLevel`, which the phase-11 version ignored.
+- **`CardContent` is `flex flex-col gap-4`**: every card body here is a stack, and the old `Card` spaced its
+  children that way.
+- **`CardAction` is `flex flex-wrap gap-2`**, so several header buttons wrap on a phone.
+
+All 31 call sites moved from `<Card title description actions>` to `CardHeader` / `CardTitle` /
+`CardDescription` / `CardAction` / `CardContent`, by a script that parses balanced JSX braces; the one
+`actions` value was then unwrapped by hand. `auth-layout.tsx` was converted by hand — left as it was, it would
+have compiled and rendered its form flush against the card's edges, because the registry `Card` pads only
+vertically and leaves horizontal padding to its parts.
+
+Visible changes, intended: cards gain shadcn's `shadow-sm`, and the gap between a card's header and its body
+is 24px (was 16px). Verified with `check-types`, `lint`, `test` (338) and a production build. `test:e2e`: 67
+passed once; twice the §3.4 race failed its one test (66 passed), each time on a run that took ~52 s rather
+than ~33 s.

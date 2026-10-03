@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Button } from "./ui/button";
 import { Link } from "@/i18n/navigation";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * What a signed-in user sees on a tenant screen when there is no tenant.
@@ -40,21 +40,31 @@ export function NoOrganizationPanel({
 
   if (isPlatformAdmin) {
     return (
-      <Card title={admin("platformAdminTitle")}>
-        <p className="text-sm text-ink-muted">{admin("platformAdminHint")}</p>
-        <Button asChild>
-          <Link href="/admin">{admin("platformAdminLink")}</Link>
-        </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle>{admin("platformAdminTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-ink-muted">{admin("platformAdminHint")}</p>
+          <Button asChild>
+            <Link href="/admin">{admin("platformAdminLink")}</Link>
+          </Button>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card title={t("noOrganizationTitle")}>
-      <p className="text-sm text-ink-muted">{t("noOrganizationHint")}</p>
-      <Button asChild>
-        <Link href="/dashboard">{t("noOrganizationLink")}</Link>
-      </Button>
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("noOrganizationTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-ink-muted">{t("noOrganizationHint")}</p>
+        <Button asChild>
+          <Link href="/dashboard">{t("noOrganizationLink")}</Link>
+        </Button>
+      </CardContent>
     </Card>
   );
 }

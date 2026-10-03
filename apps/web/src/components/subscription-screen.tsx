@@ -9,7 +9,7 @@ import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashbo
 import { NoOrganizationPanel } from "./no-organization";
 import { Button, buttonVariants } from "./ui/button";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
-import { Card } from "./ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 
 type Plan = SubscribablePlan;
@@ -160,184 +160,189 @@ export function SubscriptionScreen(): React.ReactElement {
           })}
         </p>
       ) : null}
-      <Card title={t("subscriptionTitle")}>
-        {isSubscribed ? (
-          <>
-            <p role="status">{t("currentPlan", { plan: planLabel(subscription.plan, t) })}</p>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("subscriptionTitle")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isSubscribed ? (
+            <>
+              <p role="status">{t("currentPlan", { plan: planLabel(subscription.plan, t) })}</p>
 
-            {/* The trial's own countdown. Shown instead of the renewal date,
+              {/* The trial's own countdown. Shown instead of the renewal date,
                 not alongside it: during a trial "renews on" would be the first
                 *charge*, and calling that a renewal is how a customer ends up
                 surprised by a bill they were told about in the wrong words. */}
-            {isTrialing && subscription.trialEndsAt ? (
-              <p className="text-sm text-ink-muted">
-                {t("trialEndsOn", {
-                  date: new Date(subscription.trialEndsAt).toLocaleDateString(),
-                  plan: planLabel(subscription.plan, t),
-                })}
-              </p>
-            ) : subscription.currentPeriodEnd ? (
-              <p className="text-sm text-ink-muted">
-                {subscription.cancelAtPeriodEnd
-                  ? t("cancelsOn", {
-                      date: new Date(subscription.currentPeriodEnd).toLocaleDateString(),
-                    })
-                  : t("renewsOn", {
-                      date: new Date(subscription.currentPeriodEnd).toLocaleDateString(),
-                    })}
-              </p>
-            ) : null}
+              {isTrialing && subscription.trialEndsAt ? (
+                <p className="text-sm text-ink-muted">
+                  {t("trialEndsOn", {
+                    date: new Date(subscription.trialEndsAt).toLocaleDateString(),
+                    plan: planLabel(subscription.plan, t),
+                  })}
+                </p>
+              ) : subscription.currentPeriodEnd ? (
+                <p className="text-sm text-ink-muted">
+                  {subscription.cancelAtPeriodEnd
+                    ? t("cancelsOn", {
+                        date: new Date(subscription.currentPeriodEnd).toLocaleDateString(),
+                      })
+                    : t("renewsOn", {
+                        date: new Date(subscription.currentPeriodEnd).toLocaleDateString(),
+                      })}
+                </p>
+              ) : null}
 
-            {/* A downgrade the owner scheduled. Without this the screen shows
+              {/* A downgrade the owner scheduled. Without this the screen shows
                 the plan they are leaving and no sign that they left it, which
                 is the support ticket §2.4 exists to prevent. */}
-            {subscription.pendingPlan && subscription.pendingPlanStartsAt ? (
-              <p role="status" className="text-sm text-ink-muted">
-                {t("planChangesOn", {
-                  plan: planLabel(subscription.pendingPlan, t),
-                  date: new Date(subscription.pendingPlanStartsAt).toLocaleDateString(),
-                })}
-              </p>
-            ) : null}
+              {subscription.pendingPlan && subscription.pendingPlanStartsAt ? (
+                <p role="status" className="text-sm text-ink-muted">
+                  {t("planChangesOn", {
+                    plan: planLabel(subscription.pendingPlan, t),
+                    date: new Date(subscription.pendingPlanStartsAt).toLocaleDateString(),
+                  })}
+                </p>
+              ) : null}
 
-            {/* Access continues while Stripe retries — saying otherwise would
+              {/* Access continues while Stripe retries — saying otherwise would
                 be false — but the deadline has to be named or it gets ignored
                 until the organization is suspended (§2.3). */}
-            {subscription.status === "PAST_DUE" ? (
-              <p role="alert" className="text-sm text-warning">
-                {t("paymentFailedNotice")}
+              {subscription.status === "PAST_DUE" ? (
+                <p role="alert" className="text-sm text-warning">
+                  {t("paymentFailedNotice")}
+                </p>
+              ) : null}
+
+              <p className="text-sm text-ink-muted">
+                {subscription.cancelAtPeriodEnd
+                  ? t("subscriptionEnding")
+                  : isTrialing
+                    ? t("trialActive")
+                    : t("subscriptionActive")}
               </p>
-            ) : null}
 
-            <p className="text-sm text-ink-muted">
-              {subscription.cancelAtPeriodEnd
-                ? t("subscriptionEnding")
-                : isTrialing
-                  ? t("trialActive")
-                  : t("subscriptionActive")}
-            </p>
+              <ErrorText>{error}</ErrorText>
 
-            <ErrorText>{error}</ErrorText>
-
-            {/* Absent rather than broken when Stripe is unconfigured — the same
+              {/* Absent rather than broken when Stripe is unconfigured — the same
                 rule that decides which plans are offered. */}
-            {billing.data?.portalAvailable ? (
-              <Button
-                disabled={portal.isPending}
-                onClick={() => {
-                  setError(null);
-                  portal.mutate();
-                }}
-              >
-                {portal.isPending ? t("loading") : t("manageBilling")}
-              </Button>
-            ) : null}
+              {billing.data?.portalAvailable ? (
+                <Button
+                  disabled={portal.isPending}
+                  onClick={() => {
+                    setError(null);
+                    portal.mutate();
+                  }}
+                >
+                  {portal.isPending ? t("loading") : t("manageBilling")}
+                </Button>
+              ) : null}
 
-            {billing.data?.portalAvailable ? (
-              <p className="text-sm text-ink-muted">{t("manageBillingHint")}</p>
-            ) : null}
-          </>
-        ) : availablePlans.length === 0 ? (
-          // Billing is unconfigured. Saying so beats a button that leads to a
-          // blank Stripe page (rule 4: one feature degrades, nothing crashes).
-          <ErrorText>{t("noPlansConfigured")}</ErrorText>
-        ) : sent ? (
-          <>
-            <p role="status">{t("paymentLinkSent", { email: sent.emailedTo })}</p>
-            {/* A real <a>, not `Button asChild` around a locale `Link`: this
+              {billing.data?.portalAvailable ? (
+                <p className="text-sm text-ink-muted">{t("manageBillingHint")}</p>
+              ) : null}
+            </>
+          ) : availablePlans.length === 0 ? (
+            // Billing is unconfigured. Saying so beats a button that leads to a
+            // blank Stripe page (rule 4: one feature degrades, nothing crashes).
+            <ErrorText>{t("noPlansConfigured")}</ErrorText>
+          ) : sent ? (
+            <>
+              <p role="status">{t("paymentLinkSent", { email: sent.emailedTo })}</p>
+              {/* A real <a>, not `Button asChild` around a locale `Link`: this
                 leaves the app for Stripe's hosted page, so it must not go
                 through the locale-aware router. `buttonVariants` gives it the
                 button's styling without its element. */}
-            <a
-              href={sent.paymentUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className={buttonVariants()}
+              <a
+                href={sent.paymentUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className={buttonVariants()}
+              >
+                {sent.trial ? t("goToTrial") : t("goToPayment")}
+              </a>
+            </>
+          ) : (
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setError(null);
+                subscribe.mutate();
+              }}
             >
-              {sent.trial ? t("goToTrial") : t("goToPayment")}
-            </a>
-          </>
-        ) : (
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setError(null);
-              subscribe.mutate();
-            }}
-          >
-            {/* Only when there is actually a trial to have. The server decides
+              {/* Only when there is actually a trial to have. The server decides
                 — a Payment Link's trial is baked into the link, so promising
                 one the link does not carry would be a promise Stripe breaks at
                 the checkout page (§2.1). */}
-            {billing.data?.trialAvailable ? (
-              <p className="text-sm text-ink-muted">
-                {t("trialOffer", { days: billing.data.trialPeriodDays })}
-              </p>
-            ) : (
-              <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
-            )}
+              {billing.data?.trialAvailable ? (
+                <p className="text-sm text-ink-muted">
+                  {t("trialOffer", { days: billing.data.trialPeriodDays })}
+                </p>
+              ) : (
+                <p className="text-sm text-ink-muted">{t("trialAlreadyUsed")}</p>
+              )}
 
-            <p className="text-sm text-ink-muted">{t("pricesTaxExempt")}</p>
+              <p className="text-sm text-ink-muted">{t("pricesTaxExempt")}</p>
 
-            <div className="flex flex-col gap-2">
-              <p id="plan-choice" className="text-sm font-medium">
-                {t("choosePlan")}
-              </p>
-              <RadioGroup
-                aria-labelledby="plan-choice"
-                value={plan}
-                onValueChange={(value) => {
-                  const chosen = availablePlans.find((option) => option === value);
-                  if (chosen) setPlan(chosen);
-                }}
-                className="gap-2"
-              >
-                {availablePlans.map((option) => (
-                  <label
-                    key={option}
-                    className="flex items-start gap-3 rounded-lg border border-line p-4 text-sm has-[[data-state=checked]]:border-primary"
-                  >
-                    <RadioGroupItem value={option} className="mt-0.5" />
-                    <span className="grid flex-1 gap-1">
-                      <span className="flex flex-wrap items-baseline justify-between gap-2">
-                        <strong>{planLabel(option, t)}</strong>
-                        <strong>
-                          {formatPlanPrice(option, locale)} {t("perMonth")}
-                        </strong>
+              <div className="flex flex-col gap-2">
+                <p id="plan-choice" className="text-sm font-medium">
+                  {t("choosePlan")}
+                </p>
+                <RadioGroup
+                  aria-labelledby="plan-choice"
+                  value={plan}
+                  onValueChange={(value) => {
+                    const chosen = availablePlans.find((option) => option === value);
+                    if (chosen) setPlan(chosen);
+                  }}
+                  className="gap-2"
+                >
+                  {availablePlans.map((option) => (
+                    <label
+                      key={option}
+                      className="flex items-start gap-3 rounded-lg border border-line p-4 text-sm has-[[data-state=checked]]:border-primary"
+                    >
+                      <RadioGroupItem value={option} className="mt-0.5" />
+                      <span className="grid flex-1 gap-1">
+                        <span className="flex flex-wrap items-baseline justify-between gap-2">
+                          <strong>{planLabel(option, t)}</strong>
+                          <strong>
+                            {formatPlanPrice(option, locale)} {t("perMonth")}
+                          </strong>
+                        </span>
+                        <span className="text-ink-muted">
+                          {option === "STARTER"
+                            ? t("planStarterDescription")
+                            : option === "PROFESSIONAL_PLUS"
+                              ? t("planProfessionalPlusDescription")
+                              : t("planProfessionalDescription")}
+                        </span>
                       </span>
-                      <span className="text-ink-muted">
-                        {option === "STARTER"
-                          ? t("planStarterDescription")
-                          : option === "PROFESSIONAL_PLUS"
-                            ? t("planProfessionalPlusDescription")
-                            : t("planProfessionalDescription")}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </RadioGroup>
-            </div>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
 
-            <p className="text-sm text-ink-muted">{t("assistedSetupOffer")}</p>
+              <p className="text-sm text-ink-muted">{t("assistedSetupOffer")}</p>
 
-            <ErrorText>{error}</ErrorText>
+              <ErrorText>{error}</ErrorText>
 
-            {activationPending ? (
-              <p role="status" className="text-sm text-ink-muted">
-                {t("subscriptionActivationPending")}
-              </p>
-            ) : null}
+              {activationPending ? (
+                <p role="status" className="text-sm text-ink-muted">
+                  {t("subscriptionActivationPending")}
+                </p>
+              ) : null}
 
-            <Button type="submit" disabled={subscribe.isPending || activationPending}>
-              {subscribe.isPending
-                ? t("loading")
-                : billing.data?.trialAvailable
-                  ? t("startTrial")
-                  : t("sendPaymentLink")}
-            </Button>
-          </form>
-        )}
+              <Button type="submit" disabled={subscribe.isPending || activationPending}>
+                {subscribe.isPending
+                  ? t("loading")
+                  : billing.data?.trialAvailable
+                    ? t("startTrial")
+                    : t("sendPaymentLink")}
+              </Button>
+            </form>
+          )}
+        </CardContent>
       </Card>
     </DashboardShell>
   );
