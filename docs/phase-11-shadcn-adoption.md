@@ -181,8 +181,11 @@ access before sign-in: /en" dispatches `beforeinstallprompt` as soon as the serv
 visible, but `staff-pwa.tsx` attaches that listener in a `useEffect`, after hydration. When hydration is
 late the event is lost and the "Install app" button never appears. It failed in 3 of 4 full-suite runs on a
 loaded machine, then passed 3/3 on this tree and 3/3 on the pre-shadcn sources (`2152eae`) under the same
-conditions, and 12/12 when run alone. Not fixed here; the fix belongs in the test (dispatch inside
-`expect(…).toPass()`), not in the component.
+conditions, and 12/12 when run alone. **Fixed after step 4** in the test, not the component: it now re-dispatches the event inside
+`expect(…).toPass()` until the button appears. Afterwards: 3/3 full runs and a 12-worker `--repeat-each=2`
+stress run (134/134) passed. The same stress run with the old test also passed, so the failure could not be
+reproduced on demand that day; the fix stands on reasoning — the test no longer depends on hydration timing
+it never waited for — rather than on a before/after measurement.
 
 Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (67 passed, 3 of 3
 consecutive runs).

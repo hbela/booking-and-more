@@ -23,18 +23,28 @@ for (const [path, staffTitle, patientTitle, installLabel] of [
         exact: true,
       }),
     ).toBeVisible();
-    await page.evaluate(() => {
-      const event = new Event("beforeinstallprompt", { cancelable: true });
-      Object.assign(event, {
-        prompt: () => {
-          document.documentElement.dataset.installPrompted = "true";
-          return Promise.resolve();
-        },
-        userChoice: Promise.resolve({ outcome: "dismissed" }),
+    // Everything asserted above is server-rendered, so it proves nothing about
+    // hydration — and `InstallApp` attaches its `beforeinstallprompt` listener
+    // in an effect. Dispatched once, the event was lost whenever hydration ran
+    // late, which on a loaded machine was most runs (phase-11-shadcn-adoption
+    // §3.4). The browser fires it whenever it decides to, so re-firing until
+    // the button appears is also the more faithful model.
+    const install = page.getByRole("button", { name: installLabel, exact: true });
+    await expect(async () => {
+      await page.evaluate(() => {
+        const event = new Event("beforeinstallprompt", { cancelable: true });
+        Object.assign(event, {
+          prompt: () => {
+            document.documentElement.dataset.installPrompted = "true";
+            return Promise.resolve();
+          },
+          userChoice: Promise.resolve({ outcome: "dismissed" }),
+        });
+        window.dispatchEvent(event);
       });
-      window.dispatchEvent(event);
-    });
-    await page.getByRole("button", { name: installLabel, exact: true }).click();
+      await expect(install).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await install.click();
     await expect(page.locator("html")).toHaveAttribute("data-install-prompted", "true");
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
