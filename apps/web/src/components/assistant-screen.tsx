@@ -11,6 +11,7 @@ import { Card } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { conversationListQuery } from "@/lib/conversation-list-query";
+import { Checkbox } from "./ui/checkbox";
 
 interface Settings {
   enabled: boolean;
@@ -136,8 +137,7 @@ export function AssistantScreen(): React.ReactElement {
               }}
             >
               <label className="flex items-center gap-2">
-                <input name="enabled" type="checkbox" defaultChecked={settings.data.enabled} />{" "}
-                {t("enabled")}
+                <Checkbox name="enabled" defaultChecked={settings.data.enabled} /> {t("enabled")}
               </label>
               <label>
                 {t("personaName")}

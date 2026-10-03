@@ -30,6 +30,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
+import { Checkbox } from "./ui/checkbox";
 
 /** A trimmed text value from a form. `FormData.get` can also hand back a File,
  *  which would stringify to "[object Object]" if taken at face value. */
@@ -86,11 +87,10 @@ export function ServicesScreen(): React.ReactElement {
         {/* A filter rather than a second table: the owner's model is "my
             services, including the ones I put away", not two catalogues. */}
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={showArchived}
-            onChange={(event) => {
-              setShowArchived(event.target.checked);
+            onCheckedChange={(value) => {
+              setShowArchived(value === true);
             }}
           />
           <span>{t("showArchived")}</span>

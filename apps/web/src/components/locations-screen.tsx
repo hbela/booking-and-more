@@ -19,6 +19,7 @@ import { Card } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 import { Section } from "./ui/section";
 import { RowButton } from "./ui/table";
+import { Checkbox } from "./ui/checkbox";
 
 /**
  * One-line address for the list.
@@ -75,11 +76,10 @@ export function LocationsScreen(): React.ReactElement {
     <DashboardShell context={context}>
       <Section title={t("locations")}>
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={showArchived}
-            onChange={(event) => {
-              setShowArchived(event.target.checked);
+            onCheckedChange={(value) => {
+              setShowArchived(value === true);
             }}
           />
           <span>{t("showArchived")}</span>

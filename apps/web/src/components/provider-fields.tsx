@@ -14,6 +14,7 @@ import {
 import { FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
+import { Checkbox } from "./ui/checkbox";
 
 /**
  * One field set, used by both the create panel and the edit panel.
@@ -173,17 +174,19 @@ export function ProviderFields({
         <div className="flex flex-wrap gap-3">
           {LOCALES.map((locale) => (
             <label key={locale} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={state.languages.includes(locale)}
-                onChange={(event) => {
+                onCheckedChange={(value) => {
                   onChange({
                     // Rebuilt from LOCALES rather than pushed onto, so the order
                     // is stable and `diffPatch`'s content comparison is not
                     // defeated by two equal sets in different orders.
-                    languages: event.target.checked
-                      ? LOCALES.filter((code) => code === locale || state.languages.includes(code))
-                      : state.languages.filter((code) => code !== locale),
+                    languages:
+                      value === true
+                        ? LOCALES.filter(
+                            (code) => code === locale || state.languages.includes(code),
+                          )
+                        : state.languages.filter((code) => code !== locale),
                   });
                 }}
               />
@@ -239,11 +242,10 @@ export function ProviderFields({
       <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>
 
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={state.onlineBookingEnabled}
-          onChange={(event) => {
-            onChange({ onlineBookingEnabled: event.target.checked });
+          onCheckedChange={(value) => {
+            onChange({ onlineBookingEnabled: value === true });
           }}
         />
         <span>{t("onlineBooking")}</span>

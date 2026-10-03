@@ -47,6 +47,7 @@ import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
 import { RowButton, RowLink } from "./ui/table";
+import { Checkbox } from "./ui/checkbox";
 
 /** One node, shared by every disabled Invite button, so the reason is announced. */
 const INVITE_HINT_ID = "provider-invite-needs-email";
@@ -249,11 +250,10 @@ export function ProvidersScreen(): React.ReactElement {
         ) : null}
 
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={showArchived}
-            onChange={(event) => {
-              setShowArchived(event.target.checked);
+            onCheckedChange={(value) => {
+              setShowArchived(value === true);
             }}
           />
           <span>{t("showArchived")}</span>
@@ -858,11 +858,10 @@ function CreateProviderPanel({
             <legend className="text-sm font-medium">{t("services")}</legend>
             {services.map((service) => (
               <label key={service.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={serviceRows.get(service.id)?.checked ?? false}
-                  onChange={(event) => {
-                    const checked = event.target.checked;
+                  onCheckedChange={(value) => {
+                    const checked = value === true;
                     setServiceRows((current) => {
                       const existing = current?.get(service.id);
                       if (!current || !existing) return current;
@@ -1166,11 +1165,10 @@ function AssignmentsPanel({
                 return (
                   <div key={service.id} className="flex flex-col gap-1">
                     <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={row.checked}
-                        onChange={(event) => {
-                          updateService(service.id, { checked: event.target.checked });
+                        onCheckedChange={(value) => {
+                          updateService(service.id, { checked: value === true });
                         }}
                       />
                       <span>
@@ -1213,11 +1211,10 @@ function AssignmentsPanel({
 
                 return (
                   <label key={location.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={row.checked}
-                      onChange={(event) => {
-                        updateLocation(location.id, { checked: event.target.checked });
+                      onCheckedChange={(value) => {
+                        updateLocation(location.id, { checked: value === true });
                       }}
                     />
                     <span>{location.name}</span>
@@ -1334,11 +1331,10 @@ function ServiceOverrides({
         {/* The *assignment's* active flag, not the service's. This is the one the
             previous editor destroyed on every save. */}
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={row.active}
-            onChange={(event) => {
-              onChange({ active: event.target.checked });
+            onCheckedChange={(value) => {
+              onChange({ active: value === true });
             }}
           />
           <span>{t("assignmentActive")}</span>

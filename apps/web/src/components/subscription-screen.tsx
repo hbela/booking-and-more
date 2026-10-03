@@ -8,6 +8,7 @@ import { ApiError, apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
 import { Button, buttonVariants } from "./ui/button";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Card } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 
@@ -279,42 +280,44 @@ export function SubscriptionScreen(): React.ReactElement {
 
             <p className="text-sm text-ink-muted">{t("pricesTaxExempt")}</p>
 
-            <fieldset className="flex flex-col gap-2">
-              <legend className="text-sm font-medium">{t("choosePlan")}</legend>
-
-              {availablePlans.map((option) => (
-                <label
-                  key={option}
-                  className="flex items-start gap-3 rounded-lg border border-line p-4 text-sm"
-                >
-                  <input
-                    className="mt-1"
-                    type="radio"
-                    name="plan"
-                    value={option}
-                    checked={plan === option}
-                    onChange={() => {
-                      setPlan(option);
-                    }}
-                  />
-                  <span className="grid flex-1 gap-1">
-                    <span className="flex flex-wrap items-baseline justify-between gap-2">
-                      <strong>{planLabel(option, t)}</strong>
-                      <strong>
-                        {formatPlanPrice(option, locale)} {t("perMonth")}
-                      </strong>
+            <div className="flex flex-col gap-2">
+              <p id="plan-choice" className="text-sm font-medium">
+                {t("choosePlan")}
+              </p>
+              <RadioGroup
+                aria-labelledby="plan-choice"
+                value={plan}
+                onValueChange={(value) => {
+                  const chosen = availablePlans.find((option) => option === value);
+                  if (chosen) setPlan(chosen);
+                }}
+                className="gap-2"
+              >
+                {availablePlans.map((option) => (
+                  <label
+                    key={option}
+                    className="flex items-start gap-3 rounded-lg border border-line p-4 text-sm has-[[data-state=checked]]:border-primary"
+                  >
+                    <RadioGroupItem value={option} className="mt-0.5" />
+                    <span className="grid flex-1 gap-1">
+                      <span className="flex flex-wrap items-baseline justify-between gap-2">
+                        <strong>{planLabel(option, t)}</strong>
+                        <strong>
+                          {formatPlanPrice(option, locale)} {t("perMonth")}
+                        </strong>
+                      </span>
+                      <span className="text-ink-muted">
+                        {option === "STARTER"
+                          ? t("planStarterDescription")
+                          : option === "PROFESSIONAL_PLUS"
+                            ? t("planProfessionalPlusDescription")
+                            : t("planProfessionalDescription")}
+                      </span>
                     </span>
-                    <span className="text-ink-muted">
-                      {option === "STARTER"
-                        ? t("planStarterDescription")
-                        : option === "PROFESSIONAL_PLUS"
-                          ? t("planProfessionalPlusDescription")
-                          : t("planProfessionalDescription")}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+                  </label>
+                ))}
+              </RadioGroup>
+            </div>
 
             <p className="text-sm text-ink-muted">{t("assistedSetupOffer")}</p>
 

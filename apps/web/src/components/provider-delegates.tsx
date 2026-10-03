@@ -19,6 +19,7 @@ import { Card } from "./ui/card";
 import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { DataTable, RowButton, Td, Th } from "./ui/table";
+import { Checkbox } from "./ui/checkbox";
 
 const SCOPES: DelegationScope[] = ["AVAILABILITY", "BOOKINGS"];
 
@@ -305,11 +306,10 @@ export function ProviderDelegates({
                   <span className="flex flex-wrap gap-3">
                     {SCOPES.map((scope) => (
                       <label key={scope} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={row.scopes.includes(scope)}
                           disabled={busy}
-                          onChange={() => {
+                          onCheckedChange={() => {
                             toggleScope(row, scope);
                           }}
                         />
@@ -388,10 +388,9 @@ export function ProviderDelegates({
             <legend className="text-ink text-sm font-medium">{t("delegateScopes")}</legend>
             {SCOPES.map((scope) => (
               <label key={scope} className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={draftScopes.includes(scope)}
-                  onChange={() => {
+                  onCheckedChange={() => {
                     toggleDraftScope(scope);
                   }}
                   className="mt-1"

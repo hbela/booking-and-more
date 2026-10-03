@@ -31,6 +31,7 @@ import { Card } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
+import { Checkbox } from "./ui/checkbox";
 
 /**
  * "Last changed by Réka, 10 minutes ago."
@@ -412,11 +413,10 @@ function PeriodRow({
         />
 
         <label className="flex items-center gap-1 text-xs">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={toMidnight}
-            onChange={(event) => {
-              onChange({ endTime: event.target.checked ? END_OF_DAY : "17:00" });
+            onCheckedChange={(value) => {
+              onChange({ endTime: value === true ? END_OF_DAY : "17:00" });
             }}
           />
           <span>{t("toMidnight")}</span>
@@ -475,11 +475,10 @@ function PeriodRow({
           </FormField>
 
           <label className="flex items-center gap-2 self-end text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={period.active}
-              onChange={(event) => {
-                onChange({ active: event.target.checked });
+              onCheckedChange={(value) => {
+                onChange({ active: value === true });
               }}
             />
             <span>{t("periodActive")}</span>

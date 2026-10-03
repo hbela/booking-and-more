@@ -13,6 +13,7 @@ import { FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Textarea } from "./ui/textarea";
+import { Checkbox } from "./ui/checkbox";
 
 /** What the currency picker offers. The API accepts any ISO 4217 code. */
 const CURRENCIES = ["HUF", "EUR", "USD", "GBP"] as const;
@@ -277,11 +278,10 @@ export function ServiceFields({
       <p className="text-xs text-ink-subtle">{t("inheritHint")}</p>
 
       <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={state.requiresApproval}
-          onChange={(event) => {
-            onChange({ requiresApproval: event.target.checked });
+          onCheckedChange={(value) => {
+            onChange({ requiresApproval: value === true });
           }}
         />
         <span>{t("requiresApproval")}</span>

@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–3 done).
+**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–3b done).
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -85,7 +85,7 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 | 1    | `accent` → `booking` rename; alias layer; `tw-animate-css`; `components.json`      | done  |
 | 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)               | done  |
 | 3    | Input, Textarea, Label, NativeSelect, Field                                        | done  |
-| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                     |       |
+| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                     | done  |
 | 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                     |       |
 | 5    | Badge (our tones as extra variants), Alert for Callout, Table, Separator, Skeleton |       |
 | 6    | Dialog / AlertDialog for existing modals only                                      |       |
@@ -161,3 +161,28 @@ Visible changes, intended: controls are `rounded-md` with a hairline shadow, tex
 (16px below, which stops iOS zooming into a focused field), selects show a lucide chevron instead of the
 browser's arrow, and labels use shadcn's spacing. Verified with `check-types`, `lint`, `test` (338), a
 production build and `test:e2e` (67 passed).
+
+## 3.4 Step 3b — Checkbox and RadioGroup
+
+- **The CLI re-adds the npm package `cn` on every `add`**, not once — it happened again here. The §3.3
+  check of the `package.json` diff is not optional.
+- 15 checkboxes became `Checkbox`. Each kept its wrapping `<label>`: a Radix checkbox is a `<button>`,
+  which is labelable, so the label still names it and still toggles it on click. `onChange` became
+  `onCheckedChange`, which receives `boolean | "indeterminate"`, so `event.target.checked` became
+  `value === true`. The assistant settings form reads `FormData`; inside a `<form>` Radix renders a hidden
+  input with the same `name` and value `"on"`, so `data.get("enabled") === "on"` is unchanged.
+- The subscription plan choice is a `RadioGroup`. It replaces the `<fieldset>`/`<legend>` with
+  `role="radiogroup"` named by `aria-labelledby` on the visible heading; the selected card takes a
+  `border-primary` edge (border only — no new text-on-colour pair to test).
+- Both components lost `outline-none` / `ring-ring/50` and the dark `bg-input/30` tint, per §2.4.
+
+**A flaky e2e test was found, and it predates this work.** `staff-pwa.spec.ts`'s "home page explains mobile
+access before sign-in: /en" dispatches `beforeinstallprompt` as soon as the server-rendered headings are
+visible, but `staff-pwa.tsx` attaches that listener in a `useEffect`, after hydration. When hydration is
+late the event is lost and the "Install app" button never appears. It failed in 3 of 4 full-suite runs on a
+loaded machine, then passed 3/3 on this tree and 3/3 on the pre-shadcn sources (`2152eae`) under the same
+conditions, and 12/12 when run alone. Not fixed here; the fix belongs in the test (dispatch inside
+`expect(…).toPass()`), not in the component.
+
+Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (67 passed, 3 of 3
+consecutive runs).
