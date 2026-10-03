@@ -20,6 +20,7 @@ import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { DataTable, RowButton, TableCell, TableHead, TableRow } from "./ui/table";
 import { Checkbox } from "./ui/checkbox";
+import { useConfirm } from "./ui/confirm-dialog";
 
 const SCOPES: DelegationScope[] = ["AVAILABILITY", "BOOKINGS"];
 
@@ -73,6 +74,7 @@ export function ProviderDelegates({
   onClose?: (() => void) | undefined;
 }): React.ReactElement | null {
   const t = useTranslations("availability");
+  const { confirm, confirmDialog } = useConfirm();
   const context = useDashboardContext();
   const queryClient = useQueryClient();
 
@@ -335,12 +337,14 @@ export function ProviderDelegates({
                     <RowButton
                       disabled={busy}
                       onClick={() => {
-                        if (
-                          !window.confirm(t("delegateRevokeConfirm", { name: row.member.name }))
-                        ) {
-                          return;
-                        }
-                        revoke.mutate(row.member.membershipId);
+                        confirm({
+                          title: t("delegateRevokeConfirm", { name: row.member.name }),
+                          confirmLabel: t("delegateRevoke"),
+                          destructive: true,
+                          onConfirm: () => {
+                            revoke.mutate(row.member.membershipId);
+                          },
+                        });
                       }}
                     >
                       {t("delegateRevoke")}
@@ -445,6 +449,7 @@ export function ProviderDelegates({
           </div>
         )}
       </CardContent>
+      {confirmDialog}
     </Card>
   );
 }

@@ -237,8 +237,11 @@ reverses one without noticing there was a decision:
 - **Gated navigation items are `<span aria-disabled>`, never dimmed anchors.** An anchor stays focusable and
   activates on Enter however it is painted, so a "disabled" one navigates to a screen that 403s
   (phase-9 §2.11).
-- **There is no `Dialog` primitive and there is not going to be one.** `useEditPanel` substitutes an inline
-  panel plus an explicit focus contract — the panel takes focus on open and hands it back on close.
+- **There is no edit dialog and there is not going to be one.** `useEditPanel` substitutes an inline panel
+  plus an explicit focus contract — the panel takes focus on open and hands it back on close. _(Amended
+  2026-10-03: shadcn's `AlertDialog` now exists, for confirmations that were already modal —
+  `window.confirm()` and the affected-bookings `<dialog>` — and for nothing else; see
+  [phase-11-shadcn-adoption.md](phase-11-shadcn-adoption.md) §3.7.)_
 - **`role="note"` on `Notice`, `role="alert"` on `ErrorText`.** A prerequisite is not an error and must not
   interrupt.
 - **The locale switcher is a native `<select>`.** A custom dropdown is a worse control for a keyboard and

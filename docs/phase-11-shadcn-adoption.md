@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–5 done).
+**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–6 done).
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -88,7 +88,7 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 | 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                              | done  |
 | 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                              | done  |
 | 5    | Badge (our tones as extra variants), Alert for Callout, Table                               | done  |
-| 6    | Dialog / AlertDialog for existing modals only                                               |       |
+| 6    | Dialog / AlertDialog for existing modals only                                               | done  |
 | 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar, skeleton |       |
 | 8    | Delete unused wrappers and recipes                                                          |       |
 
@@ -246,3 +246,32 @@ mirror each screen's layout and still carry text for a screen reader, which is d
 than a component swap.
 
 Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (67 passed, 2 of 2 runs).
+
+## 3.7 Step 6 — AlertDialog for the modals that already existed
+
+Added `dialog` and `alert-dialog`. `alert-dialog` depends on `button`, and the CLI stopped to ask whether to
+overwrite ours; it was declined (`printf 'n\n' | shadcn add …`). **Never pass `--overwrite` to an `add` that
+pulls in a component already adapted here** — it would silently restore the registry's focus ring and `h-9`.
+The npm package `cn` was installed and removed again.
+
+- **Five `window.confirm()` prompts are `useConfirm()`** (`ui/confirm-dialog.tsx`): unlink a diary, revoke a
+  delegate, claim a diary, archive a provider, disconnect a calendar. The browser's dialog could not be
+  styled, labelled its buttons in the browser's language rather than the page's, and froze the tab. The
+  question is the title; the confirm button reuses the label of the button that asked ("Archive", "Revoke");
+  destructive actions get the `destructive` button. Callback-shaped (`confirm({ …, onConfirm })`) rather
+  than a Promise, so the five click handlers stayed synchronous. One new key: `common.cancel`.
+- **The affected-bookings `<dialog>` is an `AlertDialog`**, not a `Dialog`, because it must not close on an
+  outside click — the same as `showModal()`. Its buttons are plain `Button`s: `AlertDialogAction` closes the
+  dialog itself, and confirming starts a save that the caller ends.
+- **Focus did not come back, and the new e2e test caught it.** Radix returns focus to the dialog's
+  `Trigger`; every dialog here is opened from code and has none, so closing dropped focus on `<body>`.
+  `AlertDialogContent` and `DialogContent` now remember the element focused when they opened and return to
+  it. `e2e/confirm-dialog.spec.ts` asserts the whole contract on the providers screen: a translated
+  `alertdialog`, focus on Cancel, Escape sends nothing and refocuses Archive, confirming sends exactly one
+  `DELETE`, and no native browser dialog ever opens.
+- `Dialog` is installed but unused. Its close buttons are opt-in through a translated `closeLabel` — the
+  registry hard-codes the English "Close" and draws the corner one as a 16px icon with its outline removed.
+
+Phase-11 §2.6's Dialog bullet is amended in place: still **no edit dialog**, only these confirmations, which
+were modal already. Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e`
+(68 passed, 2 of 2 runs).

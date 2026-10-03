@@ -46,6 +46,7 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
+import { useConfirm } from "./ui/confirm-dialog";
 import {
   RowButton,
   RowLink,
@@ -70,6 +71,7 @@ const INVITE_HINT_ID = "provider-invite-needs-email";
  */
 export function ProvidersScreen(): React.ReactElement {
   const t = useTranslations("catalogue");
+  const { confirm, confirmDialog } = useConfirm();
   const context = useDashboardContext();
   useSignInRedirect(!context.isPending && !context.me);
   const queryClient = useQueryClient();
@@ -368,14 +370,13 @@ export function ProvidersScreen(): React.ReactElement {
                             <RowButton
                               disabled={claimDiary.isPending}
                               onClick={() => {
-                                if (
-                                  !window.confirm(
-                                    t("claimDiaryConfirm", { name: provider.displayName }),
-                                  )
-                                ) {
-                                  return;
-                                }
-                                claimDiary.mutate(provider);
+                                confirm({
+                                  title: t("claimDiaryConfirm", { name: provider.displayName }),
+                                  confirmLabel: t("claimDiary"),
+                                  onConfirm: () => {
+                                    claimDiary.mutate(provider);
+                                  },
+                                });
                               }}
                             >
                               {t("claimDiary")}
@@ -450,13 +451,18 @@ export function ProvidersScreen(): React.ReactElement {
                                     email: login.user.email,
                                   })
                                 : t("archiveConfirm", { name: provider.displayName });
-                              if (!window.confirm(question)) return;
-
-                              void apiFetch(`/v1/providers/${provider.id}`, {
-                                method: "DELETE",
-                                tenantId: context.tenantId,
-                              }).then(() => {
-                                void queryClient.invalidateQueries({ queryKey: ["providers"] });
+                              confirm({
+                                title: question,
+                                confirmLabel: t("archive"),
+                                destructive: true,
+                                onConfirm: () => {
+                                  void apiFetch(`/v1/providers/${provider.id}`, {
+                                    method: "DELETE",
+                                    tenantId: context.tenantId,
+                                  }).then(() => {
+                                    void queryClient.invalidateQueries({ queryKey: ["providers"] });
+                                  });
+                                },
                               });
                             }}
                           >
@@ -549,6 +555,7 @@ export function ProvidersScreen(): React.ReactElement {
           locations={locations.data?.items}
         />
       ) : null}
+      {confirmDialog}
     </DashboardShell>
   );
 }
@@ -557,9 +564,10 @@ export function ProvidersScreen(): React.ReactElement {
  * Giving one provider a login.
  * docs/phase-9-provider-onboarding.md §2.
  *
- * A `useEditPanel` rather than a `confirm()`: this screen has no Dialog
- * primitive and is not getting one, and the hook already carries the focus
- * wiring, the `aria-expanded`/`aria-controls` pairing and the scroll behaviour.
+ * A `useEditPanel` rather than a `useConfirm()` question: panels stay inline
+ * (phase-11 §2.6 — `useConfirm` only replaced prompts that were already
+ * modal), and the hook already carries the focus wiring, the
+ * `aria-expanded`/`aria-controls` pairing and the scroll behaviour.
  *
  * There is nothing to fill in. The address comes from the provider record and
  * the role is always PROVIDER, so the whole form is one button and the text

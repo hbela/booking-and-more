@@ -18,7 +18,7 @@ export interface EditPanel {
  * One open editing panel per screen, with the focus wiring a dialog would give
  * us for free.
  *
- * There is no Dialog primitive here and there is not going to be one — the
+ * There is no edit dialog here and there is not going to be one — the
  * screens use an inline `Card` toggled by state. What that pattern loses is
  * everything a dialog does about focus: before this hook, pressing "Assign"
  * rendered a panel below the fold and left the caret on the button, so for a

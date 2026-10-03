@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
+import { useConfirm } from "./ui/confirm-dialog";
 
 interface IntegrationsResponse {
   configured: boolean;
@@ -54,6 +55,7 @@ interface GoogleCalendar {
  */
 export function IntegrationsScreen(): React.ReactElement {
   const t = useTranslations("integrations");
+  const { confirm, confirmDialog } = useConfirm();
   const dashboard = useTranslations("dashboard");
   const context = useDashboardContext();
   useSignInRedirect(!context.isPending && !context.me);
@@ -374,9 +376,14 @@ export function IntegrationsScreen(): React.ReactElement {
                       // The dialog says what disconnecting does *not* do, because
                       // the events staying in Google is the surprising half —
                       // they are real appointments somebody still has to attend.
-                      if (window.confirm(t("disconnectConfirm"))) {
-                        disconnect.mutate(integration.id);
-                      }
+                      confirm({
+                        title: t("disconnectConfirm"),
+                        confirmLabel: t("disconnect"),
+                        destructive: true,
+                        onConfirm: () => {
+                          disconnect.mutate(integration.id);
+                        },
+                      });
                     }}
                   >
                     {t("disconnect")}
@@ -387,6 +394,7 @@ export function IntegrationsScreen(): React.ReactElement {
           </Card>
         );
       })}
+      {confirmDialog}
     </DashboardShell>
   );
 }

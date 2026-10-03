@@ -12,6 +12,7 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
+import { useConfirm } from "./ui/confirm-dialog";
 import {
   RowButton,
   Table,
@@ -398,6 +399,7 @@ function MemberDiary({
   canManage: boolean;
 }): React.ReactElement {
   const t = useTranslations("dashboard");
+  const { confirm, confirmDialog } = useConfirm();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
@@ -429,9 +431,15 @@ function MemberDiary({
       <RowButton
         disabled={link.isPending}
         onClick={() => {
-          if (!window.confirm(t("unlinkDiaryConfirm", { name: member.user.name }))) return;
-          setError(null);
-          link.mutate(null);
+          confirm({
+            title: t("unlinkDiaryConfirm", { name: member.user.name }),
+            confirmLabel: t("unlinkDiary"),
+            destructive: true,
+            onConfirm: () => {
+              setError(null);
+              link.mutate(null);
+            },
+          });
         }}
       >
         {t("unlinkDiary")}
@@ -445,6 +453,7 @@ function MemberDiary({
       <div className="flex flex-col items-start gap-1">
         <span>{label}</span>
         {unlink}
+        {confirmDialog}
         <ErrorText>{error}</ErrorText>
       </div>
     );
