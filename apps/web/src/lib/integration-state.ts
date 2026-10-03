@@ -92,19 +92,19 @@ export function resolveIntegrationHealth(
   return { kind: "healthy", synced: integration.sync.synced };
 }
 
-/** The chip's colour. The word beside it is what actually carries the meaning. */
+/** The chip's Badge variant. The word beside it is what actually carries the meaning. */
 export function healthTone(
   health: IntegrationHealth,
-): "neutral" | "info" | "success" | "warning" | "danger" {
+): "secondary" | "info" | "success" | "warning" | "destructive" {
   switch (health.kind) {
     case "disconnected":
-      return "neutral";
+      return "secondary";
     case "needsReconnect":
-      return "danger";
+      return "destructive";
     case "noCalendar":
       return "warning";
     case "failed":
-      return "danger";
+      return "destructive";
     case "syncing":
       return "info";
     case "healthy":

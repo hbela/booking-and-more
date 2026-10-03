@@ -29,7 +29,15 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Section } from "./ui/section";
-import { RowButton } from "./ui/table";
+import {
+  RowButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
 import { Checkbox } from "./ui/checkbox";
 
 /** A trimmed text value from a form. `FormData.get` can also hand back a File,
@@ -99,59 +107,96 @@ export function ServicesScreen(): React.ReactElement {
         {services.data?.items.length === 0 ? (
           <p className="text-sm text-ink-muted">{t("noServices")}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-line">
-                <tr>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("name")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("duration")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("price")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("status")}
-                  </th>
-                  <th scope="col" className="py-2 font-medium">
-                    <span className="sr-only">{t("actions")}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {services.data?.items.map((service) => {
-                  const archived = service.archivedAt !== null;
+          <Table className="w-full min-w-md">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("name")}</TableHead>
+                <TableHead>{t("duration")}</TableHead>
+                <TableHead>{t("price")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
+                <TableHead>
+                  <span className="sr-only">{t("actions")}</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {services.data?.items.map((service) => {
+                const archived = service.archivedAt !== null;
 
-                  return (
-                    <tr key={service.id} className="border-b border-line">
-                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
-                        {service.name}
-                        <span className="block font-mono text-xs text-ink-subtle">
-                          {service.slug}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {t("minutes", { count: service.durationMinutes })}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {service.priceMinor === null || service.currency === null
-                          ? t("onRequest")
-                          : formatMoney(service.priceMinor, service.currency, locale)}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {archived ? t("archived") : service.active ? t("active") : t("inactive")}
-                      </td>
-                      <td className="py-2">
-                        {!canManage ? null : archived ? (
-                          // Restore is the only action on an archived row —
-                          // editing or activating one in place would be a way
-                          // of half-reviving it.
+                return (
+                  <TableRow key={service.id}>
+                    <TableCell className={archived ? "text-ink-subtle" : undefined}>
+                      {service.name}
+                      <span className="block font-mono text-xs text-ink-subtle">
+                        {service.slug}
+                      </span>
+                    </TableCell>
+                    <TableCell>{t("minutes", { count: service.durationMinutes })}</TableCell>
+                    <TableCell>
+                      {service.priceMinor === null || service.currency === null
+                        ? t("onRequest")
+                        : formatMoney(service.priceMinor, service.currency, locale)}
+                    </TableCell>
+                    <TableCell>
+                      {archived ? t("archived") : service.active ? t("active") : t("inactive")}
+                    </TableCell>
+                    <TableCell>
+                      {!canManage ? null : archived ? (
+                        // Restore is the only action on an archived row —
+                        // editing or activating one in place would be a way
+                        // of half-reviving it.
+                        <RowButton
+                          onClick={() => {
+                            void apiFetch(`/v1/services/${service.id}/restore`, {
+                              method: "POST",
+                              tenantId: context.tenantId,
+                            }).then(() => {
+                              void queryClient.invalidateQueries({ queryKey: ["services"] });
+                              void queryClient.invalidateQueries({
+                                queryKey: ["knowledge-usage"],
+                              });
+                            });
+                          }}
+                        >
+                          {t("restore")}
+                        </RowButton>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
                           <RowButton
                             onClick={() => {
-                              void apiFetch(`/v1/services/${service.id}/restore`, {
-                                method: "POST",
+                              edit.toggle(service.id);
+                            }}
+                            {...edit.triggerProps(service.id)}
+                          >
+                            {t("edit")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              setTranslating(translating?.id === service.id ? null : service);
+                            }}
+                          >
+                            {t("translations")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              void apiFetch(`/v1/services/${service.id}`, {
+                                method: "PATCH",
+                                tenantId: context.tenantId,
+                                body: { active: !service.active },
+                              }).then(() => {
+                                void queryClient.invalidateQueries({ queryKey: ["services"] });
+                                void queryClient.invalidateQueries({
+                                  queryKey: ["knowledge-usage"],
+                                });
+                              });
+                            }}
+                          >
+                            {service.active ? t("deactivate") : t("activate")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              void apiFetch(`/v1/services/${service.id}`, {
+                                method: "DELETE",
                                 tenantId: context.tenantId,
                               }).then(() => {
                                 void queryClient.invalidateQueries({ queryKey: ["services"] });
@@ -161,65 +206,16 @@ export function ServicesScreen(): React.ReactElement {
                               });
                             }}
                           >
-                            {t("restore")}
+                            {t("archive")}
                           </RowButton>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            <RowButton
-                              onClick={() => {
-                                edit.toggle(service.id);
-                              }}
-                              {...edit.triggerProps(service.id)}
-                            >
-                              {t("edit")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                setTranslating(translating?.id === service.id ? null : service);
-                              }}
-                            >
-                              {t("translations")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                void apiFetch(`/v1/services/${service.id}`, {
-                                  method: "PATCH",
-                                  tenantId: context.tenantId,
-                                  body: { active: !service.active },
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["services"] });
-                                  void queryClient.invalidateQueries({
-                                    queryKey: ["knowledge-usage"],
-                                  });
-                                });
-                              }}
-                            >
-                              {service.active ? t("deactivate") : t("activate")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                void apiFetch(`/v1/services/${service.id}`, {
-                                  method: "DELETE",
-                                  tenantId: context.tenantId,
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["services"] });
-                                  void queryClient.invalidateQueries({
-                                    queryKey: ["knowledge-usage"],
-                                  });
-                                });
-                              }}
-                            >
-                              {t("archive")}
-                            </RowButton>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
       </Section>
 

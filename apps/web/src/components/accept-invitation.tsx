@@ -8,7 +8,7 @@ import { ApiError, apiFetch } from "@/lib/api-client";
 import { signOut, useSession } from "@/lib/auth-client";
 import { AuthForm, Field } from "./auth-form";
 import { Button } from "./ui/button";
-import { Callout } from "./ui/callout";
+import { Alert, AlertDescription } from "./ui/alert";
 import { ErrorText } from "./ui/form-field";
 
 interface InvitationDetails {
@@ -247,12 +247,14 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
 
         {state.kind === "wrong-user" ? (
           <>
-            <Callout tone="action" role="alert">
-              {t("wrongUser", {
-                invited: state.details.email,
-                current: state.signedInAs,
-              })}
-            </Callout>
+            <Alert variant="warning" role="alert">
+              <AlertDescription>
+                {t("wrongUser", {
+                  invited: state.details.email,
+                  current: state.signedInAs,
+                })}
+              </AlertDescription>
+            </Alert>
             <Button
               className="self-start"
               onClick={() => {
@@ -282,9 +284,9 @@ export function AcceptInvitation({ token }: { token: string }): React.ReactEleme
 
         {state.kind === "accepted" ? (
           <>
-            <Callout tone="success" role="status">
-              {t("accepted", { role: state.role })}
-            </Callout>
+            <Alert variant="success" role="status">
+              <AlertDescription>{t("accepted", { role: state.role })}</AlertDescription>
+            </Alert>
             <Button
               className="self-start"
               onClick={() => {

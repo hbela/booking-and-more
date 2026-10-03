@@ -79,7 +79,7 @@ export function TextField({
  * An error that is not attached to a field.
  *
  * `role="alert"` so it interrupts — this is the "something went wrong" case,
- * unlike {@link ./callout.tsx}'s `role="note"`, which is "here is what to do
+ * unlike {@link ./alert.tsx}'s `role="note"`, which is "here is what to do
  * next" and must not. Returns null when empty so callers can pass a possibly
  * absent message without guarding.
  */

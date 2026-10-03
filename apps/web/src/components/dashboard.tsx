@@ -12,7 +12,15 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
-import { RowButton } from "./ui/table";
+import {
+  RowButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
 import { BusinessKnowledge } from "./business-knowledge";
 import { PatientQrCodes } from "./patient-qr-codes";
 import { ArrowUpRight, CalendarDays, Clock3, Bot } from "lucide-react";
@@ -147,51 +155,38 @@ export function Dashboard(): React.ReactElement {
 
           {canReadMembers ? (
             <Section title={t("members")} variant="card">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-md text-left text-sm">
-                  <thead className="border-b border-line bg-surface-sunken">
-                    <tr>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        {t("name")}
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        {t("email")}
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        {t("role")}
-                      </th>
-                      {/* Which diary a member holds, and the way to repair one
+              <Table className="w-full min-w-md">
+                <TableHeader className="bg-surface-sunken">
+                  <TableRow>
+                    <TableHead>{t("name")}</TableHead>
+                    <TableHead>{t("email")}</TableHead>
+                    <TableHead>{t("role")}</TableHead>
+                    {/* Which diary a member holds, and the way to repair one
                           that holds none. A PROVIDER with no diary looks
                           entirely healthy in a name/email/role table while
                           being unable to do anything at all. */}
-                      <th scope="col" className="py-2 font-medium">
-                        {t("diary")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.data?.items.map((member) => (
-                      <tr
-                        key={member.id}
-                        className="h-14 border-b border-line hover:bg-surface-raised"
-                      >
-                        <td className="py-2 pr-4">{member.user.name}</td>
-                        <td className="py-2 pr-4">{member.user.email}</td>
-                        <td className="py-2 pr-4">{member.role}</td>
-                        <td className="py-2">
-                          <MemberDiary
-                            member={member}
-                            providers={providers.data?.items ?? null}
-                            takenProviderIds={takenProviderIds}
-                            tenantId={context.tenantId}
-                            canManage={canManageMembers}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    <TableHead>{t("diary")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.data?.items.map((member) => (
+                    <TableRow key={member.id} className="h-14 hover:bg-surface-raised">
+                      <TableCell>{member.user.name}</TableCell>
+                      <TableCell>{member.user.email}</TableCell>
+                      <TableCell>{member.role}</TableCell>
+                      <TableCell>
+                        <MemberDiary
+                          member={member}
+                          providers={providers.data?.items ?? null}
+                          takenProviderIds={takenProviderIds}
+                          tenantId={context.tenantId}
+                          canManage={canManageMembers}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </Section>
           ) : null}
         </>

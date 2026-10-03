@@ -40,13 +40,22 @@ import { NoOrganizationPanel } from "./no-organization";
 import { ProviderDelegates } from "./provider-delegates";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
 import { Button } from "./ui/button";
-import { Callout, CalloutLink } from "./ui/callout";
+import { Alert, AlertDescription, AlertLink } from "./ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
-import { RowButton, RowLink } from "./ui/table";
+import {
+  RowButton,
+  RowLink,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
 import { Checkbox } from "./ui/checkbox";
 
 /** One node, shared by every disabled Invite button, so the reason is announced. */
@@ -231,22 +240,26 @@ export function ProvidersScreen(): React.ReactElement {
         {/* A provider with no service to offer cannot be booked at all, so this
             is a real prerequisite rather than a suggestion. */}
         {noServices ? (
-          <Callout tone="action">
-            {t.rich("needServicesFirst", {
-              link: (chunks) => <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>,
-            })}
-          </Callout>
+          <Alert variant="warning">
+            <AlertDescription>
+              {t.rich("needServicesFirst", {
+                link: (chunks) => <AlertLink href="/dashboard/services">{chunks}</AlertLink>,
+              })}
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         {/* Locations are genuinely optional — slot search never requires one, so
             an online-only or telephone practice is bookable without any. Said
             plainly, rather than dressed up as a second blocker. */}
         {noLocations ? (
-          <Callout>
-            {t.rich("noLocationsYet", {
-              link: (chunks) => <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>,
-            })}
-          </Callout>
+          <Alert>
+            <AlertDescription>
+              {t.rich("noLocationsYet", {
+                link: (chunks) => <AlertLink href="/dashboard/locations">{chunks}</AlertLink>,
+              })}
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         <label className="flex items-center gap-2 text-sm">
@@ -262,166 +275,155 @@ export function ProvidersScreen(): React.ReactElement {
         {providers.data?.items.length === 0 ? (
           <p className="text-sm text-ink-muted">{t("noProviders")}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-line">
-                <tr>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("name")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("timezone")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("status")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("approval")}
-                  </th>
-                  <th scope="col" className="py-2 font-medium">
-                    <span className="sr-only">{t("actions")}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {providers.data?.items.map((provider) => {
-                  const archived = provider.archivedAt !== null;
+          <Table className="w-full min-w-md">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("name")}</TableHead>
+                <TableHead>{t("timezone")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
+                <TableHead>{t("approval")}</TableHead>
+                <TableHead>
+                  <span className="sr-only">{t("actions")}</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {providers.data?.items.map((provider) => {
+                const archived = provider.archivedAt !== null;
 
-                  return (
-                    <tr key={provider.id} className="border-b border-line">
-                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
-                        {provider.displayName}
-                        {myMembership?.providerId === provider.id ? (
-                          <span className="text-ink-subtle"> · {t("thisIsYou")}</span>
-                        ) : null}
-                      </td>
-                      <td className="py-2 pr-4 text-ink-muted">{provider.timezone}</td>
-                      <td className="py-2 pr-4">
-                        {archived ? t("archived") : provider.active ? t("active") : t("inactive")}
-                        {archived || provider.onlineBookingEnabled ? "" : ` · ${t("offlineOnly")}`}
-                      </td>
-                      <td className="py-2 pr-4 text-ink-muted">
-                        {provider.autoConfirmBookings
-                          ? t("approvalAutomatic")
-                          : t("approvalManual")}
-                      </td>
-                      <td className="py-2">
-                        {!canManage ? null : archived ? (
+                return (
+                  <TableRow key={provider.id}>
+                    <TableCell className={archived ? "text-ink-subtle" : undefined}>
+                      {provider.displayName}
+                      {myMembership?.providerId === provider.id ? (
+                        <span className="text-ink-subtle"> · {t("thisIsYou")}</span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-ink-muted">{provider.timezone}</TableCell>
+                    <TableCell>
+                      {archived ? t("archived") : provider.active ? t("active") : t("inactive")}
+                      {archived || provider.onlineBookingEnabled ? "" : ` · ${t("offlineOnly")}`}
+                    </TableCell>
+                    <TableCell className="text-ink-muted">
+                      {provider.autoConfirmBookings ? t("approvalAutomatic") : t("approvalManual")}
+                    </TableCell>
+                    <TableCell>
+                      {!canManage ? null : archived ? (
+                        <RowButton
+                          onClick={() => {
+                            void apiFetch(`/v1/providers/${provider.id}/restore`, {
+                              method: "POST",
+                              tenantId: context.tenantId,
+                            }).then(() => {
+                              void queryClient.invalidateQueries({ queryKey: ["providers"] });
+                            });
+                          }}
+                        >
+                          {t("restore")}
+                        </RowButton>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
                           <RowButton
                             onClick={() => {
-                              void apiFetch(`/v1/providers/${provider.id}/restore`, {
-                                method: "POST",
+                              edit.toggle(provider.id);
+                            }}
+                            {...edit.triggerProps(provider.id)}
+                          >
+                            {t("edit")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              assignments.toggle(provider.id);
+                            }}
+                            {...assignments.triggerProps(provider.id)}
+                          >
+                            {t("assign")}
+                          </RowButton>
+                          {/* Availability hangs off the provider rather than
+                                off the nav: it is this person's diary, and
+                                theirs to set (§2.7). The owner reaches it one
+                                provider at a time, which is also the only way
+                                to say *whose* diary is being opened. */}
+                          <RowLink href={`/dashboard/availability?providerId=${provider.id}`}>
+                            {t("availability")}
+                          </RowLink>
+                          {!canChangeApproval ? null : (
+                            <RowButton
+                              disabled={changeApproval.isPending}
+                              onClick={() => {
+                                changeApproval.mutate(provider);
+                              }}
+                            >
+                              {provider.autoConfirmBookings
+                                ? t("switchToManualApproval")
+                                : t("switchToAutomaticApproval")}
+                            </RowButton>
+                          )}
+                          {/* Giving this person a login. One action, because
+                                the two it replaced — invite, then link the
+                                membership to the diary — lived on different
+                                screens and the second was never built
+                                (phase-9-provider-onboarding §1). */}
+                          {canClaimDiary && loginFor(provider.id) === undefined ? (
+                            <RowButton
+                              disabled={claimDiary.isPending}
+                              onClick={() => {
+                                if (
+                                  !window.confirm(
+                                    t("claimDiaryConfirm", { name: provider.displayName }),
+                                  )
+                                ) {
+                                  return;
+                                }
+                                claimDiary.mutate(provider);
+                              }}
+                            >
+                              {t("claimDiary")}
+                            </RowButton>
+                          ) : null}
+                          {/* A diary somebody already signs in as needs no
+                                invitation — the API would only refuse it. That
+                                includes the owner's own (§2.2). */}
+                          {!canInvite ||
+                          loginFor(provider.id) !== undefined ? null : provider.email === null ? (
+                            // aria-disabled on a live button rather than
+                            // `disabled`, so a keyboard user still reaches it
+                            // and hears why. Same reasoning as the nav's
+                            // subscription gate.
+                            <RowButton
+                              onClick={() => {
+                                /* no address to invite */
+                              }}
+                              aria-disabled="true"
+                              aria-describedby={INVITE_HINT_ID}
+                              className="border-line-strong text-ink-subtle rounded-md border px-2 py-1 text-xs"
+                            >
+                              {t("invite")}
+                            </RowButton>
+                          ) : (
+                            <RowButton
+                              onClick={() => {
+                                invite.toggle(provider.id);
+                              }}
+                              {...invite.triggerProps(provider.id)}
+                            >
+                              {invitedProviderIds.has(provider.id) ? t("reinvite") : t("invite")}
+                            </RowButton>
+                          )}
+                          <RowButton
+                            onClick={() => {
+                              void apiFetch(`/v1/providers/${provider.id}`, {
+                                method: "PATCH",
                                 tenantId: context.tenantId,
+                                body: { active: !provider.active },
                               }).then(() => {
                                 void queryClient.invalidateQueries({ queryKey: ["providers"] });
                               });
                             }}
                           >
-                            {t("restore")}
+                            {provider.active ? t("deactivate") : t("activate")}
                           </RowButton>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            <RowButton
-                              onClick={() => {
-                                edit.toggle(provider.id);
-                              }}
-                              {...edit.triggerProps(provider.id)}
-                            >
-                              {t("edit")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                assignments.toggle(provider.id);
-                              }}
-                              {...assignments.triggerProps(provider.id)}
-                            >
-                              {t("assign")}
-                            </RowButton>
-                            {/* Availability hangs off the provider rather than
-                                off the nav: it is this person's diary, and
-                                theirs to set (§2.7). The owner reaches it one
-                                provider at a time, which is also the only way
-                                to say *whose* diary is being opened. */}
-                            <RowLink href={`/dashboard/availability?providerId=${provider.id}`}>
-                              {t("availability")}
-                            </RowLink>
-                            {!canChangeApproval ? null : (
-                              <RowButton
-                                disabled={changeApproval.isPending}
-                                onClick={() => {
-                                  changeApproval.mutate(provider);
-                                }}
-                              >
-                                {provider.autoConfirmBookings
-                                  ? t("switchToManualApproval")
-                                  : t("switchToAutomaticApproval")}
-                              </RowButton>
-                            )}
-                            {/* Giving this person a login. One action, because
-                                the two it replaced — invite, then link the
-                                membership to the diary — lived on different
-                                screens and the second was never built
-                                (phase-9-provider-onboarding §1). */}
-                            {canClaimDiary && loginFor(provider.id) === undefined ? (
-                              <RowButton
-                                disabled={claimDiary.isPending}
-                                onClick={() => {
-                                  if (
-                                    !window.confirm(
-                                      t("claimDiaryConfirm", { name: provider.displayName }),
-                                    )
-                                  ) {
-                                    return;
-                                  }
-                                  claimDiary.mutate(provider);
-                                }}
-                              >
-                                {t("claimDiary")}
-                              </RowButton>
-                            ) : null}
-                            {/* A diary somebody already signs in as needs no
-                                invitation — the API would only refuse it. That
-                                includes the owner's own (§2.2). */}
-                            {!canInvite ||
-                            loginFor(provider.id) !== undefined ? null : provider.email === null ? (
-                              // aria-disabled on a live button rather than
-                              // `disabled`, so a keyboard user still reaches it
-                              // and hears why. Same reasoning as the nav's
-                              // subscription gate.
-                              <RowButton
-                                onClick={() => {
-                                  /* no address to invite */
-                                }}
-                                aria-disabled="true"
-                                aria-describedby={INVITE_HINT_ID}
-                                className="border-line-strong text-ink-subtle rounded-md border px-2 py-1 text-xs"
-                              >
-                                {t("invite")}
-                              </RowButton>
-                            ) : (
-                              <RowButton
-                                onClick={() => {
-                                  invite.toggle(provider.id);
-                                }}
-                                {...invite.triggerProps(provider.id)}
-                              >
-                                {invitedProviderIds.has(provider.id) ? t("reinvite") : t("invite")}
-                              </RowButton>
-                            )}
-                            <RowButton
-                              onClick={() => {
-                                void apiFetch(`/v1/providers/${provider.id}`, {
-                                  method: "PATCH",
-                                  tenantId: context.tenantId,
-                                  body: { active: !provider.active },
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["providers"] });
-                                });
-                              }}
-                            >
-                              {provider.active ? t("deactivate") : t("activate")}
-                            </RowButton>
-                            {/* Who assists on this diary. The panel already
+                          {/* Who assists on this diary. The panel already
                                 existed, at the foot of the availability screen,
                                 which put staffing behind "open their diary and
                                 scroll" — and made it read as an availability
@@ -429,56 +431,61 @@ export function ProvidersScreen(): React.ReactElement {
                                 the owner's route to it: same component, same
                                 rules, reached from the row that names the
                                 person. */}
-                            {!canDelegate ? null : (
-                              <RowButton
-                                onClick={() => {
-                                  assistants.toggle(provider.id);
-                                }}
-                                {...assistants.triggerProps(provider.id)}
-                              >
-                                {t("manageAssistant")}
-                              </RowButton>
-                            )}
+                          {!canDelegate ? null : (
                             <RowButton
                               onClick={() => {
-                                const login = loginFor(provider.id);
-                                const question = login
-                                  ? t("archiveConfirmLinked", {
-                                      name: provider.displayName,
-                                      email: login.user.email,
-                                    })
-                                  : t("archiveConfirm", { name: provider.displayName });
-                                if (!window.confirm(question)) return;
-
-                                void apiFetch(`/v1/providers/${provider.id}`, {
-                                  method: "DELETE",
-                                  tenantId: context.tenantId,
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["providers"] });
-                                });
+                                assistants.toggle(provider.id);
                               }}
+                              {...assistants.triggerProps(provider.id)}
                             >
-                              {t("archive")}
+                              {t("manageAssistant")}
                             </RowButton>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          )}
+                          <RowButton
+                            onClick={() => {
+                              const login = loginFor(provider.id);
+                              const question = login
+                                ? t("archiveConfirmLinked", {
+                                    name: provider.displayName,
+                                    email: login.user.email,
+                                  })
+                                : t("archiveConfirm", { name: provider.displayName });
+                              if (!window.confirm(question)) return;
+
+                              void apiFetch(`/v1/providers/${provider.id}`, {
+                                method: "DELETE",
+                                tenantId: context.tenantId,
+                              }).then(() => {
+                                void queryClient.invalidateQueries({ queryKey: ["providers"] });
+                              });
+                            }}
+                          >
+                            {t("archive")}
+                          </RowButton>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
 
         {/* The linking step is a row action, which made it easy to miss: an
             owner could create services and providers and still have no idea what
             joins them. Naming it here is the cheapest fix. */}
         {(providers.data?.items.length ?? 0) > 0 && !noServices ? (
-          <Callout>{t("assignHint")}</Callout>
+          <Alert>
+            <AlertDescription>{t("assignHint")}</AlertDescription>
+          </Alert>
         ) : null}
 
-        {(providers.data?.items.length ?? 0) > 0 ? <Callout>{t("approvalHint")}</Callout> : null}
+        {(providers.data?.items.length ?? 0) > 0 ? (
+          <Alert>
+            <AlertDescription>{t("approvalHint")}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <ErrorText>{approvalError}</ErrorText>
         <ErrorText>{claimError}</ErrorText>
@@ -653,7 +660,11 @@ function InvitePanel({
             {/* Said before the press, not after: re-inviting silently kills the
               link the first email carried, and somebody halfway through using
               it deserves to be the owner's decision rather than a surprise. */}
-            {alreadyInvited ? <Callout>{t("alreadyInvited")}</Callout> : null}
+            {alreadyInvited ? (
+              <Alert>
+                <AlertDescription>{t("alreadyInvited")}</AlertDescription>
+              </Alert>
+            ) : null}
 
             <ErrorText>{error}</ErrorText>
 
@@ -1171,13 +1182,13 @@ function AssignmentsPanel({
             <fieldset className="flex flex-col gap-3">
               <legend className="text-sm font-medium">{t("services")}</legend>
               {services.data?.items.length === 0 ? (
-                <Callout tone="action">
-                  {t.rich("needServicesFirst", {
-                    link: (chunks) => (
-                      <CalloutLink href="/dashboard/services">{chunks}</CalloutLink>
-                    ),
-                  })}
-                </Callout>
+                <Alert variant="warning">
+                  <AlertDescription>
+                    {t.rich("needServicesFirst", {
+                      link: (chunks) => <AlertLink href="/dashboard/services">{chunks}</AlertLink>,
+                    })}
+                  </AlertDescription>
+                </Alert>
               ) : (
                 services.data?.items.map((service) => {
                   const row = serviceRows?.get(service.id);
@@ -1220,13 +1231,13 @@ function AssignmentsPanel({
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-medium">{t("locations")}</legend>
               {locations.data?.items.length === 0 ? (
-                <Callout>
-                  {t.rich("noLocationsYet", {
-                    link: (chunks) => (
-                      <CalloutLink href="/dashboard/locations">{chunks}</CalloutLink>
-                    ),
-                  })}
-                </Callout>
+                <Alert>
+                  <AlertDescription>
+                    {t.rich("noLocationsYet", {
+                      link: (chunks) => <AlertLink href="/dashboard/locations">{chunks}</AlertLink>,
+                    })}
+                  </AlertDescription>
+                </Alert>
               ) : (
                 locations.data?.items.map((location) => {
                   const row = locationRows?.get(location.id);

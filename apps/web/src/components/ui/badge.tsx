@@ -1,42 +1,71 @@
-import { cn } from "@/lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
+import { Slot } from "radix-ui";
 
-export type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger";
+import { cn } from "@/lib/utils";
 
 /**
- * A status chip: booking states, subscription states, invitation states.
+ * shadcn/ui's Badge — a status chip: booking, subscription, invitation and
+ * integration states.
  *
  * **The word is the status; the colour only agrees with it.** Every call site
  * passes real text — never an empty coloured dot — because colour alone fails
- * WCAG 1.4.1 and is invisible to roughly one man in twelve. The tone/text
- * pairings are contrast-checked in globals.contrast.test.ts.
+ * WCAG 1.4.1. Not a `<span role="status">`: these render in tables and lists as
+ * static labels, and a live region would announce every row on every render.
  *
- * Not a `<span role="status">`: these render in tables and lists as static
- * labels, and a live region would announce every row on every re-render.
+ * Departures from the registry copy (phase-11-shadcn-adoption §3.6):
+ *
+ * - **`success`, `warning` and `info` are added**, carried over from the
+ *   phase-11 Badge's tones; the registry has no way to say "confirmed".
+ * - **`destructive` is a tinted chip, not a filled one.** The registry fills it
+ *   with `--destructive` and white text, which fails in the dark theme, where
+ *   danger is a bright fill. Every tinted variant uses a surface/text pair that
+ *   globals.contrast.test.ts asserts at 4.5:1.
+ * - No `focus-visible:ring-ring/50` (§2.4).
  */
-export function Badge({
-  tone = "neutral",
-  children,
+const badgeVariants = cva(
+  [
+    "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent",
+    "px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-colors",
+    "[&>svg]:pointer-events-none [&>svg]:size-3",
+  ],
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground [a&]:hover:bg-primary-hover",
+        secondary: "bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+        destructive: "bg-danger-surface text-on-danger-surface",
+        success: "bg-success-surface text-on-success-surface",
+        warning: "bg-warning-surface text-on-warning-surface",
+        info: "bg-primary-surface text-on-primary-surface",
+        outline:
+          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
+
+type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
+
+function Badge({
   className,
-}: {
-  tone?: BadgeTone;
-  children: React.ReactNode;
-  className?: string;
-}): React.ReactElement {
+  variant = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"span"> &
+  VariantProps<typeof badgeVariants> & { asChild?: boolean }): React.ReactElement {
+  const Comp = asChild ? Slot.Root : "span";
+
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
-        {
-          neutral: "bg-surface-sunken text-ink-muted",
-          info: "bg-primary-surface text-on-primary-surface",
-          success: "bg-success-surface text-on-success-surface",
-          warning: "bg-warning-surface text-on-warning-surface",
-          danger: "bg-danger-surface text-on-danger-surface",
-        }[tone],
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <Comp
+      data-slot="badge"
+      data-variant={variant}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
+
+export { Badge, badgeVariants, type BadgeVariant };

@@ -6,7 +6,7 @@ without giving up the token layer or the accessibility decisions phase 11 record
 
 ## Implementation Record
 
-**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–4 done).
+**Document version:** 0.1 — started 2026-10-03. **In progress** (steps 0–5 done).
 **Scope:** `apps/web/src/components/ui/` and its call sites; `globals.css`'s alias layer; `components.json`.
 **Depends on:** [phase-11-gui-redesign.md](phase-11-gui-redesign.md), whose §2.2, §2.4 and §2.6 this must
 not break.
@@ -79,18 +79,18 @@ Also: `Callout`/`Notice` keep `role="note"` (shadcn `Alert` defaults to `role="a
 
 # 3. Steps
 
-| Step | What                                                                               | State |
-| ---- | ---------------------------------------------------------------------------------- | ----- |
-| 0    | This record                                                                        | done  |
-| 1    | `accent` → `booking` rename; alias layer; `tw-animate-css`; `components.json`      | done  |
-| 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)               | done  |
-| 3    | Input, Textarea, Label, NativeSelect, Field                                        | done  |
-| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                     | done  |
-| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                     | done  |
-| 5    | Badge (our tones as extra variants), Alert for Callout, Table, Separator, Skeleton |       |
-| 6    | Dialog / AlertDialog for existing modals only                                      |       |
-| 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar  |       |
-| 8    | Delete unused wrappers and recipes                                                 |       |
+| Step | What                                                                                        | State |
+| ---- | ------------------------------------------------------------------------------------------- | ----- |
+| 0    | This record                                                                                 | done  |
+| 1    | `accent` → `booking` rename; alias layer; `tw-animate-css`; `components.json`               | done  |
+| 2    | Button (`buttonRecipe` → `buttonVariants`, `ButtonLink` → `asChild`)                        | done  |
+| 3    | Input, Textarea, Label, NativeSelect, Field                                                 | done  |
+| 3b   | Checkbox / RadioGroup for the 16 raw checkbox and radio inputs                              | done  |
+| 4    | Card (keeps `<section>` and the `useEditPanel` focus contract)                              | done  |
+| 5    | Badge (our tones as extra variants), Alert for Callout, Table                               | done  |
+| 6    | Dialog / AlertDialog for existing modals only                                               |       |
+| 7    | Additive polish, each agreed first: tabs, tooltip, dropdown-menu, sonner, sidebar, skeleton |       |
+| 8    | Delete unused wrappers and recipes                                                          |       |
 
 ## 3.1 Step 1
 
@@ -214,3 +214,35 @@ Visible changes, intended: cards gain shadcn's `shadow-sm`, and the gap between 
 is 24px (was 16px). Verified with `check-types`, `lint`, `test` (338) and a production build. `test:e2e`: 67
 passed once; twice the §3.4 race failed its one test (66 passed), each time on a run that took ~52 s rather
 than ~33 s.
+
+## 3.6 Step 5 — Badge, Alert, Table
+
+Added `badge`, `alert`, `table` (`separator` came with `field` in step 3). The CLI installed the npm package
+`cn` again — the third time — and it was removed again.
+
+- **Badge** gains `success`, `warning` and `info`, carried over from the phase-11 tones, and its
+  `destructive` is a tinted chip rather than the registry's red fill with white text, which fails on the dark
+  theme's bright danger. Call sites: `tone` → `variant`, `neutral` → `secondary`, `danger` → `destructive`.
+  `healthTone` in `lib/integration-state.ts` returns variant names now; it spells them as a union rather than
+  importing the component's type, so `lib/` still does not depend on `components/`.
+- **Callout is gone; `Alert` replaces it**, as `<Alert variant><AlertDescription>…</AlertDescription></Alert>`
+  with `action` → `warning`, `danger` → `destructive`, `info` → `default`. It keeps **`role="note"` as the
+  default** (the registry's is `alert`), and the three call sites that chose `alert` or `status` keep theirs.
+  `AlertDescription` is a block that inherits the tone's colour — the registry's is a grid, which split
+  "text <link> text" into three lines, in `text-muted-foreground`, an untested pair on a tinted container.
+  `AlertTitle` lost `line-clamp-1`. `CalloutLink` is `AlertLink`.
+- **Table**: five hand-built tables (dashboard members, locations, providers, services, platform
+  organizations) now use `Table`/`TableHeader`/`TableBody`/`TableRow`/`TableHead`/`TableCell`, with the
+  per-cell padding and per-row borders they used to spell out removed. `TableHead` defaults to
+  `scope="col"`; `TableCell` dropped the registry's `whitespace-nowrap`, which would stretch a table with an
+  address column across several screens. `DataTable` stays as a composite (required hidden caption, framed,
+  sunken header) like `FormField`. `booking-calendar.tsx`'s `<table>` is a month grid, not data, and was left
+  alone.
+- **`RowButton` / `RowLink`** are now the outline button at a compact size. They stay below the 44px target
+  as before — two or three per row at 44px would double every table's height.
+
+**Skeleton moved to step 7.** The loading states are a "Loading…" paragraph per screen; a skeleton has to
+mirror each screen's layout and still carry text for a screen reader, which is design work per screen rather
+than a component swap.
+
+Verified with `check-types`, `lint`, `test` (338), a production build and `test:e2e` (67 passed, 2 of 2 runs).

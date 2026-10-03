@@ -26,7 +26,7 @@ import {
 import { AffectedBookingsDialog } from "./affected-bookings-dialog";
 import { useDashboardContext } from "./dashboard-shell";
 import { Button } from "./ui/button";
-import { Callout } from "./ui/callout";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
@@ -255,33 +255,35 @@ export function WorkingHoursEditor({
           `role="alert"`: it appears in response to a press, and the button that
           caused it does not otherwise change. */}
         {conflict === null ? null : (
-          <Callout tone="action" role="alert">
-            <span className="flex flex-col items-start gap-2">
-              <span>
-                {conflict.change?.by
-                  ? t("scheduleMovedBy", {
-                      name: conflict.change.by.name,
-                      when: formatRelativeAge(conflict.change.at, new Date(), locale),
-                    })
-                  : t("scheduleMovedUnknown")}
+          <Alert variant="warning" role="alert">
+            <AlertDescription>
+              <span className="flex flex-col items-start gap-2">
+                <span>
+                  {conflict.change?.by
+                    ? t("scheduleMovedBy", {
+                        name: conflict.change.by.name,
+                        when: formatRelativeAge(conflict.change.at, new Date(), locale),
+                      })
+                    : t("scheduleMovedUnknown")}
+                </span>
+                <span className="text-xs">{t("scheduleMovedHint")}</span>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    setConflict(null);
+                    setError(null);
+                    // Re-seeds the form from their version through the effect above,
+                    // which discards what is on screen — which is why the hint says
+                    // so before the press rather than after.
+                    void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
+                  }}
+                >
+                  {t("scheduleMovedReload")}
+                </Button>
               </span>
-              <span className="text-xs">{t("scheduleMovedHint")}</span>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => {
-                  setConflict(null);
-                  setError(null);
-                  // Re-seeds the form from their version through the effect above,
-                  // which discards what is on screen — which is why the hint says
-                  // so before the press rather than after.
-                  void queryClient.invalidateQueries({ queryKey: ["working-hours", providerId] });
-                }}
-              >
-                {t("scheduleMovedReload")}
-              </Button>
-            </span>
-          </Callout>
+            </AlertDescription>
+          </Alert>
         )}
 
         {week === null ? (

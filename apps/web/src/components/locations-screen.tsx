@@ -18,7 +18,15 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
 import { Section } from "./ui/section";
-import { RowButton } from "./ui/table";
+import {
+  RowButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
 import { Checkbox } from "./ui/checkbox";
 
 /**
@@ -88,99 +96,89 @@ export function LocationsScreen(): React.ReactElement {
         {locations.data?.items.length === 0 ? (
           <p className="text-sm text-ink-muted">{t("noLocations")}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-md text-left text-sm">
-              <thead className="border-b border-line">
-                <tr>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("name")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("type")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("address")}
-                  </th>
-                  <th scope="col" className="py-2 pr-4 font-medium">
-                    {t("status")}
-                  </th>
-                  <th scope="col" className="py-2 font-medium">
-                    <span className="sr-only">{t("actions")}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {locations.data?.items.map((location) => {
-                  const archived = location.archivedAt !== null;
+          <Table className="w-full min-w-md">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("name")}</TableHead>
+                <TableHead>{t("type")}</TableHead>
+                <TableHead>{t("address")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
+                <TableHead>
+                  <span className="sr-only">{t("actions")}</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {locations.data?.items.map((location) => {
+                const archived = location.archivedAt !== null;
 
-                  return (
-                    <tr key={location.id} className="border-b border-line">
-                      <td className={`py-2 pr-4 ${archived ? "text-ink-subtle" : ""}`}>
-                        {location.name}
-                      </td>
-                      <td className="py-2 pr-4">{t(`locationType.${location.type}`)}</td>
-                      <td className="py-2 pr-4 text-ink-muted">{formatAddress(location)}</td>
-                      <td className="py-2 pr-4">
-                        {archived ? t("archived") : location.active ? t("active") : t("inactive")}
-                      </td>
-                      <td className="py-2">
-                        {!canManage ? null : archived ? (
+                return (
+                  <TableRow key={location.id}>
+                    <TableCell className={archived ? "text-ink-subtle" : undefined}>
+                      {location.name}
+                    </TableCell>
+                    <TableCell>{t(`locationType.${location.type}`)}</TableCell>
+                    <TableCell className="text-ink-muted">{formatAddress(location)}</TableCell>
+                    <TableCell>
+                      {archived ? t("archived") : location.active ? t("active") : t("inactive")}
+                    </TableCell>
+                    <TableCell>
+                      {!canManage ? null : archived ? (
+                        <RowButton
+                          onClick={() => {
+                            void apiFetch(`/v1/locations/${location.id}/restore`, {
+                              method: "POST",
+                              tenantId: context.tenantId,
+                            }).then(() => {
+                              void queryClient.invalidateQueries({ queryKey: ["locations"] });
+                            });
+                          }}
+                        >
+                          {t("restore")}
+                        </RowButton>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
                           <RowButton
                             onClick={() => {
-                              void apiFetch(`/v1/locations/${location.id}/restore`, {
-                                method: "POST",
+                              edit.toggle(location.id);
+                            }}
+                            {...edit.triggerProps(location.id)}
+                          >
+                            {t("edit")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              void apiFetch(`/v1/locations/${location.id}`, {
+                                method: "PATCH",
+                                tenantId: context.tenantId,
+                                body: { active: !location.active },
+                              }).then(() => {
+                                void queryClient.invalidateQueries({ queryKey: ["locations"] });
+                              });
+                            }}
+                          >
+                            {location.active ? t("deactivate") : t("activate")}
+                          </RowButton>
+                          <RowButton
+                            onClick={() => {
+                              void apiFetch(`/v1/locations/${location.id}`, {
+                                method: "DELETE",
                                 tenantId: context.tenantId,
                               }).then(() => {
                                 void queryClient.invalidateQueries({ queryKey: ["locations"] });
                               });
                             }}
                           >
-                            {t("restore")}
+                            {t("archive")}
                           </RowButton>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            <RowButton
-                              onClick={() => {
-                                edit.toggle(location.id);
-                              }}
-                              {...edit.triggerProps(location.id)}
-                            >
-                              {t("edit")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                void apiFetch(`/v1/locations/${location.id}`, {
-                                  method: "PATCH",
-                                  tenantId: context.tenantId,
-                                  body: { active: !location.active },
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["locations"] });
-                                });
-                              }}
-                            >
-                              {location.active ? t("deactivate") : t("activate")}
-                            </RowButton>
-                            <RowButton
-                              onClick={() => {
-                                void apiFetch(`/v1/locations/${location.id}`, {
-                                  method: "DELETE",
-                                  tenantId: context.tenantId,
-                                }).then(() => {
-                                  void queryClient.invalidateQueries({ queryKey: ["locations"] });
-                                });
-                              }}
-                            >
-                              {t("archive")}
-                            </RowButton>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
       </Section>
 

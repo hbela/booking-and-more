@@ -18,7 +18,7 @@ import {
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Callout } from "./ui/callout";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
@@ -195,9 +195,13 @@ export function IntegrationsScreen(): React.ReactElement {
             which is exactly why the API reports `configured` rather than letting
             it be inferred. */}
           {!configured ? (
-            <Callout tone="info">{t("notConfigured")}</Callout>
+            <Alert>
+              <AlertDescription>{t("notConfigured")}</AlertDescription>
+            </Alert>
           ) : rows.length === 0 ? (
-            <Callout tone="info">{t("noneConnected")}</Callout>
+            <Alert>
+              <AlertDescription>{t("noneConnected")}</AlertDescription>
+            </Alert>
           ) : null}
 
           {configured && mayConnect ? (
@@ -251,7 +255,7 @@ export function IntegrationsScreen(): React.ReactElement {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={healthTone(health)}>{t(`health.${health.kind}`)}</Badge>
+                <Badge variant={healthTone(health)}>{t(`health.${health.kind}`)}</Badge>
                 {integration.providerName ? (
                   <span className="text-sm text-ink-muted">
                     {t("forProvider", { provider: integration.providerName })}
@@ -282,7 +286,11 @@ export function IntegrationsScreen(): React.ReactElement {
                       {/* Said before the choice, not after it: re-pointing leaves
                         the events already written where they are, and that is
                         not something to discover afterwards (known limit 6). */}
-                      {chosen ? <Callout tone="action">{t("repointWarning")}</Callout> : null}
+                      {chosen ? (
+                        <Alert variant="warning">
+                          <AlertDescription>{t("repointWarning")}</AlertDescription>
+                        </Alert>
+                      ) : null}
 
                       <ul className="flex flex-col gap-2">
                         {(calendars.data?.items ?? []).map((calendar) => (
@@ -303,10 +311,10 @@ export function IntegrationsScreen(): React.ReactElement {
                               {calendar.summary}
                             </Button>
                             {calendar.primary ? (
-                              <Badge tone="neutral">{t("primaryCalendar")}</Badge>
+                              <Badge variant="secondary">{t("primaryCalendar")}</Badge>
                             ) : null}
                             {calendar.selected ? (
-                              <Badge tone="success">{t("current")}</Badge>
+                              <Badge variant="success">{t("current")}</Badge>
                             ) : null}
                           </li>
                         ))}
@@ -404,9 +412,9 @@ function CallbackNotice(): React.ReactElement | null {
   const succeeded = isSuccessOutcome(outcome);
 
   return (
-    <Callout tone={succeeded ? "success" : "danger"} role={succeeded ? "status" : "alert"}>
-      {t(`outcome.${outcome}`)}
-    </Callout>
+    <Alert variant={succeeded ? "success" : "destructive"} role={succeeded ? "status" : "alert"}>
+      <AlertDescription>{t(`outcome.${outcome}`)}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -423,17 +431,25 @@ function HealthDetail({ health }: { health: IntegrationHealth }): React.ReactEle
   switch (health.kind) {
     case "needsReconnect":
       return (
-        <Callout tone="danger" role="note">
-          {t("needsReconnectDetail")}
-        </Callout>
+        <Alert variant="destructive" role="note">
+          <AlertDescription>{t("needsReconnectDetail")}</AlertDescription>
+        </Alert>
       );
     case "noCalendar":
-      return <Callout tone="action">{t("noCalendarDetail")}</Callout>;
+      return (
+        <Alert variant="warning">
+          <AlertDescription>{t("noCalendarDetail")}</AlertDescription>
+        </Alert>
+      );
     case "failed":
       // tech-impl §25.6, and its second line matters as much as the first: the
       // sync failed *and* a retry is already scheduled, so nobody has to do
       // anything for it to be attempted again.
-      return <Callout tone="danger">{t("failedDetail", { count: health.failed })}</Callout>;
+      return (
+        <Alert variant="destructive">
+          <AlertDescription>{t("failedDetail", { count: health.failed })}</AlertDescription>
+        </Alert>
+      );
     case "syncing":
       return (
         <p className="text-sm text-ink-muted">{t("syncingDetail", { count: health.queued })}</p>

@@ -17,7 +17,7 @@ import { ProviderDelegates } from "./provider-delegates";
 import { WorkingHoursEditor } from "./working-hours-editor";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
-import { Callout, CalloutLink } from "./ui/callout";
+import { Alert, AlertDescription, AlertLink } from "./ui/alert";
 import { FormField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
@@ -160,11 +160,13 @@ export function AvailabilityScreen(): React.ReactElement {
         </Section>
       ) : providerArchived ? (
         <Section title={t("title")}>
-          <Callout tone="action">
-            {context.me.membership?.role === "PROVIDER"
-              ? t("providerArchivedOwn")
-              : t("providerArchivedOther")}
-          </Callout>
+          <Alert variant="warning">
+            <AlertDescription>
+              {context.me.membership?.role === "PROVIDER"
+                ? t("providerArchivedOwn")
+                : t("providerArchivedOther")}
+            </AlertDescription>
+          </Alert>
         </Section>
       ) : (
         <>
@@ -190,11 +192,13 @@ export function AvailabilityScreen(): React.ReactElement {
           ) : null}
 
           {offersNothing ? (
-            <Callout tone="action">
-              {t.rich("providerOffersNothing", {
-                link: (chunks) => <CalloutLink href="/dashboard/providers">{chunks}</CalloutLink>,
-              })}
-            </Callout>
+            <Alert variant="warning">
+              <AlertDescription>
+                {t.rich("providerOffersNothing", {
+                  link: (chunks) => <AlertLink href="/dashboard/providers">{chunks}</AlertLink>,
+                })}
+              </AlertDescription>
+            </Alert>
           ) : null}
 
           {context.tenantId ? (

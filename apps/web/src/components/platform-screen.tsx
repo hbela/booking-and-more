@@ -11,6 +11,7 @@ import { ErrorText, FormField } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Section } from "./ui/section";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 /**
  * Platform administration. docs/phase-9-saas-administration.md §7.
@@ -290,104 +291,102 @@ export function PlatformScreen(): React.ReactElement {
           <p className="text-sm text-ink-muted">{t("empty")}</p>
         ) : null}
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[52rem] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-line text-left">
-                <th className="py-2 pr-4 font-medium">{t("colOrganization")}</th>
-                <th className="py-2 pr-4 font-medium">{t("colOwner")}</th>
-                <th className="py-2 pr-4 font-medium">{t("colStatus")}</th>
-                <th className="py-2 pr-4 font-medium">{t("colSubscription")}</th>
-                <th className="py-2 pr-4 font-medium">{t("colActions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {organizations.data?.items.map((organization) => (
-                <tr key={organization.id} className="border-b border-line align-top">
-                  <td className="py-3 pr-4">
-                    <div className="font-medium">{organization.name}</div>
-                    {/* The domain is the identity (§2.3), so it is shown before
+        <Table className="w-full min-w-[52rem]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("colOrganization")}</TableHead>
+              <TableHead>{t("colOwner")}</TableHead>
+              <TableHead>{t("colStatus")}</TableHead>
+              <TableHead>{t("colSubscription")}</TableHead>
+              <TableHead>{t("colActions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {organizations.data?.items.map((organization) => (
+              <TableRow key={organization.id} className="align-top">
+                <TableCell>
+                  <div className="font-medium">{organization.name}</div>
+                  {/* The domain is the identity (§2.3), so it is shown before
                         the slug rather than after it. */}
-                    <div className="text-xs text-ink-muted">{organization.domain ?? "—"}</div>
-                    <div className="text-xs text-ink-subtle">/{organization.slug}</div>
-                  </td>
+                  <div className="text-xs text-ink-muted">{organization.domain ?? "—"}</div>
+                  <div className="text-xs text-ink-subtle">/{organization.slug}</div>
+                </TableCell>
 
-                  <td className="py-3 pr-4">
-                    <div>{organization.owner?.email ?? "—"}</div>
-                    {/* The API has always carried the owner's name and the
+                <TableCell>
+                  <div>{organization.owner?.email ?? "—"}</div>
+                  {/* The API has always carried the owner's name and the
                         column dropped it, so an operator looking for a person
                         by the name they know them by found only an address. */}
-                    {organization.owner?.name ? (
-                      <div className="text-xs text-ink-muted">{organization.owner.name}</div>
-                    ) : null}
-                    {organization.owner?.accepted === false ? (
-                      <div className="text-xs text-warning">{t("ownerPending")}</div>
-                    ) : null}
-                  </td>
+                  {organization.owner?.name ? (
+                    <div className="text-xs text-ink-muted">{organization.owner.name}</div>
+                  ) : null}
+                  {organization.owner?.accepted === false ? (
+                    <div className="text-xs text-warning">{t("ownerPending")}</div>
+                  ) : null}
+                </TableCell>
 
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={organization.status} label={t(organization.status)} />
-                    {organization.daysRemaining === null ? null : (
-                      <div className="mt-1 text-xs text-ink-muted">
-                        {t("daysRemaining", { days: organization.daysRemaining })}
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="py-3 pr-4">
-                    {organization.subscription === null ? (
-                      <span className="text-ink-subtle">{t("noSubscription")}</span>
-                    ) : (
-                      <>
-                        <div>{organization.subscription.plan}</div>
-                        <div className="text-xs text-ink-muted">
-                          {organization.subscription.status}
-                        </div>
-                      </>
-                    )}
-                  </td>
-
-                  <td className="py-3 pr-4">
-                    <div className="flex flex-col items-start gap-1">
-                      {organization.owner?.accepted === false ? (
-                        <button
-                          type="button"
-                          className="text-xs underline"
-                          disabled={resend.isPending}
-                          onClick={() => {
-                            resend.mutate(organization.id);
-                          }}
-                        >
-                          {t("resendInvitation")}
-                        </button>
-                      ) : null}
-
-                      {resendError?.id === organization.id ? (
-                        <ErrorText>{resendError.message}</ErrorText>
-                      ) : null}
-
-                      {organization.status === "CLOSED" ? null : (
-                        <button
-                          type="button"
-                          className="text-xs underline"
-                          disabled={setStatus.isPending}
-                          onClick={() => {
-                            setStatus.mutate({
-                              id: organization.id,
-                              status: organization.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
-                            });
-                          }}
-                        >
-                          {organization.status === "SUSPENDED" ? t("reactivate") : t("suspend")}
-                        </button>
-                      )}
+                <TableCell>
+                  <StatusBadge status={organization.status} label={t(organization.status)} />
+                  {organization.daysRemaining === null ? null : (
+                    <div className="mt-1 text-xs text-ink-muted">
+                      {t("daysRemaining", { days: organization.daysRemaining })}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {organization.subscription === null ? (
+                    <span className="text-ink-subtle">{t("noSubscription")}</span>
+                  ) : (
+                    <>
+                      <div>{organization.subscription.plan}</div>
+                      <div className="text-xs text-ink-muted">
+                        {organization.subscription.status}
+                      </div>
+                    </>
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  <div className="flex flex-col items-start gap-1">
+                    {organization.owner?.accepted === false ? (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        disabled={resend.isPending}
+                        onClick={() => {
+                          resend.mutate(organization.id);
+                        }}
+                      >
+                        {t("resendInvitation")}
+                      </button>
+                    ) : null}
+
+                    {resendError?.id === organization.id ? (
+                      <ErrorText>{resendError.message}</ErrorText>
+                    ) : null}
+
+                    {organization.status === "CLOSED" ? null : (
+                      <button
+                        type="button"
+                        className="text-xs underline"
+                        disabled={setStatus.isPending}
+                        onClick={() => {
+                          setStatus.mutate({
+                            id: organization.id,
+                            status: organization.status === "SUSPENDED" ? "ACTIVE" : "SUSPENDED",
+                          });
+                        }}
+                      >
+                        {organization.status === "SUSPENDED" ? t("reactivate") : t("suspend")}
+                      </button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </Section>
     </main>
   );

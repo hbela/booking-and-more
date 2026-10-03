@@ -83,7 +83,7 @@ describe("resolveIntegrationHealth", () => {
 
     expect(health).toEqual({ kind: "needsReconnect", lastError: "invalid_grant" });
     expect(canRetry(health)).toBe(false);
-    expect(healthTone(health)).toBe("danger");
+    expect(healthTone(health)).toBe("destructive");
   });
 
   it("asks for a calendar before it reports anything about syncing", () => {
@@ -125,7 +125,7 @@ describe("resolveIntegrationHealth", () => {
 
     expect(health).toEqual({ kind: "disconnected" });
     // Neutral, not danger: this is a preference honoured, not a failure.
-    expect(healthTone(health)).toBe("neutral");
+    expect(healthTone(health)).toBe("secondary");
   });
 });
 

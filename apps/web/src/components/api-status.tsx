@@ -50,7 +50,7 @@ export function ApiStatus(): React.ReactElement {
         {/* The badge carries a word, never a bare coloured dot: colour alone
             fails WCAG 1.4.1, and "is the API up" is exactly the sort of thing a
             reader should not have to infer from a hue. */}
-        <Badge tone={isPending ? "neutral" : isError ? "danger" : "success"}>
+        <Badge variant={isPending ? "secondary" : isError ? "destructive" : "success"}>
           {isPending ? t("checking") : isError ? t("unreachable") : t("ok")}
         </Badge>
       </div>

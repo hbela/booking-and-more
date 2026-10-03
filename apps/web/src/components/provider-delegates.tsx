@@ -14,11 +14,11 @@ import { useDashboardContext } from "./dashboard-shell";
 import type { EditPanel } from "@/lib/use-edit-panel";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Callout } from "./ui/callout";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { NativeSelect } from "./ui/native-select";
-import { DataTable, RowButton, Td, Th } from "./ui/table";
+import { DataTable, RowButton, TableCell, TableHead, TableRow } from "./ui/table";
 import { Checkbox } from "./ui/checkbox";
 
 const SCOPES: DelegationScope[] = ["AVAILABILITY", "BOOKINGS"];
@@ -253,13 +253,15 @@ export function ProviderDelegates({
         {error === null ? null : <ErrorText>{error}</ErrorText>}
 
         {acceptUrl === null ? null : (
-          <Callout tone="action">
-            <span className="flex flex-col gap-1">
-              <span>{t("delegateInviteSent")}</span>
-              <code className="text-xs break-all">{acceptUrl}</code>
-              <span className="text-xs">{t("delegateInviteLinkOnce")}</span>
-            </span>
-          </Callout>
+          <Alert variant="warning">
+            <AlertDescription>
+              <span className="flex flex-col gap-1">
+                <span>{t("delegateInviteSent")}</span>
+                <code className="text-xs break-all">{acceptUrl}</code>
+                <span className="text-xs">{t("delegateInviteLinkOnce")}</span>
+              </span>
+            </AlertDescription>
+          </Alert>
         )}
 
         {rows.length === 0 && mode === "idle" ? (
@@ -267,42 +269,44 @@ export function ProviderDelegates({
           // assistants and the front desk silently loses them. The provider's
           // version of the message asks them to go and ask, because they cannot
           // fix it themselves.
-          <Callout tone="action">
-            {canManage ? t("delegatesEmpty") : t("delegatesEmptyProvider")}
-          </Callout>
+          <Alert variant="warning">
+            <AlertDescription>
+              {canManage ? t("delegatesEmpty") : t("delegatesEmptyProvider")}
+            </AlertDescription>
+          </Alert>
         ) : null}
 
         {rows.length > 0 ? (
           <DataTable
             caption={t("delegates")}
             head={
-              <tr>
-                <Th>{t("delegateMember")}</Th>
-                <Th>{t("delegateScopes")}</Th>
+              <TableRow>
+                <TableHead>{t("delegateMember")}</TableHead>
+                <TableHead>{t("delegateScopes")}</TableHead>
                 {canManage ? (
-                  <Th>
+                  <TableHead>
                     <span className="sr-only">{t("delegateActions")}</span>
-                  </Th>
+                  </TableHead>
                 ) : null}
-              </tr>
+              </TableRow>
             }
           >
             {rows.map((row) => (
-              <tr key={row.member.membershipId}>
-                <Td>
+              <TableRow key={row.member.membershipId}>
+                <TableCell>
                   <span className="flex flex-col">
                     <span className="font-medium">{row.member.name}</span>
                     <span className="text-ink-muted text-xs">{row.member.email}</span>
                     {row.member.roleReceivesDelegations ? null : (
                       // The grant survives a role change and confers nothing
                       // (§2.8). Surfaced where it can be fixed.
-                      <Badge tone="warning" className="mt-1 self-start">
+                      <Badge variant="warning" className="mt-1 self-start">
                         {t("delegateStaleRole")}
                       </Badge>
                     )}
                   </span>
-                </Td>
-                <Td>
+                </TableCell>
+                <TableCell>
                   {canManage ? (
                     <span className="flex flex-wrap gap-3">
                       {SCOPES.map((scope) => (
@@ -325,9 +329,9 @@ export function ProviderDelegates({
                       {row.scopes.map((scope) => scopeLabel(scope)).join(" · ")}
                     </span>
                   )}
-                </Td>
+                </TableCell>
                 {canManage ? (
-                  <Td className="text-right">
+                  <TableCell className="text-right">
                     <RowButton
                       disabled={busy}
                       onClick={() => {
@@ -341,9 +345,9 @@ export function ProviderDelegates({
                     >
                       {t("delegateRevoke")}
                     </RowButton>
-                  </Td>
+                  </TableCell>
                 ) : null}
-              </tr>
+              </TableRow>
             ))}
           </DataTable>
         ) : null}
@@ -371,7 +375,9 @@ export function ProviderDelegates({
                 </FormField>
 
                 {candidates.isSuccess && available.length === 0 ? (
-                  <Callout tone="action">{t("delegateNoCandidates")}</Callout>
+                  <Alert variant="warning">
+                    <AlertDescription>{t("delegateNoCandidates")}</AlertDescription>
+                  </Alert>
                 ) : null}
               </>
             ) : (
