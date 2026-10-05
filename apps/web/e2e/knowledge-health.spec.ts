@@ -406,6 +406,127 @@ for (const locale of ["en", "hu"] as const) {
     await page.screenshot({ path: `test-results/knowledge-drafts-${locale}.png`, fullPage: true });
   });
 
+  test(`${locale}: a service translation is drafted per language and saved only with the form`, async ({
+    page,
+  }) => {
+    const drafts: unknown[] = [];
+    const saved: unknown[] = [];
+    await mockApi(page, async (route, path, method) => {
+      if (path === "/v1/me") {
+        await route.fulfill({
+          json: { ...me, permissions: [...me.permissions, "service:manage"] },
+        });
+        return true;
+      }
+      if (path === "/v1/services" && method === "GET") {
+        await route.fulfill({
+          json: {
+            nextCursor: null,
+            items: [
+              {
+                id: "svc_1",
+                name: "Fogkőeltávolítás",
+                slug: "fogko",
+                description: "Ultrahangos tisztítás.",
+                durationMinutes: 30,
+                bufferBeforeMinutes: 0,
+                bufferAfterMinutes: 0,
+                priceMinor: null,
+                currency: null,
+                active: true,
+                requiresApproval: false,
+                minimumNoticeMinutes: null,
+                maximumAdvanceDays: null,
+                translations: [{ locale: "de", name: "Zahnsteinentfernung", description: null }],
+                archivedAt: null,
+                createdAt: "2026-10-01T00:00:00.000Z",
+                updatedAt: "2026-10-01T00:00:00.000Z",
+              },
+            ],
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/assistant/knowledge/translation-draft" && method === "POST") {
+        const body = route.request().postDataJSON() as { target: string };
+        drafts.push(body);
+        await route.fulfill({
+          json: {
+            source: "hu",
+            target: body.target,
+            kind: "SERVICE",
+            profile: null,
+            faqs: [],
+            service: {
+              name: `[${body.target}] Scaling`,
+              description: `[${body.target}] Ultrasonic.`,
+            },
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/services/svc_1/translations" && method === "PUT") {
+        saved.push(route.request().postDataJSON());
+        await route.fulfill({ json: { items: [] } });
+        return true;
+      }
+      return false;
+    });
+
+    await page.goto(`/${locale}/dashboard/services`);
+    await page.getByRole("button", { name: en ? "Translations" : "Fordítások" }).click();
+    // The nearest block around the name field that holds a button: the row.
+    const draftButton = (language: string) =>
+      page
+        .locator(`input[name="name-${language}"]`)
+        .locator("xpath=ancestor::div[.//button][1]")
+        .getByRole("button", {
+          name: en ? "Draft from Hungarian" : "Fordítás a(z) magyar szövegből",
+        });
+
+    // The default language is the source and has no button of its own.
+    await expect(
+      page.getByRole("button", {
+        name: en ? "Draft from Hungarian" : "Fordítás a(z) magyar szövegből",
+      }),
+    ).toHaveCount(3);
+
+    // Empty fields are filled straight away, name and description both, and marked.
+    await draftButton("en").click();
+    await expect(page.locator('input[name="name-en"]')).toHaveValue("[en] Scaling");
+    await expect(page.locator('textarea[name="description-en"]')).toHaveValue("[en] Ultrasonic.");
+    expect(drafts).toEqual([{ target: "en", kind: "SERVICE", serviceId: "svc_1" }]);
+    await expect(
+      page.getByText(en ? /Machine-translated from Hungarian/ : /Gépi fordítás a\(z\) magyar/),
+    ).toHaveCount(1);
+    // Nothing was saved by drafting.
+    expect(saved).toEqual([]);
+    await page.screenshot({ path: `test-results/service-drafts-${locale}.png`, fullPage: true });
+
+    // An existing translation is not replaced without asking.
+    await draftButton("de").click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: en ? "Cancel" : "Mégse" }).click();
+    await expect(page.locator('input[name="name-de"]')).toHaveValue("Zahnsteinentfernung");
+
+    await page
+      .locator('input[name="name-en"]')
+      .locator("xpath=ancestor::form")
+      .getByRole("button", { name: en ? "Save" : "Mentés", exact: true })
+      .click();
+    await expect
+      .poll(() => saved)
+      .toEqual([
+        {
+          translations: [
+            { locale: "en", name: "[en] Scaling", description: "[en] Ultrasonic." },
+            { locale: "de", name: "Zahnsteinentfernung", description: null },
+          ],
+        },
+      ]);
+  });
+
   test(`${locale}: a transcript shows what an answer said and what it named outside the records`, async ({
     page,
   }) => {

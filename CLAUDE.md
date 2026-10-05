@@ -215,7 +215,10 @@ allowance through the same reserve → call → reconcile sequence; a draft neve
 remains — only the off→on transition; a live tenant is never switched off by a finding.** The receptionist reads the free-text company profile, service descriptions and FAQs as one
 block beside the catalogue, with no rule for which wins — so a profile listing treatments that cannot be
 booked gets them offered. **Read its §2.1 before adding anything to the assistant's context**: every kind of
-fact has one authoritative source, and free text may explain a structured fact but never add or override one.
+fact has one authoritative source, and free text may explain a structured fact but never add or override one. ·
+[Phase 12 — service translation drafts](docs/phase-12-service-translation-drafts.md) (done). The same
+draft endpoint, a third `kind`; its §2.2 is why a service's own name is translated while a name inside the
+profile is not.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

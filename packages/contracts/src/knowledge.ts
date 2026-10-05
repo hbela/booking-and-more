@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { languageSchema } from "./common.js";
+import { idSchema, languageSchema } from "./common.js";
 
 export const KNOWLEDGE_CHARACTER_LIMIT = 10_000;
 export function knowledgeCharacters(text: string | null | undefined): number {
@@ -95,18 +95,23 @@ export const knowledgeAuditSchema = z.object({
 export type KnowledgeAudit = z.infer<typeof knowledgeAuditSchema>;
 
 /**
- * phase-12 §8.4: a machine translation of the default-language profile or FAQs.
+ * phase-12 §8.4: a machine translation of the default-language profile, FAQs,
+ * or one service's name and description (docs/phase-12-service-translation-drafts.md).
  * A draft — nothing is saved; the owner reviews and saves it like any edit.
  */
-export const translationDraftRequestSchema = z.object({
-  target: languageSchema,
-  kind: z.enum(["PROFILE", "FAQ"]),
-});
+export const translationDraftKindSchema = z.enum(["PROFILE", "FAQ", "SERVICE"]);
+export const translationDraftRequestSchema = z.discriminatedUnion("kind", [
+  z.object({ target: languageSchema, kind: z.literal("PROFILE") }),
+  z.object({ target: languageSchema, kind: z.literal("FAQ") }),
+  z.object({ target: languageSchema, kind: z.literal("SERVICE"), serviceId: idSchema }),
+]);
+export type TranslationDraftRequest = z.infer<typeof translationDraftRequestSchema>;
 export const translationDraftSchema = z.object({
   source: languageSchema,
   target: languageSchema,
-  kind: z.enum(["PROFILE", "FAQ"]),
+  kind: translationDraftKindSchema,
   profile: z.string().nullable(),
   faqs: z.array(z.object({ sourceId: z.string(), question: z.string(), answer: z.string() })),
+  service: z.object({ name: z.string(), description: z.string().nullable() }).nullable(),
 });
 export type TranslationDraft = z.infer<typeof translationDraftSchema>;

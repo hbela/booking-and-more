@@ -194,7 +194,11 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
         action: "assistant.knowledge.translation_drafted",
         entityType: "Tenant",
         entityId: request.tenant!.id,
-        after: { kind: draft.kind, target: draft.target },
+        after: {
+          kind: draft.kind,
+          target: draft.target,
+          ...(request.body.kind === "SERVICE" && { serviceId: request.body.serviceId }),
+        },
       });
       return draft;
     },

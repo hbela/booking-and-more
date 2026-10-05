@@ -1,9 +1,9 @@
 "use client";
 
 import { PageLoading } from "./ui/loading";
-import { knowledgeCharacters, type Language } from "@bam/contracts";
+import { knowledgeCharacters, type Language, type TranslationDraft } from "@bam/contracts";
 import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -15,6 +15,9 @@ import {
   type ServiceDetail,
 } from "@/lib/api-client";
 import { LOCALES, diffPatch } from "@/lib/catalogue-form";
+import { fill, without } from "@/lib/fill-field";
+import { aiErrorKey } from "./knowledge-health";
+import { useConfirm } from "./ui/confirm-dialog";
 import {
   ServiceFields,
   serviceBodyFrom,
@@ -235,6 +238,9 @@ export function ServicesScreen(): React.ReactElement {
           key={`${context.tenantId}-${translating.id}`}
           tenantId={context.tenantId}
           defaultLanguage={context.me.tenant?.defaultLanguage ?? "hu"}
+          // A draft is a paid model call on the assistant's allowance, so it
+          // carries the assistant's guard and plan (phase-12 §8.4).
+          canDraft={context.me.features.assistant && context.can("assistant:manage")}
           service={translating}
           onClose={() => {
             setTranslating(null);
@@ -451,21 +457,79 @@ function EditServicePanel({
  * editable so owners can reduce existing content. Preserve the disabled
  * original-language entry when replacing the set.
  */
+const LANGUAGE_LABELS = { hu: "hungarian", en: "english", de: "german", fr: "french" } as const;
+
 function TranslationsPanel({
   tenantId,
   defaultLanguage,
+  canDraft,
   service,
   onClose,
 }: {
   tenantId: string;
   defaultLanguage: string;
+  /** Machine drafts from the default language (docs/phase-12-service-translation-drafts.md). */
+  canDraft: boolean;
   service: Service;
   onClose: () => void;
 }): React.ReactElement {
   const t = useTranslations("catalogue");
+  const knowledgeText = useTranslations("businessKnowledge");
+  const healthText = useTranslations("knowledgeHealth");
   const budgetText = useTranslations("knowledgeBudget");
+  const uiLocale = useLocale();
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
+  const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // Locales whose fields hold an unedited machine draft.
+  const [drafted, setDrafted] = useState<ReadonlySet<Language>>(new Set());
+
+  const sourceLanguage = LOCALES.find((entry) => entry === defaultLanguage) ?? "hu";
+  // Hungarian writes language names in lower case mid-sentence ("a(z) magyar szövegből").
+  const inSentence = (language: Language) => {
+    const name = knowledgeText(LANGUAGE_LABELS[language]);
+    return uiLocale === "hu" ? name.toLocaleLowerCase("hu") : name;
+  };
+
+  // phase-12 §8.4: a draft fills the editor and saves nothing.
+  const draft = useMutation({
+    mutationFn: (target: Language) =>
+      apiFetch<TranslationDraft>("/v1/assistant/knowledge/translation-draft", {
+        method: "POST",
+        tenantId,
+        body: { target, kind: "SERVICE", serviceId: service.id },
+      }),
+  });
+
+  const draftLocale = (language: Language) => {
+    const form = formRef.current;
+    const name = form?.elements.namedItem(`name-${language}`);
+    const description = form?.elements.namedItem(`description-${language}`);
+    if (!(name instanceof HTMLInputElement) || !(description instanceof HTMLTextAreaElement))
+      return;
+    const run = () =>
+      draft.mutate(language, {
+        onSuccess: (result) => {
+          if (!result.service) return;
+          fill(name, result.service.name);
+          fill(description, result.service.description ?? "");
+          setDrafted((current) => new Set(current).add(language));
+        },
+      });
+    if (name.value.trim() || description.value.trim())
+      confirm({
+        title: t("draftOverwrite", { language: inSentence(language) }),
+        confirmLabel: knowledgeText("draft.replace"),
+        onConfirm: run,
+      });
+    else run();
+  };
+  // Typing makes the draft the owner's text. `fill` dispatches an untrusted
+  // event, which does not count.
+  const ownEdit = (language: Language) => (event: React.FormEvent) => {
+    if (event.nativeEvent.isTrusted) setDrafted((current) => without(current, language));
+  };
 
   const [changes, setChanges] = useState<Partial<Record<Language, number>>>({});
   const save = useMutation({
@@ -513,7 +577,9 @@ function TranslationsPanel({
         <CardTitle>{t("translationsFor", { name: service.name })}</CardTitle>
       </CardHeader>
       <CardContent>
+        {confirmDialog}
         <form
+          ref={formRef}
           onChange={(event) => {
             const data = new FormData(event.currentTarget);
             setChanges(
@@ -541,18 +607,50 @@ function TranslationsPanel({
             const existing = service.translations.find((entry) => entry.locale === locale);
             const isOriginal = locale === defaultLanguage;
             const locked = isOriginal;
+            const markerId = `draft-${locale}`;
 
             return (
               <div key={locale} className="flex flex-col gap-2">
-                <FormField id={`name-${locale}`} label={`${locale.toUpperCase()} — ${t("name")}`}>
-                  <Input
-                    id={`name-${locale}`}
-                    name={`name-${locale}`}
-                    defaultValue={existing?.name ?? (isOriginal ? service.name : "")}
-                    placeholder={service.name}
-                    disabled={locked}
-                  />
-                </FormField>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <FormField
+                      id={`name-${locale}`}
+                      label={`${locale.toUpperCase()} — ${t("name")}`}
+                    >
+                      <Input
+                        id={`name-${locale}`}
+                        name={`name-${locale}`}
+                        lang={locale}
+                        defaultValue={existing?.name ?? (isOriginal ? service.name : "")}
+                        placeholder={service.name}
+                        disabled={locked}
+                        aria-describedby={drafted.has(locale) ? markerId : undefined}
+                        onInput={ownEdit(locale)}
+                      />
+                    </FormField>
+                  </div>
+                  {canDraft && !isOriginal ? (
+                    // Outside the label, so it is not part of the field's accessible name.
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={draft.isPending}
+                      onClick={() => draftLocale(locale)}
+                    >
+                      {draft.isPending && draft.variables === locale
+                        ? knowledgeText("draft.running")
+                        : knowledgeText("draft.profile", { language: inSentence(sourceLanguage) })}
+                    </Button>
+                  ) : null}
+                </div>
+                {drafted.has(locale) ? (
+                  <p id={markerId} className="text-sm text-warning">
+                    {knowledgeText("draft.marker", { language: inSentence(sourceLanguage) })}
+                  </p>
+                ) : null}
+                {draft.isError && draft.variables === locale ? (
+                  <ErrorText>{healthText(aiErrorKey(draft.error))}</ErrorText>
+                ) : null}
 
                 <FormField
                   id={`description-${locale}`}
@@ -561,8 +659,14 @@ function TranslationsPanel({
                 >
                   <Textarea
                     id={`description-${locale}`}
-                    aria-describedby={`description-${locale}-hint`}
+                    aria-describedby={
+                      drafted.has(locale)
+                        ? `description-${locale}-hint ${markerId}`
+                        : `description-${locale}-hint`
+                    }
                     rows={5}
+                    lang={locale}
+                    onInput={ownEdit(locale)}
                     name={`description-${locale}`}
                     defaultValue={
                       existing?.description ?? (isOriginal ? (service.description ?? "") : "")

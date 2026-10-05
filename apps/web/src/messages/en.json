@@ -205,6 +205,7 @@
     "name": "Name",
     "description": "Description",
     "serviceDescriptionHint": "Write a short description first, then put --- on its own line before the detailed description. Short Description: and Long Description: headings also work.",
+    "draftOverwrite": "Replace the current {language} name and description with a machine translation?",
     "email": "Email",
     "timezone": "Time zone",
     "type": "Type",

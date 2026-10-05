@@ -41,6 +41,8 @@ describe("the translation prompt", () => {
     });
 
     expect(prompt.system).toContain("from Hungarian to English");
+    // A service's own name is translated; one mentioned in prose is kept.
+    expect(prompt.system).toContain(':service-name" IS the name of a bookable service');
     expect(prompt.user.match(/<\/item>/gu)).toHaveLength(2);
   });
 });

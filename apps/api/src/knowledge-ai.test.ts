@@ -233,6 +233,70 @@ describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
       input.items.map((item) => ({ id: item.id, text: `[${input.to}] ${item.text}` }));
   });
 
+  it("drafts one service's name and description, and only from the caller's own tenant", async () => {
+    const site = await clinic("service");
+    const service = await app.prisma.service.create({
+      data: {
+        tenantId: site.tenantId,
+        name: "Fogkőeltávolítás",
+        slug: `fogko-${RUN}`,
+        description: "Ultrahangos tisztítás.",
+        durationMinutes: 30,
+      },
+    });
+    const calls = model.translations.length;
+    const draft = await app.inject({
+      method: "POST",
+      url: "/v1/assistant/knowledge/translation-draft",
+      headers: site.headers,
+      payload: { target: "fr", kind: "SERVICE", serviceId: service.id },
+    });
+    expect(draft.statusCode, draft.body).toBe(200);
+    expect(draft.json()).toMatchObject({
+      source: "hu",
+      target: "fr",
+      kind: "SERVICE",
+      profile: null,
+      faqs: [],
+      service: { name: "[fr] Fogkőeltávolítás", description: "[fr] Ultrahangos tisztítás." },
+    });
+    // The name travels as its own item, so the prompt translates it rather
+    // than keeping it as a name mentioned in prose.
+    expect(model.translations[calls]?.items.map((item) => item.id)).toEqual([
+      "service:service-name",
+      "service:description",
+    ]);
+    expect(await app.prisma.serviceTranslation.count({ where: { serviceId: service.id } })).toBe(0);
+
+    await app.prisma.service.update({ where: { id: service.id }, data: { description: null } });
+    const nameOnly = await app.inject({
+      method: "POST",
+      url: "/v1/assistant/knowledge/translation-draft",
+      headers: site.headers,
+      payload: { target: "en", kind: "SERVICE", serviceId: service.id },
+    });
+    expect(nameOnly.json().service).toEqual({ name: "[en] Fogkőeltávolítás", description: null });
+
+    // Another tenant's service is the same 404 as one that does not exist (rule 5).
+    const other = await clinic("service-other");
+    const foreign = await app.inject({
+      method: "POST",
+      url: "/v1/assistant/knowledge/translation-draft",
+      headers: other.headers,
+      payload: { target: "en", kind: "SERVICE", serviceId: service.id },
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.json().error.code).toBe("SERVICE_NOT_FOUND");
+
+    const missingId = await app.inject({
+      method: "POST",
+      url: "/v1/assistant/knowledge/translation-draft",
+      headers: site.headers,
+      payload: { target: "en", kind: "SERVICE" },
+    });
+    expect(missingId.statusCode).toBe(422);
+  });
+
   it("refuses before calling when the month's allowance cannot cover the call", async () => {
     const site = await clinic("quota");
     await app.prisma.subscription.update({

@@ -8,6 +8,7 @@ import { KnowledgeBudget, isKnowledgeLimitError } from "./knowledge-budget";
 import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { fill, without } from "@/lib/fill-field";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { ErrorText } from "./ui/form-field";
@@ -44,23 +45,6 @@ interface CompanyProfile {
   businessDescriptionEn: string | null;
   businessDescriptionDe: string | null;
   businessDescriptionFr: string | null;
-}
-
-/**
- * Put text into an uncontrolled textarea the way typing would, so React's
- * onChange — and the character budget hanging off it — sees the change.
- */
-function fill(field: HTMLTextAreaElement, text: string): void {
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(field, text);
-  field.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
-/** A new set without `language`, or the same one when it was not there. */
-function without<T>(current: ReadonlySet<T>, value: T): ReadonlySet<T> {
-  if (!current.has(value)) return current;
-  const next = new Set(current);
-  next.delete(value);
-  return next;
 }
 
 function formText(data: FormData, name: string): string {

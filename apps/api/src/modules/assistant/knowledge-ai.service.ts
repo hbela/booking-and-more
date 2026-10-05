@@ -7,10 +7,13 @@ import {
   type KnowledgeAssistant,
 } from "@bam/ai";
 import {
+  ErrorCodes,
   languageSchema,
+  NotFoundError,
   ValidationError,
   type KnowledgeAudit,
   type TranslationDraft,
+  type TranslationDraftRequest,
 } from "@bam/contracts";
 import type { PrismaClient } from "@bam/db";
 import type { KnowledgeText } from "@bam/knowledge-engine";
@@ -109,7 +112,7 @@ export class KnowledgeAiService {
 
   async translationDraft(
     tenantId: string,
-    args: { target: string; kind: "PROFILE" | "FAQ" },
+    args: TranslationDraftRequest,
   ): Promise<TranslationDraft> {
     const tenant = await this.prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
@@ -124,7 +127,18 @@ export class KnowledgeAiService {
 
     const items: { id: string; text: string }[] = [];
     let faqs: { id: string; question: string; answer: string }[] = [];
-    if (args.kind === "PROFILE") {
+    if (args.kind === "SERVICE") {
+      // `services.name` and `.description` are the default language; the
+      // other locales are ServiceTranslation rows (tech-impl §38).
+      const service = await this.prisma.service.findFirst({
+        where: { id: args.serviceId, tenantId },
+        select: { name: true, description: true },
+      });
+      if (!service) throw new NotFoundError("Service not found.", ErrorCodes.SERVICE_NOT_FOUND);
+      items.push({ id: "service:service-name", text: service.name });
+      if (service.description?.trim())
+        items.push({ id: "service:description", text: service.description });
+    } else if (args.kind === "PROFILE") {
       const settings = await this.prisma.tenantAssistantSettings.findUnique({
         where: { tenantId },
       });
@@ -170,6 +184,13 @@ export class KnowledgeAiService {
         question: text.get(`${faq.id}:q`)!,
         answer: text.get(`${faq.id}:a`)!,
       })),
+      service:
+        args.kind === "SERVICE"
+          ? {
+              name: text.get("service:service-name")!,
+              description: text.get("service:description") ?? null,
+            }
+          : null,
     };
   }
 

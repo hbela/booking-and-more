@@ -205,6 +205,7 @@
     "name": "Név",
     "description": "Leírás",
     "serviceDescriptionHint": "Először írjon rövid leírást, majd egy külön sorba írt --- után a részletes leírást. A Rövid leírás: és Részletes leírás: címsorok is használhatók.",
+    "draftOverwrite": "Lecseréli a jelenlegi {language} nevet és leírást gépi fordításra?",
     "email": "E-mail cím",
     "timezone": "Időzóna",
     "type": "Típus",
