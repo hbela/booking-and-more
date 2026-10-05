@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Bot, RefreshCw, Send } from "lucide-react";
+import { Bot, CalendarDays, RefreshCw, Send } from "lucide-react";
 import { ApiError, formatMoney } from "@/lib/api-client";
 import {
   assistantAvailability,
@@ -275,7 +275,10 @@ function ChatConversation({
       .catch(() => undefined);
   }, [secondsLeft, session, turn?.closureReason]);
 
-  const sendText = async (value: string) => {
+  // `shown` is what the customer's bubble says when it differs from what the
+  // server is sent: a slot pick sends its ordinal, which the server resolves
+  // against the list it last showed, but reads as the time that was chosen.
+  const sendText = async (value: string, shown?: string) => {
     const text = value.trim();
     if (!session || !text || busy || closed) return;
     if (
@@ -288,7 +291,10 @@ function ChatConversation({
     setDraft("");
     setBusy(true);
     setError(null);
-    setBubbles((rows) => [...rows, { id: `c-${++serial.current}`, from: "customer", text }]);
+    setBubbles((rows) => [
+      ...rows,
+      { id: `c-${++serial.current}`, from: "customer", text: shown ?? text },
+    ]);
     try {
       const next = await sendMessage({
         session,
@@ -387,10 +393,20 @@ function ChatConversation({
               ))}
             </NativeSelect>
           </label>
-          <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
-            <RefreshCw size={16} aria-hidden />
-            {session ? t.reset : g.start}
-          </Button>
+          {/* The two ways forward sit side by side: start over here, or leave
+              the chat for the classic form. */}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={reset} disabled={busy}>
+              <RefreshCw size={16} aria-hidden />
+              {session ? t.reset : g.start}
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={bookingHref}>
+                <CalendarDays size={16} aria-hidden />
+                {t.form}
+              </Link>
+            </Button>
+          </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 sm:p-6" aria-live="polite">
           {!available ? (
@@ -439,7 +455,13 @@ function ChatConversation({
             <SlotChoices
               slots={turn.slots}
               locale={language}
-              onPick={(ordinal) => setDraft(t.slot(ordinal))}
+              disabled={busy || !available}
+              onPick={(ordinal, slot) =>
+                void sendText(
+                  t.slot(ordinal),
+                  `${formatSlotTime(slot.startAt, language)} · ${slot.providerName}`,
+                )
+              }
             />
           ) : null}
           {!closed && turn?.confirmation ? (
@@ -526,13 +548,6 @@ function ChatConversation({
               <TooltipContent>{t.send}</TooltipContent>
             </Tooltip>
           </form>
-          <Button
-            asChild
-            variant="ghost"
-            className="mt-3 w-full underline-offset-4 hover:underline"
-          >
-            <Link href={bookingHref}>{t.form}</Link>
-          </Button>
         </footer>
       </section>
     </div>
@@ -542,11 +557,13 @@ function ChatConversation({
 function SlotChoices({
   slots,
   locale,
+  disabled,
   onPick,
 }: {
   slots: ConversationSlot[];
   locale: Locale;
-  onPick: (ordinal: number) => void;
+  disabled: boolean;
+  onPick: (ordinal: number, slot: ConversationSlot) => void;
 }): React.ReactElement {
   return (
     <ul className="grid gap-2 sm:grid-cols-2">
@@ -555,17 +572,10 @@ function SlotChoices({
           <Button
             variant="outline"
             className="h-full w-full flex-col"
-            onClick={() => onPick(index + 1)}
+            disabled={disabled}
+            onClick={() => onPick(index + 1, slot)}
           >
-            <time dateTime={slot.startAt}>
-              {new Date(slot.startAt).toLocaleString(locale, {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </time>
+            <time dateTime={slot.startAt}>{formatSlotTime(slot.startAt, locale)}</time>
             <span className="text-xs text-ink-muted">{slot.providerName}</span>
           </Button>
         </li>
@@ -573,6 +583,16 @@ function SlotChoices({
     </ul>
   );
 }
+function formatSlotTime(startAt: string, locale: Locale): string {
+  return new Date(startAt).toLocaleString(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function Confirmation({
   card,
   locale,
