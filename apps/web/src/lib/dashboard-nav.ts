@@ -147,12 +147,20 @@ const NAV: NavItem[] = [
   // So the condition is data, and `hasPersonalDiary` is false for an
   // administrator on purpose. Diary delegation adds a third way to earn the
   // item — a grant — and does not change that.
+  //
+  // An owner who is also a provider (docs/phase-9-owner-as-provider.md) does
+  // have a personal diary, and is still left without the item: whoever manages
+  // providers already reaches every diary, their own included, from the row on
+  // Providers, and a second door to one of them made the screen read as the
+  // organization's again.
   {
     href: "/dashboard/availability",
     key: "availability",
     alwaysAvailable: false,
     permissions: null,
-    requires: (me) => hasPersonalDiary(me, "AVAILABILITY"),
+    requires: (me) =>
+      hasPersonalDiary(me, "AVAILABILITY") &&
+      !(me?.permissions.includes("provider:manage") ?? false),
   },
 ];
 

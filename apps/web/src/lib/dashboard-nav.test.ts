@@ -83,6 +83,14 @@ describe("navFor", () => {
     ]);
   });
 
+  it("gives an owner who is also a provider no top-level availability item", () => {
+    // Their own diary is one row on Providers, like everybody else's.
+    const owner = keysFor(me({ permissions: OWNER, providerId: "p_owner", assistant: true }));
+    expect(owner).not.toContain("availability");
+    expect(owner).toContain("providers");
+    expect(owner.at(-1)).toBe("assistant");
+  });
+
   it("shows the Assistant only when the subscription includes it", () => {
     expect(keysFor(me({ permissions: OWNER, assistant: true }))).toContain("assistant");
     expect(keysFor(me({ permissions: OWNER, assistant: false }))).not.toContain("assistant");
