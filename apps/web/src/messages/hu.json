@@ -710,6 +710,12 @@
       "ASSISTANT": "AI Asszistens",
       "SYSTEM": "Rendszer",
       "TOOL": "Eszköz"
+    },
+    "knowledgeGate": {
+      "refused": "Az asszisztens nem kapcsolt be: a tudásában {count, plural, other {# megoldatlan hiba}} van. Már az első válaszaiban ellentmondana a rögzített adatoknak. Javítsa ki őket, vagy jelölje szándékosnak.",
+      "blocked": "Az asszisztens még nem kapcsolható be: a tudásában {count, plural, other {# megoldatlan hiba}} van.",
+      "live": "Az asszisztens működik, de a tudásában {count, plural, other {# megoldatlan hiba}} van. Tovább fut; az ügyfelek a szövegeitől eltérő választ kaphatnak.",
+      "link": "A tudás ellenőrzésének megnyitása"
     }
   },
   "businessKnowledge": {
@@ -831,6 +837,12 @@
       "saved": "Az elérhetőségek mentve.",
       "loading": "Betöltés…",
       "error": "Az elérhetőségeket nem sikerült betölteni vagy menteni. Ellenőrizze az e-mail-címet, és próbálja újra."
-    }
+    },
+    "markIntended": "Szándékos",
+    "undoIntended": "Visszavonás",
+    "intended_badge": "Szándékos",
+    "allIntended": "Nincs nyitott probléma. Minden jelzett pont szándékosként van megjelölve.",
+    "intendedTitle": "{count, plural, other {# szándékosként megjelölve}}",
+    "intendedHint": "Ezek már nem számítanak hibának, és nem akadályozzák az asszisztenst. Ha átfogalmazza a szöveget, a jelzés visszatér, mert Ön azt a megfogalmazást hagyta jóvá."
   }
 }

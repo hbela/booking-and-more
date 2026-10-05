@@ -7,8 +7,8 @@ treatments nobody can book is a defect in the product, not a content problem of 
 
 ## Implementation Plan
 
-**Document version:** 0.4 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts 1
-and 2 are built** (§7.1, §7.2); parts 3–5 are not.
+**Document version:** 0.5 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts
+1–3 are built** (§7.1–§7.3); parts 4–5 are not.
 **Scope:** (1) a written rule for which source is authoritative for each kind of fact the assistant
 states; (2) a verification mechanism that finds where the company profile, service descriptions and
 FAQs contradict the structured records, and shows it to the owner; (3) runtime changes so the
@@ -262,7 +262,9 @@ write invalidates the health query, and each profile field shows its own count f
 The assistant settings screen shows the health summary. Proposed default: **enabling chat is refused
 while any `ERROR` finding is unacknowledged** (`KNOWLEDGE_HAS_ERRORS`, with the list). Already-enabled
 tenants are not switched off by a new finding — a provider archived on a Friday must not silently
-remove the product's main feature; they get a banner and an email instead.
+remove the product's main feature; they get a banner and an email instead. **As built (§7.3): the
+refusal and the banner exist; the email does not** — it needs an outbox event, a template in both
+locales and a decision on how often to send it, and is left for a later slice.
 
 ## 5.4 Saves are never refused
 
@@ -369,6 +371,46 @@ flags).
 
   `knowledge-budget.spec.ts` needed a health response in its mock: its catch-all `{ items: [] }`
   crashed the Overview client-side. A real API cannot return that shape.
+
+## 7.3 Part 3 — as built (2026-10-05)
+
+- **Migration `20261005100855_knowledge_finding_acknowledgements`.** One table,
+  `knowledge_finding_acknowledgements`, unique on `(tenant_id, finding_key)`. The tenant foreign key
+  cascades. `acknowledged_by_user_id` is recorded but has no foreign key, following
+  `ProviderDelegation.grantedByUserId`. A row whose key no longer matches anything is inert, so
+  nothing prunes it.
+- **`findingKey`** (`@bam/knowledge-engine`) is `code | source kind | source id | locale | folded
+  excerpt`:
+  - changing case or punctuation keeps an acknowledgement; rewording the sentence brings the finding
+    back;
+  - the same name acknowledged in the profile is still reported in an FAQ.
+- **API:**
+  - `POST /v1/assistant/knowledge/acknowledgements { key }` accepts only a key the check reports at
+    that moment (404 otherwise), so the table only holds what the owner was actually shown.
+  - `DELETE /v1/assistant/knowledge/acknowledgements/:id` undoes one.
+  - Both use the `manage` guard, write an audit entry, and return the recomputed health.
+  - The health response gains `key` and `acknowledgementId` per finding. `errors` and `warnings` now
+    count unacknowledged findings only.
+- **Gate:** `AssistantService.saveSettings` refuses `enabled: true` with `409 KNOWLEDGE_HAS_ERRORS`
+  (`details.errors`) when the assistant is currently off and unacknowledged errors remain. A
+  tenant already on is never refused and never switched off. The form always sends `enabled`, so
+  refusing every save that carries it would have locked a live tenant out of renaming its persona.
+- **Prompt:** an acknowledged `PERSON_NOT_A_PROVIDER` excerpt is listed in `<bookable-facts>` as
+  "named, cannot be booked (confirmed by the business)". The provider rule now says such people may
+  be described when asked about by name, never offered.
+- **Web:**
+  - each finding has "Mark as intended";
+  - intended ones move to a collapsed list, with Undo;
+  - per-field counts ignore intended findings;
+  - the Assistant screen warns before the attempt ("cannot be switched on yet"), explains a refusal,
+    and tells a live tenant it is running with errors. Each message links to the check.
+- **Verified:**
+  - engine: 18 tests;
+  - API: 459 passed / 34 skipped, including a database test of the whole sequence: refused, a
+    made-up key refused, acknowledge, enable, undo, live tenant still saves, reworded sentence comes
+    back;
+  - web: 339 unit tests and all 76 e2e tests, 6 of them in `knowledge-health.spec.ts`;
+  - lint clean, drift check clean.
 
 Part 1 should be measured with §6's script before and after, so the eval script's harness may be
 pulled forward into part 1 even though its full question set lands in part 5.

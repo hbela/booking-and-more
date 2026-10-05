@@ -69,7 +69,10 @@ export function BusinessKnowledge({
   const health = useKnowledgeHealth(tenantId);
   const profileFindings = (language: Language) =>
     health.data?.findings.filter(
-      (finding) => finding.source.kind === "PROFILE" && finding.source.locale === language,
+      (finding) =>
+        finding.source.kind === "PROFILE" &&
+        finding.source.locale === language &&
+        finding.acknowledgementId === null,
     ).length ?? 0;
   const settings = useQuery({
     queryKey: ["assistant-settings", tenantId],
@@ -120,7 +123,7 @@ export function BusinessKnowledge({
   });
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
-      <KnowledgeHealthCard tenantId={tenantId} />
+      <KnowledgeHealthCard tenantId={tenantId} canManage={canManage} />
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>

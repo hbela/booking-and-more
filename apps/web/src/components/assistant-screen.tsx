@@ -5,7 +5,7 @@ import { ListLoading, PageLoading } from "./ui/loading";
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api-client";
+import { ApiError, apiFetch } from "@/lib/api-client";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { Button } from "./ui/button";
 import { Link } from "@/i18n/navigation";
@@ -14,6 +14,8 @@ import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { conversationListQuery } from "@/lib/conversation-list-query";
 import { Checkbox } from "./ui/checkbox";
+import { Alert, AlertDescription, AlertLink } from "./ui/alert";
+import { knowledgeHealthKey, useKnowledgeHealth } from "./knowledge-health";
 
 interface Settings {
   enabled: boolean;
@@ -92,7 +94,14 @@ export function AssistantScreen(): React.ReactElement {
       toast.success(t("saved"));
       void client.invalidateQueries({ queryKey: ["assistant-settings"] });
     },
+    // The enable gate answers from the same check the list shows; refresh it so
+    // the two cannot disagree on the count (phase-12 §5.3).
+    onError: () =>
+      void client.invalidateQueries({ queryKey: knowledgeHealthKey(context.tenantId) }),
   });
+  const health = useKnowledgeHealth(context.tenantId, enabled);
+  const knowledgeErrors = health.data?.errors ?? 0;
+  const gateRefused = save.error instanceof ApiError && save.error.code === "KNOWLEDGE_HAS_ERRORS";
   if (context.isPending || !context.me) return <PageLoading label={t("loading")} />;
   if (!context.can("conversation:read:all"))
     return (
@@ -142,7 +151,29 @@ export function AssistantScreen(): React.ReactElement {
             <CardDescription>{t("settingsHint")}</CardDescription>
           </CardHeader>
           <CardContent>
-            {settings.error || save.isError ? <ErrorText>{t("error")}</ErrorText> : null}
+            {settings.error || (save.isError && !gateRefused) ? (
+              <ErrorText>{t("error")}</ErrorText>
+            ) : null}
+            {knowledgeErrors > 0 || gateRefused ? (
+              <Alert
+                variant={gateRefused ? "destructive" : "warning"}
+                role={gateRefused ? "alert" : "note"}
+                className="mb-4"
+              >
+                <AlertDescription>
+                  <p>
+                    {gateRefused
+                      ? t("knowledgeGate.refused", { count: Math.max(knowledgeErrors, 1) })
+                      : settings.data?.enabled
+                        ? t("knowledgeGate.live", { count: knowledgeErrors })
+                        : t("knowledgeGate.blocked", { count: knowledgeErrors })}
+                  </p>
+                  <AlertLink href="/dashboard#knowledge-health">
+                    {t("knowledgeGate.link")}
+                  </AlertLink>
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {settings.data ? (
               <form
                 className="grid gap-4"

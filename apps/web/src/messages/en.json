@@ -710,6 +710,12 @@
       "ASSISTANT": "AI Assistant",
       "SYSTEM": "System",
       "TOOL": "Tool"
+    },
+    "knowledgeGate": {
+      "refused": "The assistant was not switched on: its knowledge has {count, plural, one {# unresolved error} other {# unresolved errors}}. It would contradict your records on its first answers. Fix each one, or mark it as intended.",
+      "blocked": "The assistant cannot be switched on yet: its knowledge has {count, plural, one {# unresolved error} other {# unresolved errors}}.",
+      "live": "The assistant is live, but its knowledge has {count, plural, one {# unresolved error} other {# unresolved errors}}. It keeps running; customers may get answers that differ from your texts.",
+      "link": "Open the knowledge check"
     }
   },
   "businessKnowledge": {
@@ -831,6 +837,12 @@
       "saved": "Contact details saved.",
       "loading": "Loading…",
       "error": "Could not load or save the contact details. Check the email address and try again."
-    }
+    },
+    "markIntended": "Mark as intended",
+    "undoIntended": "Undo",
+    "intended_badge": "Intended",
+    "allIntended": "No open problems. Everything reported is marked as intended.",
+    "intendedTitle": "{count, plural, one {# marked as intended} other {# marked as intended}}",
+    "intendedHint": "These no longer count as errors and do not block the assistant. Rewording the text brings a finding back, because what you approved was that wording."
   }
 }

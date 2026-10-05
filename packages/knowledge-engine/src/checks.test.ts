@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkKnowledge, hoursSummary } from "./checks.js";
+import { findingKey } from "./key.js";
 import { citiesIn, hourRanges, personNames, prices } from "./text.js";
 import type { KnowledgeSnapshot } from "./types.js";
 
@@ -213,5 +214,26 @@ describe("hoursSummary", () => {
         { weekday: 6, startTime: "10:00", endTime: "12:00" },
       ]),
     ).toEqual(["Mon–Tue 09:00–17:00", "Sat 10:00–12:00"]);
+  });
+});
+
+describe("findingKey", () => {
+  const [first] = checkKnowledge({
+    ...wellness,
+    texts: [{ kind: "PROFILE", id: null, name: null, locale: "hu", text: "Dr. Kocsis Zoltán" }],
+  });
+
+  it("survives a change of case or punctuation, not a rewording", () => {
+    expect(findingKey(first!)).toBe(findingKey({ ...first!, excerpt: "kocsis, ZOLTÁN" }));
+    expect(findingKey(first!)).not.toBe(findingKey({ ...first!, excerpt: "Kocsis Péter" }));
+  });
+
+  it("tells the same excerpt in another source or language apart", () => {
+    expect(findingKey(first!)).not.toBe(
+      findingKey({ ...first!, source: { ...first!.source, kind: "FAQ" } }),
+    );
+    expect(findingKey(first!)).not.toBe(
+      findingKey({ ...first!, source: { ...first!.source, locale: "en" } }),
+    );
   });
 });

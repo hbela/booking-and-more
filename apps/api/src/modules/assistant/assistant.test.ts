@@ -114,6 +114,7 @@ describe("company profile translations", () => {
       service: { findMany: vi.fn().mockResolvedValue([]) },
       provider: { findMany: vi.fn().mockResolvedValue([]) },
       location: { findMany: vi.fn().mockResolvedValue([]) },
+      knowledgeFindingAcknowledgement: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
     const service = new AssistantService(prisma);
     const tenant = { id: "tenant-1", name: "Company", defaultLanguage: "hu" } as Tenant;

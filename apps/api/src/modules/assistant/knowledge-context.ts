@@ -49,6 +49,11 @@ export interface BookableFactsInput {
   contactPhone: string | null;
   bookingPolicy: string | null;
   cancellationPolicy: string | null;
+  /**
+   * People the description names who are not providers, as acknowledged by the
+   * owner in the knowledge check (phase-12 §3.3) — a practice leader, say.
+   */
+  namedNotBookable?: string[];
 }
 
 const NOT_RECORDED = "not recorded";
@@ -113,6 +118,14 @@ export function renderBookableFacts(input: BookableFactsInput, locale: string): 
     "Locations:",
     ...(locations.length > 0 ? locations : ["- none"]),
     "",
+    ...(input.namedNotBookable && input.namedNotBookable.length > 0
+      ? [
+          "People the business names who cannot be booked (confirmed by the business; may be",
+          "mentioned, never offered as a provider):",
+          ...input.namedNotBookable.map((name) => `- ${name}`),
+          "",
+        ]
+      : []),
     "Weekly hours when appointments can be booked, per provider.",
     "No separate opening hours are recorded; these are the practice's hours:",
     ...(hours.length > 0 ? hours : ["- none"]),

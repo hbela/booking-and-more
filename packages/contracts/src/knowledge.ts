@@ -52,11 +52,20 @@ export const knowledgeFindingSchema = z.object({
   excerpt: z.string(),
   expected: z.array(z.string()),
   suggestion: z.string().nullable(),
+  /** `@bam/knowledge-engine`'s `findingKey` — what an acknowledgement names. */
+  key: z.string(),
+  /** Set when the owner marked this finding as intended (phase-12 §3.3). */
+  acknowledgementId: z.string().nullable(),
 });
 export const knowledgeHealthSchema = z.object({
+  /** Unacknowledged only: these are what the enable gate counts (phase-12 §5.3). */
   errors: z.number().int(),
   warnings: z.number().int(),
   findings: z.array(knowledgeFindingSchema),
 });
 export type KnowledgeFindingView = z.infer<typeof knowledgeFindingSchema>;
 export type KnowledgeHealth = z.infer<typeof knowledgeHealthSchema>;
+
+export const acknowledgeKnowledgeFindingSchema = z.object({
+  key: z.string().min(1).max(2_000),
+});

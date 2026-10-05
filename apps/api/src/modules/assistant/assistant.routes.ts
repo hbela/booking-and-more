@@ -1,5 +1,6 @@
 import { Permissions } from "@bam/auth";
 import {
+  acknowledgeKnowledgeFindingSchema,
   commonErrorResponses,
   idSchema,
   knowledgeHealthSchema,
@@ -18,7 +19,7 @@ import {
   conversationStatsSchema,
 } from "./assistant.schemas.js";
 import { AssistantService } from "./assistant.service.js";
-import { knowledgeHealth } from "./knowledge-health.js";
+import { acknowledgeFinding, knowledgeHealth, removeAcknowledgement } from "./knowledge-health.js";
 
 export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
   const service = new AssistantService(app.prisma);
@@ -99,6 +100,57 @@ export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => knowledgeHealth(app.prisma, request.tenant!.id),
+  );
+
+  // phase-12 §3.3: the owner marks a finding as intended. Both return the
+  // recomputed health, so the screen and the enable gate agree immediately.
+  app.post(
+    "/knowledge/acknowledgements",
+    {
+      preHandler: manage,
+      schema: {
+        tags: ["assistant"],
+        body: acknowledgeKnowledgeFindingSchema,
+        response: { 201: knowledgeHealthSchema, ...commonErrorResponses },
+      },
+    },
+    async (request, reply) => {
+      const tenantId = request.tenant!.id;
+      const row = await acknowledgeFinding(app.prisma, {
+        tenantId,
+        key: request.body.key,
+        userId: request.user?.id ?? null,
+      });
+      request.audit({
+        action: "assistant.knowledge_finding.acknowledged",
+        entityType: "KnowledgeFindingAcknowledgement",
+        entityId: row.id,
+        after: { code: row.code },
+      });
+      return reply.status(201).send(await knowledgeHealth(app.prisma, tenantId));
+    },
+  );
+
+  app.delete(
+    "/knowledge/acknowledgements/:id",
+    {
+      preHandler: manage,
+      schema: {
+        tags: ["assistant"],
+        params: z.object({ id: idSchema }),
+        response: { 200: knowledgeHealthSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const tenantId = request.tenant!.id;
+      await removeAcknowledgement(app.prisma, { tenantId, id: request.params.id });
+      request.audit({
+        action: "assistant.knowledge_finding.unacknowledged",
+        entityType: "KnowledgeFindingAcknowledgement",
+        entityId: request.params.id,
+      });
+      return knowledgeHealth(app.prisma, tenantId);
+    },
   );
 
   app.get(

@@ -120,26 +120,27 @@ model Tenant {
   workingHours           WorkingHours[]
   availabilityExceptions AvailabilityException[]
 
-  customers            Customer[]
-  capacityReservations CapacityReservation[]
-  bookingHolds         BookingHold[]
-  bookings             Booking[]
-  outboxEvents         OutboxEvent[]
-  idempotencyKeys      IdempotencyKey[]
-  notifications        Notification[]
-  subscription         Subscription?
-  checkoutLink         SubscriptionCheckoutLink?
-  billingoPartner      BillingoPartner?
-  billingoInvoices     BillingoInvoice[]
-  assistantSettings    TenantAssistantSettings?
-  assistantFaqs        TenantAssistantFaq[]
-  chatCounters         ChatUsageCounter[]
-  conversationSessions ConversationSession[]
-  conversationMessages ConversationMessage[]
-  conversationActions  ConversationPendingAction[]
-  usageEvents          UsageEvent[]
-  usageAggregates      UsageAggregate[]
-  usageReservations    UsageReservation[]
+  customers                 Customer[]
+  capacityReservations      CapacityReservation[]
+  bookingHolds              BookingHold[]
+  bookings                  Booking[]
+  outboxEvents              OutboxEvent[]
+  idempotencyKeys           IdempotencyKey[]
+  notifications             Notification[]
+  subscription              Subscription?
+  checkoutLink              SubscriptionCheckoutLink?
+  billingoPartner           BillingoPartner?
+  billingoInvoices          BillingoInvoice[]
+  assistantSettings         TenantAssistantSettings?
+  assistantFaqs             TenantAssistantFaq[]
+  knowledgeAcknowledgements KnowledgeFindingAcknowledgement[]
+  chatCounters              ChatUsageCounter[]
+  conversationSessions      ConversationSession[]
+  conversationMessages      ConversationMessage[]
+  conversationActions       ConversationPendingAction[]
+  usageEvents               UsageEvent[]
+  usageAggregates           UsageAggregate[]
+  usageReservations         UsageReservation[]
 
   calendarIntegrations  CalendarIntegration[]
   calendarMappings      CalendarMapping[]
@@ -1375,19 +1376,19 @@ enum UsageReservationStatus {
 }
 
 model TenantAssistantSettings {
-  tenantId            String   @id @map("tenant_id")
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  enabled             Boolean  @default(false)
-  personaName         String   @default("Assistant") @map("persona_name")
-  businessDescription String?  @map("business_description") @db.Text
-  businessDescriptionHu String? @map("business_description_hu") @db.Text
-  businessDescriptionEn String? @map("business_description_en") @db.Text
-  businessDescriptionDe String? @map("business_description_de") @db.Text
-  businessDescriptionFr String? @map("business_description_fr") @db.Text
-  supportedLocales    String[] @default(["hu", "en"]) @map("supported_locales")
-  escalationMessage   String?  @map("escalation_message") @db.Text
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenantId              String   @id @map("tenant_id")
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enabled               Boolean  @default(false)
+  personaName           String   @default("Assistant") @map("persona_name")
+  businessDescription   String?  @map("business_description") @db.Text
+  businessDescriptionHu String?  @map("business_description_hu") @db.Text
+  businessDescriptionEn String?  @map("business_description_en") @db.Text
+  businessDescriptionDe String?  @map("business_description_de") @db.Text
+  businessDescriptionFr String?  @map("business_description_fr") @db.Text
+  supportedLocales      String[] @default(["hu", "en"]) @map("supported_locales")
+  escalationMessage     String?  @map("escalation_message") @db.Text
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("tenant_assistant_settings")
 }
@@ -1406,6 +1407,34 @@ model TenantAssistantFaq {
 
   @@index([tenantId, locale, active, sortOrder])
   @@map("tenant_assistant_faqs")
+}
+
+/// A knowledge-check finding the owner has marked as intended
+/// (docs/phase-12-assistant-knowledge-consistency.md §3.3) — a practice leader
+/// who does not treat patients is named in the profile and is not a provider,
+/// truly.
+///
+/// Keyed on `@bam/knowledge-engine`'s `findingKey`, which includes the folded
+/// excerpt: rewording the sentence brings the finding back, on purpose, because
+/// what the owner approved was that sentence. A row whose key no longer matches
+/// any finding is inert, not wrong, so nothing prunes it.
+model KnowledgeFindingAcknowledgement {
+  id         String @id @default(cuid(2))
+  tenantId   String @map("tenant_id")
+  tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  findingKey String @map("finding_key")
+  /// Copied from the finding, so a reader — and the assistant's prompt, for
+  /// PERSON_NOT_A_PROVIDER — need not recompute the check to know what it was.
+  code       String
+  excerpt    String
+
+  /// Recorded, not enforced, matching `ProviderDelegation.grantedByUserId`.
+  acknowledgedByUserId String?  @map("acknowledged_by_user_id")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([tenantId, findingKey])
+  @@index([tenantId, code])
+  @@map("knowledge_finding_acknowledgements")
 }
 
 model ConversationSession {
@@ -2328,17 +2357,19 @@ model CalendarOauthState {
 
 /// Immutable, encrypted evidence for a tenant's test-to-live billing transition.
 model BillingTransitionArchive {
-  tenantId String @id @map("tenant_id")
-  sealedSnapshot String @map("sealed_snapshot")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenantId       String   @id @map("tenant_id")
+  sealedSnapshot String   @map("sealed_snapshot")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
   @@map("billing_transition_archives")
 }
 
 model ChatUsageCounter {
   tenantId String @map("tenant_id")
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  period String
-  quantity Int @default(0)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  period   String
+  quantity Int    @default(0)
+
   @@id([tenantId, period])
   @@map("chat_usage_counters")
 }

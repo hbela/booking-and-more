@@ -1,7 +1,12 @@
 import type { KnowledgeHealth } from "@bam/contracts";
-import { languageSchema } from "@bam/contracts";
+import { languageSchema, NotFoundError } from "@bam/contracts";
 import type { PrismaClient } from "@bam/db";
-import { checkKnowledge, type KnowledgeSnapshot, type KnowledgeText } from "@bam/knowledge-engine";
+import {
+  checkKnowledge,
+  findingKey,
+  type KnowledgeSnapshot,
+  type KnowledgeText,
+} from "@bam/knowledge-engine";
 import { PublicCatalogueService } from "../public/catalogue.service.js";
 
 const PROFILE_FIELDS = {
@@ -37,6 +42,10 @@ export async function knowledgeHealth(
     catalogue.bookableFacts(tenantId),
     catalogue.listLocations(tenantId),
   ]);
+  const acknowledgements = await prisma.knowledgeFindingAcknowledgement.findMany({
+    where: { tenantId },
+    select: { id: true, findingKey: true },
+  });
   const defaultLocale = tenant.defaultLanguage;
 
   const texts: KnowledgeText[] = [];
@@ -111,10 +120,51 @@ export async function knowledgeHealth(
     texts,
   };
 
-  const findings = checkKnowledge(snapshot);
+  const acknowledged = new Map(acknowledgements.map((row) => [row.findingKey, row.id]));
+  const findings = checkKnowledge(snapshot).map((finding) => {
+    const key = findingKey(finding);
+    return { ...finding, key, acknowledgementId: acknowledged.get(key) ?? null };
+  });
+  const open = findings.filter((entry) => entry.acknowledgementId === null);
   return {
-    errors: findings.filter((entry) => entry.severity === "ERROR").length,
-    warnings: findings.filter((entry) => entry.severity === "WARNING").length,
+    errors: open.filter((entry) => entry.severity === "ERROR").length,
+    warnings: open.filter((entry) => entry.severity === "WARNING").length,
     findings,
   };
+}
+
+/**
+ * Mark a current finding as intended (phase-12 §3.3). Only a key the check
+ * reports *now* is accepted, so the table holds acknowledgements of things the
+ * owner was actually shown rather than arbitrary strings.
+ */
+export async function acknowledgeFinding(
+  prisma: PrismaClient,
+  args: { tenantId: string; key: string; userId: string | null },
+): Promise<{ id: string; code: string }> {
+  const health = await knowledgeHealth(prisma, args.tenantId);
+  const finding = health.findings.find((entry) => entry.key === args.key);
+  if (!finding) throw new NotFoundError("That finding is no longer reported.");
+  return prisma.knowledgeFindingAcknowledgement.upsert({
+    where: { tenantId_findingKey: { tenantId: args.tenantId, findingKey: args.key } },
+    create: {
+      tenantId: args.tenantId,
+      findingKey: args.key,
+      code: finding.code,
+      excerpt: finding.excerpt,
+      acknowledgedByUserId: args.userId,
+    },
+    update: {},
+    select: { id: true, code: true },
+  });
+}
+
+export async function removeAcknowledgement(
+  prisma: PrismaClient,
+  args: { tenantId: string; id: string },
+): Promise<void> {
+  const result = await prisma.knowledgeFindingAcknowledgement.deleteMany({
+    where: { id: args.id, tenantId: args.tenantId },
+  });
+  if (result.count !== 1) throw new NotFoundError("Acknowledgement not found.");
 }

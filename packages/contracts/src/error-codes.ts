@@ -97,6 +97,16 @@ export const ErrorCodes = {
    */
   SCHEDULE_FINGERPRINT_REQUIRED: "SCHEDULE_FINGERPRINT_REQUIRED",
 
+  /**
+   * The AI receptionist cannot be switched on while the knowledge check reports
+   * an unacknowledged error (docs/phase-12-assistant-knowledge-consistency.md
+   * §5.3): the assistant would contradict the business on its first answer.
+   * Only the off→on transition is refused — a tenant already live is never
+   * switched off by a finding, and may still save its other settings.
+   * `details.errors` is the count; the list is the health endpoint's.
+   */
+  KNOWLEDGE_HAS_ERRORS: "KNOWLEDGE_HAS_ERRORS",
+
   // --- Diary delegation -----------------------------------------------------
   /**
    * The member named cannot receive this diary: they are not ACTIVE, their role

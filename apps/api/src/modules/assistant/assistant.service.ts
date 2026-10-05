@@ -2,6 +2,8 @@ import { withKnowledgeBudget } from "./knowledge-budget.js";
 import type { ChatLimits } from "../public/chat-guards.js";
 import type { PrismaClient, Tenant } from "@bam/db";
 import {
+  ConflictError,
+  ErrorCodes,
   ForbiddenError,
   hasAssistantEntitlement,
   languageSchema,
@@ -16,6 +18,7 @@ import type {
 } from "./assistant.schemas.js";
 import { localiseService, PublicCatalogueService } from "../public/catalogue.service.js";
 import { renderBookableFacts, renderBusinessDescription } from "./knowledge-context.js";
+import { knowledgeHealth } from "./knowledge-health.js";
 
 const PROFILE_FIELDS = {
   hu: "businessDescriptionHu",
@@ -106,11 +109,17 @@ export class AssistantService {
     locale: string,
   ): Promise<{ bookableFacts: string; businessDescription: string }> {
     const catalogue = new PublicCatalogueService(this.prisma);
-    const [settings, faqs, facts, locations] = await Promise.all([
+    const [settings, faqs, facts, locations, namedNotBookable] = await Promise.all([
       this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: tenant.id } }),
       this.faqsFor(tenant, locale),
       catalogue.bookableFacts(tenant.id),
       catalogue.listLocations(tenant.id),
+      this.prisma.knowledgeFindingAcknowledgement.findMany({
+        where: { tenantId: tenant.id, code: "PERSON_NOT_A_PROVIDER" },
+        select: { excerpt: true },
+        orderBy: { createdAt: "asc" },
+        take: 25,
+      }),
     ]);
     const profile = localizedBusinessDescriptionWithLocale(
       settings,
@@ -129,6 +138,7 @@ export class AssistantService {
             contactPhone: tenant.contactPhone,
             bookingPolicy: tenant.bookingPolicy,
             cancellationPolicy: tenant.cancellationPolicy,
+            namedNotBookable: [...new Set(namedNotBookable.map((row) => row.excerpt))],
           },
           locale,
         ),
@@ -175,11 +185,12 @@ export class AssistantService {
   getSettings(tenantId: string): Promise<AssistantSettingsRow | null> {
     return this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId } });
   }
-  saveSettings(
+  async saveSettings(
     tenantId: string,
     patch: AssistantSettingsPatch,
     locale = "hu",
   ): Promise<AssistantSettingsRow> {
+    if (patch.enabled === true) await this.assertMayEnable(tenantId);
     const input = Object.fromEntries(
       Object.entries(patch).filter(([, value]) => value !== undefined),
     ) as Partial<AssistantSettingsInput>;
@@ -206,6 +217,30 @@ export class AssistantService {
       }),
     );
   }
+  /**
+   * phase-12 §5.3: switching the assistant on is refused while the knowledge
+   * check reports an unacknowledged error. Only the off→on transition — a
+   * tenant already live keeps running and may save its other settings, because
+   * a provider archived on a Friday must not silently remove the product's
+   * main feature.
+   */
+  private async assertMayEnable(tenantId: string): Promise<void> {
+    const current = await this.prisma.tenantAssistantSettings.findUnique({
+      where: { tenantId },
+      select: { enabled: true },
+    });
+    if (current?.enabled) return;
+    const health = await knowledgeHealth(this.prisma, tenantId);
+    if (health.errors === 0) return;
+    throw new ConflictError(
+      ErrorCodes.KNOWLEDGE_HAS_ERRORS,
+      health.errors === 1
+        ? "The assistant's knowledge has 1 unresolved error. Fix it or mark it as intended first."
+        : `The assistant's knowledge has ${String(health.errors)} unresolved errors. Fix them or mark them as intended first.`,
+      { errors: health.errors },
+    );
+  }
+
   listFaqs(tenantId: string): Promise<AssistantFaqRow[]> {
     return this.prisma.tenantAssistantFaq.findMany({
       where: { tenantId },

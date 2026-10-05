@@ -94,6 +94,8 @@ export function buildSystemPrompt(input: InterpretationInput): string {
     "  Return ANSWER_FAQ with a concise parameters.answer in the customer's language,",
     "  using only those provider names. Never add names from <business-description>",
     "  or conversation history, even when those sources disagree.",
+    "  People <bookable-facts> lists as named but not bookable may be described if asked",
+    "  about by name; never list them as providers or offer them for booking.",
     "  Do not infer specialties or claim that a provider is on duty or has free slots.",
     "  If no providers are listed, say no current bookable providers are listed and",
     "  suggest contacting the practice; do not fall back to profile staff names.",

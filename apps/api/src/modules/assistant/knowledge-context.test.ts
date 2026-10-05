@@ -73,6 +73,15 @@ describe("renderBookableFacts", () => {
     expect(facts).toContain("Cancellation policy: not recorded");
   });
 
+  it("lists people the owner confirmed are named but not bookable, apart from providers", () => {
+    const facts = renderBookableFacts({ ...wellness, namedNotBookable: ["Kocsis Zoltán"] }, "hu");
+    const people = facts.indexOf("cannot be booked (confirmed by the business");
+
+    expect(people).toBeGreaterThan(facts.indexOf("Bookable providers"));
+    expect(facts.slice(people)).toContain("- Kocsis Zoltán");
+    expect(renderBookableFacts(wellness, "hu")).not.toContain("confirmed by the business");
+  });
+
   it("uses the customer's locale for a translated service name", () => {
     const facts = renderBookableFacts(
       {

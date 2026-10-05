@@ -13,12 +13,13 @@ import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { ListLoading } from "./ui/loading";
 import { Textarea } from "./ui/textarea";
 
-export const knowledgeHealthKey = (tenantId: string) => ["knowledge-health", tenantId];
+export const knowledgeHealthKey = (tenantId: string | undefined) => ["knowledge-health", tenantId];
 
-export function useKnowledgeHealth(tenantId: string) {
+export function useKnowledgeHealth(tenantId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: knowledgeHealthKey(tenantId),
     queryFn: () => apiFetch<KnowledgeHealth>("/v1/assistant/knowledge/health", { tenantId }),
+    enabled: Boolean(tenantId) && enabled,
   });
 }
 
@@ -30,6 +31,14 @@ const LANGUAGE_KEYS: Record<string, "hungarian" | "english" | "german" | "french
 };
 
 const RULES = ["K1", "K2", "K3", "K4", "K5", "K6", "K7", "K8"] as const;
+
+/** Codes whose message already quotes the excerpt, so no separate quotation. */
+const OWN_EXCERPT: string[] = [
+  "UNBOOKABLE_SERVICE_MENTIONED",
+  "PERSON_NOT_A_PROVIDER",
+  "PERSONAL_DATA",
+  "PROVIDER_WITHOUT_HOURS",
+];
 
 /** The screen that fixes a finding, when it is not the text on this page. */
 function fixHref(finding: KnowledgeFindingView): string | null {
@@ -54,11 +63,38 @@ function fixHref(finding: KnowledgeFindingView): string | null {
  * Where the company profile, service descriptions and FAQs contradict the
  * records the assistant treats as authoritative (phase-12 §5.1).
  */
-export function KnowledgeHealthCard({ tenantId }: { tenantId: string }) {
+export function KnowledgeHealthCard({
+  tenantId,
+  canManage,
+}: {
+  tenantId: string;
+  canManage: boolean;
+}) {
   const t = useTranslations("knowledgeHealth");
   const uiLocale = useLocale();
   const languages = useTranslations("businessKnowledge");
+  const client = useQueryClient();
   const health = useKnowledgeHealth(tenantId);
+  // Both answer with the recomputed health, so the list and the enable gate
+  // agree without a second request (phase-12 §3.3).
+  const settle = (next: KnowledgeHealth) => client.setQueryData(knowledgeHealthKey(tenantId), next);
+  const acknowledge = useMutation({
+    mutationFn: (key: string) =>
+      apiFetch<KnowledgeHealth>("/v1/assistant/knowledge/acknowledgements", {
+        method: "POST",
+        tenantId,
+        body: { key },
+      }),
+    onSuccess: settle,
+  });
+  const undo = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<KnowledgeHealth>(`/v1/assistant/knowledge/acknowledgements/${id}`, {
+        method: "DELETE",
+        tenantId,
+      }),
+    onSuccess: settle,
+  });
   const language = (locale: string | null) =>
     locale && LANGUAGE_KEYS[locale] ? languages(LANGUAGE_KEYS[locale]) : (locale ?? "");
 
@@ -96,6 +132,70 @@ export function KnowledgeHealthCard({ tenantId }: { tenantId: string }) {
     }
   };
 
+  const open = health.data?.findings.filter((entry) => entry.acknowledgementId === null) ?? [];
+  const intended = health.data?.findings.filter((entry) => entry.acknowledgementId !== null) ?? [];
+  const busy = acknowledge.isPending || undo.isPending;
+
+  const item = (finding: KnowledgeFindingView) => {
+    const href = fixHref(finding);
+    const isIntended = finding.acknowledgementId !== null;
+    return (
+      <li
+        key={finding.key}
+        className={`grid gap-1 rounded-lg border border-line p-3 ${isIntended ? "text-ink-muted" : ""}`}
+      >
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+          <Badge
+            variant={
+              isIntended ? "outline" : finding.severity === "ERROR" ? "destructive" : "warning"
+            }
+          >
+            {isIntended
+              ? t("intended_badge")
+              : finding.severity === "ERROR"
+                ? t("error_badge")
+                : t("warning_badge")}
+          </Badge>
+          <span>{source(finding)}</span>
+          {finding.rule ? <span>· {t(`rules.${finding.rule}.title`)}</span> : null}
+        </div>
+        <p>{message(finding)}</p>
+        {finding.code === "PERSON_NOT_A_PROVIDER" && finding.suggestion ? (
+          <p className="text-sm text-ink-muted">
+            {t("didYouMean", { suggestion: finding.suggestion })}
+          </p>
+        ) : null}
+        {finding.excerpt && !OWN_EXCERPT.includes(finding.code) ? (
+          <blockquote className="border-l-2 border-line pl-3 text-sm text-ink-muted">
+            {finding.excerpt}
+          </blockquote>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {href && !isIntended ? (
+            <Link href={href} className="text-sm underline underline-offset-4">
+              {t("fix")}
+            </Link>
+          ) : null}
+          {canManage ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                isIntended
+                  ? undo.mutate(finding.acknowledgementId!)
+                  : acknowledge.mutate(finding.key)
+              }
+            >
+              {isIntended ? t("undoIntended") : t("markIntended")}
+            </Button>
+          ) : null}
+        </div>
+      </li>
+    );
+  };
+
   return (
     <Card id="knowledge-health" className="lg:col-span-2">
       <CardHeader>
@@ -108,52 +208,22 @@ export function KnowledgeHealthCard({ tenantId }: { tenantId: string }) {
         {health.data ? (
           <>
             <p aria-live="polite" className="font-semibold">
-              {health.data.findings.length === 0
-                ? t("clean")
-                : t("summary", { errors: health.data.errors, warnings: health.data.warnings })}
+              {open.length > 0
+                ? t("summary", { errors: health.data.errors, warnings: health.data.warnings })
+                : intended.length > 0
+                  ? t("allIntended")
+                  : t("clean")}
             </p>
-            {health.data.findings.length > 0 ? (
-              <ul className="grid gap-2">
-                {health.data.findings.map((finding, index) => {
-                  const href = fixHref(finding);
-                  return (
-                    <li
-                      key={`${finding.code}-${finding.source.kind}-${finding.source.id ?? ""}-${finding.source.locale ?? ""}-${index}`}
-                      className="grid gap-1 rounded-lg border border-line p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                        <Badge variant={finding.severity === "ERROR" ? "destructive" : "warning"}>
-                          {finding.severity === "ERROR" ? t("error_badge") : t("warning_badge")}
-                        </Badge>
-                        <span>{source(finding)}</span>
-                        {finding.rule ? <span>· {t(`rules.${finding.rule}.title`)}</span> : null}
-                      </div>
-                      <p>{message(finding)}</p>
-                      {finding.code === "PERSON_NOT_A_PROVIDER" && finding.suggestion ? (
-                        <p className="text-sm text-ink-muted">
-                          {t("didYouMean", { suggestion: finding.suggestion })}
-                        </p>
-                      ) : null}
-                      {finding.excerpt &&
-                      ![
-                        "UNBOOKABLE_SERVICE_MENTIONED",
-                        "PERSON_NOT_A_PROVIDER",
-                        "PERSONAL_DATA",
-                        "PROVIDER_WITHOUT_HOURS",
-                      ].includes(finding.code) ? (
-                        <blockquote className="border-l-2 border-line pl-3 text-sm text-ink-muted">
-                          {finding.excerpt}
-                        </blockquote>
-                      ) : null}
-                      {href ? (
-                        <Link href={href} className="text-sm underline underline-offset-4">
-                          {t("fix")}
-                        </Link>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+            {acknowledge.isError || undo.isError ? <ErrorText>{t("error")}</ErrorText> : null}
+            {open.length > 0 ? <ul className="grid gap-2">{open.map(item)}</ul> : null}
+            {intended.length > 0 ? (
+              <details className="rounded-lg border border-line p-3">
+                <summary className="cursor-pointer font-semibold">
+                  {t("intendedTitle", { count: intended.length })}
+                </summary>
+                <p className="mt-2 text-sm text-ink-muted">{t("intendedHint")}</p>
+                <ul className="mt-2 grid gap-2">{intended.map(item)}</ul>
+              </details>
             ) : null}
           </>
         ) : null}

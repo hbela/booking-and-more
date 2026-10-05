@@ -208,8 +208,10 @@ bite: **Radix returns focus to a `Trigger`, and every dialog here is opened from
 `AlertDialogContent` remembers its opener (§3.7); and **Radix unmounts inactive tabs**, so a tab holding
 unsaved state must be `forceMount`ed (§3.8) ·
 [Phase 12 — assistant knowledge consistency](docs/phase-12-assistant-knowledge-consistency.md) (**in progress**:
-parts 1–2 of 5 built — the facts/description split and routing, and the consistency check on Overview;
-acknowledgements, the enable gate, the model audit and translation drafts are not). The receptionist reads the free-text company profile, service descriptions and FAQs as one
+parts 1–3 of 5 built — the facts/description split and routing, the consistency check on Overview,
+acknowledgements and the enable gate; the model audit, translation drafts, grounding flags and the eval
+are not). **Switching the assistant on is refused (`KNOWLEDGE_HAS_ERRORS`) while an unacknowledged error
+remains — only the off→on transition; a live tenant is never switched off by a finding.** The receptionist reads the free-text company profile, service descriptions and FAQs as one
 block beside the catalogue, with no rule for which wins — so a profile listing treatments that cannot be
 booked gets them offered. **Read its §2.1 before adding anything to the assistant's context**: every kind of
 fact has one authoritative source, and free text may explain a structured fact but never add or override one.
