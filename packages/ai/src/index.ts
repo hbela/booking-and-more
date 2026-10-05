@@ -21,6 +21,22 @@ export {
 export type { AnthropicConfig } from "./client.js";
 
 export { AnthropicIntentInterpreter } from "./interpreter.js";
+export {
+  AnthropicKnowledgeAssistant,
+  buildAuditPrompt,
+  buildTranslatePrompt,
+  FakeKnowledgeAssistant,
+  parseFindings,
+  parseItems,
+} from "./knowledge.js";
+export type {
+  AuditFindingDraft,
+  AuditInput,
+  AuditText,
+  KnowledgeAssistant,
+  TranslateInput,
+  TranslationItem,
+} from "./knowledge.js";
 export { DisabledTranscriptionProvider } from "./transcription.js";
 export { TemplateResponseComposer } from "./composer.js";
 

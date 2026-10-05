@@ -739,7 +739,19 @@
     "addFaq": "Add FAQ",
     "delete": "Delete",
     "empty": "No frequently asked questions yet.",
-    "findings": "{count, plural, one {# problem in this text} other {# problems in this text}} — see the knowledge check"
+    "findings": "{count, plural, one {# problem in this text} other {# problems in this text}} — see the knowledge check",
+    "draft": {
+      "profile": "Draft from {language}",
+      "running": "Translating…",
+      "marker": "Machine-translated from {language}. Review it before saving — nothing is saved until you do.",
+      "overwrite": "Replace the current {language} text with a machine translation?",
+      "replace": "Replace",
+      "faqTitle": "Translate the {language} FAQs",
+      "faqTarget": "Into",
+      "faqRun": "Draft translations",
+      "add": "Add",
+      "discard": "Discard"
+    }
   },
   "pwa": {
     "install": "Install app",
@@ -843,6 +855,17 @@
     "intended_badge": "Intended",
     "allIntended": "No open problems. Everything reported is marked as intended.",
     "intendedTitle": "{count, plural, one {# marked as intended} other {# marked as intended}}",
-    "intendedHint": "These no longer count as errors and do not block the assistant. Rewording the text brings a finding back, because what you approved was that wording."
+    "intendedHint": "These no longer count as errors and do not block the assistant. Rewording the text brings a finding back, because what you approved was that wording.",
+    "ai": {
+      "title": "AI review",
+      "hint": "Asks the AI to read your texts against your records and point out claims the checks above cannot understand. Advisory: it never blocks the assistant. Uses your AI allowance; running it again on unchanged texts is free.",
+      "run": "Review with AI",
+      "running": "Reviewing…",
+      "none": "The AI found nothing that contradicts your records.",
+      "found": "{count, plural, one {The AI found # point to review.} other {The AI found # points to review.}}",
+      "discarded": "{count, plural, one {# suggestion was dropped because it quoted text that is not in your texts.} other {# suggestions were dropped because they quoted text that is not in your texts.}}",
+      "quota": "This month's AI allowance has been used. It renews at the start of next month.",
+      "unavailable": "The AI is not available right now. Please try again later."
+    }
   }
 }

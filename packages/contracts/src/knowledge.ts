@@ -69,3 +69,44 @@ export type KnowledgeHealth = z.infer<typeof knowledgeHealthSchema>;
 export const acknowledgeKnowledgeFindingSchema = z.object({
   key: z.string().min(1).max(2_000),
 });
+
+/**
+ * phase-12 §3.2: the model-assisted audit. Advisory — never counted by the
+ * enable gate, never acknowledged. Each excerpt has been verified to occur in
+ * the text it names; `discarded` says how many the model invented.
+ */
+export const knowledgeAuditRequestSchema = z.object({
+  /** The language the owner reads; explanations come back in it. */
+  locale: languageSchema,
+});
+export const knowledgeAuditSchema = z.object({
+  findings: z.array(
+    z.object({
+      severity: z.enum(["ERROR", "WARNING"]),
+      source: knowledgeFindingSchema.shape.source,
+      excerpt: z.string(),
+      explanation: z.string(),
+    }),
+  ),
+  discarded: z.number().int(),
+  /** True when an identical snapshot was audited before and nothing was spent. */
+  cached: z.boolean(),
+});
+export type KnowledgeAudit = z.infer<typeof knowledgeAuditSchema>;
+
+/**
+ * phase-12 §8.4: a machine translation of the default-language profile or FAQs.
+ * A draft — nothing is saved; the owner reviews and saves it like any edit.
+ */
+export const translationDraftRequestSchema = z.object({
+  target: languageSchema,
+  kind: z.enum(["PROFILE", "FAQ"]),
+});
+export const translationDraftSchema = z.object({
+  source: languageSchema,
+  target: languageSchema,
+  kind: z.enum(["PROFILE", "FAQ"]),
+  profile: z.string().nullable(),
+  faqs: z.array(z.object({ sourceId: z.string(), question: z.string(), answer: z.string() })),
+});
+export type TranslationDraft = z.infer<typeof translationDraftSchema>;

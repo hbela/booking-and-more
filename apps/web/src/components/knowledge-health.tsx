@@ -3,8 +3,8 @@
 import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import type { KnowledgeFindingView, KnowledgeHealth } from "@bam/contracts";
-import { apiFetch } from "@/lib/api-client";
+import type { KnowledgeAudit, KnowledgeFindingView, KnowledgeHealth } from "@bam/contracts";
+import { ApiError, apiFetch } from "@/lib/api-client";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -12,6 +12,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { ErrorText, FormField, TextField } from "./ui/form-field";
 import { ListLoading } from "./ui/loading";
 import { Textarea } from "./ui/textarea";
+
+/**
+ * The message for a failed paid model call (phase-12 part 4): the allowance,
+ * the provider, or anything else.
+ */
+export function aiErrorKey(error: unknown): "ai.quota" | "ai.unavailable" | "error" {
+  if (error instanceof ApiError && error.code === "USAGE_QUOTA_EXCEEDED") return "ai.quota";
+  if (error instanceof ApiError && error.code === "CONVERSATION_UNAVAILABLE")
+    return "ai.unavailable";
+  return "error";
+}
 
 export const knowledgeHealthKey = (tenantId: string | undefined) => ["knowledge-health", tenantId];
 
@@ -114,7 +125,7 @@ export function KnowledgeHealthCard({
       : t(`codes.${finding.code}`, values);
   };
 
-  const source = (finding: KnowledgeFindingView) => {
+  const source = (finding: Pick<KnowledgeFindingView, "source">) => {
     const lang = language(finding.source.locale);
     switch (finding.source.kind) {
       case "PROFILE":
@@ -135,6 +146,15 @@ export function KnowledgeHealthCard({
   const open = health.data?.findings.filter((entry) => entry.acknowledgementId === null) ?? [];
   const intended = health.data?.findings.filter((entry) => entry.acknowledgementId !== null) ?? [];
   const busy = acknowledge.isPending || undo.isPending;
+  // phase-12 §3.2: advisory, paid, owner-triggered; never counted by the gate.
+  const audit = useMutation({
+    mutationFn: () =>
+      apiFetch<KnowledgeAudit>("/v1/assistant/knowledge/audit", {
+        method: "POST",
+        tenantId,
+        body: { locale: uiLocale },
+      }),
+  });
 
   const item = (finding: KnowledgeFindingView) => {
     const href = fixHref(finding);
@@ -226,6 +246,61 @@ export function KnowledgeHealthCard({
               </details>
             ) : null}
           </>
+        ) : null}
+        {canManage ? (
+          <section className="grid gap-2 rounded-lg border border-line p-3" aria-live="polite">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="font-semibold">{t("ai.title")}</h3>
+                <p className="text-sm text-ink-muted">{t("ai.hint")}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={audit.isPending}
+                onClick={() => audit.mutate()}
+              >
+                {audit.isPending ? t("ai.running") : t("ai.run")}
+              </Button>
+            </div>
+            {audit.isError ? <ErrorText>{t(aiErrorKey(audit.error))}</ErrorText> : null}
+            {audit.data ? (
+              <>
+                <p className="text-sm font-semibold">
+                  {audit.data.findings.length === 0
+                    ? t("ai.none")
+                    : t("ai.found", { count: audit.data.findings.length })}
+                </p>
+                {audit.data.findings.length > 0 ? (
+                  <ul className="grid gap-2">
+                    {audit.data.findings.map((finding, index) => (
+                      <li
+                        key={`${finding.source.kind}-${finding.source.id ?? ""}-${index}`}
+                        className="grid gap-1 rounded-lg border border-line p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                          <Badge variant={finding.severity === "ERROR" ? "destructive" : "warning"}>
+                            {finding.severity === "ERROR" ? t("error_badge") : t("warning_badge")}
+                          </Badge>
+                          <span>{source(finding)}</span>
+                        </div>
+                        <blockquote className="border-l-2 border-line pl-3 text-sm text-ink-muted">
+                          {finding.excerpt}
+                        </blockquote>
+                        <p>{finding.explanation}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {audit.data.discarded > 0 ? (
+                  <p className="text-xs text-ink-muted">
+                    {t("ai.discarded", { count: audit.data.discarded })}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+          </section>
         ) : null}
         <details className="rounded-lg border border-line p-3">
           <summary className="cursor-pointer font-semibold">{t("rulesTitle")}</summary>

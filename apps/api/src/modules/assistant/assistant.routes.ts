@@ -1,10 +1,15 @@
 import { Permissions } from "@bam/auth";
+import type { KnowledgeAssistant } from "@bam/ai";
 import {
   acknowledgeKnowledgeFindingSchema,
   commonErrorResponses,
   idSchema,
+  knowledgeAuditRequestSchema,
+  knowledgeAuditSchema,
   knowledgeHealthSchema,
   languageSchema,
+  translationDraftRequestSchema,
+  translationDraftSchema,
 } from "@bam/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -19,10 +24,25 @@ import {
   conversationStatsSchema,
 } from "./assistant.schemas.js";
 import { AssistantService } from "./assistant.service.js";
+import { KnowledgeAiService, type KnowledgeAiLimits } from "./knowledge-ai.service.js";
 import { acknowledgeFinding, knowledgeHealth, removeAcknowledgement } from "./knowledge-health.js";
 
-export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
+export interface AssistantRouteOptions {
+  /** phase-12 part 4. Anthropic in production, a scripted fake in tests. */
+  knowledgeAssistant: KnowledgeAssistant;
+  knowledgeAiLimits: KnowledgeAiLimits;
+}
+
+export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = async (
+  app,
+  options,
+) => {
   const service = new AssistantService(app.prisma);
+  const knowledgeAi = new KnowledgeAiService(
+    app.prisma,
+    options.knowledgeAssistant,
+    options.knowledgeAiLimits,
+  );
   const entitled = async (request: { tenant?: { id: string } }) =>
     service.assertEntitled(request.tenant!.id);
   const manage = [
@@ -128,6 +148,54 @@ export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
         after: { code: row.code },
       });
       return reply.status(201).send(await knowledgeHealth(app.prisma, tenantId));
+    },
+  );
+
+  // phase-12 §3.2 and §8.4: paid, owner-triggered model calls. Both are reads of
+  // tenant data as far as the database is concerned, but they spend the AI
+  // allowance, so they take the `manage` guard rather than `read`.
+  app.post(
+    "/knowledge/audit",
+    {
+      preHandler: manage,
+      schema: {
+        tags: ["assistant"],
+        body: knowledgeAuditRequestSchema,
+        response: { 200: knowledgeAuditSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const result = await knowledgeAi.audit(request.tenant!.id, request.body.locale);
+      if (!result.cached)
+        request.audit({
+          action: "assistant.knowledge.audited",
+          entityType: "Tenant",
+          entityId: request.tenant!.id,
+          after: { findings: result.findings.length, discarded: result.discarded },
+        });
+      return result;
+    },
+  );
+
+  app.post(
+    "/knowledge/translation-draft",
+    {
+      preHandler: manage,
+      schema: {
+        tags: ["assistant"],
+        body: translationDraftRequestSchema,
+        response: { 200: translationDraftSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const draft = await knowledgeAi.translationDraft(request.tenant!.id, request.body);
+      request.audit({
+        action: "assistant.knowledge.translation_drafted",
+        entityType: "Tenant",
+        entityId: request.tenant!.id,
+        after: { kind: draft.kind, target: draft.target },
+      });
+      return draft;
     },
   );
 

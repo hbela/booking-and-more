@@ -264,4 +264,145 @@ for (const locale of ["en", "hu"] as const) {
       }),
     ).toHaveAttribute("href", /\/dashboard#knowledge-health$/);
   });
+
+  test(`${locale}: the AI review shows verified points and explains a used-up allowance`, async ({
+    page,
+  }) => {
+    let audits = 0;
+    await mockApi(page, async (route, path, method) => {
+      if (path !== "/v1/assistant/knowledge/audit" || method !== "POST") return false;
+      audits += 1;
+      expect(route.request().postDataJSON()).toEqual({ locale });
+      await route.fulfill(
+        audits === 1
+          ? {
+              json: {
+                findings: [
+                  {
+                    severity: "ERROR",
+                    source: { kind: "PROFILE", id: null, name: null, locale: "hu" },
+                    excerpt: "- Fogszabályozás",
+                    explanation: "Csak a Konzultáció foglalható.",
+                  },
+                ],
+                discarded: 1,
+                cached: false,
+              },
+            }
+          : {
+              status: 429,
+              json: {
+                error: {
+                  code: "USAGE_QUOTA_EXCEEDED",
+                  message: "Used.",
+                  requestId: "r",
+                  details: null,
+                },
+              },
+            },
+      );
+      return true;
+    });
+
+    await page.goto(`/${locale}/dashboard`);
+    const card = page.locator("#knowledge-health");
+    const run = card.getByRole("button", { name: en ? "Review with AI" : "Ellenőrzés MI-vel" });
+
+    await run.click();
+    await expect(card.getByText("Csak a Konzultáció foglalható.")).toBeVisible();
+    await expect(
+      card.getByText(en ? /1 suggestion was dropped/ : /1 javaslatot elvetettünk/),
+    ).toBeVisible();
+
+    await run.click();
+    await expect(
+      card.getByText(en ? /AI allowance has been used/ : /MI-keret elfogyott/),
+    ).toBeVisible();
+  });
+
+  test(`${locale}: translation drafts fill the editor or the FAQ list and save nothing by themselves`, async ({
+    page,
+  }) => {
+    const created: unknown[] = [];
+    await mockApi(page, async (route, path, method) => {
+      if (path === "/v1/assistant/knowledge/translation-draft" && method === "POST") {
+        const body = route.request().postDataJSON() as { target: string; kind: string };
+        await route.fulfill({
+          json: {
+            source: "hu",
+            target: body.target,
+            kind: body.kind,
+            profile: body.kind === "PROFILE" ? `[${body.target}] Our services` : null,
+            faqs:
+              body.kind === "FAQ"
+                ? [{ sourceId: "faq_1", question: "Is there parking?", answer: "Yes." }]
+                : [],
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/assistant/faqs" && method === "POST") {
+        created.push(route.request().postDataJSON());
+        await route.fulfill({ status: 201, json: { id: "faq_2" } });
+        return true;
+      }
+      if (path === "/v1/assistant/faqs") {
+        await route.fulfill({
+          json: {
+            items: [{ id: "faq_1", locale: "hu", question: "Van parkoló?", answer: "Igen." }],
+          },
+        });
+        return true;
+      }
+      return false;
+    });
+
+    await page.goto(`/${locale}/dashboard`);
+    // An empty field is filled straight away, and marked as a draft.
+    await page
+      .locator("div")
+      .filter({ has: page.locator('textarea[name="description-en"]') })
+      .last()
+      .getByRole("button", { name: en ? "Draft from Hungarian" : "Fordítás a(z) magyar szövegből" })
+      .click();
+    const english = page.locator('textarea[name="description-en"]');
+    await expect(english).toHaveValue("[en] Our services");
+    const marker = page.getByText(
+      en ? /Machine-translated from Hungarian/ : /Gépi fordítás a\(z\) magyar/,
+    );
+    await expect(marker.first()).toBeVisible();
+    // Typing makes it the owner's text.
+    await english.press("End");
+    await english.pressSequentially(".");
+    await expect(marker).toHaveCount(0);
+
+    // A field with text asks first.
+    const german = page.locator('textarea[name="description-de"]');
+    await german.fill("Eigener Text");
+    await page
+      .locator("div")
+      .filter({ has: german })
+      .last()
+      .getByRole("button", { name: en ? "Draft from Hungarian" : "Fordítás a(z) magyar szövegből" })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: en ? "Replace" : "Csere" })
+      .click();
+    await expect(german).toHaveValue("[de] Our services");
+
+    // FAQs come back as a list to add one by one.
+    await page
+      .getByRole("button", { name: en ? "Draft translations" : "Fordítások készítése" })
+      .click();
+    await expect(page.getByText("Is there parking?")).toBeVisible();
+    await page.getByRole("button", { name: en ? "Add" : "Hozzáadás", exact: true }).click();
+    await expect
+      .poll(() => created)
+      .toEqual([
+        { locale: "en", question: "Is there parking?", answer: "Yes.", active: true, sortOrder: 0 },
+      ]);
+    await expect(page.getByText("Is there parking?")).toHaveCount(0);
+    await page.screenshot({ path: `test-results/knowledge-drafts-${locale}.png`, fullPage: true });
+  });
 }

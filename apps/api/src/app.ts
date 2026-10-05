@@ -20,9 +20,11 @@ import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
 import { type Env } from "@bam/config";
 import {
   AnthropicIntentInterpreter,
+  AnthropicKnowledgeAssistant,
   DisabledTranscriptionProvider,
   TemplateResponseComposer,
   type AiProviders,
+  type KnowledgeAssistant,
 } from "@bam/ai";
 // PARKED — Epic 6 part 1 (see the block near "Calendar integrations" below).
 // import { hasGoogleCalendar } from "@bam/config";
@@ -135,6 +137,8 @@ export interface BuildAppOptions {
   googleCalendarClient?: GoogleCalendarClient;
   /** Test seam: deterministic model providers with no network or bill. */
   aiProviders?: AiProviders;
+  /** Test seam: the knowledge audit and translation drafts (phase-12 part 4). */
+  knowledgeAssistant?: KnowledgeAssistant;
 }
 
 /**
@@ -525,7 +529,24 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
     configured: options.aiProviders !== undefined || Boolean(env.ANTHROPIC_API_KEY),
   });
 
-  await app.register(assistantRoutes, { prefix: "/v1/assistant" });
+  await app.register(assistantRoutes, {
+    prefix: "/v1/assistant",
+    // Constructed eagerly, connected lazily: with no ANTHROPIC_API_KEY both
+    // calls answer 503 and every other assistant route works (rule 4).
+    knowledgeAssistant:
+      options.knowledgeAssistant ??
+      new AnthropicKnowledgeAssistant({
+        apiKey: env.ANTHROPIC_API_KEY,
+        chatModel: env.ANTHROPIC_CHAT_MODEL,
+        maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
+      }),
+    knowledgeAiLimits: {
+      professionalMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL,
+      plusMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS,
+      maxInputTokens: env.CHAT_MAX_INPUT_TOKENS_PER_CONVERSATION,
+      maxConversationOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS_PER_CONVERSATION,
+    },
+  });
 
   return app;
 }

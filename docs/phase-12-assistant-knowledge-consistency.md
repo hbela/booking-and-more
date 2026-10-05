@@ -7,8 +7,8 @@ treatments nobody can book is a defect in the product, not a content problem of 
 
 ## Implementation Plan
 
-**Document version:** 0.5 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts
-1–3 are built** (§7.1–§7.3); parts 4–5 are not.
+**Document version:** 0.6 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts
+1–4 are built** (§7.1–§7.4); part 5 is not.
 **Scope:** (1) a written rule for which source is authoritative for each kind of fact the assistant
 states; (2) a verification mechanism that finds where the company profile, service descriptions and
 FAQs contradict the structured records, and shows it to the owner; (3) runtime changes so the
@@ -157,7 +157,8 @@ claim. That is what layer 2 is for.
 
 ## 3.2 Layer 2 — model-assisted audit (on demand, owner-triggered)
 
-A "Check consistency" action on the knowledge screen. One model call, `temperature: 0`, with:
+A "Check consistency" action on the knowledge screen. One model call (not `temperature: 0`; see
+§4.4. It is built as described otherwise, in §7.4), with:
 
 - the structured snapshot rendered as authoritative facts,
 - the texts fenced exactly as the receptionist fences them,
@@ -411,6 +412,58 @@ flags).
     back;
   - web: 339 unit tests and all 76 e2e tests, 6 of them in `knowledge-health.spec.ts`;
   - lint clean, drift check clean.
+
+## 7.4 Part 4 — as built (2026-10-05)
+
+- **`@bam/ai` `knowledge.ts`** adds a `KnowledgeAssistant` interface with an Anthropic implementation
+  and a scripted `FakeKnowledgeAssistant`. It has two calls, each with a token count for reserving
+  quota beforehand:
+  - `audit`: records in `<records>`, each text in its own `<text ref>`, explanations in the
+    owner's language;
+  - `translate`: one `<item>` per piece, formatting, names, prices and contacts kept as written.
+
+  Both force a tool schema, and the caller parses the result again. A `max_tokens` stop or a
+  missing tool call is a failure, never "nothing found". Tenant text cannot open or close a block,
+  and a test covers forged `</records>` and `<text>` tags.
+- **`KnowledgeAiService`:**
+  - Both calls go through the chat's sequence: count, reserve with 10% headroom, call, reconcile.
+    They are measured against the **same monthly ceilings** the chat uses, so the owner spends the
+    same allowance the customers do, not a second one. A provider failure settles the whole
+    reservation, because the provider may have charged for it.
+  - **Audit:** `POST /v1/assistant/knowledge/audit { locale }`. It reads the same snapshot as the
+    check (`knowledgeSnapshot`, split out of `knowledgeHealth`) and the same `<bookable-facts>` the
+    receptionist reads. An excerpt that does not occur in its text, ignoring whitespace, is
+    discarded and counted in `discarded`, which the screen shows.
+  - **Audit cache:** keyed by a hash of the whole input, in process memory, with at most 200
+    entries. **This amends §3.2's "cached" toward the cheap side:** a restart costs one more call,
+    and an entry cannot go stale because its key is its content. A table was not worth a migration
+    for that.
+  - **Translation draft:** `POST /v1/assistant/knowledge/translation-draft { target, kind }`
+    translates the default-language profile or its active FAQs. It is all or nothing: a draft
+    missing a piece is a 503, because an owner who did not notice would save it half done. It is
+    422 when the target is the default language or there is nothing to translate. **Nothing is
+    written.**
+  - Both use the `manage` guard because they spend money, and both write an audit entry. A cached
+    audit does not, since it spends nothing.
+- **Web:**
+  - an "AI review" block in the knowledge check, with verified points, the discarded count and a
+    used-up allowance stated plainly;
+  - a "Draft from {default language}" button under each other profile field. It asks before
+    replacing text that is already there, and the field carries a "machine-translated, review
+    before saving" note until the owner types in it;
+  - a FAQ block that drafts a language's FAQs as a list to Add or Discard one by one.
+
+  The profile fields were restructured so the buttons and notes sit **outside** each `<label>`.
+  Before this, the findings link was inside it and so part of the textarea's accessible name.
+- **Verified:**
+  - `@bam/ai`: 22 tests;
+  - API: 464 passed / 34 skipped, including `knowledge-ai.test.ts` through `buildApp` with the fake:
+    cache, invented excerpts, no write from a draft, the all-or-nothing rule, quota refusal before
+    any call, settlement on provider failure, and 403 on a plan without the assistant;
+  - web: 339 unit tests and all 80 e2e tests, 10 in `knowledge-health.spec.ts`;
+  - lint and the drift check clean.
+
+  **Not run against the real model.** The prompts are untested on Anthropic, as Part 1's are.
 
 Part 1 should be measured with §6's script before and after, so the eval script's harness may be
 pulled forward into part 1 even though its full question set lands in part 5.

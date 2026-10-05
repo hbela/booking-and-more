@@ -16,18 +16,11 @@ const PROFILE_FIELDS = {
   fr: "businessDescriptionFr",
 } as const;
 
-/**
- * Where the tenant's prose contradicts its records (phase-12 §3.1, §5.1).
- *
- * Loads exactly what the assistant is given — the bookable catalogue through
- * `PublicCatalogueService`, active FAQs, every profile language — and lets
- * `@bam/knowledge-engine` judge it. Computed on every read, never cached:
- * archiving a provider makes a profile wrong without anybody saving it.
- */
-export async function knowledgeHealth(
+/** What the assistant is given, as plain values — the check's and the audit's input. */
+export async function knowledgeSnapshot(
   prisma: PrismaClient,
   tenantId: string,
-): Promise<KnowledgeHealth> {
+): Promise<KnowledgeSnapshot> {
   const catalogue = new PublicCatalogueService(prisma);
   const [tenant, settings, faqs, facts, locations] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
@@ -42,10 +35,6 @@ export async function knowledgeHealth(
     catalogue.bookableFacts(tenantId),
     catalogue.listLocations(tenantId),
   ]);
-  const acknowledgements = await prisma.knowledgeFindingAcknowledgement.findMany({
-    where: { tenantId },
-    select: { id: true, findingKey: true },
-  });
   const defaultLocale = tenant.defaultLanguage;
 
   const texts: KnowledgeText[] = [];
@@ -89,7 +78,7 @@ export async function knowledgeHealth(
   const usable = (row: (typeof facts.providers)[number]["workingHours"][number]) =>
     !row.location || (row.location.active && !row.location.archivedAt);
 
-  const snapshot: KnowledgeSnapshot = {
+  return {
     defaultLocale,
     supportedLocales: settings?.supportedLocales ?? [...languageSchema.options],
     services: facts.services.map((service) => ({
@@ -119,7 +108,27 @@ export async function knowledgeHealth(
     contactPhone: tenant.contactPhone,
     texts,
   };
+}
 
+/**
+ * Where the tenant's prose contradicts its records (phase-12 §3.1, §5.1).
+ *
+ * Loads exactly what the assistant is given — the bookable catalogue through
+ * `PublicCatalogueService`, active FAQs, every profile language — and lets
+ * `@bam/knowledge-engine` judge it. Computed on every read, never cached:
+ * archiving a provider makes a profile wrong without anybody saving it.
+ */
+export async function knowledgeHealth(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<KnowledgeHealth> {
+  const [snapshot, acknowledgements] = await Promise.all([
+    knowledgeSnapshot(prisma, tenantId),
+    prisma.knowledgeFindingAcknowledgement.findMany({
+      where: { tenantId },
+      select: { id: true, findingKey: true },
+    }),
+  ]);
   const acknowledged = new Map(acknowledgements.map((row) => [row.findingKey, row.id]));
   const findings = checkKnowledge(snapshot).map((finding) => {
     const key = findingKey(finding);
