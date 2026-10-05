@@ -294,6 +294,7 @@ export class ConversationService {
     });
     const collected = this.repo.collectedOf(session);
     const state = session.machineState as CustomerBookingState;
+    const knowledge = await this.assistant.knowledgeContext(tenant, session.locale);
     // Build history before appending this utterance: it must occur exactly once.
     const input = {
       utterance: text,
@@ -302,7 +303,8 @@ export class ConversationService {
       state,
       history: await this.recentTurns(tenant.id, session.id),
       catalogue: await this.tools.catalogueFor(tenant.id, session.locale),
-      businessContext: await this.assistant.knowledgeContext(tenant, session.locale),
+      bookableFacts: knowledge.bookableFacts,
+      businessContext: knowledge.businessDescription,
       timeoutMs: Math.max(1, Math.min(30_000, session.expiresAt.getTime() - Date.now())),
     };
     let counted: number;

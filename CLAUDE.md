@@ -206,7 +206,12 @@ time, which must be removed; and it offers to overwrite adapted components, whic
 phase 11 still stands: native selects, no edit dialogs — `AlertDialog` only replaced confirmations that were already modal. Two that
 bite: **Radix returns focus to a `Trigger`, and every dialog here is opened from code**, so the adapted
 `AlertDialogContent` remembers its opener (§3.7); and **Radix unmounts inactive tabs**, so a tab holding
-unsaved state must be `forceMount`ed (§3.8).
+unsaved state must be `forceMount`ed (§3.8) ·
+[Phase 12 — assistant knowledge consistency](docs/phase-12-assistant-knowledge-consistency.md) (**in progress**:
+part 1 of 5 built — the facts/description split and the routing; the consistency checker is not). The receptionist reads the free-text company profile, service descriptions and FAQs as one
+block beside the catalogue, with no rule for which wins — so a profile listing treatments that cannot be
+booked gets them offered. **Read its §2.1 before adding anything to the assistant's context**: every kind of
+fact has one authoritative source, and free text may explain a structured fact but never add or override one.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

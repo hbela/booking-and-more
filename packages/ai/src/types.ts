@@ -87,7 +87,14 @@ export interface InterpretationInput {
   /** Recent turns. Summarised rather than replayed whole (PRD §11). */
   history?: ConversationTurn[] | undefined;
   catalogue: InterpretationCatalogue;
-  /** Tenant-authored facts, already bounded and labelled as untrusted data. */
+  /**
+   * Facts rendered from the tenant's records — services, providers, locations,
+   * hours, contacts, policies. Authoritative for every kind of fact it covers
+   * (phase-12 §2.1). Still fenced as data: names in it are tenant-authored.
+   */
+  bookableFacts?: string | undefined;
+  /** Tenant-authored prose — profile, service descriptions, FAQs. Explains the
+   *  facts above; never adds or overrides one. */
   businessContext?: string | undefined;
 }
 

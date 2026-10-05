@@ -168,6 +168,67 @@ export class PublicCatalogueService {
     });
   }
 
+  /**
+   * What the AI receptionist may state as fact (phase-12 §2.1, §4.1): the bookable
+   * services with their terms and who performs them, and the bookable providers
+   * with their weekly hours. Same predicates as the lists above, so the assistant
+   * can never describe a service or a person the booking page would not offer.
+   *
+   * Weekly hours are not otherwise a public read, but every slot the booking page
+   * offers is derived from them, so stating the pattern discloses nothing the slot
+   * search does not.
+   */
+  async bookableFacts(tenantId: string) {
+    const [services, providers] = await Promise.all([
+      this.prisma.service.findMany({
+        where: {
+          tenantId,
+          active: true,
+          archivedAt: null,
+          providers: { some: { active: true, provider: bookableProvider } },
+        },
+        include: {
+          translations: true,
+          providers: {
+            where: { active: true, provider: bookableProvider },
+            select: {
+              customDurationMinutes: true,
+              customPriceMinor: true,
+              provider: { select: { displayName: true } },
+            },
+            orderBy: { provider: { displayName: "asc" } },
+          },
+        },
+        orderBy: [{ name: "asc" }, { id: "asc" }],
+        take: 50,
+      }),
+      this.prisma.provider.findMany({
+        where: {
+          tenantId,
+          ...bookableProvider,
+          services: { some: { active: true, service: { active: true, archivedAt: null } } },
+        },
+        select: {
+          displayName: true,
+          description: true,
+          languages: true,
+          workingHours: {
+            select: {
+              weekday: true,
+              startTime: true,
+              endTime: true,
+              location: { select: { name: true, active: true, archivedAt: true } },
+            },
+            orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          },
+        },
+        orderBy: [{ displayName: "asc" }, { id: "asc" }],
+        take: 50,
+      }),
+    ]);
+    return { services, providers };
+  }
+
   async findProvider(args: { tenantId: string; providerId: string }): Promise<Provider> {
     const provider = await this.prisma.provider.findFirst({
       where: {

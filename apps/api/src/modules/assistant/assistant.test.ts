@@ -112,13 +112,15 @@ describe("company profile translations", () => {
       tenantAssistantSettings: { findUnique: vi.fn().mockResolvedValue(profile) },
       tenantAssistantFaq: { findMany: vi.fn().mockResolvedValue([]) },
       service: { findMany: vi.fn().mockResolvedValue([]) },
+      provider: { findMany: vi.fn().mockResolvedValue([]) },
       location: { findMany: vi.fn().mockResolvedValue([]) },
     } as unknown as PrismaClient;
     const service = new AssistantService(prisma);
     const tenant = { id: "tenant-1", name: "Company", defaultLanguage: "hu" } as Tenant;
-    const context = await service.knowledgeContext(tenant, "en");
-    expect(context).toContain(profile.businessDescriptionEn);
-    expect(context).not.toContain(profile.businessDescriptionHu);
+    const { businessDescription } = await service.knowledgeContext(tenant, "en");
+    expect(businessDescription).toContain(profile.businessDescriptionEn);
+    expect(businessDescription).toContain("written in English");
+    expect(businessDescription).not.toContain(profile.businessDescriptionHu);
   });
 
   it("keeps the other language unchanged when saving a translation", async () => {
@@ -196,10 +198,12 @@ describe.skipIf(!databaseUrl)("stored company profile translations", () => {
         businessDescriptionDe: profile.businessDescriptionDe,
         businessDescriptionFr: profile.businessDescriptionFr,
       });
-      const hu = await service.knowledgeContext(tenant, "hu");
-      const en = await service.knowledgeContext(tenant, "en");
-      expect(en).toContain("Example street 12");
-      expect(hu).toContain("Example street 12");
+      const huContext = await service.knowledgeContext(tenant, "hu");
+      const enContext = await service.knowledgeContext(tenant, "en");
+      expect(enContext.bookableFacts).toContain("Example street 12");
+      expect(huContext.bookableFacts).toContain("Example street 12");
+      const hu = huContext.businessDescription;
+      const en = enContext.businessDescription;
       expect(hu).toContain(profile.businessDescriptionHu);
       expect(hu).not.toContain(profile.businessDescriptionEn);
       expect(en).toContain(profile.businessDescriptionEn);
@@ -215,17 +219,34 @@ describe.skipIf(!databaseUrl)("stored company profile translations", () => {
           active: true,
           sortOrder: 0,
         });
-        const context = await service.knowledgeContext(tenant, locale);
+        const context = (await service.knowledgeContext(tenant, locale)).businessDescription;
         expect(context).toContain(profile[field]);
         expect(context).not.toContain(profile.businessDescriptionHu);
         expect(context).not.toContain(profile.businessDescriptionEn);
         expect(context).toContain(`${locale} approved answer`);
-        expect(await service.knowledgeContext(tenant, "hu")).not.toContain(
+        expect((await service.knowledgeContext(tenant, "hu")).businessDescription).not.toContain(
           `${locale} approved answer`,
         );
       }
+      // phase-12 §4.3: a locale with no FAQs of its own gets the default
+      // locale's, labelled — before, an English customer got none at all.
+      await service.createFaq(tenant.id, {
+        locale: "hu",
+        question: "Van parkoló?",
+        answer: "hu approved answer",
+        active: true,
+        sortOrder: 0,
+      });
+      const enFallback = (await service.knowledgeContext(tenant, "en")).businessDescription;
+      expect(enFallback).toContain("FAQ (written in Hungarian)");
+      expect(enFallback).toContain("hu approved answer");
+      expect((await service.knowledgeContext(tenant, "de")).businessDescription).not.toContain(
+        "hu approved answer",
+      );
       await service.saveSettings(tenant.id, { businessDescriptionEn: null }, "hu");
-      expect(await service.knowledgeContext(tenant, "en")).toContain(profile.businessDescriptionHu);
+      expect((await service.knowledgeContext(tenant, "en")).businessDescription).toContain(
+        profile.businessDescriptionHu,
+      );
     } finally {
       await prisma.tenant.delete({ where: { id: tenant.id } });
       await prisma.$disconnect();

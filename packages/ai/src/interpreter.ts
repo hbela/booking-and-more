@@ -62,7 +62,8 @@ const PARAMETER_PROPERTIES: Record<string, { type: string[]; description?: strin
   reason: { type: ["string", "null"] },
   answer: {
     type: ["string", "null"],
-    description: "Only an answer grounded in the business facts block.",
+    description:
+      "Only an answer grounded in <bookable-facts>, or in <business-description> where it does not contradict them.",
   },
 };
 

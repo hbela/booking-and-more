@@ -15,6 +15,7 @@ import type {
   AssistantSettingsPatch,
 } from "./assistant.schemas.js";
 import { localiseService, PublicCatalogueService } from "../public/catalogue.service.js";
+import { renderBookableFacts, renderBusinessDescription } from "./knowledge-context.js";
 
 const PROFILE_FIELDS = {
   hu: "businessDescriptionHu",
@@ -95,53 +96,80 @@ export class AssistantService {
     }
   }
 
-  async knowledgeContext(tenant: Tenant, locale: string): Promise<string> {
-    const [settings, faqs, services, locations] = await Promise.all([
+  /**
+   * The assistant's two blocks (phase-12 §4.1): facts rendered from records,
+   * which win, and the tenant's prose, which explains. Both are fenced as
+   * untrusted data by the prompt.
+   */
+  async knowledgeContext(
+    tenant: Tenant,
+    locale: string,
+  ): Promise<{ bookableFacts: string; businessDescription: string }> {
+    const catalogue = new PublicCatalogueService(this.prisma);
+    const [settings, faqs, facts, locations] = await Promise.all([
       this.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: tenant.id } }),
+      this.faqsFor(tenant, locale),
+      catalogue.bookableFacts(tenant.id),
+      catalogue.listLocations(tenant.id),
+    ]);
+    const profile = localizedBusinessDescriptionWithLocale(
+      settings,
+      locale,
+      tenant.defaultLanguage,
+    );
+    return {
+      bookableFacts: [
+        `Business: ${tenant.name}`,
+        renderBookableFacts(
+          {
+            services: facts.services,
+            providers: facts.providers,
+            locations: locations.slice(0, 25),
+            contactEmail: tenant.contactEmail,
+            contactPhone: tenant.contactPhone,
+            bookingPolicy: tenant.bookingPolicy,
+            cancellationPolicy: tenant.cancellationPolicy,
+          },
+          locale,
+        ),
+      ].join("\n"),
+      businessDescription: renderBusinessDescription({
+        profile,
+        services: facts.services.flatMap((service) => {
+          const localized = localiseService(service, locale);
+          if (!localized.description) return [];
+          const translated = service.translations.some(
+            (entry) => entry.locale === locale && entry.description,
+          );
+          return [
+            {
+              name: localized.name,
+              description: localized.description,
+              locale: translated ? locale : tenant.defaultLanguage,
+            },
+          ];
+        }),
+        faqs,
+      }),
+    };
+  }
+
+  /**
+   * The customer's locale's FAQs, or the default locale's when it has none
+   * (phase-12 §4.3) — the same fallback the profile has always had. Before, an
+   * English customer got the Hungarian profile and no FAQs at all.
+   */
+  private async faqsFor(tenant: Tenant, locale: string) {
+    const find = (faqLocale: string) =>
       this.prisma.tenantAssistantFaq.findMany({
-        where: { tenantId: tenant.id, active: true, locale },
+        where: { tenantId: tenant.id, active: true, locale: faqLocale },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         take: 50,
-      }),
-      new PublicCatalogueService(this.prisma).listServices({ tenantId: tenant.id, limit: 50 }),
-      this.prisma.location.findMany({
-        where: { tenantId: tenant.id, active: true, archivedAt: null },
-        select: {
-          name: true,
-          type: true,
-          addressLine1: true,
-          addressLine2: true,
-          postalCode: true,
-          city: true,
-          countryCode: true,
-        },
-        orderBy: { name: "asc" },
-        take: 25,
-      }),
-    ]);
-    const description = localizedBusinessDescription(settings, locale, tenant.defaultLanguage);
-    return [
-      `Business: ${tenant.name}`,
-      description ? `Description: ${description}` : "",
-      ...locations.map((location) => `Location: ${JSON.stringify(location)}`),
-      tenant.contactEmail ? `Email: ${tenant.contactEmail}` : "",
-      tenant.contactPhone ? `Phone: ${tenant.contactPhone}` : "",
-      tenant.bookingPolicy ? `Booking policy: ${tenant.bookingPolicy}` : "",
-      tenant.cancellationPolicy ? `Cancellation policy: ${tenant.cancellationPolicy}` : "",
-      ...services.slice(0, 50).map((service) => {
-        const localized = localiseService(service, locale);
-        // Public, bookable services only. These remain data inside the AI's
-        // untrusted business-facts block, never instructions or booking rules.
-        return `Service: ${JSON.stringify({
-          id: service.id,
-          name: localized.name,
-          description: localized.description ?? null,
-        })}`;
-      }),
-      ...faqs.map((faq) => `Q: ${faq.question}\nA: ${faq.answer}`),
-    ]
-      .filter(Boolean)
-      .join("\n");
+        select: { question: true, answer: true, locale: true },
+      });
+    const own = await find(locale);
+    if (own.length > 0 || locale === tenant.defaultLanguage) return own;
+    return find(tenant.defaultLanguage);
   }
 
   getSettings(tenantId: string): Promise<AssistantSettingsRow | null> {
@@ -281,20 +309,33 @@ interface AssistantSettingsRow {
   updatedAt: Date;
 }
 
+type ProfileSettings = Pick<
+  AssistantSettingsRow,
+  "businessDescription" | (typeof PROFILE_FIELDS)[keyof typeof PROFILE_FIELDS]
+> | null;
+
 export function localizedBusinessDescription(
-  settings: Pick<
-    AssistantSettingsRow,
-    "businessDescription" | (typeof PROFILE_FIELDS)[keyof typeof PROFILE_FIELDS]
-  > | null,
+  settings: ProfileSettings,
   locale: string,
   defaultLanguage: string,
 ): string | null {
+  return localizedBusinessDescriptionWithLocale(settings, locale, defaultLanguage)?.text ?? null;
+}
+
+/** As above, also saying which language the chosen text is written in. */
+export function localizedBusinessDescriptionWithLocale(
+  settings: ProfileSettings,
+  locale: string,
+  defaultLanguage: string,
+): { text: string; locale: string } | null {
   if (!settings) return null;
   const requestedLocale = languageSchema.safeParse(locale);
   const originalLocale = languageSchema.safeParse(defaultLanguage);
   const requested = requestedLocale.success ? settings[PROFILE_FIELDS[requestedLocale.data]] : null;
+  if (requested) return { text: requested, locale };
   const original = originalLocale.success ? settings[PROFILE_FIELDS[originalLocale.data]] : null;
-  return requested || original || settings.businessDescription || null;
+  const fallback = original || settings.businessDescription;
+  return fallback ? { text: fallback, locale: defaultLanguage } : null;
 }
 
 interface AssistantFaqRow {
