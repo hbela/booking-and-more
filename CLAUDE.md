@@ -207,10 +207,10 @@ phase 11 still stands: native selects, no edit dialogs — `AlertDialog` only re
 bite: **Radix returns focus to a `Trigger`, and every dialog here is opened from code**, so the adapted
 `AlertDialogContent` remembers its opener (§3.7); and **Radix unmounts inactive tabs**, so a tab holding
 unsaved state must be `forceMount`ed (§3.8) ·
-[Phase 12 — assistant knowledge consistency](docs/phase-12-assistant-knowledge-consistency.md) (**in progress**:
-parts 1–4 of 5 built — the facts/description split and routing, the consistency check on Overview,
-acknowledgements, the enable gate, the AI review and translation drafts; grounding flags on transcripts
-and the eval script are not). The two owner-triggered model calls spend **the chat's** monthly
+[Phase 12 — assistant knowledge consistency](docs/phase-12-assistant-knowledge-consistency.md) (**built**; **nothing in it has been run against the real model yet** — `pnpm assistant:eval <slug> --yes` on
+staging is the first step, its §7.6). Facts from records are fenced apart from the business's prose and
+win; a consistency check on Overview, acknowledgements, an AI review, translation drafts, and grounding
+flags on transcripts sit around them. The two owner-triggered model calls spend **the chat's** monthly
 allowance through the same reserve → call → reconcile sequence; a draft never writes anything. **Switching the assistant on is refused (`KNOWLEDGE_HAS_ERRORS`) while an unacknowledged error
 remains — only the off→on transition; a live tenant is never switched off by a finding.** The receptionist reads the free-text company profile, service descriptions and FAQs as one
 block beside the catalogue, with no rule for which wins — so a profile listing treatments that cannot be
@@ -230,6 +230,13 @@ removed and what to reinstate first if the decision is ever revisited. **Nothing
 now**: no `@bam/ai`, no `@bam/conversation-engine`, no `/v1/public/conversations`, and no conversation or
 usage tables — `20260811120000_remove_conversations_and_usage_metering` drops them. Read the records before
 reopening the idea, and treat tech-impl §18–§21 and PRD goal #2 as specified-but-not-built.
+
+**Except that chat came back.** On 2026-08-20 the text receptionist was rebuilt — `@bam/ai`,
+`@bam/conversation-engine`, `/v1/public/tenants/:slug/conversations` and the chat tables are all in the
+tree again, voice still is not. Its record is
+[the AI receptionist implementation](docs/multi-tenant-ai-receptionist-implementation.md), and
+[Phase 12](docs/phase-12-assistant-knowledge-consistency.md) is what it reads and how that is checked.
+The paragraph above describes 2026-08-11 and is kept because its reasons for withdrawing still matter.
 
 Cite spec sections in code comments as `// tech-impl §11.3` when implementing something the spec pins down.
 
@@ -399,6 +406,7 @@ pnpm db:grant-platform-admin <email>   # the only way to set isPlatformAdmin
 pnpm db:join-tenant <email> <slug> [ROLE]   # development only; a second membership by hand
 pnpm db:discard-organization <slug|domain> [--yes]   # development only; see below
 pnpm db:explain-availability <slug> [YYYY-MM-DD] [--service <slug>] [--provider <name>]
+pnpm assistant:eval <slug> [--runs N] [--locale hu|en|both] [--yes]   # real model calls; phase-12 §6
 ```
 
 **`db:explain-availability` is the answer to "the provider has hours but the booking page offers nothing".**

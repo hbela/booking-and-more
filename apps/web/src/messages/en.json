@@ -716,6 +716,11 @@
       "blocked": "The assistant cannot be switched on yet: its knowledge has {count, plural, one {# unresolved error} other {# unresolved errors}}.",
       "live": "The assistant is live, but its knowledge has {count, plural, one {# unresolved error} other {# unresolved errors}}. It keeps running; customers may get answers that differ from your texts.",
       "link": "Open the knowledge check"
+    },
+    "grounding": {
+      "flagged": "{count, plural, one {# answer named something not in your records} other {# answers named something not in your records}}",
+      "notInRecords": "This answer named something your records do not hold: {values}. The customer saw it as written.",
+      "check": "Open the knowledge check"
     }
   },
   "businessKnowledge": {

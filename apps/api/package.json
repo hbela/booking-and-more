@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "stripe:catalog": "node scripts/configure-stripe-catalog.mjs",
     "db:backfill-pii": "node scripts/backfill-customer-pii.mjs",
-    "billing:transition-test": "node scripts/transition-test-billing.mjs"
+    "billing:transition-test": "node scripts/transition-test-billing.mjs",
+    "assistant:eval": "tsx scripts/assistant-eval.ts"
   },
   "dependencies": {
     "@bam/ai": "workspace:*",

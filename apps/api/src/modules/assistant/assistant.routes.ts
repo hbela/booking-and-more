@@ -22,6 +22,7 @@ import {
   conversationListItemSchema,
   conversationListQuerySchema,
   conversationStatsSchema,
+  groundingWarningsSchema,
 } from "./assistant.schemas.js";
 import { AssistantService } from "./assistant.service.js";
 import { KnowledgeAiService, type KnowledgeAiLimits } from "./knowledge-ai.service.js";
@@ -307,8 +308,8 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
       },
     },
     async (request) => ({
-      items: (await service.listConversations(request.tenant!.id, request.query)).map(
-        toConversation,
+      items: (await service.listConversations(request.tenant!.id, request.query)).map((row) =>
+        toConversation(row, row._count.messages),
       ),
     }),
   );
@@ -338,13 +339,20 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
     async (request) => {
       const row = await service.conversation(request.tenant!.id, request.params.id);
       return {
-        ...toConversation(row),
+        ...toConversation(
+          row,
+          row.messages.filter((message) => message.groundingWarnings !== null).length,
+        ),
         summary: row.summary,
         messages: row.messages.map((message) => ({
           id: message.id,
           sender: message.sender,
           content: message.content,
           structured: message.structuredContentJson,
+          groundingWarnings: groundingWarningsSchema
+            .nullable()
+            .catch(null)
+            .parse(message.groundingWarnings),
           createdAt: message.createdAt.toISOString(),
         })),
       };
@@ -388,18 +396,22 @@ function toSettings(row: {
     updatedAt: row.updatedAt.toISOString(),
   };
 }
-function toConversation(row: {
-  id: string;
-  locale: string;
-  status: string;
-  turnCount: number;
-  outcomeSuccessful: boolean | null;
-  bookingId: string | null;
-  customerId: string | null;
-  createdAt: Date;
-  lastActivityAt: Date;
-}) {
+function toConversation(
+  row: {
+    id: string;
+    locale: string;
+    status: string;
+    turnCount: number;
+    outcomeSuccessful: boolean | null;
+    bookingId: string | null;
+    customerId: string | null;
+    createdAt: Date;
+    lastActivityAt: Date;
+  },
+  flaggedAnswers: number,
+) {
   return {
+    flaggedAnswers,
     id: row.id,
     locale: row.locale,
     status: row.status,

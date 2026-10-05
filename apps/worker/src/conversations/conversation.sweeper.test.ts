@@ -203,6 +203,7 @@ describe.skipIf(!databaseUrl)("conversation sweeper", () => {
         sender: "CUSTOMER",
         content: "private details",
         structuredContentJson: { phone: "+361234567" },
+        groundingWarnings: [{ kind: "PERSON", value: "Kiss Éva" }],
         inputTokens: 10,
         createdAt: new Date("2026-04-01T09:00:00Z"),
       },
@@ -224,6 +225,8 @@ describe.skipIf(!databaseUrl)("conversation sweeper", () => {
     const erased = await prisma.conversationMessage.findUniqueOrThrow({ where: { id: old.id } });
     expect(erased.content).toBe("[redacted]");
     expect(erased.structuredContentJson).toBeNull();
+    // phase-12 §4.5: the warnings hold names, so they go with the body.
+    expect(erased.groundingWarnings).toBeNull();
     expect(erased.inputTokens).toBeNull();
     expect(erased.redactedAt).not.toBeNull();
 

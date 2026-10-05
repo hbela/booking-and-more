@@ -1491,6 +1491,11 @@ model ConversationMessage {
   messageType           MessageType         @default(TEXT) @map("message_type")
   content               String              @db.Text
   structuredContentJson Json?               @map("structured_content_json")
+  /// An `ANSWER_FAQ` reply that named a person, city, hours or price the
+  /// records do not hold (phase-12 §4.5): `[{ kind, value }]`. Flag only — the
+  /// answer was delivered. NULL when nothing was found or nothing was checked.
+  /// Holds names, so the retention sweep erases it with the body.
+  groundingWarnings     Json?               @map("grounding_warnings")
   inputTokens           Int?                @map("input_tokens")
   outputTokens          Int?                @map("output_tokens")
   redactedAt            DateTime?           @map("redacted_at") @db.Timestamptz(3)

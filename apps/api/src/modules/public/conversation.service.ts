@@ -35,6 +35,9 @@ import { BookingService } from "../bookings/booking.service.js";
 import { BookingRepository } from "../bookings/booking.repository.js";
 import { UsageService } from "../usage/usage.service.js";
 import { AssistantService } from "../assistant/assistant.service.js";
+import { groundingFacts } from "../assistant/knowledge-health.js";
+import { groundingIssues, type GroundingIssue } from "@bam/knowledge-engine";
+import { captureException } from "@bam/observability";
 import {
   ConversationRepository,
   conversationNotFound,
@@ -455,6 +458,7 @@ export class ConversationService {
         collected,
         countTurn: true,
         message: { key: "conversation.answer", params: { answer }, ui: "NONE" },
+        groundingWarnings: await this.groundingOf(tenant.id, answer),
       });
     }
 
@@ -858,6 +862,8 @@ export class ConversationService {
     services?: z.infer<typeof conversationServiceSchema>[];
     providers?: z.infer<typeof conversationProviderSchema>[];
     slots?: z.infer<typeof conversationSlotSchema>[];
+    /** phase-12 §4.5: recorded on the message, never shown to the customer. */
+    groundingWarnings?: GroundingIssue[] | null;
   }): Promise<ConversationTurnResponse> {
     const current = await this.prisma.conversationSession.findUniqueOrThrow({
       where: { id: args.session.id },
@@ -898,6 +904,9 @@ export class ConversationService {
           messageType: "STRUCTURED",
           content: args.message.key,
           structuredContentJson: args.message.params ?? {},
+          ...(args.groundingWarnings && args.groundingWarnings.length > 0
+            ? { groundingWarnings: args.groundingWarnings as unknown as Prisma.InputJsonValue }
+            : {}),
         },
       });
       return tx.conversationSession.findUniqueOrThrow({ where: { id: args.session.id } });
@@ -917,6 +926,21 @@ export class ConversationService {
       bookingReference: await this.referenceOf(updated),
       turnsRemaining: Math.max(0, this.options.maxTurns - updated.turnCount),
     };
+  }
+
+  /**
+   * Whether a model-written answer names something the records do not hold
+   * (phase-12 §4.5). Flag only: the answer is delivered either way, and a
+   * failure here must never cost the customer their reply — it is reported
+   * and the message is stored unflagged.
+   */
+  private async groundingOf(tenantId: string, answer: string): Promise<GroundingIssue[] | null> {
+    try {
+      return groundingIssues(answer, await groundingFacts(this.prisma, tenantId));
+    } catch (error) {
+      captureException(error, { area: "assistant-grounding", tenantId });
+      return null;
+    }
   }
 
   private async close(

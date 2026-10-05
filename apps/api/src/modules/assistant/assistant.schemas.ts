@@ -54,7 +54,13 @@ export const conversationListItemSchema = z.object({
   customerId: idSchema.nullable(),
   startedAt: instantSchema,
   lastActivityAt: instantSchema,
+  /** phase-12 §4.5: answers that named something the records do not hold. */
+  flaggedAnswers: z.number().int(),
 });
+/** phase-12 §4.5: what an `ANSWER_FAQ` reply named that the records do not hold. */
+export const groundingWarningsSchema = z.array(
+  z.object({ kind: z.enum(["PERSON", "CITY", "HOURS", "PRICE"]), value: z.string() }),
+);
 export const conversationDetailSchema = conversationListItemSchema.extend({
   summary: z.string().nullable(),
   messages: z.array(
@@ -63,6 +69,7 @@ export const conversationDetailSchema = conversationListItemSchema.extend({
       sender: z.string(),
       content: z.string(),
       structured: z.unknown().nullable(),
+      groundingWarnings: groundingWarningsSchema.nullable(),
       createdAt: instantSchema,
     }),
   ),

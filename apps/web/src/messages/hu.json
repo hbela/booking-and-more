@@ -716,6 +716,11 @@
       "blocked": "Az asszisztens még nem kapcsolható be: a tudásában {count, plural, other {# megoldatlan hiba}} van.",
       "live": "Az asszisztens működik, de a tudásában {count, plural, other {# megoldatlan hiba}} van. Tovább fut; az ügyfelek a szövegeitől eltérő választ kaphatnak.",
       "link": "A tudás ellenőrzésének megnyitása"
+    },
+    "grounding": {
+      "flagged": "{count, plural, other {# válasz olyat említett, ami nincs a rögzített adatok között}}",
+      "notInRecords": "Ez a válasz olyat említett, ami nincs a rögzített adatok között: {values}. Az ügyfél így látta.",
+      "check": "A tudás ellenőrzésének megnyitása"
     }
   },
   "businessKnowledge": {

@@ -31,6 +31,25 @@ interface Conversation {
   turnCount: number;
   outcomeSuccessful: boolean | null;
   lastActivityAt: string;
+  /** phase-12 §4.5: answers that named something the records do not hold. */
+  flaggedAnswers: number;
+}
+interface TranscriptMessage {
+  id: string;
+  sender: string;
+  content: string;
+  structured: unknown;
+  groundingWarnings: { kind: "PERSON" | "CITY" | "HOURS" | "PRICE"; value: string }[] | null;
+}
+
+/**
+ * What the assistant said. A reply is stored as a template key; for a
+ * model-written answer the words are in its parameters, and showing the key
+ * instead ("conversation.answer") hid exactly the replies worth reading.
+ */
+function spokenText(message: TranscriptMessage): string {
+  const answer = (message.structured as { answer?: unknown } | null)?.answer;
+  return typeof answer === "string" ? answer : message.content;
 }
 interface Stats {
   total: number;
@@ -77,10 +96,9 @@ export function AssistantScreen(): React.ReactElement {
   const detail = useQuery({
     queryKey: ["assistant-conversation", context.tenantId, selected],
     queryFn: () =>
-      apiFetch<{ messages: Array<{ id: string; sender: string; content: string }> }>(
-        `/v1/assistant/conversations/${selected}`,
-        { tenantId: context.tenantId },
-      ),
+      apiFetch<{ messages: TranscriptMessage[] }>(`/v1/assistant/conversations/${selected}`, {
+        tenantId: context.tenantId,
+      }),
     enabled: enabled && Boolean(selected),
   });
   const save = useMutation({
@@ -267,6 +285,11 @@ export function AssistantScreen(): React.ReactElement {
                         {new Date(row.lastActivityAt).toLocaleString(locale)} ·{" "}
                         {t("turns", { count: row.turnCount })}
                       </span>
+                      {row.flaggedAnswers > 0 ? (
+                        <span className="mt-1 block text-xs text-warning">
+                          {t("grounding.flagged", { count: row.flaggedAnswers })}
+                        </span>
+                      ) : null}
                     </button>
                   </li>
                 ))}
@@ -283,7 +306,19 @@ export function AssistantScreen(): React.ReactElement {
                   {detail.data?.messages.map((message) => (
                     <li key={message.id} className="rounded-lg bg-surface-raised p-3 text-sm">
                       <strong>{t(`sender.${message.sender}`)}</strong>
-                      <p>{message.content}</p>
+                      <p>{spokenText(message)}</p>
+                      {message.groundingWarnings ? (
+                        <p className="mt-2 text-xs text-warning">
+                          {t("grounding.notInRecords", {
+                            values: message.groundingWarnings
+                              .map((warning) => warning.value)
+                              .join(", "),
+                          })}{" "}
+                          <Link href="/dashboard#knowledge-health" className="underline">
+                            {t("grounding.check")}
+                          </Link>
+                        </p>
+                      ) : null}
                     </li>
                   ))}
                 </ol>

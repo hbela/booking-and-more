@@ -405,4 +405,73 @@ for (const locale of ["en", "hu"] as const) {
     await expect(page.getByText("Is there parking?")).toHaveCount(0);
     await page.screenshot({ path: `test-results/knowledge-drafts-${locale}.png`, fullPage: true });
   });
+
+  test(`${locale}: a transcript shows what an answer said and what it named outside the records`, async ({
+    page,
+  }) => {
+    await mockApi(page, async (route, path) => {
+      if (path === "/v1/assistant/conversations") {
+        await route.fulfill({
+          json: {
+            items: [
+              {
+                id: "c_1",
+                locale: "hu",
+                status: "COMPLETED",
+                turnCount: 2,
+                outcomeSuccessful: null,
+                bookingId: null,
+                customerId: null,
+                startedAt: "2026-10-05T08:00:00.000Z",
+                lastActivityAt: "2026-10-05T08:05:00.000Z",
+                flaggedAnswers: 1,
+              },
+            ],
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/assistant/conversations/c_1") {
+        await route.fulfill({
+          json: {
+            messages: [
+              {
+                id: "m_1",
+                sender: "CUSTOMER",
+                content: "Hol vannak?",
+                structured: null,
+                groundingWarnings: null,
+                createdAt: "2026-10-05T08:00:00.000Z",
+              },
+              {
+                id: "m_2",
+                sender: "ASSISTANT",
+                content: "conversation.answer",
+                structured: { answer: "Budapesten várjuk." },
+                groundingWarnings: [{ kind: "CITY", value: "Budapest" }],
+                createdAt: "2026-10-05T08:00:01.000Z",
+              },
+            ],
+          },
+        });
+        return true;
+      }
+      return false;
+    });
+
+    await page.goto(`/${locale}/dashboard/assistant`);
+    const row = page.getByRole("button", {
+      name: en ? /1 answer named something not in your records/ : /1 válasz olyat említett/,
+    });
+    await row.click();
+    await expect(page.getByText("Budapesten várjuk.")).toBeVisible();
+    await expect(page.getByText("conversation.answer")).toHaveCount(0);
+    await expect(
+      page.getByText(
+        en
+          ? /named something your records do not hold: Budapest/
+          : /nincs a rögzített adatok között: Budapest/,
+      ),
+    ).toBeVisible();
+  });
 }

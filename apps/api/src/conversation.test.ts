@@ -1039,4 +1039,59 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       vi.useRealTimers();
     }
   });
+  it("flags an FAQ answer that names what the records do not hold, and tells only staff (phase-12 §4.5)", async () => {
+    const site = await clinic("grounding");
+    const conversation = await startConversation(site, "CHAT", "hu");
+
+    ai.interpreter.push(
+      envelope({
+        intent: "ANSWER_FAQ",
+        parameters: { answer: "Budapesten várjuk, Dr. Nagy Péter rendel." },
+      }),
+    );
+    const flagged = await say(conversation, "Hol vannak és ki rendel?");
+    // Flag only (phase-12 §8.2): the customer gets the answer, and nothing else.
+    expect(flagged.message.params?.["answer"]).toBe("Budapesten várjuk, Dr. Nagy Péter rendel.");
+    expect(JSON.stringify(flagged)).not.toMatch(/grounding/iu);
+
+    ai.interpreter.push(
+      envelope({
+        intent: "ANSWER_FAQ",
+        parameters: { answer: "Dr. Kovács Anna rendel, hétfőn 09:00–17:00 között." },
+      }),
+    );
+    await say(conversation, "Ki rendel?");
+
+    const list = await app.inject({
+      method: "GET",
+      url: "/v1/assistant/conversations",
+      headers: as(site.ownerCookie, site.tenantId),
+    });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(
+      (list.json().items as { id: string; flaggedAnswers: number }[]).find(
+        (item) => item.id === conversation.id,
+      )?.flaggedAnswers,
+    ).toBe(1);
+
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/assistant/conversations/${conversation.id}`,
+      headers: as(site.ownerCookie, site.tenantId),
+    });
+    expect(detail.statusCode, detail.body).toBe(200);
+    const answers = (
+      detail.json().messages as {
+        content: string;
+        groundingWarnings: { kind: string; value: string }[] | null;
+      }[]
+    ).filter((message) => message.content === "conversation.answer");
+    expect(answers.map((message) => message.groundingWarnings)).toEqual([
+      [
+        { kind: "PERSON", value: "Nagy Péter" },
+        { kind: "CITY", value: "Budapest" },
+      ],
+      null,
+    ]);
+  });
 });

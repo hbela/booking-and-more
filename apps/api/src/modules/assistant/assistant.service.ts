@@ -1,6 +1,6 @@
 import { withKnowledgeBudget } from "./knowledge-budget.js";
 import type { ChatLimits } from "../public/chat-guards.js";
-import type { PrismaClient, Tenant } from "@bam/db";
+import { Prisma, type PrismaClient, type Tenant } from "@bam/db";
 import {
   ConflictError,
   ErrorCodes,
@@ -278,7 +278,7 @@ export class AssistantService {
       from?: string | undefined;
       to?: string | undefined;
     },
-  ): Promise<ConversationListRow[]> {
+  ): Promise<(ConversationListRow & { _count: { messages: number } })[]> {
     return this.prisma.conversationSession.findMany({
       where: {
         tenantId,
@@ -296,6 +296,9 @@ export class AssistantService {
       orderBy: [{ lastActivityAt: "desc" }, { id: "desc" }],
       take: query.limit,
       skip: query.offset,
+      include: {
+        _count: { select: { messages: { where: { groundingWarnings: { not: Prisma.DbNull } } } } },
+      },
     });
   }
   async conversation(tenantId: string, id: string) {

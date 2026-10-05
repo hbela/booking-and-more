@@ -4,6 +4,7 @@ import type { PrismaClient } from "@bam/db";
 import {
   checkKnowledge,
   findingKey,
+  type GroundingFacts,
   type KnowledgeSnapshot,
   type KnowledgeText,
 } from "@bam/knowledge-engine";
@@ -176,4 +177,29 @@ export async function removeAcknowledgement(
     where: { id: args.id, tenantId: args.tenantId },
   });
   if (result.count !== 1) throw new NotFoundError("Acknowledgement not found.");
+}
+
+/**
+ * What an `ANSWER_FAQ` reply is checked against (phase-12 §4.5): the same
+ * records the receptionist was given, plus the people the owner confirmed may
+ * be named without being bookable.
+ */
+export async function groundingFacts(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<GroundingFacts> {
+  const [snapshot, people] = await Promise.all([
+    knowledgeSnapshot(prisma, tenantId),
+    prisma.knowledgeFindingAcknowledgement.findMany({
+      where: { tenantId, code: "PERSON_NOT_A_PROVIDER" },
+      select: { excerpt: true },
+    }),
+  ]);
+  return {
+    services: snapshot.services,
+    providers: snapshot.providers,
+    locationCities: snapshot.locationCities,
+    hours: snapshot.hours,
+    acknowledgedPeople: people.map((row) => row.excerpt),
+  };
 }

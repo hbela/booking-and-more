@@ -107,7 +107,7 @@ export async function sweepConversations(
       LIMIT ${options.batchSize}
     )
     UPDATE "conversation_messages"
-    SET "content" = '[redacted]', "structured_content_json" = NULL,
+    SET "content" = '[redacted]', "structured_content_json" = NULL, "grounding_warnings" = NULL,
         "input_tokens" = NULL, "output_tokens" = NULL, "redacted_at" = ${now}
     WHERE "id" IN (SELECT "id" FROM eligible)
   `;

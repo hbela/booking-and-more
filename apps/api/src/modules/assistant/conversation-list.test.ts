@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PrismaClient } from "@bam/db";
+import { Prisma, type PrismaClient } from "@bam/db";
 import { AssistantService } from "./assistant.service.js";
 import { conversationListQuerySchema } from "./assistant.schemas.js";
 
@@ -27,6 +27,10 @@ describe("conversation list date filtering", () => {
       orderBy: [{ lastActivityAt: "desc" }, { id: "desc" }],
       take: 25,
       skip: 25,
+      // phase-12 §4.5: the flagged-answer count travels with each row.
+      include: {
+        _count: { select: { messages: { where: { groundingWarnings: { not: Prisma.DbNull } } } } },
+      },
     });
   });
 

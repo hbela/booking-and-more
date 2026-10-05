@@ -5,10 +5,14 @@ treatments nobody can book is a defect in the product, not a content problem of 
 
 # Phase 12 — Assistant knowledge consistency
 
-## Implementation Plan
+## Implementation Record
 
-**Document version:** 0.6 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts
-1–4 are built** (§7.1–§7.4); part 5 is not.
+**Document version:** 1.0 — planned and built 2026-10-05. **All five parts are built** (§7.1–§7.5).
+Open items:
+- §6's evaluation has **not been run** against the real model, and nothing in this phase has been;
+- §5.3's email to a live tenant is not built.
+
+§7.6 lists both.
 **Scope:** (1) a written rule for which source is authoritative for each kind of fact the assistant
 states; (2) a verification mechanism that finds where the company profile, service descriptions and
 FAQs contradict the structured records, and shows it to the owner; (3) runtime changes so the
@@ -21,9 +25,8 @@ acknowledged" pattern reused in §5.4) ·
 [phase-2-3-owner-management.md](phase-2-3-owner-management.md) §2.6 (who decides what: the owner
 configures the catalogue, availability belongs to the provider).
 
-**Note on CLAUDE.md:** its phase-records paragraph still says chat was withdrawn and that no `@bam/ai`
-exists. Both stopped being true with the receptionist on 2026-08-20. That paragraph should be
-corrected as part of this phase.
+**Note on CLAUDE.md:** its withdrawal paragraph said chat was withdrawn and that no `@bam/ai` existed.
+Both stopped being true with the receptionist on 2026-08-20. It was corrected in part 5.
 
 ---
 
@@ -465,8 +468,64 @@ flags).
 
   **Not run against the real model.** The prompts are untested on Anthropic, as Part 1's are.
 
-Part 1 should be measured with §6's script before and after, so the eval script's harness may be
-pulled forward into part 1 even though its full question set lands in part 5.
+## 7.5 Part 5 — as built (2026-10-05)
+
+- **`groundingIssues(answer, facts)`** (`@bam/knowledge-engine`) uses the check's narrow extractors on
+  the model's own prose. It reports:
+  - a titled name that is neither a bookable provider nor an acknowledged person (§3.3);
+  - a city that is no location;
+  - an hour range that is neither a day's merged bookable period nor the week's earliest-to-latest
+    span;
+  - a price no service carries.
+- **Migration `20261005111151_conversation_grounding_warnings`** adds one nullable `jsonb` column,
+  `conversation_messages.grounding_warnings`. It is set only on an `ANSWER_FAQ` reply that names
+  something, and only on the stored message, never on the customer's response. Flag, not block, as
+  §8.2 decided.
+  - The check runs inside the turn. If it throws, the error goes to Sentry and the message is stored
+    unflagged: it may never cost the customer the reply.
+  - The 90-day retention sweep erases the column with the body, because it holds names.
+- **Staff API:**
+  - the transcript returns `groundingWarnings` per message;
+  - the conversation list returns `flaggedAnswers` per conversation, counted in the same query, so
+    an owner can find them without opening each one.
+- **Web:** the list marks conversations with flagged answers, and the transcript shows what was named
+  with a link to the knowledge check. **A defect found on the way:** the transcript printed each
+  assistant message's template key, so every model-written answer read "conversation.answer". It
+  now prints the answer text, which is where the flags are worth anything.
+- **§6 evaluation, `pnpm assistant:eval <slug> [--runs N] [--locale hu|en|both] [--yes]`**
+  (`apps/api/scripts/assistant-eval.ts`):
+  - It builds the exact input the chat builds and asks §6's six questions N times per language.
+  - Each run is judged **routed** (an expected intent), **grounded** (record-rendered, or an
+    `ANSWER_FAQ` with no grounding issue) and **consistent** (the same intent and verdict on every
+    run). Answers are printed for a human to read.
+  - It spends nothing without `--yes`. It is not metered against the tenant: an operator measuring
+    the product is not the tenant using it. The token total and estimated cost are printed instead.
+  - It reads only, and never runs in CI. `apps/api/tsconfig.json` now includes `scripts/**/*.ts`,
+    so it is typechecked and linted.
+- **CLAUDE.md:** the Phase 7/8 withdrawal paragraph now says the receptionist came back.
+- **Verified:**
+  - engine: 22 tests;
+  - API: 465 passed / 34 skipped, including a route test of the flag through a real conversation:
+    the flagged answer is delivered unchanged and unmarked, the clean answer has no flag, and the
+    list counts 1;
+  - worker: 162 tests, with retention now asserting the column is erased;
+  - web: 339 unit tests and all 82 e2e tests;
+  - lint and the drift check clean;
+  - the eval's dry run against the local `wellness` tenant prints its plan (60 calls).
+
+## 7.6 What is not done
+
+1. **Nothing here has met the real model.** Parts 1, 4 and 5 change what Anthropic is sent and how
+   its answers are judged, and every test uses a scripted stand-in. The first step is
+   `pnpm assistant:eval wellness --yes` on staging, with the wellness texts **unfixed**, to see
+   whether §4's routing and precedence alone produce grounded, consistent answers. Then compare with
+   the texts fixed per §9.
+2. **§5.3's email** to an already-live tenant when a new error appears. The banner on the Assistant
+   screen covers it until then.
+3. §6 originally pulled the eval forward into part 1 to measure before and after. It was built last
+   instead, so the "before" can only be measured by running it against `c45d163`, the commit before
+   part 1. The script itself would need to be copied in, since it does not exist there. The useful
+   comparison now is unfixed against fixed texts, as in item 1.
 
 ---
 
