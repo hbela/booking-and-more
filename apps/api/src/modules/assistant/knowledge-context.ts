@@ -56,7 +56,8 @@ const WEEKDAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 export function renderBookableFacts(input: BookableFactsInput, locale: string): string {
   const services = input.services.map((service) => {
-    const name = service.translations.find((entry) => entry.locale === locale)?.name ?? service.name;
+    const name =
+      service.translations.find((entry) => entry.locale === locale)?.name ?? service.name;
     const providers = service.providers.map((link) => {
       const own = [
         link.customDurationMinutes === null ? "" : `${link.customDurationMinutes} min`,
@@ -158,12 +159,17 @@ export function renderBusinessDescription(input: BusinessDescriptionInput): stri
  * periods collapse into a range. Hours at an inactive or archived location are
  * dropped, as the availability engine drops them.
  */
-export function weeklyHours(rows: BookableFactsInput["providers"][number]["workingHours"]): string | null {
+export function weeklyHours(
+  rows: BookableFactsInput["providers"][number]["workingHours"],
+): string | null {
   const byDay = new Map<number, string>();
   for (const row of rows) {
     if (row.location && (!row.location.active || row.location.archivedAt)) continue;
     const period = `${row.startTime}–${row.endTime}${row.location ? ` at ${row.location.name}` : ""}`;
-    byDay.set(row.weekday, byDay.has(row.weekday) ? `${byDay.get(row.weekday)}, ${period}` : period);
+    byDay.set(
+      row.weekday,
+      byDay.has(row.weekday) ? `${byDay.get(row.weekday)}, ${period}` : period,
+    );
   }
   const days = [...byDay.keys()].sort((a, b) => a - b);
   const groups: { from: number; to: number; periods: string }[] = [];

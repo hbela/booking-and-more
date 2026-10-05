@@ -14,6 +14,12 @@ import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Textarea } from "./ui/textarea";
+import {
+  ContactDetailsCard,
+  KnowledgeHealthCard,
+  knowledgeHealthKey,
+  useKnowledgeHealth,
+} from "./knowledge-health";
 
 const LANGUAGES = ["hu", "en", "de", "fr"] as const;
 const LANGUAGE_LABELS = { hu: "hungarian", en: "english", de: "german", fr: "french" } as const;
@@ -47,9 +53,12 @@ function formText(data: FormData, name: string): string {
 export function BusinessKnowledge({
   tenantId,
   canManage,
+  canManageContact,
 }: {
   tenantId: string;
   canManage: boolean;
+  /** Contact details and policies are tenant settings, not assistant ones. */
+  canManageContact: boolean;
 }) {
   const t = useTranslations("businessKnowledge");
   const locale = useLocale();
@@ -57,6 +66,11 @@ export function BusinessKnowledge({
   const [profileChanges, setProfileChanges] = useState<Partial<Record<Language, number>>>({});
   const [faqChanges, setFaqChanges] = useState<Partial<Record<Language, number>>>({});
   const client = useQueryClient();
+  const health = useKnowledgeHealth(tenantId);
+  const profileFindings = (language: Language) =>
+    health.data?.findings.filter(
+      (finding) => finding.source.kind === "PROFILE" && finding.source.locale === language,
+    ).length ?? 0;
   const settings = useQuery({
     queryKey: ["assistant-settings", tenantId],
     queryFn: () => apiFetch<CompanyProfile>("/v1/assistant/settings", { tenantId }),
@@ -76,6 +90,7 @@ export function BusinessKnowledge({
       toast.success(t("saved"));
       setProfileChanges({});
       void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: knowledgeHealthKey(tenantId) });
       void client.invalidateQueries({ queryKey: ["assistant-settings", tenantId] });
     },
   });
@@ -89,6 +104,7 @@ export function BusinessKnowledge({
     onSuccess: () => {
       setFaqChanges({});
       void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: knowledgeHealthKey(tenantId) });
       void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] });
     },
   });
@@ -98,11 +114,13 @@ export function BusinessKnowledge({
     onSuccess: () => {
       setFaqChanges({});
       void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
+      void client.invalidateQueries({ queryKey: knowledgeHealthKey(tenantId) });
       void client.invalidateQueries({ queryKey: ["assistant-faqs", tenantId] });
     },
   });
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
+      <KnowledgeHealthCard tenantId={tenantId} />
       <Card>
         <CardHeader>
           <CardTitle>{t("title")}</CardTitle>
@@ -151,6 +169,11 @@ export function BusinessKnowledge({
 
                     readOnly={!canManage}
                   />
+                  {profileFindings(language) > 0 ? (
+                    <a href="#knowledge-health" className="text-sm text-warning underline">
+                      {t("findings", { count: profileFindings(language) })}
+                    </a>
+                  ) : null}
                 </label>
               ))}
               <KnowledgeBudget tenantId={tenantId} changes={profileChanges} />
@@ -258,6 +281,7 @@ export function BusinessKnowledge({
           </ul>
         </CardContent>
       </Card>
+      <ContactDetailsCard tenantId={tenantId} canManage={canManageContact} />
     </div>
   );
 }

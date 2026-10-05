@@ -7,8 +7,8 @@ treatments nobody can book is a defect in the product, not a content problem of 
 
 ## Implementation Plan
 
-**Document version:** 0.3 — plan and partial record, 2026-10-05. §8's decisions are settled. **Part 1
-is built** (§7.1); parts 2–5 are not.
+**Document version:** 0.4 — plan and partial record, 2026-10-05. §8's decisions are settled. **Parts 1
+and 2 are built** (§7.1, §7.2); parts 3–5 are not.
 **Scope:** (1) a written rule for which source is authoritative for each kind of fact the assistant
 states; (2) a verification mechanism that finds where the company profile, service descriptions and
 FAQs contradict the structured records, and shows it to the owner; (3) runtime changes so the
@@ -140,7 +140,7 @@ texts, FAQs); output is `KnowledgeFinding[]`. Property-testable like the availab
 | `PERSON_NOT_A_PROVIDER` | K2 | Title-prefixed names (`Dr.`, `dr.`, `doktornő`, `Prof.`) and capitalised name pairs, compared to provider names with diacritic folding and edit distance — "Kiss Éva" vs "Kiss Katalin" is reported as a *probable typo*, not just as unknown |
 | `CITY_MISMATCH` | K3 | Hungarian and international city gazetteer (inflected: *budapesti*, *Budapesten*, *Szentendrén*) vs location cities |
 | `HOURS_STATED` / `HOURS_MISMATCH` | K4 | `H–H óra`, `8:00–20:00`, weekday ranges; mismatch if not equal to the union of working hours |
-| `PRICE_IN_TEXT_ONLY` / `PRICE_MISMATCH` | K5 | `31.000 Ft`, `31 000 HUF`, `€40` vs `priceMinor` |
+| `PRICE_NOT_RECORDED` | K5 | `31.000 Ft`, `31 000 HUF`, `€40` vs every bookable service's `priceMinor` (amended in §7.2) |
 | `CONTACT_MISSING` | — | Profile invites contact; `contactEmail` and `contactPhone` both null |
 | `UNBOOKABLE_SERVICE_MENTIONED` | K1 | Bullet items under a heading matching *Szolgáltatás*, *Services*, *Leistungen*, *Prestations* that match no service name (folded, stemmed) |
 | `DUPLICATED_FACT` | K6 | Same price token or ≥ 80-char shingle in profile and a service description |
@@ -253,8 +253,9 @@ layer 2.
 
 ## 5.2 Inline on save
 
-Saving the profile, a service description or an FAQ returns its layer-1 findings in the response,
-and the editor shows them under the field.
+~~Saving the profile, a service description or an FAQ returns its layer-1 findings in the response,
+and the editor shows them under the field.~~ Amended in §7.2: no save response changes. Each knowledge
+write invalidates the health query, and each profile field shows its own count from it.
 
 ## 5.3 Enabling the assistant
 
@@ -321,6 +322,53 @@ flags).
   lint clean. The wellness tenant's facts block was rendered from the local database and matches
   §1.1. **Not verified against the real model.** That is §6's job, and a live chat on staging is the
   first thing to do with this.
+
+## 7.2 Part 2 — as built (2026-10-05)
+
+- **`@bam/knowledge-engine`** — a pure package with no runtime dependencies (rule 8).
+  `checkKnowledge(snapshot)` returns `KnowledgeFinding[]`, errors first. `text.ts` holds the
+  extractors. Each is deliberately narrow and anchored on something unambiguous:
+  - people need a title (`Dr.`, `doktornő`, `főorvos` …);
+  - hours need minutes or a unit, so "3-5 alkalom" is not a time;
+  - cities match a short list plus a whitelist of Hungarian case endings, so "Vác" does not match
+    "vacsora" and "Pécs" does not match "pecsét";
+  - offerings are only read from bullet lists under a heading that announces them
+    (*Szolgáltatásaink*, *Services* …).
+
+  A missed contradiction is the safe direction. A false one teaches the owner to ignore the list.
+- **`GET /v1/assistant/knowledge/health`** (`knowledge-health.ts`) loads exactly what the assistant
+  is given, through `PublicCatalogueService.bookableFacts`, and returns `{ errors, warnings,
+  findings }`. It has the same `read` guard as the settings `GET`. It is computed on every request.
+  The response schema is `knowledgeHealthSchema` in `@bam/contracts`.
+- **Overview:** `KnowledgeHealthCard` heads the knowledge section. Each finding shows its source, the
+  rule it breaks and, where the fix is on another screen, a link there. The K1–K8 rules are a
+  collapsible list in both locales. Each profile field shows how many findings concern its language.
+- **Amendments to the plan:**
+  - **K5 is one warning, `PRICE_NOT_RECORDED`, not a text-only warning plus a mismatch error.** A
+    package price (10.000 Ft for an X-ray inside a 31.000 Ft package) is a true statement that
+    matches no service's price. Prose cannot be reliably attributed to one service, so it cannot be
+    "wrong" for that service.
+  - **A contact and policies form was added (`ContactDetailsCard`).** `PATCH /v1/tenants/current`
+    has always accepted `contactEmail`, `contactPhone`, `bookingPolicy` and `cancellationPolicy`, but
+    no screen set them. `CONTACT_MISSING` would otherwise have been a finding nobody could fix, and
+    Part 1 tells the assistant those fields are where contact details and policies come from. It
+    is gated on `tenant:manage` (OWNER only), as the endpoint is.
+  - **§5.2 inline findings** come from the health query rather than from each save response (see
+    §5.2).
+- **The wellness tenant, read from the local database:** 9 errors and 22 warnings. That is every row
+  of §1.1 and nothing that is not a real issue: 5 unbookable offerings, Kocsis Zoltán, "Kiss Éva"
+  (suggesting Dr Kiss Katalin), Budapest, the 8–20 hours, 8 price lines, the duplicated package, 6
+  missing translations, 5 named testimonials, no contact details, and Hauser Max with no hours.
+- **Verified:**
+  - engine: 16 tests;
+  - API: 457 passed / 34 skipped, including a database test that the check sees only its own
+    tenant;
+  - web: 339 unit tests and all 72 e2e tests, including the new `knowledge-health.spec.ts` in both
+    locales;
+  - lint and types clean.
+
+  `knowledge-budget.spec.ts` needed a health response in its mock: its catch-all `{ items: [] }`
+  crashed the Overview client-side. A real API cannot return that shape.
 
 Part 1 should be measured with §6's script before and after, so the eval script's harness may be
 pulled forward into part 1 even though its full question set lands in part 5.

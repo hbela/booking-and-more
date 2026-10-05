@@ -1,5 +1,10 @@
 import { Permissions } from "@bam/auth";
-import { commonErrorResponses, idSchema, languageSchema } from "@bam/contracts";
+import {
+  commonErrorResponses,
+  idSchema,
+  knowledgeHealthSchema,
+  languageSchema,
+} from "@bam/contracts";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
@@ -13,6 +18,7 @@ import {
   conversationStatsSchema,
 } from "./assistant.schemas.js";
 import { AssistantService } from "./assistant.service.js";
+import { knowledgeHealth } from "./knowledge-health.js";
 
 export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
   const service = new AssistantService(app.prisma);
@@ -79,6 +85,20 @@ export const assistantRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       return toSettings(row);
     },
+  );
+
+  // phase-12 §3.1, §5.1: where the profile, service descriptions and FAQs
+  // contradict the records. Read-only, computed on every request.
+  app.get(
+    "/knowledge/health",
+    {
+      preHandler: read,
+      schema: {
+        tags: ["assistant"],
+        response: { 200: knowledgeHealthSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => knowledgeHealth(app.prisma, request.tenant!.id),
   );
 
   app.get(

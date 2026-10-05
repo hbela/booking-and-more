@@ -68,7 +68,9 @@ for (const locale of ["en", "hu"] as const) {
                       remaining: language === "en" ? 9500 : 10_000,
                     })),
                   }
-                : { items: [] };
+                : path === "/v1/assistant/knowledge/health"
+                  ? { errors: 0, warnings: 0, findings: [] }
+                  : { items: [] };
       return route.fulfill({ json });
     });
     await page.goto(`/${locale}/dashboard`);

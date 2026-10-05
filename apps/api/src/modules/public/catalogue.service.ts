@@ -209,6 +209,7 @@ export class PublicCatalogueService {
           services: { some: { active: true, service: { active: true, archivedAt: null } } },
         },
         select: {
+          id: true,
           displayName: true,
           description: true,
           languages: true,

@@ -732,7 +732,8 @@
     "answer": "Answer",
     "addFaq": "Add FAQ",
     "delete": "Delete",
-    "empty": "No frequently asked questions yet."
+    "empty": "No frequently asked questions yet.",
+    "findings": "{count, plural, one {# problem in this text} other {# problems in this text}} — see the knowledge check"
   },
   "pwa": {
     "install": "Install app",
@@ -747,5 +748,89 @@
     "offlineTitle": "You're offline",
     "offlineDescription": "Connect to the internet to open your workspace. Appointments and changes are available only while online.",
     "retry": "Try again"
+  },
+  "knowledgeHealth": {
+    "title": "Assistant knowledge check",
+    "hint": "Where your company profile, service descriptions and FAQs disagree with your services, providers, locations and working hours. The assistant always trusts the records, so in these places it will answer differently from what you wrote.",
+    "loading": "Checking…",
+    "error": "Could not run the check. Please try again.",
+    "clean": "No problems found. Your texts agree with your records.",
+    "summary": "{errors, plural, =0 {No errors} one {# error} other {# errors}}, {warnings, plural, =0 {no warnings} one {# warning} other {# warnings}}.",
+    "error_badge": "Error",
+    "warning_badge": "Warning",
+    "noneRecorded": "none recorded",
+    "didYouMean": "Did you mean {suggestion}?",
+    "fix": "Fix it here",
+    "source": {
+      "profile": "Company profile ({language})",
+      "service": "Service description: {name} ({language})",
+      "services": "Services ({language})",
+      "faq": "FAQ: {name}",
+      "faqs": "FAQs ({language})",
+      "records": "Settings"
+    },
+    "codes": {
+      "UNBOOKABLE_SERVICE_MENTIONED": "“{excerpt}” is listed as something you offer, but it cannot be booked. Bookable services: {expected}. Add it as a service, remove it, or say how it is reached (for example: planned at a consultation).",
+      "PERSON_NOT_A_PROVIDER": "“{excerpt}” is not a bookable provider. Bookable providers: {expected}.",
+      "CITY_MISMATCH": "{suggestion} is mentioned, but your locations are in: {expected}.",
+      "HOURS_MISMATCH": "These hours differ from your working hours ({expected}). The assistant answers with the working hours.",
+      "HOURS_STATED": "Opening hours are written in the text. They match today, but the assistant reads them from working hours; remove them so they cannot go out of date.",
+      "PRICE_NOT_RECORDED": "This price is not set on any service, so the assistant will not quote it. Set the price on the service.",
+      "DUPLICATED_FACT": "This price also appears in the description of {expected}. Keep it in one place, on the service.",
+      "LOCALE_MISSING_PROFILE": "There is no {language} company profile. {language} conversations use the default-language profile.",
+      "LOCALE_MISSING_SERVICE": "Services without a {language} translation: {expected}.",
+      "LOCALE_MISSING_FAQ": "There are no {language} FAQs. {language} conversations use the default-language FAQs.",
+      "PERSONAL_DATA": "A testimonial names a customer ({excerpt}). The assistant can repeat it to anyone who asks.",
+      "CONTACT_MISSING": "No contact email or phone number is set, so the assistant cannot tell customers how to reach you.",
+      "PROVIDER_WITHOUT_HOURS": "{excerpt} offers services but has no working hours, so nobody can book them."
+    },
+    "rulesTitle": "How to write texts the assistant can use",
+    "rulesIntro": "Your services, providers, locations, working hours and contact details are the facts. Texts may explain them, never add to or contradict them.",
+    "rules": {
+      "K1": {
+        "title": "Offerings",
+        "text": "Only list a treatment as offered if it is a bookable service, or say how it is reached (for example: planned at a consultation)."
+      },
+      "K2": {
+        "title": "People",
+        "text": "Name only providers who can be booked here. Name anyone else, such as a practice leader who does not treat patients, together with their role."
+      },
+      "K3": {
+        "title": "Place",
+        "text": "The city and address come from Locations. If you repeat them, they must match."
+      },
+      "K4": {
+        "title": "Hours",
+        "text": "Do not write opening hours in the text. The assistant reads them from working hours."
+      },
+      "K5": {
+        "title": "Prices",
+        "text": "A price belongs on the service. The assistant only quotes prices set there."
+      },
+      "K6": {
+        "title": "One fact, one place",
+        "text": "Something about one service, such as a package, belongs in that service’s description, not also in the profile."
+      },
+      "K7": {
+        "title": "Languages",
+        "text": "Every language the assistant speaks should have its own profile, service translations and FAQs. Otherwise it translates the default language."
+      },
+      "K8": {
+        "title": "Personal data",
+        "text": "Do not include customers’ names, for example in testimonials. The assistant may repeat them to anyone."
+      }
+    },
+    "contact": {
+      "title": "Contact details and policies",
+      "hint": "The assistant gives these when customers ask how to reach you or whether they can cancel.",
+      "email": "Contact email",
+      "phone": "Contact phone",
+      "bookingPolicy": "Booking policy",
+      "cancellationPolicy": "Cancellation policy",
+      "save": "Save contact details",
+      "saved": "Contact details saved.",
+      "loading": "Loading…",
+      "error": "Could not load or save the contact details. Check the email address and try again."
+    }
   }
 }

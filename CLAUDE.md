@@ -208,7 +208,8 @@ bite: **Radix returns focus to a `Trigger`, and every dialog here is opened from
 `AlertDialogContent` remembers its opener (§3.7); and **Radix unmounts inactive tabs**, so a tab holding
 unsaved state must be `forceMount`ed (§3.8) ·
 [Phase 12 — assistant knowledge consistency](docs/phase-12-assistant-knowledge-consistency.md) (**in progress**:
-part 1 of 5 built — the facts/description split and the routing; the consistency checker is not). The receptionist reads the free-text company profile, service descriptions and FAQs as one
+parts 1–2 of 5 built — the facts/description split and routing, and the consistency check on Overview;
+acknowledgements, the enable gate, the model audit and translation drafts are not). The receptionist reads the free-text company profile, service descriptions and FAQs as one
 block beside the catalogue, with no rule for which wins — so a profile listing treatments that cannot be
 booked gets them offered. **Read its §2.1 before adding anything to the assistant's context**: every kind of
 fact has one authoritative source, and free text may explain a structured fact but never add or override one.
@@ -355,6 +356,8 @@ packages/auth     Roles, permissions, pure policy functions, Better Auth factory
 packages/availability-engine  Pure slot generation. No runtime dependencies, deliberately.
 packages/booking-engine  Pure booking decisions: spans, hold lifecycle, state machine, policy.
                          The transaction is the API's; the database owns the race.
+packages/knowledge-engine  Pure consistency checks: where a tenant's profile, service descriptions and
+                         FAQs contradict its records (phase-12 §3.1). Loading the snapshot is the API's.
 packages/notification-engine  Pure notification decisions: what an outbox event owes, dedupe keys,
                          locale resolution, retry classification. Sending lives in the worker.
 packages/config   Zod-validated env.
@@ -368,7 +371,7 @@ Every one of those libraries is consumed through its `exports` map, which resolv
 alongside the apps. Without it, turbo's `^build` compiles each library exactly once at start-up, and an
 export added afterwards does not exist as far as an already-running `next dev` is concerned: Turbopack
 reports `Export X doesn't exist in target module` and helpfully suggests a neighbouring export from the
-stale build. That is 11 persistent tasks, which is why `turbo.json` raises `concurrency` above its default
+stale build. That is 12 persistent tasks, which is why `turbo.json` raises `concurrency` above its default
 of 10. `@bam/db#dev` additionally depends on `@bam/db#build`, because only that runs `prisma generate` and
 the watch cannot typecheck without the generated client.
 

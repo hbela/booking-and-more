@@ -128,9 +128,7 @@ describe("weeklyHours", () => {
         hours(4),
         hours(6, "10:00", "14:00"),
       ]),
-    ).toBe(
-      "Mon–Tue 09:00–17:00; Wed 09:00–12:00, 13:00–17:00; Thu 09:00–17:00; Sat 10:00–14:00",
-    );
+    ).toBe("Mon–Tue 09:00–17:00; Wed 09:00–12:00, 13:00–17:00; Thu 09:00–17:00; Sat 10:00–14:00");
   });
 
   it("drops hours at an inactive or archived location, as the engine does", () => {

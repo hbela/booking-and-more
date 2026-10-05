@@ -732,7 +732,8 @@
     "answer": "Válasz",
     "addFaq": "Kérdés hozzáadása",
     "delete": "Törlés",
-    "empty": "Még nincsenek gyakori kérdések."
+    "empty": "Még nincsenek gyakori kérdések.",
+    "findings": "{count, plural, other {# probléma ebben a szövegben}} — lásd a tudás ellenőrzését"
   },
   "pwa": {
     "install": "Alkalmazás telepítése",
@@ -747,5 +748,89 @@
     "offlineTitle": "Nincs internetkapcsolat",
     "offlineDescription": "A munkafelület megnyitásához kapcsolódjon az internethez. Az időpontok megtekintése és módosítása csak online érhető el.",
     "retry": "Újrapróbálkozás"
+  },
+  "knowledgeHealth": {
+    "title": "Az asszisztens tudásának ellenőrzése",
+    "hint": "Itt látja, hol mond ellent a cégprofil, a szolgáltatásleírások vagy a GYIK a szolgáltatásainak, szolgáltatóinak, helyszíneinek és munkaidejének. Az asszisztens mindig a rögzített adatoknak hisz, ezért ezekben a pontokban másként válaszol, mint ahogy Ön leírta.",
+    "loading": "Ellenőrzés…",
+    "error": "Az ellenőrzés nem futott le. Kérjük, próbálja újra.",
+    "clean": "Nincs probléma. A szövegek egyeznek a rögzített adatokkal.",
+    "summary": "{errors, plural, =0 {Nincs hiba} other {# hiba}}, {warnings, plural, =0 {nincs figyelmeztetés} other {# figyelmeztetés}}.",
+    "error_badge": "Hiba",
+    "warning_badge": "Figyelmeztetés",
+    "noneRecorded": "nincs rögzítve",
+    "didYouMean": "Talán erre gondolt: {suggestion}?",
+    "fix": "Javítás itt",
+    "source": {
+      "profile": "Cégprofil ({language})",
+      "service": "Szolgáltatásleírás: {name} ({language})",
+      "services": "Szolgáltatások ({language})",
+      "faq": "GYIK: {name}",
+      "faqs": "GYIK ({language})",
+      "records": "Beállítások"
+    },
+    "codes": {
+      "UNBOOKABLE_SERVICE_MENTIONED": "A(z) „{excerpt}” kínálatként szerepel, de nem foglalható. Foglalható szolgáltatások: {expected}. Vegye fel szolgáltatásként, törölje, vagy írja le, hogyan érhető el (például: a konzultáción tervezzük meg).",
+      "PERSON_NOT_A_PROVIDER": "„{excerpt}” nem foglalható szolgáltató. Foglalható szolgáltatók: {expected}.",
+      "CITY_MISMATCH": "A szöveg említi: {suggestion}, de a helyszínei itt vannak: {expected}.",
+      "HOURS_MISMATCH": "Ez az időpont eltér a munkaidőtől ({expected}). Az asszisztens a munkaidővel válaszol.",
+      "HOURS_STATED": "A nyitvatartás a szövegben is szerepel. Most egyezik, de az asszisztens a munkaidőből olvassa; törölje, hogy ne avulhasson el.",
+      "PRICE_NOT_RECORDED": "Ez az ár egyik szolgáltatásnál sincs beállítva, ezért az asszisztens nem mondja meg. Állítsa be az árat a szolgáltatásnál.",
+      "DUPLICATED_FACT": "Ez az ár a(z) {expected} leírásában is szerepel. Egy helyen tartsa, a szolgáltatásnál.",
+      "LOCALE_MISSING_PROFILE": "Nincs {language} nyelvű cégprofil. Az ilyen nyelvű beszélgetések az alapnyelvű profilt használják.",
+      "LOCALE_MISSING_SERVICE": "Szolgáltatások {language} fordítás nélkül: {expected}.",
+      "LOCALE_MISSING_FAQ": "Nincs {language} nyelvű GYIK. Az ilyen nyelvű beszélgetések az alapnyelvű GYIK-et használják.",
+      "PERSONAL_DATA": "Egy vélemény ügyfelet nevez meg ({excerpt}). Az asszisztens bárkinek megismételheti.",
+      "CONTACT_MISSING": "Nincs megadva kapcsolati e-mail-cím vagy telefonszám, ezért az asszisztens nem tudja megmondani, hogyan érhetik el Önöket.",
+      "PROVIDER_WITHOUT_HOURS": "{excerpt} szolgáltatásokat kínál, de nincs munkaideje, ezért senki sem tud hozzá foglalni."
+    },
+    "rulesTitle": "Hogyan írjon az asszisztens számára használható szöveget",
+    "rulesIntro": "A tények a szolgáltatások, a szolgáltatók, a helyszínek, a munkaidő és az elérhetőségek. A szöveg magyarázhatja őket, de nem egészítheti ki és nem mondhat nekik ellent.",
+    "rules": {
+      "K1": {
+        "title": "Kínálat",
+        "text": "Csak foglalható szolgáltatást soroljon fel kínálatként, vagy írja le, hogyan érhető el (például: a konzultáción tervezzük meg)."
+      },
+      "K2": {
+        "title": "Személyek",
+        "text": "Csak itt foglalható szolgáltatókat nevezzen meg. Mást, például nem rendelő rendelővezetőt, a szerepével együtt említsen."
+      },
+      "K3": {
+        "title": "Helyszín",
+        "text": "A város és a cím a Helyszínekből jön. Ha a szövegben is szerepel, egyezzen."
+      },
+      "K4": {
+        "title": "Nyitvatartás",
+        "text": "Ne írja a nyitvatartást a szövegbe. Az asszisztens a munkaidőből olvassa."
+      },
+      "K5": {
+        "title": "Árak",
+        "text": "Az ár a szolgáltatáshoz tartozik. Az asszisztens csak az ott beállított árat mondja meg."
+      },
+      "K6": {
+        "title": "Egy tény, egy hely",
+        "text": "Ami egy szolgáltatásra vonatkozik, például egy csomag, az annak a leírásába kerüljön, ne a profilba is."
+      },
+      "K7": {
+        "title": "Nyelvek",
+        "text": "Minden nyelvhez, amelyen az asszisztens beszél, legyen saját profil, szolgáltatásfordítás és GYIK. Különben az alapnyelvűt fordítja."
+      },
+      "K8": {
+        "title": "Személyes adatok",
+        "text": "Ne szerepeljenek ügyfélnevek, például véleményekben. Az asszisztens bárkinek megismételheti őket."
+      }
+    },
+    "contact": {
+      "title": "Elérhetőségek és szabályzatok",
+      "hint": "Az asszisztens ezeket adja meg, ha az ügyfél azt kérdezi, hogyan érheti el Önöket, vagy lemondhatja-e az időpontot.",
+      "email": "Kapcsolati e-mail-cím",
+      "phone": "Kapcsolati telefonszám",
+      "bookingPolicy": "Foglalási szabályzat",
+      "cancellationPolicy": "Lemondási szabályzat",
+      "save": "Elérhetőségek mentése",
+      "saved": "Az elérhetőségek mentve.",
+      "loading": "Betöltés…",
+      "error": "Az elérhetőségeket nem sikerült betölteni vagy menteni. Ellenőrizze az e-mail-címet, és próbálja újra."
+    }
   }
 }
