@@ -5,6 +5,7 @@ import { loadEnv } from "@bam/config";
 import { usagePeriodOf } from "@bam/contracts";
 
 import { buildApp, type AppInstance } from "./app.js";
+import { SiteReadError, type SiteFetcher } from "./modules/assistant/site-reader.js";
 
 /**
  * phase-12 part 4 through real HTTP: the model-assisted audit (§3.2) and
@@ -19,6 +20,16 @@ const RUN = `ka${randomBytes(4).toString("hex")}`;
 describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
   let app: AppInstance;
   let model: FakeKnowledgeAssistant;
+  /** The fake website, by host then path; a host missing here is unreachable. */
+  const websites = new Map<string, Record<string, string>>();
+  const fetched: string[] = [];
+  const siteFetcher: SiteFetcher = (url, allow) => {
+    fetched.push(url.toString());
+    if (!allow(url)) return Promise.reject(new SiteReadError("off_site"));
+    const body = websites.get(url.hostname)?.[url.pathname];
+    if (body === undefined) return Promise.reject(new SiteReadError("unreachable"));
+    return Promise.resolve({ url, contentType: "text/html; charset=utf-8", body });
+  };
 
   beforeAll(async () => {
     const env = loadEnv({
@@ -42,6 +53,7 @@ describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
       rateLimit: false,
       aiProviders: fakeProviders(),
       knowledgeAssistant: model,
+      siteFetcher,
     });
     await app.ready();
   });
@@ -295,6 +307,127 @@ describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
       payload: { target: "en", kind: "SERVICE" },
     });
     expect(missingId.statusCode).toBe(422);
+  });
+
+  it("drafts from the organization's own website, keeps only what the site names, saves nothing", async () => {
+    const site = await clinic("import");
+    const domain = `import-${RUN}.example.test`;
+    const imported = () =>
+      app.inject({
+        method: "POST",
+        url: "/v1/assistant/knowledge/site-import",
+        headers: site.headers,
+        payload: {},
+      });
+
+    // No domain on record: nothing to read, and nothing is spent.
+    const calls = model.imports.length;
+    const noDomain = await imported();
+    expect(noDomain.statusCode).toBe(422);
+    expect(model.imports).toHaveLength(calls);
+
+    await app.prisma.tenant.update({ where: { id: site.tenantId }, data: { domain } });
+    // Registered but unreachable: refused before the model is called.
+    const unreachable = await imported();
+    expect(unreachable.statusCode).toBe(422);
+    expect(unreachable.json().error).toMatchObject({
+      code: "SITE_UNREACHABLE",
+      details: { reason: "unreachable" },
+    });
+    expect(model.imports).toHaveLength(calls);
+
+    websites.set(domain, {
+      "/": '<h1>Wellness</h1><p>Családi rendelő.</p><a href="/arak">Árak</a><a href="https://evil.test/x">x</a>',
+      "/arak": "<ul><li>Fogkőeltávolítás 12 000 Ft</li><li>Konzultáció</li></ul>",
+    });
+    const existing = await app.prisma.service.create({
+      data: {
+        tenantId: site.tenantId,
+        name: "Konzultáció",
+        slug: `konz-${RUN}`,
+        durationMinutes: 20,
+      },
+    });
+    const home = `https://${domain}/`;
+    const prices = `https://${domain}/arak`;
+    model.nextImport = {
+      profile: "## Rólunk\nCsaládi rendelő.",
+      services: [
+        {
+          name: "Fogkőeltávolítás",
+          description: "Ultrahangos tisztítás.",
+          price: 12000,
+          currency: "HUF",
+          durationMinutes: null,
+          sourceUrl: prices,
+        },
+        {
+          name: "konzultáció",
+          description: null,
+          price: null,
+          currency: null,
+          durationMinutes: null,
+          sourceUrl: prices,
+        },
+        // Not on the site: invented, and dropped.
+        {
+          name: "Fogszabályozás",
+          description: null,
+          price: null,
+          currency: null,
+          durationMinutes: null,
+          sourceUrl: prices,
+        },
+      ],
+      faqs: [
+        { question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home },
+        { question: "Kitalált?", answer: "Igen.", sourceUrl: "https://evil.test/x" },
+      ],
+    };
+
+    const counts = async () => ({
+      services: await app.prisma.service.count({ where: { tenantId: site.tenantId } }),
+      faqs: await app.prisma.tenantAssistantFaq.count({ where: { tenantId: site.tenantId } }),
+      settings: (
+        await app.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: site.tenantId } })
+      )?.businessDescriptionHu,
+    });
+    const before = await counts();
+    const tokensBefore = await inputTokens(site.tenantId);
+
+    const draft = await imported();
+    expect(draft.statusCode, draft.body).toBe(200);
+    expect(draft.json()).toMatchObject({
+      domain,
+      language: "hu",
+      pages: [
+        { url: home, title: null },
+        { url: prices, title: null },
+      ],
+      profile: "## Rólunk\nCsaládi rendelő.",
+      services: [
+        { name: "Fogkőeltávolítás", price: 12000, currency: "HUF", existingServiceId: null },
+        { name: "konzultáció", existingServiceId: existing.id },
+      ],
+      faqs: [{ question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home }],
+      discarded: 2,
+      cached: false,
+    });
+    // The model read the site's text, not its markup.
+    expect(model.imports.at(-1)?.pages[1]?.text).toBe(
+      "- Fogkőeltávolítás 12 000 Ft\n- Konzultáció",
+    );
+    // The off-site link was never fetched.
+    expect(fetched).not.toContain("https://evil.test/x");
+    // A draft writes nothing.
+    expect(await counts()).toEqual(before);
+    expect(await inputTokens(site.tenantId)).toBeGreaterThan(tokensBefore);
+
+    // An unchanged site is answered from cache, and costs nothing.
+    const spent = await inputTokens(site.tenantId);
+    const again = await imported();
+    expect(again.json().cached).toBe(true);
+    expect(await inputTokens(site.tenantId)).toBe(spent);
   });
 
   it("refuses before calling when the month's allowance cannot cover the call", async () => {

@@ -115,3 +115,33 @@ export const translationDraftSchema = z.object({
   service: z.object({ name: z.string(), description: z.string().nullable() }).nullable(),
 });
 export type TranslationDraft = z.infer<typeof translationDraftSchema>;
+
+/**
+ * docs/phase-12-site-import.md: drafts of the default-language profile, service
+ * proposals and FAQs, read from the organization's own website. Nothing is
+ * saved; each piece goes through its ordinary editor.
+ */
+export const siteImportDraftSchema = z.object({
+  domain: z.string(),
+  language: languageSchema,
+  pages: z.array(z.object({ url: z.string(), title: z.string().nullable() })),
+  profile: z.string().nullable(),
+  services: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string().nullable(),
+      /** Major units, as the create form takes it. */
+      price: z.number().nullable(),
+      currency: z.string().nullable(),
+      durationMinutes: z.number().int().nullable(),
+      sourceUrl: z.string(),
+      /** A service of the same name is already in the catalogue. */
+      existingServiceId: z.string().nullable(),
+    }),
+  ),
+  faqs: z.array(z.object({ question: z.string(), answer: z.string(), sourceUrl: z.string() })),
+  /** Proposals dropped because they named something the site does not. */
+  discarded: z.number().int(),
+  cached: z.boolean(),
+});
+export type SiteImportDraft = z.infer<typeof siteImportDraftSchema>;

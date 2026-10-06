@@ -69,6 +69,7 @@ import { publicCatalogueRoutes } from "./modules/public/catalogue.routes.js";
 import { publicBookingRoutes } from "./modules/public/booking.routes.js";
 import { publicConversationRoutes } from "./modules/public/conversation.routes.js";
 import { assistantRoutes } from "./modules/assistant/assistant.routes.js";
+import { fetchSitePage, type SiteFetcher } from "./modules/assistant/site-reader.js";
 import { trustImmediatePrivateProxy } from "./lib/trusted-proxy.js";
 // PARKED — Epic 6 part 1.
 // import { integrationRoutes } from "./modules/integrations/integration.routes.js";
@@ -139,6 +140,8 @@ export interface BuildAppOptions {
   aiProviders?: AiProviders;
   /** Test seam: the knowledge audit and translation drafts (phase-12 part 4). */
   knowledgeAssistant?: KnowledgeAssistant;
+  /** Test seam: the website reader of the knowledge import (phase-12 site import). */
+  siteFetcher?: SiteFetcher;
 }
 
 /**
@@ -540,6 +543,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
         chatModel: env.ANTHROPIC_CHAT_MODEL,
         maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
       }),
+    siteFetcher: options.siteFetcher ?? fetchSitePage,
     knowledgeAiLimits: {
       professionalMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL,
       plusMonthlyLimit: env.CHAT_MONTHLY_LIMIT_PROFESSIONAL_PLUS,

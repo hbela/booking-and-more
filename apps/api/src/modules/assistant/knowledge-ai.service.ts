@@ -7,11 +7,13 @@ import {
   type KnowledgeAssistant,
 } from "@bam/ai";
 import {
+  AppError,
   ErrorCodes,
   languageSchema,
   NotFoundError,
   ValidationError,
   type KnowledgeAudit,
+  type SiteImportDraft,
   type TranslationDraft,
   type TranslationDraftRequest,
 } from "@bam/contracts";
@@ -20,6 +22,7 @@ import type { KnowledgeText } from "@bam/knowledge-engine";
 import { UsageService } from "../usage/usage.service.js";
 import { AssistantService, localizedBusinessDescriptionWithLocale } from "./assistant.service.js";
 import { knowledgeSnapshot } from "./knowledge-health.js";
+import { readSite, SiteReadError, type SiteFetcher, type SitePage } from "./site-reader.js";
 
 /** The chat's monthly token ceilings, so these calls spend the same allowance. */
 export interface KnowledgeAiLimits {
@@ -31,6 +34,7 @@ export interface KnowledgeAiLimits {
 
 const AUDIT_MAX_OUTPUT_TOKENS = 4_096;
 const TRANSLATION_MAX_OUTPUT_TOKENS = 16_000;
+const IMPORT_MAX_OUTPUT_TOKENS = 8_192;
 const CACHE_SIZE = 200;
 
 /**
@@ -53,11 +57,14 @@ export class KnowledgeAiService {
    * call, and a stale entry cannot exist because the key is the content.
    */
   private readonly audits = new Map<string, Omit<KnowledgeAudit, "cached">>();
+  /** Site imports by a hash of the pages read, for the same reason. */
+  private readonly imports = new Map<string, Omit<SiteImportDraft, "cached">>();
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly model: KnowledgeAssistant,
     private readonly limits: KnowledgeAiLimits,
+    private readonly siteFetcher: SiteFetcher,
   ) {
     this.usage = new UsageService(prisma);
   }
@@ -194,6 +201,85 @@ export class KnowledgeAiService {
     };
   }
 
+  /**
+   * docs/phase-12-site-import.md: drafts from the organization's own website.
+   *
+   * Only `tenants.domain` is read — never a URL the caller supplies — so the
+   * site is the organization's by provisioning, and this is not a general URL
+   * fetcher. Nothing is written: the owner saves each piece through its
+   * ordinary editor, where the knowledge budget and the consistency check
+   * apply as they do to typed text.
+   */
+  async siteImportDraft(tenantId: string): Promise<SiteImportDraft> {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { name: true, domain: true, defaultLanguage: true },
+    });
+    if (!tenant.domain)
+      throw new ValidationError("The organization has no website domain on record.", {
+        field: "domain",
+      });
+    const domain = tenant.domain;
+    const language = languageSchema.parse(tenant.defaultLanguage);
+
+    let pages: SitePage[];
+    try {
+      pages = await readSite(domain, this.siteFetcher);
+    } catch (error) {
+      const reason = error instanceof SiteReadError ? error.reason : "unreachable";
+      throw new AppError(ErrorCodes.SITE_UNREACHABLE, "The website could not be read.", {
+        statusCode: 422,
+        details: { field: "domain", reason },
+        report: false,
+      });
+    }
+
+    const input = { language, businessName: tenant.name, pages };
+    const key = createHash("sha256")
+      .update(JSON.stringify([tenantId, input]))
+      .digest("hex");
+    const hit = this.imports.get(key);
+    if (hit) return { ...hit, cached: true };
+
+    const { draft } = await this.metered(
+      tenantId,
+      () => this.model.countImportTokens(input),
+      IMPORT_MAX_OUTPUT_TOKENS,
+      () => this.model.importFromSite(input, IMPORT_MAX_OUTPUT_TOKENS),
+    );
+
+    // A proposal is kept only when it names what the site says, from a page
+    // that was read — the same posture as the audit's verbatim excerpts. An
+    // invented treatment would otherwise reach the catalogue one click later.
+    const read = new Set(pages.map((page) => page.url));
+    const corpus = normalise(pages.map((page) => `${page.title ?? ""}\n${page.text}`).join("\n"));
+    const existing = await this.prisma.service.findMany({
+      where: { tenantId, archivedAt: null },
+      select: { id: true, name: true },
+    });
+    const byName = new Map(existing.map((service) => [normalise(service.name), service.id]));
+    const seen = new Set<string>();
+    const services = draft.services.flatMap((service) => {
+      const name = normalise(service.name);
+      if (!read.has(service.sourceUrl) || !corpus.includes(name) || seen.has(name)) return [];
+      seen.add(name);
+      return [{ ...service, existingServiceId: byName.get(name) ?? null }];
+    });
+    const faqs = draft.faqs.filter((faq) => read.has(faq.sourceUrl));
+    const result = {
+      domain,
+      language,
+      pages: pages.map((page) => ({ url: page.url, title: page.title })),
+      profile: draft.profile || null,
+      services,
+      faqs,
+      discarded: draft.services.length - services.length + (draft.faqs.length - faqs.length),
+    };
+    if (this.imports.size >= CACHE_SIZE) this.imports.delete(this.imports.keys().next().value!);
+    this.imports.set(key, result);
+    return { ...result, cached: false };
+  }
+
   /** Reserve the upper bound, call, settle what was used (see the class comment). */
   private async metered<T extends { usage: AiUsage }>(
     tenantId: string,
@@ -260,6 +346,11 @@ function label(text: KnowledgeText): string {
   if (text.kind === "PROFILE") return `Company profile (${text.locale})`;
   if (text.kind === "SERVICE") return `Service description: ${text.name ?? ""} (${text.locale})`;
   return `FAQ: ${text.name ?? ""} (${text.locale})`;
+}
+
+/** Case- and whitespace-insensitive, for matching names. Accents count. */
+function normalise(value: string): string {
+  return value.normalize("NFC").toLocaleLowerCase("hu").replace(/\s+/gu, " ").trim();
 }
 
 /** Whitespace-insensitive, because a model reflows line breaks inside a quote. */

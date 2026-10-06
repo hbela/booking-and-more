@@ -6,6 +6,7 @@ import {
   idSchema,
   knowledgeAuditRequestSchema,
   knowledgeAuditSchema,
+  siteImportDraftSchema,
   knowledgeHealthSchema,
   languageSchema,
   translationDraftRequestSchema,
@@ -26,12 +27,15 @@ import {
 } from "./assistant.schemas.js";
 import { AssistantService } from "./assistant.service.js";
 import { KnowledgeAiService, type KnowledgeAiLimits } from "./knowledge-ai.service.js";
+import type { SiteFetcher } from "./site-reader.js";
 import { acknowledgeFinding, knowledgeHealth, removeAcknowledgement } from "./knowledge-health.js";
 
 export interface AssistantRouteOptions {
   /** phase-12 part 4. Anthropic in production, a scripted fake in tests. */
   knowledgeAssistant: KnowledgeAssistant;
   knowledgeAiLimits: KnowledgeAiLimits;
+  /** The website reader for the knowledge import; a fake in tests. */
+  siteFetcher: SiteFetcher;
 }
 
 export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = async (
@@ -43,6 +47,7 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
     app.prisma,
     options.knowledgeAssistant,
     options.knowledgeAiLimits,
+    options.siteFetcher,
   );
   const entitled = async (request: { tenant?: { id: string } }) =>
     service.assertEntitled(request.tenant!.id);
@@ -200,6 +205,39 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
           ...(request.body.kind === "SERVICE" && { serviceId: request.body.serviceId }),
         },
       });
+      return draft;
+    },
+  );
+
+  app.post(
+    "/knowledge/site-import",
+    {
+      preHandler: manage,
+      // Each press reads up to twelve pages of somebody's website.
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+      schema: {
+        tags: ["assistant"],
+        summary: "Draft the profile, services and FAQs from the organization's website",
+        description:
+          "Reads the website at the organization's registered domain and drafts, in its default language, a company profile, service proposals and FAQs. Nothing is saved. Spends the assistant's monthly allowance; an unchanged site is answered from cache.",
+        body: z.object({}).strict(),
+        response: { 200: siteImportDraftSchema, ...commonErrorResponses },
+      },
+    },
+    async (request) => {
+      const draft = await knowledgeAi.siteImportDraft(request.tenant!.id);
+      if (!draft.cached)
+        request.audit({
+          action: "assistant.knowledge.site_imported",
+          entityType: "Tenant",
+          entityId: request.tenant!.id,
+          after: {
+            domain: draft.domain,
+            pages: draft.pages.length,
+            services: draft.services.length,
+            faqs: draft.faqs.length,
+          },
+        });
       return draft;
     },
   );

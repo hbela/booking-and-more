@@ -153,6 +153,8 @@ export function Dashboard(): React.ReactElement {
               tenantId={context.tenantId}
               canManage={context.can("assistant:manage")}
               canManageContact={context.can("tenant:manage")}
+              canManageServices={context.can("service:manage")}
+              domain={context.me.tenant?.domain ?? null}
               defaultLanguage={context.me.tenant?.defaultLanguage ?? "hu"}
             />
           ) : null}

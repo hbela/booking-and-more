@@ -527,6 +527,157 @@ for (const locale of ["en", "hu"] as const) {
       ]);
   });
 
+  test(`${locale}: the website import drafts the profile, services and FAQs and saves only what is added`, async ({
+    page,
+  }) => {
+    const createdFaqs: unknown[] = [];
+    const createdServices: unknown[] = [];
+    const settingsSaves: unknown[] = [];
+    await mockApi(page, async (route, path, method) => {
+      if (path === "/v1/me") {
+        await route.fulfill({
+          json: {
+            ...me,
+            tenant: { ...tenant, domain: "wellness.hu" },
+            permissions: [...me.permissions, "service:manage"],
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/assistant/knowledge/site-import" && method === "POST") {
+        await route.fulfill({
+          json: {
+            domain: "wellness.hu",
+            language: "hu",
+            pages: [
+              { url: "https://wellness.hu/", title: "Wellness" },
+              { url: "https://wellness.hu/arak", title: "Árak" },
+            ],
+            profile: "## Rólunk\n\nCsaládi rendelő Szentendrén.",
+            services: [
+              {
+                name: "Fogkőeltávolítás",
+                description: "Ultrahangos tisztítás.",
+                price: 12000,
+                currency: "HUF",
+                durationMinutes: null,
+                sourceUrl: "https://wellness.hu/arak",
+                existingServiceId: null,
+              },
+              {
+                name: "Konzultáció",
+                description: null,
+                price: null,
+                currency: null,
+                durationMinutes: 20,
+                sourceUrl: "https://wellness.hu/arak",
+                existingServiceId: "svc_1",
+              },
+            ],
+            faqs: [
+              {
+                question: "Van parkoló?",
+                answer: "Igen, az udvarban.",
+                sourceUrl: "https://wellness.hu/",
+              },
+            ],
+            discarded: 1,
+            cached: false,
+          },
+        });
+        return true;
+      }
+      if (path === "/v1/assistant/faqs" && method === "POST") {
+        createdFaqs.push(route.request().postDataJSON());
+        await route.fulfill({ status: 201, json: { id: "faq_9" } });
+        return true;
+      }
+      if (path === "/v1/services" && method === "POST") {
+        createdServices.push(route.request().postDataJSON());
+        await route.fulfill({ status: 201, json: { id: "svc_9" } });
+        return true;
+      }
+      if (path === "/v1/assistant/settings" && method === "PATCH") {
+        settingsSaves.push(route.request().postDataJSON());
+        await route.fulfill({ json: {} });
+        return true;
+      }
+      return false;
+    });
+
+    await page.goto(`/${locale}/dashboard`);
+    await page
+      .getByRole("button", { name: en ? "Read wellness.hu" : "wellness.hu beolvasása" })
+      .click();
+    await expect(page.getByText(en ? "2 pages read." : "2 oldal beolvasva.")).toBeVisible();
+
+    // The profile goes into the editor, asking first because text is there.
+    await page
+      .getByRole("button", {
+        name: en ? "Use as Hungarian profile" : "Legyen ez a(z) magyar profil",
+      })
+      .click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: en ? "Replace" : "Csere" })
+      .click();
+    await expect(page.locator('textarea[name="description-hu"]')).toHaveValue(
+      "## Rólunk\n\nCsaládi rendelő Szentendrén.",
+    );
+    await expect(
+      page.getByText(en ? /Drafted from wellness.hu/ : /Vázlat innen: wellness.hu/),
+    ).toBeVisible();
+
+    // A service already in the catalogue cannot be added twice.
+    await expect(
+      page.getByText(en ? "Already in your catalogue" : "Már szerepel a szolgáltatások között"),
+    ).toBeVisible();
+
+    // Add opens the ordinary create form; a duration the site did not give is required.
+    await page
+      .getByRole("button", { name: en ? "Add" : "Hozzáadás", exact: true })
+      .first()
+      .click();
+    const duration = page.locator("#import-service-0-duration");
+    await expect(page.locator("#import-service-0-name")).toHaveValue("Fogkőeltávolítás");
+    await expect(duration).toHaveValue("");
+    const create = page.getByRole("button", { name: en ? "Create" : "Létrehozás" });
+    await create.click();
+    expect(createdServices).toEqual([]);
+    await page.screenshot({ path: `test-results/site-import-${locale}.png`, fullPage: true });
+    await duration.fill("30");
+    await create.click();
+    await expect(page.getByText(en ? "Added" : "Hozzáadva", { exact: true })).toBeVisible();
+    expect(createdServices).toEqual([
+      expect.objectContaining({
+        name: "Fogkőeltávolítás",
+        description: "Ultrahangos tisztítás.",
+        durationMinutes: 30,
+        // HUF has no minor unit in the browser's currency data.
+        priceMinor: 12_000,
+        currency: "HUF",
+      }),
+    ]);
+
+    // A FAQ is added in the default language.
+    const faq = page.locator("li").filter({ hasText: "Van parkoló?" });
+    await faq.getByRole("button", { name: en ? "Add" : "Hozzáadás", exact: true }).click();
+    await expect
+      .poll(() => createdFaqs)
+      .toEqual([
+        {
+          locale: "hu",
+          question: "Van parkoló?",
+          answer: "Igen, az udvarban.",
+          active: true,
+          sortOrder: 0,
+        },
+      ]);
+
+    // The profile was never saved by the import itself.
+    expect(settingsSaves).toEqual([]);
+  });
+
   test(`${locale}: a transcript shows what an answer said and what it named outside the records`, async ({
     page,
   }) => {

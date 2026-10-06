@@ -456,7 +456,9 @@ flags).
     before saving" note until the owner types in it;
   - a FAQ block that drafts a language's FAQs as a list to Add or Discard one by one.
   - service names and descriptions followed later the same day, as a draft button per language in
-    each service's Translations panel: [service translation drafts](phase-12-service-translation-drafts.md).
+    each service's Translations panel: [service translation drafts](phase-12-service-translation-drafts.md);
+  - and the step before translation — drafting the default-language profile, services and FAQs from
+    the organization's own website — is [the site import](phase-12-site-import.md).
 
   The profile fields were restructured so the buttons and notes sit **outside** each `<label>`.
   Before this, the findings link was inside it and so part of the textarea's accessible name.

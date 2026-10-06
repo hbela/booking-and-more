@@ -24,6 +24,7 @@ import {
   serviceStateFrom,
   type ServiceFormState,
 } from "./service-fields";
+import { CreateServiceForm } from "./create-service-form";
 import { DashboardShell, useDashboardContext, useSignInRedirect } from "./dashboard-shell";
 import { NoOrganizationPanel } from "./no-organization";
 import { type EditPanel, useEditPanel } from "@/lib/use-edit-panel";
@@ -255,39 +256,6 @@ export function ServicesScreen(): React.ReactElement {
 
 function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElement {
   const t = useTranslations("catalogue");
-  const budgetText = useTranslations("knowledgeBudget");
-  const queryClient = useQueryClient();
-
-  const [state, setState] = useState<ServiceFormState>(() => serviceStateFrom());
-  const [error, setError] = useState<string | null>(null);
-  const [slugTaken, setSlugTaken] = useState(false);
-
-  const mutation = useMutation({
-    mutationFn: () =>
-      apiFetch<Service>("/v1/services", {
-        method: "POST",
-        tenantId,
-        body: serviceBodyFrom(state, "create"),
-      }),
-    onSuccess: () => {
-      setState(serviceStateFrom());
-      void queryClient.invalidateQueries({ queryKey: ["services"] });
-      void queryClient.invalidateQueries({ queryKey: ["knowledge-usage"] });
-    },
-    onError: (cause: unknown) => {
-      // The slug index covers archived rows, so this error usually means the
-      // name is held by something the owner archived — and cannot see. Saying
-      // so turns the most confusing possible failure into an instruction.
-      setSlugTaken(cause instanceof ApiError && cause.code === "SLUG_TAKEN");
-      setError(
-        isKnowledgeLimitError(cause)
-          ? budgetText("error")
-          : cause instanceof ApiError
-            ? cause.message
-            : t("genericError"),
-      );
-    },
-  });
 
   return (
     <Card>
@@ -296,37 +264,7 @@ function CreateServicePanel({ tenantId }: { tenantId: string }): React.ReactElem
       </CardHeader>
       <CardContent>
         <p className="text-sm text-ink-muted">{t("addServiceHint")}</p>
-
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setError(null);
-            setSlugTaken(false);
-            mutation.mutate();
-          }}
-        >
-          <ServiceFields
-            state={state}
-            idPrefix="new-service"
-            onChange={(patch) => {
-              setState((current) => ({ ...current, ...patch }));
-            }}
-          />
-
-          <KnowledgeBudget
-            tenantId={tenantId}
-            baseDescriptionChange={knowledgeCharacters(state.description)}
-          />
-          <ErrorText>{error}</ErrorText>
-          {slugTaken ? (
-            <p className="text-sm text-ink-muted">{t("slugTakenArchivedHint")}</p>
-          ) : null}
-
-          <Button type="submit" disabled={mutation.isPending}>
-            {t("create")}
-          </Button>
-        </form>
+        <CreateServiceForm tenantId={tenantId} idPrefix="new-service" />
       </CardContent>
     </Card>
   );

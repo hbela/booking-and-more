@@ -16,6 +16,7 @@ import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Textarea } from "./ui/textarea";
 import { useConfirm } from "./ui/confirm-dialog";
+import { SiteImportCard } from "./site-import";
 import {
   aiErrorKey,
   ContactDetailsCard,
@@ -57,10 +58,16 @@ export function BusinessKnowledge({
   tenantId,
   canManage,
   canManageContact,
+  canManageServices,
   defaultLanguage,
+  domain,
 }: {
   tenantId: string;
   canManage: boolean;
+  /** Service proposals from the website import are created through the catalogue. */
+  canManageServices: boolean;
+  /** The organization's website, which the import reads; null hides it. */
+  domain: string | null;
   /** The language drafts are translated from (phase-12 §8.4). */
   defaultLanguage: string;
   /** Contact details and policies are tenant settings, not assistant ones. */
@@ -77,6 +84,8 @@ export function BusinessKnowledge({
   const profileForm = useRef<HTMLFormElement>(null);
   // Languages whose profile field holds an unedited machine draft.
   const [drafted, setDrafted] = useState<ReadonlySet<Language>>(new Set());
+  // The default-language profile holds an unedited draft from the website.
+  const [importedProfile, setImportedProfile] = useState(false);
   const [faqTarget, setFaqTarget] = useState<Language | null>(null);
   const [faqDraft, setFaqDraft] = useState<TranslationDraft | null>(null);
   const health = useKnowledgeHealth(tenantId);
@@ -106,6 +115,7 @@ export function BusinessKnowledge({
       toast.success(t("saved"));
       setProfileChanges({});
       setDrafted(new Set());
+      setImportedProfile(false);
       void client.invalidateQueries({ queryKey: ["knowledge-usage", tenantId] });
       void client.invalidateQueries({ queryKey: knowledgeHealthKey(tenantId) });
       void client.invalidateQueries({ queryKey: ["assistant-settings", tenantId] });
@@ -159,10 +169,21 @@ export function BusinessKnowledge({
         : current,
     );
 
-  const draftProfile = (language: Language) => {
+  /** Asks before replacing text already in a profile field, then lets `run` fill it. */
+  const replaceProfile = (language: Language, run: (field: HTMLTextAreaElement) => void) => {
     const field = profileForm.current?.elements.namedItem(`description-${language}`);
     if (!(field instanceof HTMLTextAreaElement)) return;
-    const run = () =>
+    if (field.value.trim())
+      confirm({
+        title: t("draft.overwrite", { language: inSentence(language) }),
+        confirmLabel: t("draft.replace"),
+        onConfirm: () => run(field),
+      });
+    else run(field);
+  };
+
+  const draftProfile = (language: Language) =>
+    replaceProfile(language, (field) =>
       draft.mutate(
         { target: language, kind: "PROFILE" },
         {
@@ -171,19 +192,34 @@ export function BusinessKnowledge({
             setDrafted((current) => new Set(current).add(language));
           },
         },
-      );
-    if (field.value.trim())
-      confirm({
-        title: t("draft.overwrite", { language: inSentence(language) }),
-        confirmLabel: t("draft.replace"),
-        onConfirm: run,
-      });
-    else run();
-  };
+      ),
+    );
+
+  // docs/phase-12-site-import.md §4: the website draft goes into the same
+  // editor, saved by the same button, and is marked until the owner edits it.
+  const applyImportedProfile = (text: string) =>
+    replaceProfile(sourceLanguage, (field) => {
+      fill(field, text);
+      setImportedProfile(true);
+      field.scrollIntoView({ block: "center" });
+    });
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
       {confirmDialog}
+      {canManage && domain ? (
+        <SiteImportCard
+          tenantId={tenantId}
+          domain={domain}
+          language={sourceLanguage}
+          canManageServices={canManageServices}
+          onUseProfile={applyImportedProfile}
+          onAddFaq={(faq, onDone) =>
+            addFaq.mutate({ locale: sourceLanguage, ...faq }, { onSuccess: onDone })
+          }
+          addingFaq={addFaq.isPending}
+        />
+      ) : null}
       <KnowledgeHealthCard tenantId={tenantId} canManage={canManage} />
       <Card>
         <CardHeader>
@@ -236,18 +272,27 @@ export function BusinessKnowledge({
                       lang={language}
                       defaultValue={settings.data[PROFILE_FIELDS[language]] ?? ""}
                       readOnly={!canManage}
-                      aria-describedby={drafted.has(language) ? `draft-${language}` : undefined}
+                      aria-describedby={
+                        drafted.has(language) || (importedProfile && language === sourceLanguage)
+                          ? `draft-${language}`
+                          : undefined
+                      }
                       onInput={(event) => {
                         // Typing makes the draft the owner's text. `fill`
                         // dispatches an untrusted event, which does not count.
-                        if (event.nativeEvent.isTrusted)
-                          setDrafted((current) => without(current, language));
+                        if (!event.nativeEvent.isTrusted) return;
+                        setDrafted((current) => without(current, language));
+                        if (language === sourceLanguage) setImportedProfile(false);
                       }}
                     />
                   </label>
                   {drafted.has(language) ? (
                     <p id={`draft-${language}`} className="text-sm text-warning">
                       {t("draft.marker", { language: inSentence(sourceLanguage) })}
+                    </p>
+                  ) : importedProfile && language === sourceLanguage ? (
+                    <p id={`draft-${language}`} className="text-sm text-warning">
+                      {t("import.marker", { domain: domain ?? "" })}
                     </p>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-3">

@@ -85,6 +85,9 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
                 status: z.enum(["PENDING_SUBSCRIPTION", "TRIAL", "ACTIVE", "SUSPENDED", "CLOSED"]),
                 defaultTimezone: z.string(),
                 defaultLanguage: z.string(),
+                /** The business's own domain, normalised; null when none is on
+                 *  record. What the knowledge import reads (phase-12 site import). */
+                domain: z.string().nullable(),
                 /** When this organization must have subscribed by. Null for an
                  *  internal one, which has no deadline (phase-9 §2.2). */
                 subscribeBy: z.iso.datetime({ offset: true }).nullable(),
@@ -147,6 +150,12 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
           where: { tenantId: tenant.id },
           select: { plan: true, status: true },
         });
+        // Read here rather than added to ResolvedTenant, which carries only
+        // what every request needs.
+        const identity = await app.prisma.tenant.findUnique({
+          where: { id: tenant.id },
+          select: { domain: true },
+        });
 
         return {
           ...base,
@@ -157,6 +166,7 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
             status: tenant.status,
             defaultTimezone: tenant.defaultTimezone,
             defaultLanguage: tenant.defaultLanguage,
+            domain: identity?.domain ?? null,
             subscribeBy: tenant.subscribeBy?.toISOString() ?? null,
             daysRemaining: daysUntil(tenant.subscribeBy),
           },

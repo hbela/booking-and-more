@@ -218,7 +218,14 @@ booked gets them offered. **Read its §2.1 before adding anything to the assista
 fact has one authoritative source, and free text may explain a structured fact but never add or override one. ·
 [Phase 12 — service translation drafts](docs/phase-12-service-translation-drafts.md) (done). The same
 draft endpoint, a third `kind`; its §2.2 is why a service's own name is translated while a name inside the
-profile is not.
+profile is not ·
+[Phase 12 — site import](docs/phase-12-site-import.md) (built; **never run against the real model or a
+real website**). Drafts the default-language profile, service proposals and FAQs from the website at
+`tenants.domain` — never a caller-supplied URL. **Read its §1 before touching `site-reader.ts`**: the API
+shares a network with PostgreSQL and Redis (phase-10 §2.9), so every connection's own DNS lookup refuses a
+non-public address and every redirect is re-checked against the domain. Nothing is written by the import;
+each piece goes through its ordinary editor, and a service proposal's duration is left blank and required
+when the site does not state one.
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

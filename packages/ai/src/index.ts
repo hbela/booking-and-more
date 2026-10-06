@@ -24,8 +24,10 @@ export { AnthropicIntentInterpreter } from "./interpreter.js";
 export {
   AnthropicKnowledgeAssistant,
   buildAuditPrompt,
+  buildImportPrompt,
   buildTranslatePrompt,
   FakeKnowledgeAssistant,
+  parseImport,
   parseFindings,
   parseItems,
 } from "./knowledge.js";
@@ -33,6 +35,11 @@ export type {
   AuditFindingDraft,
   AuditInput,
   AuditText,
+  ImportDraft,
+  ImportedFaq,
+  ImportedService,
+  ImportInput,
+  ImportPage,
   KnowledgeAssistant,
   TranslateInput,
   TranslationItem,

@@ -107,6 +107,8 @@ export interface MeResponse {
     status: "PENDING_SUBSCRIPTION" | "TRIAL" | "ACTIVE" | "SUSPENDED" | "CLOSED";
     defaultTimezone: string;
     defaultLanguage: string;
+    /** The business's own domain; what the knowledge import reads. */
+    domain: string | null;
     subscribeBy: string | null;
     /** Null means *no deadline*, not none left — an internal organization.
      *  Render no countdown at all in that case (phase-9 §2.2). */

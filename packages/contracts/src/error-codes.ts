@@ -153,6 +153,12 @@ export const ErrorCodes = {
   CONVERSATION_EXPIRED: "CONVERSATION_EXPIRED",
   CONVERSATION_TURN_LIMIT_REACHED: "CONVERSATION_TURN_LIMIT_REACHED",
   INTERPRETATION_FAILED: "INTERPRETATION_FAILED",
+  /**
+   * The organization's website could not be read for the knowledge import
+   * (docs/phase-12-site-import.md). `details.reason` says why: an address we
+   * refuse to connect to, a redirect off the domain, no HTML, no text.
+   */
+  SITE_UNREACHABLE: "SITE_UNREACHABLE",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
