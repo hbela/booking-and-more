@@ -1,5 +1,4 @@
 import {
-  KNOWLEDGE_CHARACTER_LIMIT,
   knowledgeCharacters,
   languageSchema,
   ValidationError,
@@ -13,6 +12,29 @@ const fields = {
   de: "businessDescriptionDe",
   fr: "businessDescriptionFr",
 } as const;
+
+/**
+ * `KNOWLEDGE_CHARACTER_LIMIT`, set once by `buildApp` from `@bam/config`.
+ *
+ * Module state rather than a constructor argument because a dozen call sites
+ * across three services reach the budget, and a forgotten argument would fall
+ * back to a default silently. Unset, every read throws instead: a path that
+ * reaches the budget without the composition root is a bug to find, not a
+ * number to guess (docs/phase-12-knowledge-allowance-and-prompt-caching.md §6).
+ */
+let configuredLimit: number | undefined;
+
+export function configureKnowledgeBudget(options: { limit: number }): void {
+  if (!Number.isSafeInteger(options.limit) || options.limit <= 0)
+    throw new Error("The knowledge character limit must be a positive integer.");
+  configuredLimit = options.limit;
+}
+
+function knowledgeLimit(): number {
+  if (configuredLimit === undefined)
+    throw new Error("The knowledge budget was used before configureKnowledgeBudget().");
+  return configuredLimit;
+}
 
 /** Count stored text, including inactive FAQs and archived services. Legacy profile is an alias. */
 export async function knowledgeUsage(
@@ -34,8 +56,9 @@ export async function knowledgeUsage(
     select: { locale: true, question: true, answer: true },
   });
   const defaultLocale = languageSchema.parse(tenant.defaultLanguage);
+  const limit = knowledgeLimit();
   return {
-    limit: KNOWLEDGE_CHARACTER_LIMIT,
+    limit,
     defaultLocale,
     locales: languageSchema.options.map((locale) => {
       const company = knowledgeCharacters(
@@ -64,7 +87,7 @@ export async function knowledgeUsage(
         services: serviceCount,
         faqs: faqCount,
         used,
-        remaining: Math.max(0, KNOWLEDGE_CHARACTER_LIMIT - used),
+        remaining: Math.max(0, limit - used),
       };
     }),
   };

@@ -527,7 +527,8 @@ for (const locale of ["en", "hu"] as const) {
       ]);
   });
 
-  test(`${locale}: the website import drafts the profile, services and FAQs and saves only what is added`, async ({
+  // PARKED — site import (docs/phase-12-site-import.md §9): the card is not rendered.
+  test.skip(`${locale}: the website import drafts the profile, services and FAQs and saves only what is added`, async ({
     page,
   }) => {
     const createdFaqs: unknown[] = [];

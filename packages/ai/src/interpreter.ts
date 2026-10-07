@@ -2,7 +2,7 @@ import { commandEnvelopeSchema, conversationIntentSchema } from "@bam/contracts"
 import type Anthropic from "@anthropic-ai/sdk";
 
 import { getAnthropic, type AnthropicConfig } from "./client.js";
-import { buildSystemPrompt, buildUserMessages } from "./prompt.js";
+import { buildSystemBlocks, buildUserMessages } from "./prompt.js";
 import { tokenUsage } from "./pricing.js";
 import type { IntentInterpreter, InterpretationInput, InterpretationResult } from "./types.js";
 
@@ -91,8 +91,17 @@ function stripNulls(parameters: Record<string, unknown>): Record<string, unknown
   );
 }
 
+/**
+ * Required rather than defaulted: a construction site that forgot it would
+ * otherwise truncate at some number other than the deployment's.
+ */
+export interface IntentInterpreterConfig extends AnthropicConfig {
+  /** `PROMPT_BLOCK_CHARACTER_CEILING`, from `@bam/config`. */
+  promptBlockCharacterCeiling: number;
+}
+
 export class AnthropicIntentInterpreter implements IntentInterpreter {
-  constructor(private readonly config: AnthropicConfig) {}
+  constructor(private readonly config: IntentInterpreterConfig) {}
 
   async countTokens(input: InterpretationInput): Promise<number> {
     const request = this.request(input);
@@ -114,10 +123,17 @@ export class AnthropicIntentInterpreter implements IntentInterpreter {
   }
 
   private request(input: InterpretationInput): Anthropic.MessageCreateParamsNonStreaming {
+    const blocks = buildSystemBlocks(input, this.config.promptBlockCharacterCeiling);
     return {
       model: this.config.chatModel,
       max_tokens: input.maxOutputTokens ?? this.config.maxOutputTokens,
-      system: buildSystemPrompt(input),
+      // The cached block first: tools, then it, form the prefix every turn of
+      // every conversation in this tenant and locale shares (phase-12
+      // knowledge-allowance §3.1).
+      system: [
+        { type: "text", text: blocks.cached, cache_control: { type: "ephemeral" } },
+        { type: "text", text: blocks.turn },
+      ],
       messages: buildUserMessages(input),
       tools: [
         {
@@ -146,6 +162,8 @@ export class AnthropicIntentInterpreter implements IntentInterpreter {
       model,
       inputTokens: completion.usage.input_tokens,
       outputTokens: completion.usage.output_tokens,
+      cacheReadTokens: completion.usage.cache_read_input_tokens,
+      cacheWriteTokens: completion.usage.cache_creation_input_tokens,
     });
 
     const content = completion.content.find((block) => block.type === "tool_use");

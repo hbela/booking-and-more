@@ -2,6 +2,10 @@ import { createPrismaClient } from "@bam/db";
 import { describe, expect, it } from "vitest";
 import { AssistantService } from "./assistant.service.js";
 import { acknowledgeFinding, knowledgeHealth, removeAcknowledgement } from "./knowledge-health.js";
+import { configureKnowledgeBudget } from "./knowledge-budget.js";
+
+// What buildApp does from KNOWLEDGE_CHARACTER_LIMIT; these tests use the services directly.
+configureKnowledgeBudget({ limit: 30_000 });
 
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 

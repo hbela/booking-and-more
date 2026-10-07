@@ -408,6 +408,17 @@ const baseEnvSchema = z.object({
   CHAT_MESSAGE_RATE_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(20),
   CHAT_SESSION_RATE_LIMIT: z.coerce.number().int().positive().max(100_000_000).default(10),
   CONVERSATION_MAX_TURNS: z.coerce.number().int().positive().max(100).default(40),
+  /**
+   * Characters per language shared by the company profile, every service
+   * description and the FAQs (phase-12 knowledge allowance §3). Each one is
+   * sent to the model on every chat turn, cached after the first.
+   */
+  KNOWLEDGE_CHARACTER_LIMIT: z.coerce.number().int().positive().max(1_000_000).default(30_000),
+  /**
+   * The most the receptionist's prompt carries per data block. Must sit above
+   * the allowance with room for the labels the renderer adds; checked below.
+   */
+  PROMPT_BLOCK_CHARACTER_CEILING: z.coerce.number().int().positive().max(2_000_000).default(45_000),
   PENDING_ACTION_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   VOICE_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(30),
   VOICE_AUDIO_RETENTION_ENABLED: z
@@ -422,6 +433,17 @@ const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
       code: "custom",
       path: ["REDIS_URL"],
       message: "Public AI chat in production requires shared Redis rate limiting.",
+    });
+  // A ceiling below the allowance would let an owner save text the
+  // receptionist never reads, and nothing would say so (phase-12 knowledge
+  // allowance §3.3). The labels the renderer adds are kept in hand by 40%.
+  if (env.PROMPT_BLOCK_CHARACTER_CEILING < Math.ceil(env.KNOWLEDGE_CHARACTER_LIMIT * 1.4))
+    ctx.addIssue({
+      code: "custom",
+      path: ["PROMPT_BLOCK_CHARACTER_CEILING"],
+      message: `Must be at least 1.4 × KNOWLEDGE_CHARACTER_LIMIT (${String(
+        Math.ceil(env.KNOWLEDGE_CHARACTER_LIMIT * 1.4),
+      )}), or saved knowledge would be cut from the prompt.`,
     });
   if (env.CHAT_MAX_MESSAGE_CHARACTERS > env.CHAT_MAX_PATIENT_CHARACTERS)
     ctx.addIssue({

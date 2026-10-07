@@ -2,6 +2,12 @@ import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadEnv } from "@bam/config";
 import { ErrorCodes } from "@bam/contracts";
+
+/**
+ * Not the default, so the allowance test proves KNOWLEDGE_CHARACTER_LIMIT
+ * reaches enforcement, the usage response and the error details.
+ */
+const LIMIT = 12_000;
 import { buildApp, type AppInstance } from "./app.js";
 
 /**
@@ -51,6 +57,7 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
         CUSTOMER_PII_BLIND_INDEX_KEY: "22".repeat(32),
         LAUNCH_ACCESS_MODE: "public",
         BETTER_AUTH_SECRET: "test-secret-that-is-at-least-32-characters-long",
+        KNOWLEDGE_CHARACTER_LIMIT: String(LIMIT),
       },
       loadDotenvFile: false,
     });
@@ -120,7 +127,7 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
     const owner = await owned("knowledge-api");
     const headers = as(owner.cookie, owner.tenantId);
     await app.prisma.tenantAssistantSettings.create({
-      data: { tenantId: owner.tenantId, businessDescriptionHu: "p".repeat(9999) },
+      data: { tenantId: owner.tenantId, businessDescriptionHu: "p".repeat(LIMIT - 1) },
     });
     const accepted = await app.inject({
       method: "POST",
@@ -139,17 +146,17 @@ describe.skipIf(!databaseUrl)("catalogue", () => {
     expect(rejected.json().error.details).toMatchObject({
       field: "knowledge",
       locale: "hu",
-      used: 10001,
-      limit: 10000,
+      used: LIMIT + 1,
+      limit: LIMIT,
     });
     const usage = await app.inject({ method: "GET", url: "/v1/services/knowledge-usage", headers });
     expect(usage.statusCode, usage.body).toBe(200);
     expect(usage.json().locales).toContainEqual({
       locale: "hu",
-      company: 9999,
+      company: LIMIT - 1,
       services: 1,
       faqs: 0,
-      used: 10000,
+      used: LIMIT,
       remaining: 0,
     });
     const anonymous = await app.inject({ method: "GET", url: "/v1/services/knowledge-usage" });

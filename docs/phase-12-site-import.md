@@ -5,8 +5,10 @@
 **Document version:** 1.0 — planned and built 2026-10-05.
 **Scope:** draft the default-language company profile, services and FAQs from the website at `tenants.domain`; nothing is written by the import.
 **Depends on:** [Phase 12](phase-12-assistant-knowledge-consistency.md) §2.1 (records beat prose), §7.4 (metered model calls), and [service translation drafts](phase-12-service-translation-drafts.md).
-**Status:** built. **Not run against the real model or a real website yet** — §7 says what that
-leaves unproven. §1–§5 below are the plan as approved; §6 records where the build differs from it.
+**Status:** **PARKED 2026-10-07 — read §9 first.** Built, and run once against a real website and the real
+model (§8), then deferred for delivery time before the owner-facing flow was tested end to end. The code
+is all still in the tree, compiles and is tested; only the two seams that make it reachable are commented
+out.
 
 ## Context
 
@@ -274,3 +276,91 @@ saved until you do" note. Errors go through `aiErrorKey` plus a `SITE_UNREACHABL
 
   **The first step is to run the import against the `wellness` tenant's real domain on staging, then
   run the knowledge check on what was added.**
+
+## 8. First real run — koronafogaszat.eu (2026-10-06)
+
+Run locally against the `wellness` tenant, whose domain was set to `koronafogaszat.eu` for the test.
+
+- **The reader worked first time:**
+  - 12 pages in 1.2 s, about 37 000 characters;
+  - the apex domain redirected to `www.` and was followed;
+  - ranking picked the treatment pages, Rólunk, Áraink and Kapcsolat over the rest.
+- **The single model call failed: "the AI is not available".** The answer stopped at exactly 8 192
+  output tokens after 93 s, and a truncated answer is a failure by design (§2). The full answer,
+  measured once with a 16 000 cap, was 9 013 tokens:
+  - about 3 500 for the profile and FAQs;
+  - about 5 500 for forty services from the price list.
+
+  A single higher cap would have pushed the call past the 120 s model timeout.
+
+- **Fix: two calls in parallel.** `ImportPart` is `PROFILE_AND_FAQS` (cap 6 000) or `SERVICES`
+  (cap 10 000), each with its own tool schema and prompt.
+  - **Re-run:** profile and FAQs in 48 s with 3 583 tokens; services in 54 s with 5 274 tokens (41
+    proposals). The owner waits about a minute instead of about two.
+  - **Cost:** the pages are sent twice (about 20 000 input tokens each), so a press costs about a
+    quarter more than one call would have.
+- **The failure was invisible.** `metered` turned every provider failure into
+  `CONVERSATION_UNAVAILABLE` and logged nothing.
+  - The model client now attaches a `failure` (`max_tokens`, `no_tool_call` or `provider_error`) to
+    the error, and `KnowledgeAiService` logs it with the operation, the cap and the tokens used, with
+    no content (rule 6).
+  - A truncated call is now settled at the tokens it actually used, rather than at the whole
+    reservation.
+- **A prompt contradiction:** the profile rules invited "specialities" and then forbade "a list of the
+  treatments". The model wrote a _Szakterületeink_ list. The rule now forbids lists of treatments,
+  services or fields of treatment, "not even under a heading such as specialities", and the re-run
+  had none.
+- **The site contradicts itself.** The home page says "közel 200 m2" and Rólunk says "közel 400 m2",
+  and the draft carries one of them. Nothing was invented; it is exactly what the "review before
+  saving" marker is for.
+- **What the profile left out, as instructed:** both phone numbers on the home page, prices, the
+  address, opening hours and the named reviews.
+
+## 9. Parked (2026-10-07)
+
+`rg "PARKED — site import"` is the inventory. Both seams are commented out, not deleted:
+
+1. **The route** `POST /v1/assistant/knowledge/site-import` in `assistant.routes.ts`, and its
+   `siteImportDraftSchema` import. Unregistered, the endpoint answers 404.
+2. **The Overview card:** the `SiteImportCard` render and import in `business-knowledge.tsx`,
+   `applyImportedProfile`, and the destructured `canManageServices` prop. The prop stays in the
+   component's type, so `dashboard.tsx` is unchanged.
+
+Two tests are parked with them:
+
+- the API integration test of the route, behind `const siteImportParked = true` in
+  `knowledge-ai.test.ts`;
+- the browser test of the card, as `test.skip` in `knowledge-health.spec.ts`.
+
+**Deliberately left in place, and still running:**
+
+- **Built for the import, and still compiled and tested:**
+  - `site-reader.ts` and its 29 unit tests;
+  - `KnowledgeAiService.siteImportDraft`;
+  - the import prompt, tools, `parseImport` and their tests in `@bam/ai`;
+  - `siteImportDraftSchema` and `SITE_UNREACHABLE` in `@bam/contracts`;
+  - `SiteImportCard`;
+  - the `businessKnowledge.import.*` copy in both locales;
+  - `tenant.domain` on `/v1/me`;
+  - the `siteFetcher` seam on `buildApp`.
+- **Things the import introduced that other features now use:**
+  - `CreateServiceForm`, which the Services screen renders;
+  - the model-failure logging, and settling a truncated call at its real usage (`metered`);
+  - the `importedProfile` marker state, which can no longer be set and so never shows.
+
+**To un-park:**
+
+1. Uncomment the route and its schema import.
+2. Uncomment the card, its import, `applyImportedProfile` and `canManageServices`.
+3. Set `siteImportParked = false` and turn the `test.skip` back into `test`.
+4. **The remaining work.** §8 proved the reader and the model calls, but the owner flow on Overview
+   was never walked with a real draft. That walk is the first thing to do:
+   - read;
+   - use the profile;
+   - add services, setting the durations the site does not state;
+   - add FAQs;
+   - then run the knowledge check.
+
+   The one known gap is a service the site names only under a heading, such as "Konzultáció" under
+   _Gyermekfogászat_. The name check drops a disambiguated name, and the plain one collides with an
+   existing service, so it can only be added by hand.

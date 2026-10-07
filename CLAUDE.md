@@ -219,13 +219,24 @@ fact has one authoritative source, and free text may explain a structured fact b
 [Phase 12 — service translation drafts](docs/phase-12-service-translation-drafts.md) (done). The same
 draft endpoint, a third `kind`; its §2.2 is why a service's own name is translated while a name inside the
 profile is not ·
-[Phase 12 — site import](docs/phase-12-site-import.md) (built; **never run against the real model or a
-real website**). Drafts the default-language profile, service proposals and FAQs from the website at
+[Phase 12 — site import](docs/phase-12-site-import.md) (**PARKED 2026-10-07 — read its §9 first**; built,
+run once against koronafogaszat.eu and the real model in its §8, owner flow never walked).
+`rg "PARKED — site import"` is the inventory: the route and the Overview card are commented out, two tests
+skipped, everything else still compiles and runs. Drafts the default-language profile, service proposals and FAQs from the website at
 `tenants.domain` — never a caller-supplied URL. **Read its §1 before touching `site-reader.ts`**: the API
 shares a network with PostgreSQL and Redis (phase-10 §2.9), so every connection's own DNS lookup refuses a
 non-public address and every redirect is re-checked against the domain. Nothing is written by the import;
 each piece goes through its ordinary editor, and a service proposal's duration is left blank and required
-when the site does not state one.
+when the site does not state one. ·
+[Phase 12 — 30 000-character allowance and prompt caching](docs/phase-12-knowledge-allowance-and-prompt-caching.md)
+(built; **`assistant:eval` not yet run on the new prompt**). The receptionist's system prompt is two blocks:
+a cached prefix (rules, catalogue, facts, description) and a per-turn tail (language, timezone, step).
+**Read its §3.1 before adding anything to the system prompt** — anything per-turn placed in the cached
+block makes every turn a cache miss. **§3.2 is the other one:** `AiUsage.inputTokens` is input-token
+*equivalents* (cache writes ×1.25, reads ×0.1), so the allowance, the per-conversation cap and the
+`AI_INPUT_TOKENS` rows all measure cost, not raw tokens. Both numbers are environment variables,
+`KNOWLEDGE_CHARACTER_LIMIT` (30 000) and `PROMPT_BLOCK_CHARACTER_CEILING` (45 000), and `loadEnv` refuses a
+ceiling below 1.4 × the limit (its §6).
 
 Phase 9 is out of order deliberately: onboarding gates every other epic's screens, so it was started once
 the booking engine existed rather than last. Note that it also delivered the first working email path, ahead

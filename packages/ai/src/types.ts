@@ -21,7 +21,16 @@ import type { CommandEnvelope } from "@bam/contracts";
 export interface AiUsage {
   provider: string;
   model: string;
+  /**
+   * Input-token *equivalents*: uncached input, plus prompt-cache writes at 1.25
+   * and reads at 0.1, so that everything metering this — the monthly
+   * allowance, the per-conversation cap, the usage rows — measures what the
+   * input cost (docs/phase-12-knowledge-allowance-and-prompt-caching.md §3.2).
+   */
   inputTokens?: number;
+  /** Raw prompt-cache counts behind `inputTokens`, for reading only. */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   outputTokens?: number;
   /** Audio seconds, rounded up — in the tenant's favour, never in ours. */
   audioSeconds?: number;

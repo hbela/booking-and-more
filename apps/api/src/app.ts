@@ -70,6 +70,7 @@ import { publicBookingRoutes } from "./modules/public/booking.routes.js";
 import { publicConversationRoutes } from "./modules/public/conversation.routes.js";
 import { assistantRoutes } from "./modules/assistant/assistant.routes.js";
 import { fetchSitePage, type SiteFetcher } from "./modules/assistant/site-reader.js";
+import { configureKnowledgeBudget } from "./modules/assistant/knowledge-budget.js";
 import { trustImmediatePrivateProxy } from "./lib/trusted-proxy.js";
 // PARKED — Epic 6 part 1.
 // import { integrationRoutes } from "./modules/integrations/integration.routes.js";
@@ -156,6 +157,8 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
   const { env } = options;
   const isProduction = env.NODE_ENV === "production";
+  // Before any route: every knowledge write checks against it.
+  configureKnowledgeBudget({ limit: env.KNOWLEDGE_CHARACTER_LIMIT });
 
   const app = Fastify({
     loggerInstance:
@@ -504,6 +507,7 @@ export async function buildApp(options: BuildAppOptions): Promise<AppInstance> {
       apiKey: env.ANTHROPIC_API_KEY,
       chatModel: env.ANTHROPIC_CHAT_MODEL,
       maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
+      promptBlockCharacterCeiling: env.PROMPT_BLOCK_CHARACTER_CEILING,
     }),
     transcription: new DisabledTranscriptionProvider(),
     composer: new TemplateResponseComposer(),

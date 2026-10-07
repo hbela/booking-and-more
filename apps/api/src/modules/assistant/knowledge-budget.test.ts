@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPrismaClient, type PrismaClient } from "@bam/db";
 import { knowledgeCharacters } from "@bam/contracts";
 import { AssistantService } from "./assistant.service.js";
-import { knowledgeUsage } from "./knowledge-budget.js";
+import { configureKnowledgeBudget, knowledgeUsage } from "./knowledge-budget.js";
+
+/** Any allowance: these tests are about the shared budget, not its size. */
+const LIMIT = 30_000;
 import { ServiceCatalogService } from "../services/service.service.js";
 import { TenantService } from "../tenants/tenant.service.js";
 import { assistantSettingsPatchSchema } from "./assistant.schemas.js";
@@ -14,6 +17,8 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
   let catalog: ServiceCatalogService;
   const ids: string[] = [];
   beforeAll(() => {
+    // What buildApp does from KNOWLEDGE_CHARACTER_LIMIT; these tests use the services directly.
+    configureKnowledgeBudget({ limit: LIMIT });
     db = createPrismaClient({ databaseUrl: databaseUrl! });
     assistant = new AssistantService(db);
     catalog = new ServiceCatalogService(db);
@@ -41,10 +46,10 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
     sortOrder: 0,
   });
 
-  it("permits all 10,000 Unicode code points in a company profile for each language", async () => {
+  it("permits the whole allowance in Unicode code points in a company profile for each language", async () => {
     const id = await tenant();
-    const text = String.fromCodePoint(0x1f600).repeat(10_000);
-    expect(knowledgeCharacters(` ${text} `)).toBe(10_000);
+    const text = String.fromCodePoint(0x1f600).repeat(LIMIT);
+    expect(knowledgeCharacters(` ${text} `)).toBe(LIMIT);
     await assistant.saveSettings(
       id,
       assistantSettingsPatchSchema.parse({
@@ -56,7 +61,10 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
       "en",
     );
     expect((await knowledgeUsage(db, id)).locales.map((entry) => entry.used)).toEqual([
-      10_000, 10_000, 10_000, 10_000,
+      LIMIT,
+      LIMIT,
+      LIMIT,
+      LIMIT,
     ]);
     await expect(
       assistant.saveSettings(id, { businessDescriptionEn: text + "x" }, "en"),
@@ -66,14 +74,14 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
 
   it("shares the allowance across profiles, service descriptions and FAQ questions plus answers", async () => {
     const id = await tenant();
-    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(6000) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT - 4000) }, "en");
     await catalog.create({
       tenantId: id,
       input: { name: "Service", durationMinutes: 30, description: "s".repeat(3000) },
     });
     const entry = await assistant.createFaq(id, faq("en", "a".repeat(999)));
     expect((await knowledgeUsage(db, id)).locales.find((row) => row.locale === "en")).toMatchObject(
-      { company: 6000, services: 3000, faqs: 1000, used: 10_000 },
+      { company: LIMIT - 4000, services: 3000, faqs: 1000, used: LIMIT },
     );
     await expect(
       assistant.updateFaq(id, entry.id, faq("en", "a".repeat(1000))),
@@ -91,7 +99,7 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
 
   it("rolls back translation replacements and FAQ language changes that overflow another language", async () => {
     const id = await tenant();
-    await assistant.saveSettings(id, { businessDescriptionFr: "f".repeat(10_000) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionFr: "f".repeat(LIMIT) }, "en");
     const service = await catalog.create({
       tenantId: id,
       input: {
@@ -120,9 +128,9 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
 
   it("serializes competing profile and service saves, allowing only one at the boundary", async () => {
     const id = await tenant();
-    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(9990) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT - 10) }, "en");
     const results = await Promise.allSettled([
-      assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(10_000) }, "en"),
+      assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT) }, "en"),
       catalog.create({
         tenantId: id,
         input: { name: "Concurrent", durationMinutes: 30, description: "s".repeat(10) },
@@ -130,26 +138,26 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
     ]);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect((await knowledgeUsage(db, id)).locales.find((row) => row.locale === "en")?.used).toBe(
-      10_000,
+      LIMIT,
     );
   });
 
   it("allows reductions and unrelated edits to legacy over-limit content but prevents growth", async () => {
     const id = await tenant();
     await db.tenantAssistantSettings.create({
-      data: { tenantId: id, businessDescriptionEn: "p".repeat(15_000) },
+      data: { tenantId: id, businessDescriptionEn: "p".repeat(LIMIT + 5000) },
     });
-    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(12_000) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT + 2000) }, "en");
     await assistant.saveSettings(id, { enabled: true }, "en");
     await expect(
-      assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(12_001) }, "en"),
+      assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT + 2001) }, "en"),
     ).rejects.toMatchObject({ statusCode: 422 });
-    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(10_000) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionEn: "p".repeat(LIMIT) }, "en");
   });
 
   it("counts inactive and archived content and prevents moving base descriptions into a full locale", async () => {
     const id = await tenant();
-    await assistant.saveSettings(id, { businessDescriptionFr: "f".repeat(10_000) }, "en");
+    await assistant.saveSettings(id, { businessDescriptionFr: "f".repeat(LIMIT) }, "en");
     const service = await catalog.create({
       tenantId: id,
       input: { name: "Archived", description: "abc", durationMinutes: 30 },
@@ -165,7 +173,7 @@ describe.skipIf(!databaseUrl)("shared knowledge character budget", () => {
   it("isolates tenant budgets and refuses edits to another tenant's service or FAQ", async () => {
     const first = await tenant();
     const second = await tenant();
-    await assistant.saveSettings(first, { businessDescriptionEn: "p".repeat(10_000) }, "en");
+    await assistant.saveSettings(first, { businessDescriptionEn: "p".repeat(LIMIT) }, "en");
     const entry = await assistant.createFaq(second, faq("en", "answer"));
     const service = await catalog.create({
       tenantId: second,

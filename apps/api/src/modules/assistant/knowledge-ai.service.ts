@@ -3,6 +3,7 @@ import {
   conversationUnavailable,
   tokenCostMinor,
   type AiUsage,
+  type ImportPart,
   type AuditText,
   type KnowledgeAssistant,
 } from "@bam/ai";
@@ -34,8 +35,27 @@ export interface KnowledgeAiLimits {
 
 const AUDIT_MAX_OUTPUT_TOKENS = 4_096;
 const TRANSLATION_MAX_OUTPUT_TOKENS = 16_000;
-const IMPORT_MAX_OUTPUT_TOKENS = 8_192;
+/**
+ * Per half of the import (docs/phase-12-site-import.md §8). Measured on
+ * koronafogaszat.eu: the whole answer was 9 013 tokens, about 3 500 of them
+ * the profile and FAQs and 5 500 the forty services.
+ */
+const IMPORT_PROFILE_MAX_OUTPUT_TOKENS = 6_000;
+const IMPORT_SERVICES_MAX_OUTPUT_TOKENS = 10_000;
+
+/** Enough of a logger to say why a model call failed, without its content. */
+export interface KnowledgeAiLog {
+  warn(details: Record<string, unknown>, message: string): void;
+}
 const CACHE_SIZE = 200;
+/**
+ * A text longer than this is split at blank lines, and pieces are batched up
+ * to the second figure per call, so a 30 000-character profile becomes several
+ * parallel calls of about 40 s rather than one that outruns the model timeout
+ * (docs/phase-12-knowledge-allowance-and-prompt-caching.md §3.4).
+ */
+const TRANSLATION_PIECE_CHARACTERS = 4_000;
+const TRANSLATION_BATCH_CHARACTERS = 6_000;
 
 /**
  * phase-12 part 4: the model-assisted audit (§3.2) and translation drafts (§8.4).
@@ -65,6 +85,7 @@ export class KnowledgeAiService {
     private readonly model: KnowledgeAssistant,
     private readonly limits: KnowledgeAiLimits,
     private readonly siteFetcher: SiteFetcher,
+    private readonly log?: KnowledgeAiLog,
   ) {
     this.usage = new UsageService(prisma);
   }
@@ -167,20 +188,50 @@ export class KnowledgeAiService {
         field: "kind",
       });
 
-    const input = { from: source, to: target, items };
-    const characters = items.reduce((sum, item) => sum + item.text.length, 0);
-    const maxOutput = Math.min(TRANSLATION_MAX_OUTPUT_TOKENS, Math.ceil(characters / 2) + 512);
-    const translated = await this.metered(
-      tenantId,
-      () => this.model.countTranslateTokens(input),
-      maxOutput,
-      () => this.model.translate(input, maxOutput),
+    const pieces = new Map(
+      items.map((item) => [item.id, splitForTranslation(item.text, TRANSLATION_PIECE_CHARACTERS)]),
+    );
+    const batches = batchPieces(
+      items.flatMap((item) =>
+        pieces.get(item.id)!.map((piece, index, all) => ({
+          id: all.length === 1 ? item.id : `${item.id}#${String(index)}`,
+          text: piece,
+        })),
+      ),
+      TRANSLATION_BATCH_CHARACTERS,
+    );
+    const translated = await Promise.all(
+      batches.map((batch) => {
+        const input = { from: source, to: target, items: batch };
+        const characters = batch.reduce((sum, item) => sum + item.text.length, 0);
+        const maxOutput = Math.min(TRANSLATION_MAX_OUTPUT_TOKENS, Math.ceil(characters / 2) + 512);
+        return this.metered(
+          tenantId,
+          () => this.model.countTranslateTokens(input),
+          maxOutput,
+          () => this.model.translate(input, maxOutput),
+          "translation_draft",
+        );
+      }),
     );
 
-    const text = new Map(translated.items.map((item) => [item.id, item.text.trim()]));
+    const returned = new Map(
+      translated.flatMap((result) => result.items.map((item) => [item.id, item.text.trim()])),
+    );
     // A draft missing a piece would be saved by an owner who did not notice;
-    // all or nothing.
-    if (items.some((item) => !text.get(item.id))) throw conversationUnavailable();
+    // all or nothing — and that holds for each piece of a split text too.
+    const text = new Map<string, string>();
+    for (const item of items) {
+      const count = pieces.get(item.id)!.length;
+      const parts =
+        count === 1
+          ? [returned.get(item.id)]
+          : Array.from({ length: count }, (_, index) =>
+              returned.get(`${item.id}#${String(index)}`),
+            );
+      if (parts.some((part) => !part)) throw conversationUnavailable();
+      text.set(item.id, parts.join("\n\n"));
+    }
     return {
       source,
       target,
@@ -241,12 +292,27 @@ export class KnowledgeAiService {
     const hit = this.imports.get(key);
     if (hit) return { ...hit, cached: true };
 
-    const { draft } = await this.metered(
-      tenantId,
-      () => this.model.countImportTokens(input),
-      IMPORT_MAX_OUTPUT_TOKENS,
-      () => this.model.importFromSite(input, IMPORT_MAX_OUTPUT_TOKENS),
-    );
+    // Two halves in parallel, each within its own cap: one call for everything
+    // ran past its output limit on a real price list (§8).
+    const half = (part: ImportPart, maxOutput: number) => {
+      const partInput = { ...input, part };
+      return this.metered(
+        tenantId,
+        () => this.model.countImportTokens(partInput),
+        maxOutput,
+        () => this.model.importFromSite(partInput, maxOutput),
+        `site_import.${part.toLowerCase()}`,
+      );
+    };
+    const [profileHalf, servicesHalf] = await Promise.all([
+      half("PROFILE_AND_FAQS", IMPORT_PROFILE_MAX_OUTPUT_TOKENS),
+      half("SERVICES", IMPORT_SERVICES_MAX_OUTPUT_TOKENS),
+    ]);
+    const draft = {
+      profile: profileHalf.draft.profile,
+      faqs: profileHalf.draft.faqs,
+      services: servicesHalf.draft.services,
+    };
 
     // A proposal is kept only when it names what the site says, from a page
     // that was read — the same posture as the audit's verbatim excerpts. An
@@ -286,11 +352,16 @@ export class KnowledgeAiService {
     count: () => Promise<number>,
     maxOutputTokens: number,
     call: () => Promise<T>,
+    operation = "knowledge",
   ): Promise<T> {
     let counted: number;
     try {
       counted = await count();
-    } catch {
+    } catch (error) {
+      this.log?.warn(
+        { operation, stage: "count", error: errorName(error) },
+        "Knowledge model call failed",
+      );
       throw conversationUnavailable();
     }
     const reservedInput = Math.ceil((counted * 110) / 100);
@@ -313,19 +384,34 @@ export class KnowledgeAiService {
     let result: T;
     try {
       result = await call();
-    } catch {
+    } catch (error) {
+      // A truncated answer reports what it used; settle that. Anything else
+      // settles the whole reservation, because the provider may have charged.
+      const failed = error as { usage?: AiUsage; failure?: string };
+      this.log?.warn(
+        {
+          operation,
+          stage: "call",
+          failure: failed.failure ?? errorName(error),
+          maxOutputTokens,
+          outputTokens: failed.usage?.outputTokens,
+        },
+        "Knowledge model call failed",
+      );
       await this.usage.reconcileAiCall({
         tenantId,
         reservationId,
-        inputTokens: reservedInput,
-        outputTokens: maxOutputTokens,
-        provider: "anthropic",
-        model: "unknown",
-        estimatedCostMinor: tokenCostMinor({
-          model: "unknown",
-          inputTokens: reservedInput,
-          outputTokens: maxOutputTokens,
-        }),
+        inputTokens: failed.usage?.inputTokens ?? reservedInput,
+        outputTokens: failed.usage?.outputTokens ?? maxOutputTokens,
+        provider: failed.usage?.provider ?? "anthropic",
+        model: failed.usage?.model ?? "unknown",
+        estimatedCostMinor:
+          failed.usage?.estimatedCostMinor ??
+          tokenCostMinor({
+            model: "unknown",
+            inputTokens: reservedInput,
+            outputTokens: maxOutputTokens,
+          }),
       });
       throw conversationUnavailable();
     }
@@ -342,10 +428,68 @@ export class KnowledgeAiService {
   }
 }
 
+/** The kind of failure only; a provider message may quote the request. */
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
 function label(text: KnowledgeText): string {
   if (text.kind === "PROFILE") return `Company profile (${text.locale})`;
   if (text.kind === "SERVICE") return `Service description: ${text.name ?? ""} (${text.locale})`;
   return `FAQ: ${text.name ?? ""} (${text.locale})`;
+}
+
+/**
+ * Pieces of at most `limit` characters, split at blank lines; a paragraph that
+ * is longer on its own is split at line breaks, then sentence ends, then cut.
+ */
+export function splitForTranslation(text: string, limit: number): string[] {
+  if (text.length <= limit) return [text];
+  const pieces: string[] = [];
+  let current = "";
+  const push = (unit: string, separator: string) => {
+    if (current && current.length + separator.length + unit.length > limit) {
+      pieces.push(current);
+      current = "";
+    }
+    current = current ? `${current}${separator}${unit}` : unit;
+  };
+  for (const paragraph of text.split(/\n{2,}/u)) {
+    if (paragraph.length <= limit) {
+      push(paragraph, "\n\n");
+      continue;
+    }
+    // Too long for one piece: smaller units, glued back with what split them.
+    // It starts a piece of its own, since its first unit carries no separator;
+    // reassembly joins pieces with a blank line, so a paragraph this long (rare)
+    // comes back as several.
+    if (current) pieces.push(current);
+    current = "";
+    for (const unit of paragraph.split(/(?<=\n)|(?<=[.!?]\s)/u)) {
+      for (let start = 0; start < unit.length; start += limit) {
+        push(unit.slice(start, start + limit), "");
+      }
+    }
+  }
+  if (current) pieces.push(current);
+  return pieces;
+}
+
+/** Greedy batches of at most `limit` characters; an item longer than that rides alone. */
+function batchPieces<T extends { text: string }>(items: T[], limit: number): T[][] {
+  const batches: T[][] = [];
+  let size = 0;
+  for (const item of items) {
+    const last = batches.at(-1);
+    if (last && size + item.text.length <= limit) {
+      last.push(item);
+      size += item.text.length;
+    } else {
+      batches.push([item]);
+      size = item.text.length;
+    }
+  }
+  return batches;
 }
 
 /** Case- and whitespace-insensitive, for matching names. Accents count. */

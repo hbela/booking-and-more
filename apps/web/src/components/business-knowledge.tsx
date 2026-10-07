@@ -16,7 +16,8 @@ import { Input } from "./ui/input";
 import { NativeSelect } from "./ui/native-select";
 import { Textarea } from "./ui/textarea";
 import { useConfirm } from "./ui/confirm-dialog";
-import { SiteImportCard } from "./site-import";
+// PARKED — site import (docs/phase-12-site-import.md §9)
+// import { SiteImportCard } from "./site-import";
 import {
   aiErrorKey,
   ContactDetailsCard,
@@ -58,7 +59,7 @@ export function BusinessKnowledge({
   tenantId,
   canManage,
   canManageContact,
-  canManageServices,
+  // canManageServices, — PARKED — site import (docs/phase-12-site-import.md §9)
   defaultLanguage,
   domain,
 }: {
@@ -195,31 +196,34 @@ export function BusinessKnowledge({
       ),
     );
 
-  // docs/phase-12-site-import.md §4: the website draft goes into the same
-  // editor, saved by the same button, and is marked until the owner edits it.
-  const applyImportedProfile = (text: string) =>
-    replaceProfile(sourceLanguage, (field) => {
-      fill(field, text);
-      setImportedProfile(true);
-      field.scrollIntoView({ block: "center" });
-    });
+  // PARKED — site import (docs/phase-12-site-import.md §9)
+  // // docs/phase-12-site-import.md §4: the website draft goes into the same
+  // // editor, saved by the same button, and is marked until the owner edits it.
+  // const applyImportedProfile = (text: string) =>
+  //   replaceProfile(sourceLanguage, (field) => {
+  //     fill(field, text);
+  //     setImportedProfile(true);
+  //     field.scrollIntoView({ block: "center" });
+  //   });
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-2">
       {confirmDialog}
-      {canManage && domain ? (
-        <SiteImportCard
-          tenantId={tenantId}
-          domain={domain}
-          language={sourceLanguage}
-          canManageServices={canManageServices}
-          onUseProfile={applyImportedProfile}
-          onAddFaq={(faq, onDone) =>
-            addFaq.mutate({ locale: sourceLanguage, ...faq }, { onSuccess: onDone })
-          }
-          addingFaq={addFaq.isPending}
-        />
-      ) : null}
+      {/* PARKED — site import (docs/phase-12-site-import.md §9)
+        {canManage && domain ? (
+          <SiteImportCard
+            tenantId={tenantId}
+            domain={domain}
+            language={sourceLanguage}
+            canManageServices={canManageServices}
+            onUseProfile={applyImportedProfile}
+            onAddFaq={(faq, onDone) =>
+              addFaq.mutate({ locale: sourceLanguage, ...faq }, { onSuccess: onDone })
+            }
+            addingFaq={addFaq.isPending}
+          />
+        ) : null}
+      */}
       <KnowledgeHealthCard tenantId={tenantId} canManage={canManage} />
       <Card>
         <CardHeader>

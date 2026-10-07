@@ -136,6 +136,7 @@ async function main(): Promise<void> {
       apiKey: env.ANTHROPIC_API_KEY,
       chatModel: env.ANTHROPIC_CHAT_MODEL,
       maxOutputTokens: env.CHAT_MAX_OUTPUT_TOKENS,
+      promptBlockCharacterCeiling: env.PROMPT_BLOCK_CHARACTER_CEILING,
     });
     const assistant = new AssistantService(prisma);
     const tools = new ConversationTools(prisma);

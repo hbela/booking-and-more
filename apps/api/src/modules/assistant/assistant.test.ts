@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createPrismaClient, type PrismaClient, type Tenant } from "@bam/db";
 import { AssistantService, localizedBusinessDescription } from "./assistant.service.js";
 import { assistantFaqInputSchema, assistantSettingsPatchSchema } from "./assistant.schemas.js";
+import { configureKnowledgeBudget } from "./knowledge-budget.js";
+
+// What buildApp does from KNOWLEDGE_CHARACTER_LIMIT; these tests use the services directly.
+configureKnowledgeBudget({ limit: 30_000 });
 
 function settingsMock(upsert: ReturnType<typeof vi.fn>): PrismaClient {
   const tx = {

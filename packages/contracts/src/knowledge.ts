@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { idSchema, languageSchema } from "./common.js";
 
-export const KNOWLEDGE_CHARACTER_LIMIT = 10_000;
 export function knowledgeCharacters(text: string | null | undefined): number {
   return Array.from(text?.trim() ?? "").length;
 }

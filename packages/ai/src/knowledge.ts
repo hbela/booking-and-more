@@ -64,7 +64,15 @@ export interface ImportPage {
   text: string;
 }
 
+/**
+ * Which half of the import one call drafts. One call for everything ran past
+ * 8 192 output tokens on a dentist's price list (docs/phase-12-site-import.md
+ * §8), so the halves run in parallel, each with its own cap.
+ */
+export type ImportPart = "PROFILE_AND_FAQS" | "SERVICES";
+
 export interface ImportInput {
+  part: ImportPart;
   /** The organization's default language: everything is written in it. */
   language: string;
   businessName: string;
@@ -189,6 +197,29 @@ export function buildTranslatePrompt(input: TranslateInput): { system: string; u
  */
 export function buildImportPrompt(input: ImportInput): { system: string; user: string } {
   const language = LANGUAGE_NAMES[input.language] ?? input.language;
+  const wanted =
+    input.part === "SERVICES"
+      ? [
+          "Return services — each bookable service or treatment the site offers, at most 40:",
+          "the name EXACTLY as the site writes it; a description of one or two sentences;",
+          "the price as a plain number in major units (12 000 Ft is 12000) with its ISO",
+          "currency code, or null for both when the site gives none or gives a range; the",
+          "duration in minutes only when the site states it, else null. Never invent a",
+          "price or a duration.",
+        ]
+      : [
+          "Return two things:",
+          "1. profile — who the business is: history, approach, equipment, the team's",
+          "   roles, what to expect at a first visit, guarantees, payment methods,",
+          "   accessibility. Markdown with short headings, at most about 2500 characters.",
+          "   It must NOT contain: opening hours, prices, street addresses, phone numbers,",
+          "   email addresses, names of customers or testimonials, and no list of",
+          "   treatments, services or fields of treatment — not even under a heading such",
+          "   as specialities. The receptionist reads all of those from the business's",
+          "   records, and prose that repeats them goes stale.",
+          "2. faqs — questions a customer would ask, at most 15, each answered only from",
+          "   what the site says. Use the site's own FAQ when it has one.",
+        ];
   return {
     system: [
       `You prepare the knowledge an AI receptionist will use for "${attribute(input.businessName)}",`,
@@ -197,21 +228,7 @@ export function buildImportPrompt(input: ImportInput): { system: string; user: s
       "",
       `Write everything in ${language}. Translate if the site is in another language.`,
       "",
-      "Return three things:",
-      "1. profile — who the business is: history, approach, equipment, specialities, what",
-      "   to expect at a first visit, payment methods, accessibility. Markdown with short",
-      "   headings, at most about 2500 characters. It must NOT contain: opening hours,",
-      "   prices, street addresses, phone numbers, email addresses, a list of the",
-      "   treatments or services offered, or names of customers or testimonials. Those",
-      "   are kept in the business's records, and prose that repeats them goes stale.",
-      "2. services — each bookable service or treatment the site offers, at most 40:",
-      "   the name EXACTLY as the site writes it; a description of one to three",
-      "   sentences; the price as a plain number in major units (12 000 Ft is 12000)",
-      "   with its ISO currency code, or null for both when the site gives none or",
-      "   gives a range; the duration in minutes only when the site states it, else",
-      "   null. Never invent a price or a duration.",
-      "3. faqs — questions a customer would ask, at most 15, each answered only from",
-      "   what the site says. Use the site's own FAQ when it has one.",
+      ...wanted,
       "",
       "Rules:",
       "- Use only facts on the pages. Leave out anything you would have to guess.",
@@ -276,15 +293,14 @@ const TRANSLATE_TOOL: Anthropic.Tool = {
 
 const nullable = (type: "string" | "number" | "integer") => ({ type: [type, "null"] });
 
-const IMPORT_TOOL: Anthropic.Tool = {
-  name: "report_import",
-  description: "Return the drafted profile, service proposals and FAQs.",
+const IMPORT_SERVICES_TOOL: Anthropic.Tool = {
+  name: "report_services",
+  description: "Return the service proposals.",
   input_schema: {
     type: "object",
     additionalProperties: false,
-    required: ["profile", "services", "faqs"],
+    required: ["services"],
     properties: {
-      profile: { type: "string" },
       services: {
         type: "array",
         items: {
@@ -301,6 +317,19 @@ const IMPORT_TOOL: Anthropic.Tool = {
           },
         },
       },
+    },
+  },
+};
+
+const IMPORT_PROFILE_TOOL: Anthropic.Tool = {
+  name: "report_profile",
+  description: "Return the drafted profile and FAQs.",
+  input_schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["profile", "faqs"],
+    properties: {
+      profile: { type: "string" },
       faqs: {
         type: "array",
         items: {
@@ -318,8 +347,18 @@ const IMPORT_TOOL: Anthropic.Tool = {
   },
 };
 
+const importTool = (part: ImportPart) =>
+  part === "SERVICES" ? IMPORT_SERVICES_TOOL : IMPORT_PROFILE_TOOL;
+
 /** Generous: an owner waits for this on purpose, unlike a chat turn. */
 const TIMEOUT_MS = 120_000;
+
+/**
+ * Why a model call produced nothing usable. Carried on the thrown error with
+ * the usage, so the caller can log the cause — the owner is only ever told the
+ * assistant is unavailable, and "max_tokens" is the one that needs a fix.
+ */
+export type ModelFailure = "max_tokens" | "no_tool_call" | "provider_error";
 
 export class AnthropicKnowledgeAssistant implements KnowledgeAssistant {
   constructor(private readonly config: AnthropicConfig) {}
@@ -359,22 +398,33 @@ export class AnthropicKnowledgeAssistant implements KnowledgeAssistant {
     tool: Anthropic.Tool,
     maxOutputTokens: number,
   ): Promise<{ input: unknown; usage: AiUsage }> {
-    const stream = getAnthropic(this.config).messages.stream(
-      this.request(prompt, tool, maxOutputTokens),
-      { timeout: TIMEOUT_MS, signal: AbortSignal.timeout(TIMEOUT_MS), maxRetries: 0 },
-    );
-    const completion = await stream.finalMessage();
+    let completion: Anthropic.Message;
+    try {
+      const stream = getAnthropic(this.config).messages.stream(
+        this.request(prompt, tool, maxOutputTokens),
+        { timeout: TIMEOUT_MS, signal: AbortSignal.timeout(TIMEOUT_MS), maxRetries: 0 },
+      );
+      completion = await stream.finalMessage();
+    } catch (error) {
+      throw Object.assign(new Error("The model call failed.", { cause: error }), {
+        failure: "provider_error" satisfies ModelFailure,
+      });
+    }
     const usage = tokenUsage({
       provider: "anthropic",
       model: this.config.chatModel,
       inputTokens: completion.usage.input_tokens,
       outputTokens: completion.usage.output_tokens,
+      cacheReadTokens: completion.usage.cache_read_input_tokens,
+      cacheWriteTokens: completion.usage.cache_creation_input_tokens,
     });
     const block = completion.content.find((entry) => entry.type === "tool_use");
     // A truncated or refused answer is a failure, not an empty result: "no
     // findings" would tell the owner their texts are fine when nobody checked.
     if (block?.type !== "tool_use" || completion.stop_reason === "max_tokens") {
-      throw Object.assign(new Error("The model returned no usable answer."), { usage });
+      const failure: ModelFailure =
+        completion.stop_reason === "max_tokens" ? "max_tokens" : "no_tool_call";
+      throw Object.assign(new Error("The model returned no usable answer."), { usage, failure });
     }
     return { input: block.input, usage };
   }
@@ -406,16 +456,16 @@ export class AnthropicKnowledgeAssistant implements KnowledgeAssistant {
   }
 
   countImportTokens(input: ImportInput): Promise<number> {
-    return this.count(buildImportPrompt(input), IMPORT_TOOL);
+    return this.count(buildImportPrompt(input), importTool(input.part));
   }
 
   async importFromSite(input: ImportInput, maxOutputTokens: number) {
     const { input: raw, usage } = await this.call(
       buildImportPrompt(input),
-      IMPORT_TOOL,
+      importTool(input.part),
       maxOutputTokens,
     );
-    return { draft: parseImport(raw), usage };
+    return { draft: parseImport(raw, input.part), usage };
   }
 }
 
@@ -459,52 +509,59 @@ const text = (value: unknown): string | null =>
  * Shape only: whether a name is on the site, or a source was read, is the
  * API's check, because only the API has the pages.
  */
-export function parseImport(raw: unknown): ImportDraft {
+export function parseImport(raw: unknown, part: ImportPart): ImportDraft {
   const body = raw as { profile?: unknown; services?: unknown; faqs?: unknown } | null;
-  if (
-    typeof body?.profile !== "string" ||
-    !Array.isArray(body.services) ||
-    !Array.isArray(body.faqs)
-  )
-    throw new Error("Malformed import answer.");
-  const services = body.services.flatMap((entry: unknown): ImportedService[] => {
-    const row = entry as Partial<Record<keyof ImportedService, unknown>>;
-    const name = text(row.name);
-    const sourceUrl = text(row.sourceUrl);
-    if (!name || !sourceUrl) return [];
-    const currency = text(row.currency)?.toUpperCase() ?? null;
-    const price =
-      typeof row.price === "number" && Number.isFinite(row.price) && row.price > 0
-        ? row.price
-        : null;
-    const duration =
-      typeof row.durationMinutes === "number" &&
-      Number.isInteger(row.durationMinutes) &&
-      row.durationMinutes >= 5 &&
-      row.durationMinutes <= 720
-        ? row.durationMinutes
-        : null;
-    // A price and its currency travel together or not at all (rule 15).
-    const priced = price !== null && currency !== null && /^[A-Z]{3}$/u.test(currency);
-    return [
-      {
-        name,
-        description: text(row.description),
-        price: priced ? price : null,
-        currency: priced ? currency : null,
-        durationMinutes: duration,
-        sourceUrl,
-      },
-    ];
-  });
-  const faqs = body.faqs.flatMap((entry: unknown): ImportedFaq[] => {
-    const row = entry as Partial<Record<keyof ImportedFaq, unknown>>;
-    const question = text(row.question);
-    const answer = text(row.answer);
-    const sourceUrl = text(row.sourceUrl);
-    return question && answer && sourceUrl ? [{ question, answer, sourceUrl }] : [];
-  });
-  return { profile: body.profile.trim(), services, faqs };
+  const wellFormed =
+    part === "SERVICES"
+      ? Array.isArray(body?.services)
+      : typeof body?.profile === "string" && Array.isArray(body.faqs);
+  if (!wellFormed) throw new Error("Malformed import answer.");
+  const services = (part === "SERVICES" ? (body!.services as unknown[]) : []).flatMap(
+    (entry: unknown): ImportedService[] => {
+      const row = entry as Partial<Record<keyof ImportedService, unknown>>;
+      const name = text(row.name);
+      const sourceUrl = text(row.sourceUrl);
+      if (!name || !sourceUrl) return [];
+      const currency = text(row.currency)?.toUpperCase() ?? null;
+      const price =
+        typeof row.price === "number" && Number.isFinite(row.price) && row.price > 0
+          ? row.price
+          : null;
+      const duration =
+        typeof row.durationMinutes === "number" &&
+        Number.isInteger(row.durationMinutes) &&
+        row.durationMinutes >= 5 &&
+        row.durationMinutes <= 720
+          ? row.durationMinutes
+          : null;
+      // A price and its currency travel together or not at all (rule 15).
+      const priced = price !== null && currency !== null && /^[A-Z]{3}$/u.test(currency);
+      return [
+        {
+          name,
+          description: text(row.description),
+          price: priced ? price : null,
+          currency: priced ? currency : null,
+          durationMinutes: duration,
+          sourceUrl,
+        },
+      ];
+    },
+  );
+  const faqs = (part === "SERVICES" ? [] : (body!.faqs as unknown[])).flatMap(
+    (entry: unknown): ImportedFaq[] => {
+      const row = entry as Partial<Record<keyof ImportedFaq, unknown>>;
+      const question = text(row.question);
+      const answer = text(row.answer);
+      const sourceUrl = text(row.sourceUrl);
+      return question && answer && sourceUrl ? [{ question, answer, sourceUrl }] : [];
+    },
+  );
+  return {
+    profile: part === "SERVICES" ? "" : (body!.profile as string).trim(),
+    services,
+    faqs,
+  };
 }
 
 /** Scripted stand-in: no network, no key, no bill. */
@@ -556,6 +613,11 @@ export class FakeKnowledgeAssistant implements KnowledgeAssistant {
   importFromSite(input: ImportInput) {
     this.imports.push(input);
     if (this.fail) return Promise.reject(new Error("provider unavailable"));
-    return Promise.resolve({ draft: this.nextImport, usage: this.usage() });
+    // Each half returns only its own part, as the real model does.
+    const draft: ImportDraft =
+      input.part === "SERVICES"
+        ? { profile: "", faqs: [], services: this.nextImport.services }
+        : { ...this.nextImport, services: [] };
+    return Promise.resolve({ draft, usage: this.usage() });
   }
 }

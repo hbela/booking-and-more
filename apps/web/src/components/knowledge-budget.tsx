@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { KnowledgeUsage, Language } from "@bam/contracts";
 import { apiFetch, ApiError } from "@/lib/api-client";
 
@@ -26,6 +26,7 @@ export function KnowledgeBudget({
   baseDescriptionChange?: number;
 }) {
   const t = useTranslations("knowledgeBudget");
+  const locale = useLocale();
   const usage = useQuery({
     queryKey: ["knowledge-usage", tenantId],
     queryFn: () => apiFetch<KnowledgeUsage>("/v1/services/knowledge-usage", { tenantId }),
@@ -35,7 +36,10 @@ export function KnowledgeBudget({
   if (!usage.data) return null;
   return (
     <div className="grid gap-1 text-sm" aria-live="polite">
-      <p className="text-ink-muted">{t("hint")}</p>
+      {/* The limit comes from the API, so the copy cannot drift from it again. */}
+      <p className="text-ink-muted">
+        {t("hint", { limit: new Intl.NumberFormat(locale).format(usage.data.limit) })}
+      </p>
       {usage.data.locales.map((entry) => {
         const used =
           entry.used +

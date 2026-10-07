@@ -6,7 +6,7 @@ import {
   idSchema,
   knowledgeAuditRequestSchema,
   knowledgeAuditSchema,
-  siteImportDraftSchema,
+  // siteImportDraftSchema, — PARKED — site import (docs/phase-12-site-import.md §9)
   knowledgeHealthSchema,
   languageSchema,
   translationDraftRequestSchema,
@@ -48,6 +48,7 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
     options.knowledgeAssistant,
     options.knowledgeAiLimits,
     options.siteFetcher,
+    app.log,
   );
   const entitled = async (request: { tenant?: { id: string } }) =>
     service.assertEntitled(request.tenant!.id);
@@ -209,38 +210,40 @@ export const assistantRoutes: FastifyPluginAsyncZod<AssistantRouteOptions> = asy
     },
   );
 
-  app.post(
-    "/knowledge/site-import",
-    {
-      preHandler: manage,
-      // Each press reads up to twelve pages of somebody's website.
-      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
-      schema: {
-        tags: ["assistant"],
-        summary: "Draft the profile, services and FAQs from the organization's website",
-        description:
-          "Reads the website at the organization's registered domain and drafts, in its default language, a company profile, service proposals and FAQs. Nothing is saved. Spends the assistant's monthly allowance; an unchanged site is answered from cache.",
-        body: z.object({}).strict(),
-        response: { 200: siteImportDraftSchema, ...commonErrorResponses },
-      },
-    },
-    async (request) => {
-      const draft = await knowledgeAi.siteImportDraft(request.tenant!.id);
-      if (!draft.cached)
-        request.audit({
-          action: "assistant.knowledge.site_imported",
-          entityType: "Tenant",
-          entityId: request.tenant!.id,
-          after: {
-            domain: draft.domain,
-            pages: draft.pages.length,
-            services: draft.services.length,
-            faqs: draft.faqs.length,
-          },
-        });
-      return draft;
-    },
-  );
+  // PARKED — site import (docs/phase-12-site-import.md §9). Unregistered, so the endpoint answers 404; the service method,
+  // the reader and the schemas behind it are all still in place.
+  // app.post(
+  //   "/knowledge/site-import",
+  //   {
+  //     preHandler: manage,
+  //     // Each press reads up to twelve pages of somebody's website.
+  //     config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+  //     schema: {
+  //       tags: ["assistant"],
+  //       summary: "Draft the profile, services and FAQs from the organization's website",
+  //       description:
+  //         "Reads the website at the organization's registered domain and drafts, in its default language, a company profile, service proposals and FAQs. Nothing is saved. Spends the assistant's monthly allowance; an unchanged site is answered from cache.",
+  //       body: z.object({}).strict(),
+  //       response: { 200: siteImportDraftSchema, ...commonErrorResponses },
+  //     },
+  //   },
+  //   async (request) => {
+  //     const draft = await knowledgeAi.siteImportDraft(request.tenant!.id);
+  //     if (!draft.cached)
+  //       request.audit({
+  //         action: "assistant.knowledge.site_imported",
+  //         entityType: "Tenant",
+  //         entityId: request.tenant!.id,
+  //         after: {
+  //           domain: draft.domain,
+  //           pages: draft.pages.length,
+  //           services: draft.services.length,
+  //           faqs: draft.faqs.length,
+  //         },
+  //       });
+  //     return draft;
+  //   },
+  // );
 
   app.delete(
     "/knowledge/acknowledgements/:id",

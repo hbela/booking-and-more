@@ -29,6 +29,21 @@ describe("loadEnv", () => {
     expect(() => load({ CHAT_DAILY_LIMIT: "0" })).toThrow();
     expect(() => load({ CHAT_MAX_MESSAGE_CHARACTERS: "6000" })).toThrow();
   });
+  it("defaults the knowledge allowance and prompt ceiling, and keeps the ceiling above the allowance", () => {
+    const env = load();
+    expect(env.KNOWLEDGE_CHARACTER_LIMIT).toBe(30_000);
+    expect(env.PROMPT_BLOCK_CHARACTER_CEILING).toBe(45_000);
+    const raised = load({
+      KNOWLEDGE_CHARACTER_LIMIT: "40000",
+      PROMPT_BLOCK_CHARACTER_CEILING: "60000",
+    });
+    expect(raised.KNOWLEDGE_CHARACTER_LIMIT).toBe(40_000);
+    // 40 000 needs at least 56 000; the default 45 000 would truncate.
+    expect(() => load({ KNOWLEDGE_CHARACTER_LIMIT: "40000" })).toThrow(
+      /PROMPT_BLOCK_CHARACTER_CEILING/,
+    );
+    expect(() => load({ KNOWLEDGE_CHARACTER_LIMIT: "0" })).toThrow();
+  });
   it("labels Sentry independently from the Node runtime environment", () => {
     const env = load({ SENTRY_ENVIRONMENT: "staging", SENTRY_RELEASE: "release-sha" });
     expect(env.NODE_ENV).toBe("test");

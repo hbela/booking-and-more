@@ -66,18 +66,41 @@ export function audioCostMinor(args: { model: string; seconds: number }): number
   return Math.ceil((args.seconds / 60) * perMinute);
 }
 
+/** Anthropic's prompt-cache multipliers on the input price. */
+export const CACHE_WRITE_WEIGHT = 1.25;
+export const CACHE_READ_WEIGHT = 0.1;
+
+/**
+ * `inputTokens` is the uncached input the provider reports; cache writes and
+ * reads are reported separately and weighted into input-token equivalents here,
+ * so a cached prompt is metered at what it cost rather than as free.
+ */
 export function tokenUsage(args: {
   provider: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
 }): AiUsage {
+  const read = args.cacheReadTokens ?? 0;
+  const written = args.cacheWriteTokens ?? 0;
+  const equivalents =
+    args.inputTokens +
+    Math.ceil(written * CACHE_WRITE_WEIGHT) +
+    Math.ceil(read * CACHE_READ_WEIGHT);
   return {
     provider: args.provider,
     model: args.model,
-    inputTokens: args.inputTokens,
+    inputTokens: equivalents,
     outputTokens: args.outputTokens,
-    estimatedCostMinor: tokenCostMinor(args),
+    ...(read > 0 ? { cacheReadTokens: read } : {}),
+    ...(written > 0 ? { cacheWriteTokens: written } : {}),
+    estimatedCostMinor: tokenCostMinor({
+      model: args.model,
+      inputTokens: equivalents,
+      outputTokens: args.outputTokens,
+    }),
   };
 }
 

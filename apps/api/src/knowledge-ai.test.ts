@@ -16,6 +16,8 @@ import { SiteReadError, type SiteFetcher } from "./modules/assistant/site-reader
 
 const databaseUrl = process.env["TEST_DATABASE_URL"];
 const RUN = `ka${randomBytes(4).toString("hex")}`;
+/** PARKED — site import (docs/phase-12-site-import.md §9): the route is unregistered. */
+const siteImportParked = true;
 
 describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
   let app: AppInstance;
@@ -309,125 +311,193 @@ describe.skipIf(!databaseUrl)("knowledge audit and translation drafts", () => {
     expect(missingId.statusCode).toBe(422);
   });
 
-  it("drafts from the organization's own website, keeps only what the site names, saves nothing", async () => {
-    const site = await clinic("import");
-    const domain = `import-${RUN}.example.test`;
-    const imported = () =>
-      app.inject({
-        method: "POST",
-        url: "/v1/assistant/knowledge/site-import",
-        headers: site.headers,
-        payload: {},
+  it.skipIf(siteImportParked)(
+    "drafts from the organization's own website, keeps only what the site names, saves nothing",
+    async () => {
+      const site = await clinic("import");
+      const domain = `import-${RUN}.example.test`;
+      const imported = () =>
+        app.inject({
+          method: "POST",
+          url: "/v1/assistant/knowledge/site-import",
+          headers: site.headers,
+          payload: {},
+        });
+
+      // No domain on record: nothing to read, and nothing is spent.
+      const calls = model.imports.length;
+      const noDomain = await imported();
+      expect(noDomain.statusCode).toBe(422);
+      expect(model.imports).toHaveLength(calls);
+
+      await app.prisma.tenant.update({ where: { id: site.tenantId }, data: { domain } });
+      // Registered but unreachable: refused before the model is called.
+      const unreachable = await imported();
+      expect(unreachable.statusCode).toBe(422);
+      expect(unreachable.json().error).toMatchObject({
+        code: "SITE_UNREACHABLE",
+        details: { reason: "unreachable" },
       });
+      expect(model.imports).toHaveLength(calls);
 
-    // No domain on record: nothing to read, and nothing is spent.
-    const calls = model.imports.length;
-    const noDomain = await imported();
-    expect(noDomain.statusCode).toBe(422);
-    expect(model.imports).toHaveLength(calls);
-
-    await app.prisma.tenant.update({ where: { id: site.tenantId }, data: { domain } });
-    // Registered but unreachable: refused before the model is called.
-    const unreachable = await imported();
-    expect(unreachable.statusCode).toBe(422);
-    expect(unreachable.json().error).toMatchObject({
-      code: "SITE_UNREACHABLE",
-      details: { reason: "unreachable" },
-    });
-    expect(model.imports).toHaveLength(calls);
-
-    websites.set(domain, {
-      "/": '<h1>Wellness</h1><p>Családi rendelő.</p><a href="/arak">Árak</a><a href="https://evil.test/x">x</a>',
-      "/arak": "<ul><li>Fogkőeltávolítás 12 000 Ft</li><li>Konzultáció</li></ul>",
-    });
-    const existing = await app.prisma.service.create({
-      data: {
-        tenantId: site.tenantId,
-        name: "Konzultáció",
-        slug: `konz-${RUN}`,
-        durationMinutes: 20,
-      },
-    });
-    const home = `https://${domain}/`;
-    const prices = `https://${domain}/arak`;
-    model.nextImport = {
-      profile: "## Rólunk\nCsaládi rendelő.",
-      services: [
-        {
-          name: "Fogkőeltávolítás",
-          description: "Ultrahangos tisztítás.",
-          price: 12000,
-          currency: "HUF",
-          durationMinutes: null,
-          sourceUrl: prices,
+      websites.set(domain, {
+        "/": '<h1>Wellness</h1><p>Családi rendelő.</p><a href="/arak">Árak</a><a href="https://evil.test/x">x</a>',
+        "/arak": "<ul><li>Fogkőeltávolítás 12 000 Ft</li><li>Konzultáció</li></ul>",
+      });
+      const existing = await app.prisma.service.create({
+        data: {
+          tenantId: site.tenantId,
+          name: "Konzultáció",
+          slug: `konz-${RUN}`,
+          durationMinutes: 20,
         },
-        {
-          name: "konzultáció",
-          description: null,
-          price: null,
-          currency: null,
-          durationMinutes: null,
-          sourceUrl: prices,
-        },
-        // Not on the site: invented, and dropped.
-        {
-          name: "Fogszabályozás",
-          description: null,
-          price: null,
-          currency: null,
-          durationMinutes: null,
-          sourceUrl: prices,
-        },
-      ],
-      faqs: [
-        { question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home },
-        { question: "Kitalált?", answer: "Igen.", sourceUrl: "https://evil.test/x" },
-      ],
-    };
+      });
+      const home = `https://${domain}/`;
+      const prices = `https://${domain}/arak`;
+      model.nextImport = {
+        profile: "## Rólunk\nCsaládi rendelő.",
+        services: [
+          {
+            name: "Fogkőeltávolítás",
+            description: "Ultrahangos tisztítás.",
+            price: 12000,
+            currency: "HUF",
+            durationMinutes: null,
+            sourceUrl: prices,
+          },
+          {
+            name: "konzultáció",
+            description: null,
+            price: null,
+            currency: null,
+            durationMinutes: null,
+            sourceUrl: prices,
+          },
+          // Not on the site: invented, and dropped.
+          {
+            name: "Fogszabályozás",
+            description: null,
+            price: null,
+            currency: null,
+            durationMinutes: null,
+            sourceUrl: prices,
+          },
+        ],
+        faqs: [
+          { question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home },
+          { question: "Kitalált?", answer: "Igen.", sourceUrl: "https://evil.test/x" },
+        ],
+      };
 
-    const counts = async () => ({
-      services: await app.prisma.service.count({ where: { tenantId: site.tenantId } }),
-      faqs: await app.prisma.tenantAssistantFaq.count({ where: { tenantId: site.tenantId } }),
-      settings: (
-        await app.prisma.tenantAssistantSettings.findUnique({ where: { tenantId: site.tenantId } })
-      )?.businessDescriptionHu,
-    });
-    const before = await counts();
-    const tokensBefore = await inputTokens(site.tenantId);
+      const counts = async () => ({
+        services: await app.prisma.service.count({ where: { tenantId: site.tenantId } }),
+        faqs: await app.prisma.tenantAssistantFaq.count({ where: { tenantId: site.tenantId } }),
+        settings: (
+          await app.prisma.tenantAssistantSettings.findUnique({
+            where: { tenantId: site.tenantId },
+          })
+        )?.businessDescriptionHu,
+      });
+      const before = await counts();
+      const tokensBefore = await inputTokens(site.tenantId);
 
-    const draft = await imported();
-    expect(draft.statusCode, draft.body).toBe(200);
-    expect(draft.json()).toMatchObject({
-      domain,
-      language: "hu",
-      pages: [
-        { url: home, title: null },
-        { url: prices, title: null },
-      ],
-      profile: "## Rólunk\nCsaládi rendelő.",
-      services: [
-        { name: "Fogkőeltávolítás", price: 12000, currency: "HUF", existingServiceId: null },
-        { name: "konzultáció", existingServiceId: existing.id },
-      ],
-      faqs: [{ question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home }],
-      discarded: 2,
-      cached: false,
-    });
-    // The model read the site's text, not its markup.
-    expect(model.imports.at(-1)?.pages[1]?.text).toBe(
-      "- Fogkőeltávolítás 12 000 Ft\n- Konzultáció",
+      const draft = await imported();
+      expect(draft.statusCode, draft.body).toBe(200);
+      expect(draft.json()).toMatchObject({
+        domain,
+        language: "hu",
+        pages: [
+          { url: home, title: null },
+          { url: prices, title: null },
+        ],
+        profile: "## Rólunk\nCsaládi rendelő.",
+        services: [
+          { name: "Fogkőeltávolítás", price: 12000, currency: "HUF", existingServiceId: null },
+          { name: "konzultáció", existingServiceId: existing.id },
+        ],
+        faqs: [{ question: "Hol vannak?", answer: "Családi rendelő.", sourceUrl: home }],
+        discarded: 2,
+        cached: false,
+      });
+      // Two halves, each within its own output cap (phase-12 site import §8).
+      expect(
+        model.imports
+          .slice(-2)
+          .map((entry) => entry.part)
+          .sort(),
+      ).toEqual(["PROFILE_AND_FAQS", "SERVICES"]);
+      // The model read the site's text, not its markup.
+      expect(model.imports.at(-1)?.pages[1]?.text).toBe(
+        "- Fogkőeltávolítás 12 000 Ft\n- Konzultáció",
+      );
+      // The off-site link was never fetched.
+      expect(fetched).not.toContain("https://evil.test/x");
+      // A draft writes nothing.
+      expect(await counts()).toEqual(before);
+      expect(await inputTokens(site.tenantId)).toBeGreaterThan(tokensBefore);
+
+      // An unchanged site is answered from cache, and costs nothing.
+      const spent = await inputTokens(site.tenantId);
+      const again = await imported();
+      expect(again.json().cached).toBe(true);
+      expect(await inputTokens(site.tenantId)).toBe(spent);
+    },
+  );
+
+  it("drafts a long profile in pieces and hands it back whole and in order", async () => {
+    const site = await clinic("long");
+    // 24 paragraphs of 500 characters: 12 000 characters, three batches.
+    const paragraphs = Array.from(
+      { length: 24 },
+      (_, index) => `${String(index).padStart(2, "0")} ${"á".repeat(496)}`,
     );
-    // The off-site link was never fetched.
-    expect(fetched).not.toContain("https://evil.test/x");
-    // A draft writes nothing.
-    expect(await counts()).toEqual(before);
-    expect(await inputTokens(site.tenantId)).toBeGreaterThan(tokensBefore);
+    const saved = await app.inject({
+      method: "PATCH",
+      url: "/v1/assistant/settings",
+      headers: site.headers,
+      payload: { businessDescriptionHu: paragraphs.join("\n\n") },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
 
-    // An unchanged site is answered from cache, and costs nothing.
-    const spent = await inputTokens(site.tenantId);
-    const again = await imported();
-    expect(again.json().cached).toBe(true);
-    expect(await inputTokens(site.tenantId)).toBe(spent);
+    const calls = model.translations.length;
+    const draft = await app.inject({
+      method: "POST",
+      url: "/v1/assistant/knowledge/translation-draft",
+      headers: site.headers,
+      payload: { target: "en", kind: "PROFILE" },
+    });
+    expect(draft.statusCode, draft.body).toBe(200);
+    const batches = model.translations.slice(calls);
+    expect(batches.length).toBeGreaterThan(1);
+    for (const batch of batches)
+      expect(batch.items.reduce((sum, item) => sum + item.text.length, 0)).toBeLessThanOrEqual(
+        6_000,
+      );
+    // Every piece came back, in the order it was in.
+    const back = (draft.json().profile as string).split("\n\n");
+    expect(back).toHaveLength(24);
+    // The fake marks each piece once, at its start.
+    expect(back.map((paragraph) => paragraph.replace(/^\[en\] /u, "").slice(0, 2))).toEqual(
+      paragraphs.map((paragraph) => paragraph.slice(0, 2)),
+    );
+
+    // One missing piece fails the whole draft.
+    model.translateWith = (input) =>
+      input.items
+        .filter((item) => !item.id.endsWith("#1"))
+        .map((item) => ({ id: item.id, text: `[${input.to}] ${item.text}` }));
+    try {
+      const partial = await app.inject({
+        method: "POST",
+        url: "/v1/assistant/knowledge/translation-draft",
+        headers: site.headers,
+        payload: { target: "de", kind: "PROFILE" },
+      });
+      expect(partial.statusCode).toBe(503);
+    } finally {
+      model.translateWith = (input) =>
+        input.items.map((item) => ({ id: item.id, text: `[${input.to}] ${item.text}` }));
+    }
   });
 
   it("refuses before calling when the month's allowance cannot cover the call", async () => {

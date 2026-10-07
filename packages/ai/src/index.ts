@@ -21,6 +21,7 @@ export {
 export type { AnthropicConfig } from "./client.js";
 
 export { AnthropicIntentInterpreter } from "./interpreter.js";
+export type { IntentInterpreterConfig } from "./interpreter.js";
 export {
   AnthropicKnowledgeAssistant,
   buildAuditPrompt,
@@ -40,6 +41,8 @@ export type {
   ImportedService,
   ImportInput,
   ImportPage,
+  ImportPart,
+  ModelFailure,
   KnowledgeAssistant,
   TranslateInput,
   TranslationItem,
@@ -47,7 +50,12 @@ export type {
 export { DisabledTranscriptionProvider } from "./transcription.js";
 export { TemplateResponseComposer } from "./composer.js";
 
-export { buildSystemPrompt, buildUserMessages, HISTORY_TURNS } from "./prompt.js";
+export {
+  buildSystemBlocks,
+  buildSystemPrompt,
+  buildUserMessages,
+  HISTORY_TURNS,
+} from "./prompt.js";
 export { audioCostMinor, audioUsage, tokenCostMinor, tokenUsage } from "./pricing.js";
 
 export {
