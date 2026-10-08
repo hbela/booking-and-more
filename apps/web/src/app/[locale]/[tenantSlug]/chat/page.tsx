@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { ChatPanel } from "@/components/chat-panel";
-import { routing } from "@/i18n/routing";
+import { routing, type Locale } from "@/i18n/routing";
 
 export default async function TenantChatPage({
   params,
@@ -18,6 +18,7 @@ export default async function TenantChatPage({
     <main className="min-h-screen bg-surface px-4 py-6 sm:px-6 sm:py-10">
       <ChatPanel
         tenantSlug={tenantSlug}
+        initialLanguage={locale as Locale}
         bookingHref={`/${tenantSlug}/book`}
         {...(parentOrigin ? { parentOrigin } : {})}
       />

@@ -124,13 +124,19 @@ const copy = {
 
 interface ChatPanelProps {
   tenantSlug: string;
+  /**
+   * The language the chat opens in: the page's own. The website widget asks
+   * for `/en/…/chat` on an English site, and this used to be ignored in favour
+   * of a hard-coded Hungarian start. The picker still switches it.
+   */
+  initialLanguage: Locale;
   bookingHref: string;
   managementToken?: string | undefined;
   parentOrigin?: string | undefined;
 }
 
 export function ChatPanel(props: ChatPanelProps): React.ReactElement {
-  const [language, setLanguage] = useState<Locale>("hu");
+  const [language, setLanguage] = useState<Locale>(props.initialLanguage);
   // Each language has its own session; remounting clears pending UI and drafts.
   return (
     <ChatConversation

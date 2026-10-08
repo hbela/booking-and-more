@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { conversationMessages, renderMessage } from "./conversation-messages";
+import {
+  conversationMessages,
+  renderMessage,
+  renderTranscriptMessage,
+} from "./conversation-messages";
 
 describe("chat messages", () => {
   it("translates every message emitted by the conversation engine in all four languages", () => {
@@ -37,5 +41,44 @@ describe("chat messages", () => {
         "hu",
       ),
     ).toBe("Nyitva: 9–17.");
+  });
+
+  describe("in a staff transcript", () => {
+    it("shows a templated reply in the language the customer chatted in", () => {
+      const greeting = { sender: "ASSISTANT", content: "conversation.greeting", structured: {} };
+      expect(renderTranscriptMessage(greeting, "en")).toBe(
+        conversationMessages["conversation.greeting"]!.en,
+      );
+      expect(renderTranscriptMessage(greeting, "hu")).toBe(
+        conversationMessages["conversation.greeting"]!.hu,
+      );
+    });
+
+    it("shows a model-written answer as written", () => {
+      expect(
+        renderTranscriptMessage(
+          { sender: "ASSISTANT", content: "conversation.answer", structured: { answer: "Igen." } },
+          "hu",
+        ),
+      ).toBe("Igen.");
+    });
+
+    it("never looks up what a customer typed", () => {
+      expect(
+        renderTranscriptMessage(
+          { sender: "CUSTOMER", content: "conversation.greeting", structured: null },
+          "en",
+        ),
+      ).toBe("conversation.greeting");
+    });
+
+    it("keeps an unknown key as stored rather than guessing", () => {
+      expect(
+        renderTranscriptMessage(
+          { sender: "ASSISTANT", content: "conversation.future.thing", structured: {} },
+          "en",
+        ),
+      ).toBe("conversation.future.thing");
+    });
   });
 });

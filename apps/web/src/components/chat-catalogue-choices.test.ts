@@ -45,7 +45,7 @@ describe("chat catalogue choices", () => {
             id: "two",
             name: "Dentálhigiénia",
             durationMinutes: 60,
-            priceMinor: 1000000,
+            priceMinor: 15000,
             currency: "HUF",
           },
         ],
@@ -56,6 +56,9 @@ describe("chat catalogue choices", () => {
     expect(html).toContain("Dentálhigiénia");
     expect(html).toContain("30");
     expect(html).toContain("perc");
+    // HUF has no minor unit: 15000 is 15 000 Ft, which a hard-coded `/ 100`
+    // printed as 150 Ft while the dashboard and booking page said 15 000.
+    expect(html).toMatch(/15\s000\sFt/);
     expect(html.match(/<button/g)).toHaveLength(2);
   });
 

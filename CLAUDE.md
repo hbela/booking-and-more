@@ -14,7 +14,9 @@ manual walk). `working_hours` and `bookings` had no constraint between them and 
 so a provider could remove the hours under a confirmed appointment and be told nothing. **Read its
 §2.2 before changing what counts as covered**: the check judges the appointment span and ignores
 buffers, deliberately unlike `assertSlotIsOffered`, and §2.1 is why there is exactly one
-implementation of the question. A schedule save that would strand bookings now returns
+implementation of the question. **§2.8 is the one to read before scoping anything to a location**: a
+search or booking that names no location means _anywhere_, so every working period and every exception
+applies — two hand-written copies of that rule disagreed and flagged every public booking. A schedule save that would strand bookings now returns
 `SCHEDULE_CONFLICTS_BOOKINGS` **once** with the list and succeeds when re-sent with
 `acknowledgeAffectedBookings` — it warns rather than refuses, because §2.6 of the owner-management
 record puts availability in the provider's hands and the only escape hatch from a hard refusal is

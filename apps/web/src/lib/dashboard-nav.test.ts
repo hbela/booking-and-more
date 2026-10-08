@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MeResponse } from "@/lib/api-client";
-import { navFor } from "./dashboard-nav";
+import { navFor, pageTitleKey } from "./dashboard-nav";
 
 /**
  * Which navigation items each role actually gets.
@@ -148,5 +148,22 @@ describe("navFor", () => {
 
   it("survives a caller with no /v1/me at all", () => {
     expect(keysFor(null)).toEqual(["overview"]);
+  });
+});
+
+describe("the page heading", () => {
+  it("names Availability even for a caller whose navigation withholds it", () => {
+    // An owner reaches each diary from the row on Providers and has no
+    // Availability item; the heading still has to say where they are.
+    expect(pageTitleKey("/dashboard/availability")).toBe("availability");
+  });
+
+  it("names every other screen by its own key", () => {
+    expect(pageTitleKey("/dashboard/bookings")).toBe("bookings");
+    expect(pageTitleKey("/dashboard")).toBe("overview");
+  });
+
+  it("falls back to the overview for a path it does not know", () => {
+    expect(pageTitleKey("/dashboard/nowhere")).toBe("overview");
   });
 });

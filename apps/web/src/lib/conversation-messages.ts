@@ -180,3 +180,29 @@ export function renderMessage(message: AssistantMessage, locale: Locale): string
     conversationMessages["conversation.error.unclear"]![locale]
   );
 }
+
+/**
+ * A stored transcript row, as staff read it on the AI Assistant screen.
+ *
+ * The API stores an assistant reply as its template key, with the parameters
+ * beside it. For a model-written answer the words are in those parameters, and
+ * showing the key instead ("conversation.answer") hid exactly the replies worth
+ * reading. Every other key is rendered from the same table the customer's chat
+ * uses, in the conversation's own language — the transcript shows what the
+ * customer read, not a translation of it.
+ *
+ * A customer's message is their own words and is never looked up, and an
+ * unknown key is shown as stored rather than replaced with a guess: unlike the
+ * live chat, a transcript is evidence.
+ */
+export function renderTranscriptMessage(
+  message: { sender: string; content: string; structured: unknown },
+  conversationLocale: string,
+): string {
+  const answer = (message.structured as { answer?: unknown } | null)?.answer;
+  if (typeof answer === "string") return answer;
+  if (message.sender === "CUSTOMER") return message.content;
+  const template = conversationMessages[message.content];
+  if (template === undefined) return message.content;
+  return template[conversationLocale as Locale] ?? template.en;
+}

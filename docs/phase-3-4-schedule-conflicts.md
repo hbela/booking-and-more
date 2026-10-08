@@ -149,6 +149,36 @@ resolution is therefore lifted into one helper both paths call, rather than writ
 
 The tenant's `defaultTimezone` is the final fallback, as it is for booking emails.
 
+## 2.8 "No location" means anywhere — amended 2026-10-08
+
+§2.7 asked for the location rule to be lifted into one helper both paths call. It was not: the
+search and the badge each wrote their own, and they disagreed about the commonest booking there is.
+The public booking page never names a location, so its search read every working-hours row
+(`listWorkingHours` with no `locationId`), while the badge judged the resulting location-less booking
+against only the rows naming no site. A provider whose hours were scoped to a site had **every**
+public booking marked _Outside schedule_ — found while capturing user-guide screenshots, on ten out
+of ten.
+
+The helper now exists: `appliesAtLocation` in
+[`location-scope.ts`](../apps/api/src/modules/availability/location-scope.ts), called by `planFor`'s
+exception filter and by the badge; `listWorkingHours` states the same rule as a Prisma `where` and
+points at it. The rule:
+
+- **A question about one site** — rows naming no site apply, rows naming that site apply, rows naming
+  another do not. Unchanged.
+- **A question about no site** — every row applies, working hours and exceptions alike.
+
+The second half also changes the search. Before, a location-less search _dropped_ location-scoped
+exceptions, because `null === undefined` is false — so a closure a provider booked at their site did
+not block the public page, and customers could book straight into it. A provider is one person:
+time off at any of their sites is time they are not available, and an extra opening at any site is
+time they are. The over-reach this accepts is a closure at site A blocking hours the same person
+works at site B at the same moment, which cannot happen.
+
+Pinned by two tests in `availability.test.ts`: a site-scoped closure removes slots from a
+location-less search, and a location-less booking under site-scoped hours carries no badge. Both fail
+against the previous predicates.
+
 ---
 
 # 3. Delivered

@@ -1,5 +1,6 @@
 import React from "react";
 import type { ConversationProvider, ConversationService } from "../lib/conversation-client";
+import { formatMoney } from "../lib/api-client";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./ui/button";
 
@@ -43,10 +44,7 @@ export function ChatCatalogueChoices({
                   {service.durationMinutes}{" "}
                   {{ hu: "perc", en: "minutes", de: "Minuten", fr: "minutes" }[locale]}
                   {service.priceMinor !== null && service.currency
-                    ? ` · ${new Intl.NumberFormat(locale, {
-                        style: "currency",
-                        currency: service.currency,
-                      }).format(service.priceMinor / 100)}`
+                    ? ` · ${formatMoney(service.priceMinor, service.currency, locale)}`
                     : ""}
                 </span>
               </button>

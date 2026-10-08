@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { ErrorText } from "./ui/form-field";
 import { Input } from "./ui/input";
 import { conversationListQuery } from "@/lib/conversation-list-query";
+import { renderTranscriptMessage } from "@/lib/conversation-messages";
 import { Checkbox } from "./ui/checkbox";
 import { Alert, AlertDescription, AlertLink } from "./ui/alert";
 import { knowledgeHealthKey, useKnowledgeHealth } from "./knowledge-health";
@@ -42,15 +43,6 @@ interface TranscriptMessage {
   groundingWarnings: { kind: "PERSON" | "CITY" | "HOURS" | "PRICE"; value: string }[] | null;
 }
 
-/**
- * What the assistant said. A reply is stored as a template key; for a
- * model-written answer the words are in its parameters, and showing the key
- * instead ("conversation.answer") hid exactly the replies worth reading.
- */
-function spokenText(message: TranscriptMessage): string {
-  const answer = (message.structured as { answer?: unknown } | null)?.answer;
-  return typeof answer === "string" ? answer : message.content;
-}
 interface Stats {
   total: number;
   active: number;
@@ -101,6 +93,9 @@ export function AssistantScreen(): React.ReactElement {
       }),
     enabled: enabled && Boolean(selected),
   });
+  // The language the customer chatted in, which the transcript is rendered in.
+  const selectedLocale =
+    conversations.data?.items.find((row) => row.id === selected)?.locale ?? locale;
   const save = useMutation({
     mutationFn: (body: Partial<Settings>) =>
       apiFetch<Settings>("/v1/assistant/settings", {
@@ -306,7 +301,7 @@ export function AssistantScreen(): React.ReactElement {
                   {detail.data?.messages.map((message) => (
                     <li key={message.id} className="rounded-lg bg-surface-raised p-3 text-sm">
                       <strong>{t(`sender.${message.sender}`)}</strong>
-                      <p>{spokenText(message)}</p>
+                      <p>{renderTranscriptMessage(message, selectedLocale)}</p>
                       {message.groundingWarnings ? (
                         <p className="mt-2 text-xs text-warning">
                           {t("grounding.notInRecords", {

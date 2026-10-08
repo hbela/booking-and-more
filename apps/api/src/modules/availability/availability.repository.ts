@@ -91,7 +91,8 @@ export class AvailabilityRepository {
         providerId: args.providerId,
         ...(args.activeOnly === true ? { active: true } : {}),
         // A row with no location applies wherever the provider works, so it is
-        // always in scope; a row naming a different site is not.
+        // always in scope; a row naming a different site is not. The same rule
+        // as `appliesAtLocation` in location-scope.ts — keep the two in step.
         ...(args.locationId === undefined
           ? {}
           : { OR: [{ locationId: null }, { locationId: args.locationId }] }),

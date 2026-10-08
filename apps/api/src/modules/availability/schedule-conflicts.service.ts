@@ -9,6 +9,7 @@ import {
 } from "@bam/availability-engine";
 import type { AffectedBooking } from "@bam/contracts";
 import type { WorkingHoursEntry } from "./availability.schemas.js";
+import { appliesAtLocation } from "./location-scope.js";
 
 /**
  * Bookings a schedule change would strand, and bookings already stranded.
@@ -263,10 +264,11 @@ export class ScheduleConflictService {
       const timezone = first.location?.timezone ?? first.provider.timezone;
       const locationId = first.locationId;
 
-      // Exactly the predicate `planFor` applies: a row naming no location
-      // applies wherever the provider works, a row naming another site does not.
+      // Exactly the predicate `planFor` applies, because it is the same
+      // function. A booking naming no location was made by a search naming
+      // none, which counted every row (§2.7).
       const inScope = <T extends { locationId: string | null }>(row: T): boolean =>
-        row.locationId === null || row.locationId === locationId;
+        appliesAtLocation(row.locationId, locationId);
 
       const uncovered = findUncoveredAppointments({
         timezone,

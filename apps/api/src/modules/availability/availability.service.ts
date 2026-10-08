@@ -18,6 +18,7 @@ import { providerNotFound } from "../providers/provider.repository.js";
 import { serviceNotFound } from "../services/service.repository.js";
 import { locationNotFound } from "../locations/location.repository.js";
 import { AvailabilityRepository, ScheduleModifiedError } from "./availability.repository.js";
+import { appliesAtLocation } from "./location-scope.js";
 import { ScheduleConflictService } from "./schedule-conflicts.service.js";
 import type {
   CreateExceptionBody,
@@ -567,8 +568,9 @@ export class AvailabilityService {
 
     const relevant = exceptions.filter(
       (exception) =>
-        // An exception scoped to a location or service applies only there.
-        (exception.locationId === null || exception.locationId === args.locationId) &&
+        // An exception scoped to a location or service applies only there — and
+        // a search naming no location sees all of them (`appliesAtLocation`).
+        appliesAtLocation(exception.locationId, args.locationId) &&
         (exception.serviceId === null || exception.serviceId === assignment.serviceId),
     );
 

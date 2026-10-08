@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
 import { signOut } from "@/lib/auth-client";
 import { apiFetch, type MeResponse, type TenantSummary } from "@/lib/api-client";
-import { navFor } from "@/lib/dashboard-nav";
+import { navFor, pageTitleKey } from "@/lib/dashboard-nav";
 import { hasNoOrganization } from "@/lib/organization-state";
 import { LocaleSwitcher } from "./locale-switcher";
 import { ThemeToggle } from "./ui/theme-toggle";
@@ -134,7 +134,7 @@ export function DashboardShell({
         <div className="min-w-0 max-w-full">
           <p className="mb-2 text-sm font-medium text-ink-muted">{t("title")}</p>
           <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            {t(navFor(context.me).find((item) => item.href === pathname)?.key ?? "overview")}
+            {t(pageTitleKey(pathname))}
           </h1>
           {context.me?.tenant ? (
             <p className="mt-3 text-lg font-medium break-words">{context.me.tenant.name}</p>

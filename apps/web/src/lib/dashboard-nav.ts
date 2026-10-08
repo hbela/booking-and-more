@@ -180,3 +180,17 @@ export function navFor(me: MeResponse | null | undefined): NavItem[] {
       (item.requires === undefined || item.requires(me)),
   );
 }
+
+/**
+ * The heading for the screen at `pathname`, as a `dashboard` message key.
+ *
+ * Read from every item, not from `navFor`. A heading names the screen the
+ * caller is on, and some screens are reached without an item of their own —
+ * an owner or administrator opens each provider's Availability from the row on
+ * Providers, and that item is withheld from them on purpose. Looking the title
+ * up among the visible items made every one of those diaries announce itself
+ * as "Overview".
+ */
+export function pageTitleKey(pathname: string): string {
+  return NAV.find((item) => item.href === pathname)?.key ?? "overview";
+}

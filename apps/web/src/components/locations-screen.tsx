@@ -34,13 +34,13 @@ import { Checkbox } from "./ui/checkbox";
 /**
  * One-line address for the list.
  *
- * Postcode and city join with a space rather than a comma â€” "1134 Budapest" is
- * one place, not two fields â€” while the street stays a separate clause. An
+ * Postcode and city join with a space rather than a comma — "1134 Budapest" is
+ * one place, not two fields — while the street stays a separate clause. An
  * em dash when there is nothing to show, so the column never looks broken.
  */
 function formatAddress(location: Location): string {
   const settlement = [location.postalCode, location.city].filter(Boolean).join(" ");
-  return [location.addressLine1, settlement].filter(Boolean).join(", ") || "â€”";
+  return [location.addressLine1, settlement].filter(Boolean).join(", ") || "—";
 }
 
 export function LocationsScreen(): React.ReactElement {

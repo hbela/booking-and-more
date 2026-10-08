@@ -595,6 +595,24 @@ describe.skipIf(!databaseUrl)("availability", () => {
       ]);
     });
 
+    it("honours a closure at a site when the search names no location", async () => {
+      // The public booking page never names a location, so a closure booked at
+      // the provider's site has to bite there too or customers book straight
+      // into it (location-scope.ts).
+      const site = await clinic("exception-site");
+      await setHours(site, [{ ...MONDAY_MORNING[0], locationId: site.locationId }]);
+
+      const created = await createException(site, {
+        type: "UNAVAILABLE",
+        startAt: budapestHour(MONDAY, 10),
+        endAt: budapestHour(MONDAY, 11),
+        locationId: site.locationId,
+      });
+
+      expect(created.statusCode, created.body).toBe(201);
+      expect(localStarts(await searchSlots(site))).toEqual(["09:00", "11:00"]);
+    });
+
     it("applies an exception scoped to one service only to that service", async () => {
       const site = await clinic("exception-scoped");
       await setHours(site, MONDAY_MORNING);
@@ -1612,6 +1630,38 @@ describe.skipIf(!databaseUrl)("availability", () => {
       await setHours(site, MONDAY_MORNING);
 
       expect((await list())[0]?.outsideSchedule).toBeNull();
+    });
+
+    it("does not mark a booking that names no location under hours scoped to a site", async () => {
+      // Every booking from the public page names no location, and the search
+      // that offered it counted the site's hours. Judging it against only the
+      // location-free rows flagged all of them (location-scope.ts).
+      const site = await clinic("badge-site");
+      await setHours(site, [{ ...MONDAY_MORNING[0], locationId: site.locationId }]);
+
+      const booking = await app.inject({
+        method: "POST",
+        url: "/v1/bookings",
+        headers: {
+          ...as(site.cookie, site.tenantId),
+          "idempotency-key": randomBytes(12).toString("hex"),
+        },
+        payload: {
+          providerId: site.providerId,
+          serviceId: site.serviceId,
+          startAt: budapestHour(MONDAY, 10),
+          customer: { fullName: "Kiss Anna", email: `badge-site-${RUN}@example.test` },
+        },
+      });
+      expect(booking.statusCode, booking.body).toBe(201);
+
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/bookings",
+        headers: as(site.cookie, site.tenantId),
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json().items[0]?.outsideSchedule).toBeNull();
     });
   });
 });
