@@ -14,6 +14,10 @@
     "./sentry-scrubbing": {
       "types": "./dist/sentry-scrubbing.d.ts",
       "default": "./dist/sentry-scrubbing.js"
+    },
+    "./sentry-guard": {
+      "types": "./dist/sentry-guard.d.ts",
+      "default": "./dist/sentry-guard.js"
     }
   },
   "files": [

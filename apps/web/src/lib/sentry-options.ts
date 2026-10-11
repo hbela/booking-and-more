@@ -1,11 +1,20 @@
-import { scrubTelemetry } from "@bam/observability/sentry-scrubbing";
+import {
+  type BudgetedEvent,
+  createEventBudget,
+  scrubOrDrop,
+} from "@bam/observability/sentry-guard";
+
+// One budget per runtime (browser tab, Node server, edge isolate): each config
+// file imports this module once.
+const withinBudget = createEventBudget();
 
 export const privacyOptions = {
   sendDefaultPii: false,
   tracesSampleRate: 0.1,
-  beforeSend: scrubTelemetry,
-  beforeSendTransaction: scrubTelemetry,
-  beforeBreadcrumb: scrubTelemetry,
+  beforeSend: <T extends BudgetedEvent>(event: T): T | null =>
+    withinBudget(event) ? scrubOrDrop(event) : null,
+  beforeSendTransaction: scrubOrDrop,
+  beforeBreadcrumb: scrubOrDrop,
 };
 
 /** Anchor both scheme and authority so trace headers never reach lookalike hosts. */

@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { getRequestContext } from "./request-context.js";
-import { redactSecretBearingValues } from "./url-redaction.js";
-import { scrubTelemetry } from "./sentry-scrubbing.js";
+import { createEventBudget, scrubOrDrop } from "./sentry-guard.js";
 
 export interface InitSentryOptions {
   dsn?: string | undefined;
@@ -30,6 +29,8 @@ export function initSentry(options: InitSentryOptions): boolean {
   if (!dsn) return false;
   if (initialised) return true;
 
+  const withinBudget = createEventBudget();
+
   Sentry.init({
     dsn,
     environment,
@@ -42,11 +43,16 @@ export function initSentry(options: InitSentryOptions): boolean {
     sendDefaultPii: false,
 
     initialScope: { tags: { service } },
-    beforeSendTransaction: scrubTelemetry,
-    beforeBreadcrumb: scrubTelemetry,
+    beforeSendTransaction: scrubOrDrop,
+    beforeBreadcrumb: scrubOrDrop,
 
     beforeSend(event) {
-      event = scrubTelemetry(redactSecretBearingValues(event));
+      if (!withinBudget(event)) return null;
+      // scrubTelemetry's string rules already cover the management-token path
+      // that redactSecretBearingValues handles for the logger.
+      const scrubbed = scrubOrDrop(event);
+      if (!scrubbed) return null;
+      event = scrubbed;
       const context = getRequestContext();
       if (!context) return event;
 
