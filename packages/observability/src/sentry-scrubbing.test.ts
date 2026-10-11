@@ -35,4 +35,33 @@ describe("Sentry privacy filtering", () => {
     );
     expect(scrubTelemetry("token=private-token&lang=hu")).toBe("token=[REDACTED]&lang=hu");
   });
+
+  it("survives circular references instead of overflowing the stack", () => {
+    const span: Record<string, unknown> = { op: "http.client" };
+    const spans: unknown[] = [span];
+    span.siblings = spans;
+    const event: Record<string, unknown> = { spans, email: "a@example.com" };
+    event.self = event;
+
+    const result = scrubTelemetry(event);
+    expect(result.self).toBe("[Circular]");
+    expect(result.email).toBe("[REDACTED]");
+    expect(result.spans).toEqual([{ op: "http.client", siblings: "[Circular]" }]);
+  });
+
+  it("scrubs a shared, non-circular reference at every place it appears", () => {
+    const shared = { message: "Failed for a@example.com" };
+    expect(scrubTelemetry({ first: shared, second: shared })).toEqual({
+      first: { message: "Failed for [REDACTED_EMAIL]" },
+      second: { message: "Failed for [REDACTED_EMAIL]" },
+    });
+  });
+
+  it("truncates pathologically deep payloads", () => {
+    let deep: Record<string, unknown> = {};
+    const root = deep;
+    for (let i = 0; i < 10_000; i += 1) deep = deep.next = {};
+    expect(() => scrubTelemetry(root)).not.toThrow();
+    expect(JSON.stringify(scrubTelemetry(root))).toContain("[Truncated]");
+  });
 });
