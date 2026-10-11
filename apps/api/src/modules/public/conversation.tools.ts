@@ -47,6 +47,11 @@ export interface ToolContext {
   timezone: string;
   collected: CollectedFields;
   parameters: Record<string, unknown>;
+  /**
+   * The customer's message exactly as sent. Read only to tell picking a service
+   * apart from asking about one — see `listServices`.
+   */
+  utterance?: string | undefined;
   now: Date;
 }
 
@@ -141,7 +146,22 @@ export class ConversationTools {
     return { message: { key: "conversation.answer", params: { answer }, ui: "NONE" } };
   }
 
-  async listServices(context: ToolContext): Promise<ToolOutcome> {
+  /**
+   * The bookable services, or the one the customer picked.
+   *
+   * Picking and asking are different acts that reach this method through the
+   * same intents: a tap on a service chip sends that service's name, and so does
+   * "Is Consultation the only service?" — both arrive as `GET_SERVICE_DETAILS`
+   * naming Consultation. Selecting on any single match once moved a customer who
+   * had asked a question straight on to "Which day works for you?". So a single
+   * match is a choice only when the caller says the customer is booking
+   * (`SEARCH_SLOTS`) or when the whole message *is* the service's name; anything
+   * else is answered in words, with the full list beside it.
+   */
+  async listServices(
+    context: ToolContext,
+    options: { booking?: boolean } = {},
+  ): Promise<ToolOutcome> {
     const rows = await this.catalogue.listServices({ tenantId: context.tenant.id, limit: 25 });
     const query = stringParam(context.parameters, "serviceQuery", "query");
     const serviceId = stringParam(context.parameters, "serviceId");
@@ -153,17 +173,49 @@ export class ConversationTools {
           ? rows
           : matchByName(rows, query, (row) => nameOf(row, context.locale));
 
-    // Exactly one match is a choice the customer has already made.
     if ((query !== undefined || serviceId !== undefined) && matched.length === 1) {
       const only = matched[0]!;
-      return { collected: { serviceId: only.id }, services: [toServiceView(only, context.locale)] };
+      const picked =
+        options.booking === true ||
+        (context.utterance !== undefined &&
+          fold(stripPunctuation(context.utterance)) === fold(nameOf(only, context.locale)));
+      if (picked) {
+        return { collected: { serviceId: only.id }, services: [toServiceView(only, context.locale)] };
+      }
     }
 
-    return {
-      services: (matched.length === 0 ? rows : matched).map((row) =>
-        toServiceView(row, context.locale),
-      ),
-    };
+    // Booking from SEARCH_SLOTS without a usable service: the machine's own
+    // "Which service would you like?" is the right next line, over the
+    // narrowed list when the words matched several.
+    if (options.booking === true) {
+      return {
+        services: (matched.length === 0 ? rows : matched).map((row) =>
+          toServiceView(row, context.locale),
+        ),
+      };
+    }
+
+    const services = rows.map((row) => toServiceView(row, context.locale));
+
+    const names = services.map((service) => service.name).join(", ");
+    const notOffered = (query !== undefined || serviceId !== undefined) && matched.length === 0;
+
+    let message: AssistantMessage;
+    if (services.length === 0) {
+      message = { key: "conversation.services.none", ui: "NONE" };
+    } else if (notOffered && query !== undefined) {
+      message = {
+        key: "conversation.services.notOffered",
+        params: { query, services: names },
+        ui: "SERVICE_LIST",
+      };
+    } else if (services.length === 1) {
+      message = { key: "conversation.services.only", params: { service: names }, ui: "SERVICE_LIST" };
+    } else {
+      message = { key: "conversation.services.available", params: { services: names }, ui: "SERVICE_LIST" };
+    }
+
+    return { message, services };
   }
 
   async listProviders(context: ToolContext): Promise<ToolOutcome> {
@@ -213,14 +265,14 @@ export class ConversationTools {
     const serviceId = stringParam(context.parameters, "serviceId") ?? context.collected.serviceId;
 
     if (serviceId === undefined && serviceQuery !== undefined) {
-      const resolved = await this.listServices(context);
+      const resolved = await this.listServices(context, { booking: true });
       if (resolved.collected?.serviceId === undefined) return resolved;
       collected.serviceId = resolved.collected.serviceId;
     } else if (serviceId !== undefined) {
       collected.serviceId = serviceId;
     }
 
-    if (collected.serviceId === undefined) return this.listServices(context);
+    if (collected.serviceId === undefined) return this.listServices(context, { booking: true });
 
     const providerId =
       stringParam(context.parameters, "providerId") ?? context.collected.providerId;
@@ -608,6 +660,11 @@ function matchByName<T>(rows: T[], query: string, nameFor: (row: T) => string): 
     const name = fold(nameFor(row));
     return name.includes(needle) || needle.includes(name);
   });
+}
+
+/** A tapped or typed name may arrive with a full stop or a question mark. */
+function stripPunctuation(value: string): string {
+  return value.replace(/[\s.!?,;:…]+$/u, "");
 }
 
 function fold(value: string): string {

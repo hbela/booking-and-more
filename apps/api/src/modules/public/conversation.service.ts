@@ -467,7 +467,7 @@ export class ConversationService {
       return this.reply({ session, tenant, collected, message: refusalMessage("LOW_CONFIDENCE") });
     }
 
-    return this.run({ session, tenant, collected, command, now: args.now });
+    return this.run({ session, tenant, collected, command, utterance: text, now: args.now });
   }
 
   /**
@@ -482,6 +482,7 @@ export class ConversationService {
     tenant: Tenant;
     collected: StoredState;
     command: { intent: ConversationIntent; parameters: Record<string, unknown> };
+    utterance: string;
     now: Date;
   }): Promise<ConversationTurnResponse> {
     const handler = this.tools.handlers()[args.command.intent];
@@ -507,6 +508,7 @@ export class ConversationService {
         timezone: args.session.timezone,
         collected: args.collected,
         parameters,
+        utterance: args.utterance,
         now: args.now,
       });
     } catch (error) {
@@ -533,6 +535,7 @@ export class ConversationService {
         collected: args.collected,
         message: outcome.message,
         countTurn: true,
+        ...(outcome.services === undefined ? {} : { services: outcome.services }),
       });
     }
 

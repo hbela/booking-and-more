@@ -267,6 +267,7 @@
     "createdButNotAssigned": "The provider was created, but their services or location could not be linked. Use Assign on their row to finish.",
     "assignments": "Services and locations",
     "loadingAssignments": "Loading this provider's services and locations…",
+    "serviceSwitchedOff": "switched off, so it cannot be booked — switch it on on the Services screen",
     "customise": "Customise for this provider",
     "customDuration": "Duration in minutes",
     "customPrice": "Price",

@@ -21,6 +21,30 @@ export const conversationMessages: Record<string, Record<Locale, string>> = {
     de: "Welche Leistung wünschen Sie?",
     fr: "Quelle prestation souhaitez-vous ?",
   },
+  "conversation.services.available": {
+    en: "These services can be booked: {services}. Which one would you like?",
+    hu: "A következő szolgáltatásokra foglalhat időpontot: {services}. Melyiket szeretné?",
+    de: "Diese Leistungen können gebucht werden: {services}. Welche möchten Sie?",
+    fr: "Ces prestations peuvent être réservées : {services}. Laquelle souhaitez-vous ?",
+  },
+  "conversation.services.only": {
+    en: "At the moment {service} is the only service that can be booked. Would you like to book it?",
+    hu: "Jelenleg csak erre a szolgáltatásra foglalhat időpontot: {service}. Szeretne foglalni?",
+    de: "Derzeit kann nur diese Leistung gebucht werden: {service}. Möchten Sie sie buchen?",
+    fr: "Pour le moment, seule cette prestation peut être réservée : {service}. Souhaitez-vous la réserver ?",
+  },
+  "conversation.services.notOffered": {
+    en: "“{query}” cannot be booked here. These services can be booked: {services}.",
+    hu: "„{query}” nem foglalható itt. A következő szolgáltatásokra foglalhat időpontot: {services}.",
+    de: "„{query}“ kann hier nicht gebucht werden. Diese Leistungen können gebucht werden: {services}.",
+    fr: "« {query} » ne peut pas être réservé ici. Ces prestations peuvent être réservées : {services}.",
+  },
+  "conversation.services.none": {
+    en: "No services can be booked online at the moment. Please contact the business directly.",
+    hu: "Jelenleg egyetlen szolgáltatásra sem lehet online időpontot foglalni. Kérem, vegye fel a kapcsolatot a vállalkozással.",
+    de: "Derzeit können keine Leistungen online gebucht werden. Bitte wenden Sie sich direkt an das Unternehmen.",
+    fr: "Aucune prestation ne peut être réservée en ligne pour le moment. Veuillez contacter directement l’établissement.",
+  },
   "conversation.ask.provider": {
     en: "Do you prefer a provider?",
     hu: "Van választott szakembere?",
@@ -173,12 +197,22 @@ export const conversationMessages: Record<string, Record<Locale, string>> = {
   },
 };
 
+/**
+ * Fill `{name}` placeholders from the message's params. Values are the tenant's
+ * own service names, rendered as text by React — never as markup.
+ */
+function interpolate(template: string, params: Record<string, unknown> | null | undefined): string {
+  return template.replace(/\{(\w+)\}/gu, (whole, name: string) => {
+    const value = params?.[name];
+    return typeof value === "string" || typeof value === "number" ? String(value) : whole;
+  });
+}
+
 export function renderMessage(message: AssistantMessage, locale: Locale): string {
   if (message.key === "conversation.answer") return String(message.params?.["answer"] ?? "");
-  return (
-    conversationMessages[message.key]?.[locale] ??
-    conversationMessages["conversation.error.unclear"]![locale]
-  );
+  const template = conversationMessages[message.key]?.[locale];
+  if (template === undefined) return conversationMessages["conversation.error.unclear"]![locale];
+  return interpolate(template, message.params);
 }
 
 /**
@@ -204,5 +238,8 @@ export function renderTranscriptMessage(
   if (message.sender === "CUSTOMER") return message.content;
   const template = conversationMessages[message.content];
   if (template === undefined) return message.content;
-  return template[conversationLocale as Locale] ?? template.en;
+  return interpolate(
+    template[conversationLocale as Locale] ?? template.en,
+    message.structured as Record<string, unknown> | null,
+  );
 }

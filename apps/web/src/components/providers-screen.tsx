@@ -908,6 +908,15 @@ function CreateProviderPanel({
                       {" · "}
                       {t("minutes", { count: service.durationMinutes })}
                     </span>
+                    {/* Assigning a switched-off service is allowed, but nobody can book it
+                        until it is switched back on — the chat and the booking page both
+                        skip it, and nothing on this screen said so. */}
+                    {service.active ? null : (
+                      <span className="text-warning">
+                        {" · "}
+                        {t("serviceSwitchedOff")}
+                      </span>
+                    )}
                   </span>
                 </label>
               ))}
@@ -1223,6 +1232,15 @@ function AssignmentsPanel({
                             {" · "}
                             {t("minutes", { count: service.durationMinutes })}
                           </span>
+                          {/* Assigning a switched-off service is allowed, but nobody can book it
+                              until it is switched back on — the chat and the booking page both
+                              skip it, and nothing on this screen said so. */}
+                          {service.active ? null : (
+                            <span className="text-warning">
+                              {" · "}
+                              {t("serviceSwitchedOff")}
+                            </span>
+                          )}
                         </span>
                       </label>
 

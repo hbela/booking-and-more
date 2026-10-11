@@ -22,6 +22,40 @@ describe("chat messages", () => {
     }
   });
 
+  it("translates every message key the conversation tools emit", () => {
+    const tools = readFileSync(
+      new URL("../../../api/src/modules/public/conversation.tools.ts", import.meta.url),
+      "utf8",
+    );
+    // `conversation.answer` carries the model's own words rather than a template.
+    const keys = [...tools.matchAll(/key: "(conversation\.[\w.]+)"/g)]
+      .map((match) => match[1]!)
+      .filter((key) => key !== "conversation.answer");
+    expect(keys).toContain("conversation.services.only");
+    for (const key of keys) {
+      for (const locale of ["hu", "en", "de", "fr"] as const) {
+        expect(conversationMessages[key]?.[locale], key).toBeTruthy();
+      }
+    }
+  });
+
+  it("names the services in the sentence that lists them", () => {
+    const message = {
+      key: "conversation.services.available",
+      params: { services: "Consultation, Cleaning" },
+      ui: "SERVICE_LIST" as const,
+    };
+    expect(renderMessage(message, "en")).toBe(
+      "These services can be booked: Consultation, Cleaning. Which one would you like?",
+    );
+    expect(
+      renderTranscriptMessage(
+        { sender: "ASSISTANT", content: message.key, structured: message.params },
+        "en",
+      ),
+    ).toContain("Consultation, Cleaning");
+  });
+
   it("shows a Hungarian clarification instead of the raw error key", () => {
     expect(renderMessage({ key: "conversation.error.unclear", ui: "NONE" }, "hu")).toContain(
       "Időpontot szeretne foglalni",

@@ -533,6 +533,48 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
     expect(selected.message.key).not.toBe("conversation.ask.service");
   });
 
+  it("answers a question that names a service without selecting it", async () => {
+    const site = await clinic("service-question");
+    const conversation = await startConversation(site, "CHAT", "en");
+
+    ai.interpreter.push(envelope({ intent: "LIST_SERVICES", parameters: {} }));
+    const listed = await say(conversation, "What are the services I can choose from?");
+    expect(listed.message).toEqual({
+      key: "conversation.services.only",
+      params: { service: "Dental check-up" },
+      ui: "SERVICE_LIST",
+    });
+    expect(listed.services).toHaveLength(1);
+
+    ai.interpreter.push(
+      envelope({
+        intent: "GET_SERVICE_DETAILS",
+        parameters: { serviceQuery: "Dental check-up" },
+      }),
+    );
+    const asked = await say(conversation, "Is Dental check-up the only service?");
+    expect(["START", "SELECTING_SERVICE"]).toContain(asked.state);
+    expect(asked.message.key).toBe("conversation.services.only");
+
+    ai.interpreter.push(
+      envelope({ intent: "GET_SERVICE_DETAILS", parameters: { serviceQuery: "braces" } }),
+    );
+    const missing = await say(conversation, "Can I book braces?");
+    expect(["START", "SELECTING_SERVICE"]).toContain(missing.state);
+    expect(missing.message).toMatchObject({
+      key: "conversation.services.notOffered",
+      params: { query: "braces", services: "Dental check-up" },
+    });
+
+    // The chip sends the name alone; that is a choice.
+    ai.interpreter.push(
+      envelope({ intent: "GET_SERVICE_DETAILS", parameters: { serviceQuery: "Dental check-up" } }),
+    );
+    const picked = await say(conversation, "Dental check-up");
+    expect(picked.state).toBe("SELECTING_DATE");
+    expect(picked.message.key).toBe("conversation.ask.date");
+  });
+
   it.each(["START", "COMPLETED"])(
     "answers location questions in %s without changing booking state",
     async (state) => {

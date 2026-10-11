@@ -267,6 +267,7 @@
     "createdButNotAssigned": "A szolgáltató létrejött, de a szolgáltatásai vagy a helyszíne nem lett hozzárendelve. Fejezze be a sorában lévő Hozzárendelés gombbal.",
     "assignments": "Szolgáltatások és helyszínek",
     "loadingAssignments": "A szolgáltató szolgáltatásainak és helyszíneinek betöltése…",
+    "serviceSwitchedOff": "ki van kapcsolva, így nem foglalható — a Szolgáltatások képernyőn kapcsolhatja be",
     "customise": "Egyedi beállítás ennél a szolgáltatónál",
     "customDuration": "Időtartam percben",
     "customPrice": "Ár",
