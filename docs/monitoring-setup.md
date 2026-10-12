@@ -127,9 +127,9 @@ per-DSN rate limit. They are spent as follows:
 
 ## Remaining coverage
 
-- After the first deploy with the heartbeat, confirm the `booking-and-more-worker`
-  cron monitor appeared in Sentry and that a failed check-in emails the operator —
-  the monitor is created by the SDK, so its alert routing has not been verified.
+- Worker heartbeat alerting is **verified on staging (2026-10-12)**: stopping the
+  worker container produced a failed `booking-and-more-worker` check-in and an email
+  to the operator; restarting it recovered the monitor. Repeat once for production.
 - Overdue and failed background work is currently logged as aggregate counts;
   log warnings do not automatically become Sentry issues or email alerts.
 - Disk pressure and billing/invoicing failure alert paths need explicit wiring and
