@@ -1,6 +1,6 @@
 import { env } from "./instrument.js";
 import { writeHeartbeat, clearHeartbeat } from "./heartbeat.js";
-import { reportProcessingHealth } from "./processing-health.js";
+import { createProcessingProbe } from "./processing-health.js";
 import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
 import { hasBillingo, hasRedis } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
@@ -294,24 +294,20 @@ async function main(): Promise<void> {
     intervalMs: 60 * 60 * 1_000,
   });
 
-  writeHeartbeat();
-  reportHeartbeat(SENTRY_HEARTBEAT);
-  let checkingProgress = false;
-  const heartbeat = setInterval(() => {
+  // The Sentry check-in carries whether work is moving, not only whether the
+  // process is: stuck or recently failed work reports "error", which alerts on
+  // the same monitor as a dead worker. The Docker file stays liveness-only, so
+  // a backlog never gets a healthy container restarted.
+  const probeProcessing = createProcessingProbe(prisma, log);
+  const beat = (): void => {
     writeHeartbeat();
-    reportHeartbeat(SENTRY_HEARTBEAT);
-    if (!checkingProgress) {
-      checkingProgress = true;
-      void reportProcessingHealth(prisma, log)
-        .catch(() => {
-          log.error("worker: unable to inspect processing health");
-        })
-        .finally(() => {
-          checkingProgress = false;
-        });
-    }
+    void probeProcessing().then((status) => {
+      reportHeartbeat(SENTRY_HEARTBEAT, status);
+    });
     log.debug({ uptimeSeconds: Math.round(process.uptime()) }, "worker: heartbeat");
-  }, HEARTBEAT_MS);
+  };
+  beat();
+  const heartbeat = setInterval(beat, HEARTBEAT_MS);
 
   // Do not hold the event loop open on the timer alone — but do keep the
   // process alive, which the timer being unref'd would otherwise prevent.

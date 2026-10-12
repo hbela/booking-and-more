@@ -99,14 +99,17 @@ export interface HeartbeatMonitor {
  * on the way. Its schedule therefore lives in code rather than in the Sentry
  * UI. A no-op without a DSN, like every other export here.
  *
+ * `status: "error"` means the process is alive but not doing its job; it opens
+ * an issue on the same thresholds as a missed check-in.
+ *
  * The thresholds are chosen around deploys: a container restart misses a
  * check-in or two, so the monitor waits out a margin and then needs two
  * consecutive misses before it opens an issue.
  */
-export function reportHeartbeat(monitor: HeartbeatMonitor): void {
+export function reportHeartbeat(monitor: HeartbeatMonitor, status: "ok" | "error" = "ok"): void {
   if (!initialised) return;
   Sentry.captureCheckIn(
-    { monitorSlug: monitor.slug, status: "ok" },
+    { monitorSlug: monitor.slug, status },
     {
       schedule: { type: "interval", value: monitor.intervalMinutes, unit: "minute" },
       checkinMargin: 3,
