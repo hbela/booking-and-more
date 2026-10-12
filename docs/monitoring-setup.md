@@ -1,6 +1,6 @@
 # Application and backup monitoring
 
-Updated 2026-09-24. Sentry handles application monitoring. Backup monitoring is
+Updated 2026-10-12. Sentry handles application monitoring. Backup monitoring is
 handled by a custom Cloudflare Worker with Resend email following the completed
 staging Sentry Cron cutover. UptimeRobot is not required. Keep staging and production separate.
 See [custom backup monitoring](backup-monitor.md) for verified status and rollout gates.
@@ -80,11 +80,12 @@ in Sentry; SDK initialization alone does not establish alert delivery.
 Configure external availability checks separately from backup monitoring and verify
 operator alert delivery:
 
-| Monitor                 | Type                      | Target / expectation                                                                 |
-| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
-| Staging web             | HTTPS                     | `https://app.booking.appointer.hu/api/health`, HTTP 200                              |
-| Staging API             | HTTPS                     | `https://api.booking.appointer.hu/health/ready`, HTTP 200                            |
-| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes |
+| Monitor                 | Type                      | Target / expectation                                                                    |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
+| Staging web             | HTTPS                     | `https://app.booking.appointer.hu/api/health`, HTTP 200 — **not configured**, see below |
+| Staging API             | Sentry uptime             | `https://api.booking.appointer.hu/health/ready`, HTTP 200, every 60 s                   |
+| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses                |
+| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes    |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together
@@ -102,10 +103,33 @@ authoritative for staging backup monitoring. Routine successful backups do not
 send email. See [custom backup monitoring](backup-monitor.md) for evidence and rollback.
 Do not manually send fabricated success events to the staging monitor.
 
+### Sentry free-plan budget (2026-10-12)
+
+The Developer plan includes **one uptime monitor and one cron monitor**, and no
+per-DSN rate limit. They are spent as follows:
+
+- **Uptime → API `/health/ready`** (monitor `2413672`, project
+  `booking-and-more-fastify`, environment `staging`). It answers 503 when PostgreSQL
+  or Redis is unreachable, so it covers more than the web check would. The web
+  `/api/health` check stays unconfigured until the plan allows a second monitor.
+- **Cron → worker heartbeat.** `reportHeartbeat` in `@bam/observability` checks in
+  from the worker's existing 60-second heartbeat and upserts the monitor's schedule
+  from code (interval 1 minute, 3-minute margin, issue after 2 consecutive misses,
+  so a redeploy does not alert). It is a no-op without `SENTRY_DSN`. The slug is
+  shared by every environment, which is what keeps it to one monitor. Backups do not
+  use this slot; they stay on the Cloudflare monitor above.
+- **Rate limiting is client-side.** `createEventBudget` caps each process at 3
+  identical errors a minute and 50 an hour, and `scrubOrDrop` drops telemetry whose
+  scrubbing throws. Both exist because a scrubber overflow once reported itself
+  ~8,500 times a day until the error quota was gone (BOOKING-AND-MORE-FASTIFY-2).
+- Spike Protection notifications are on for both projects; quota emails are on by
+  default for the organization owner.
+
 ## Remaining coverage
 
-- Worker heartbeat freshness is checked by Docker; external delivery of worker-down
-  alerts still needs configuration. A green API monitor does not prove worker health.
+- After the first deploy with the heartbeat, confirm the `booking-and-more-worker`
+  cron monitor appeared in Sentry and that a failed check-in emails the operator —
+  the monitor is created by the SDK, so its alert routing has not been verified.
 - Overdue and failed background work is currently logged as aggregate counts;
   log warnings do not automatically become Sentry issues or email alerts.
 - Disk pressure and billing/invoicing failure alert paths need explicit wiring and

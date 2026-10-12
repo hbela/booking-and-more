@@ -4,7 +4,7 @@ import { reportProcessingHealth } from "./processing-health.js";
 import { bindCustomerPii, createCustomerPii } from "@bam/crypto";
 import { hasBillingo, hasRedis } from "@bam/config";
 import { createPrismaClient } from "@bam/db";
-import { createLogger, flushSentry } from "@bam/observability";
+import { createLogger, flushSentry, reportHeartbeat } from "@bam/observability";
 // PARKED — Epic 6 part 1 (see the block in `attachQueues` below).
 // import { hasGoogleCalendar } from "@bam/config";
 // import { parseEncryptionKey } from "@bam/crypto";
@@ -63,6 +63,17 @@ const log = createLogger({
 
 /** Report liveness on this cadence so a silent process is distinguishable from a dead one. */
 const HEARTBEAT_MS = 60_000;
+
+/**
+ * The external half of the heartbeat. Docker's healthcheck reads the file and
+ * restarts a stuck container, but tells nobody; the API's uptime monitor stays
+ * green while this process is dead. Sentry's cron monitor is what emails.
+ * One monitor covers every environment, which matters on a plan that has one.
+ */
+const SENTRY_HEARTBEAT = {
+  slug: "booking-and-more-worker",
+  intervalMinutes: HEARTBEAT_MS / 60_000,
+};
 
 interface RunningQueues {
   queues: QueueRegistry;
@@ -284,9 +295,11 @@ async function main(): Promise<void> {
   });
 
   writeHeartbeat();
+  reportHeartbeat(SENTRY_HEARTBEAT);
   let checkingProgress = false;
   const heartbeat = setInterval(() => {
     writeHeartbeat();
+    reportHeartbeat(SENTRY_HEARTBEAT);
     if (!checkingProgress) {
       checkingProgress = true;
       void reportProcessingHealth(prisma, log)

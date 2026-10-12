@@ -88,6 +88,35 @@ export function captureException(error: unknown, context?: Record<string, unknow
   Sentry.captureException(error, context ? { extra: context } : undefined);
 }
 
+export interface HeartbeatMonitor {
+  /** Stable across deploys: Sentry keys the monitor, and its history, on it. */
+  slug: string;
+  intervalMinutes: number;
+}
+
+/**
+ * Check in to a Sentry cron monitor, creating or updating it from this config
+ * on the way. Its schedule therefore lives in code rather than in the Sentry
+ * UI. A no-op without a DSN, like every other export here.
+ *
+ * The thresholds are chosen around deploys: a container restart misses a
+ * check-in or two, so the monitor waits out a margin and then needs two
+ * consecutive misses before it opens an issue.
+ */
+export function reportHeartbeat(monitor: HeartbeatMonitor): void {
+  if (!initialised) return;
+  Sentry.captureCheckIn(
+    { monitorSlug: monitor.slug, status: "ok" },
+    {
+      schedule: { type: "interval", value: monitor.intervalMinutes, unit: "minute" },
+      checkinMargin: 3,
+      maxRuntime: 1,
+      failureIssueThreshold: 2,
+      recoveryThreshold: 1,
+    },
+  );
+}
+
 export async function flushSentry(timeoutMs = 2_000): Promise<void> {
   if (!initialised) return;
   await Sentry.flush(timeoutMs);
