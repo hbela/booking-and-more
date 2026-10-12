@@ -84,7 +84,7 @@ operator alert delivery:
 | ----------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
 | Staging web             | HTTPS                     | `https://app.booking.appointer.hu/api/health`, HTTP 200 — **not configured**, see below |
 | Staging API             | Sentry uptime             | `https://api.booking.appointer.hu/health/ready`, HTTP 200, every 60 s                   |
-| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses                |
+| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors      |
 | Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes    |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
@@ -118,6 +118,19 @@ per-DSN rate limit. They are spent as follows:
   so a redeploy does not alert). It is a no-op without `SENTRY_DSN`. The slug is
   shared by every environment, which is what keeps it to one monitor. Backups do not
   use this slot; they stay on the Cloudflare monitor above.
+- **The same check-in reports stuck work.** Each beat, `createProcessingProbe` in
+  `apps/worker/src/processing-health.ts` counts, in aggregate only: outbox events,
+  notifications and Stripe events overdue by more than 5 minutes, and outbox events
+  and notifications that failed in the last 30 minutes. Any non-zero count makes the
+  check-in `error` instead of `ok`, so one email covers "worker dead" and "worker
+  alive but not getting through its work"; the worker's `processing needs attention`
+  log line says which count it was. Failures use a 30-minute window because a
+  failure is an instant and the monitor needs two error check-ins in a row; the
+  lifetime FAILED totals are logged but never alarm, since those rows are never
+  cleared. An outbox row has no failed-at column, so its last scheduled attempt
+  (`available_at`) stands in. A measurement that takes longer than 10 seconds or
+  cannot reach the database reports `error` too. The Docker heartbeat file stays
+  liveness-only, so a backlog never gets a healthy container restarted.
 - **Rate limiting is client-side.** `createEventBudget` caps each process at 3
   identical errors a minute and 50 an hour, and `scrubOrDrop` drops telemetry whose
   scrubbing throws. Both exist because a scrubber overflow once reported itself
@@ -130,8 +143,9 @@ per-DSN rate limit. They are spent as follows:
 - Worker heartbeat alerting is **verified on staging (2026-10-12)**: stopping the
   worker container produced a failed `booking-and-more-worker` check-in and an email
   to the operator; restarting it recovered the monitor. Repeat once for production.
-- Overdue and failed background work is currently logged as aggregate counts;
-  log warnings do not automatically become Sentry issues or email alerts.
+- Stuck and failed background work alerts through the worker heartbeat (above).
+  **Not yet verified end to end**: no failure has been provoked on staging to watch the
+  monitor go red and recover.
 - Disk pressure and billing/invoicing failure alert paths need explicit wiring and
   an end-to-end test before the production monitoring gate is complete.
 - Test Sentry scrubbing and delivery, uptime alerts, missing-heartbeat alerts,
