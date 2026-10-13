@@ -105,12 +105,13 @@ Wrangler configuration, a command-line argument, or a deployment transcript.
    These databases and migrations already exist for this installation; reuse them.
 3. For each configuration, use `wrangler secret put NAME --config FILE` to configure:
 
-   | Secret           | Value                                                                                                      |
-   | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-   | `MONITOR_TOKENS` | JSON object mapping `bam-staging` (or `bam-test`) to an independent random token of at least 32 characters |
-   | `RESEND_API_KEY` | Dedicated sending-only key scoped to the verified monitoring sender domain                                 |
-   | `ALERT_FROM`     | Verified bare email address, without a display name                                                        |
-   | `ALERT_TO`       | Explicit operator email address                                                                            |
+   | Secret           | Value                                                                                                                      |
+   | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+   | `MONITOR_TOKENS` | JSON object mapping `bam-staging` (or `bam-test`) to an independent random token of at least 32 characters                 |
+   | `RESEND_API_KEY` | Dedicated sending-only key scoped to the verified monitoring sender domain                                                 |
+   | `ALERT_FROM`     | Verified bare email address, without a display name                                                                        |
+   | `ALERT_TO`       | Explicit operator email address                                                                                            |
+   | `HEARTBEAT_URL`  | Optional healthchecks.io ping URL (`https://hc-ping.com/<uuid>`); see [Watching the monitor](#watching-the-monitor-itself) |
 
    Files are `wrangler.jsonc` and `wrangler.rehearsal.jsonc`, relative to the workspace.
    Keep a separate token for rehearsal. Use interactive secret prompts or protected
@@ -174,11 +175,45 @@ Hard process termination may prevent a failure check-in; overrun/staleness cover
 The launcher cannot report a failure before it starts; missing success still alerts.
 
 Cloudflare hosts both R2 and this monitor, so a provider-wide outage can affect both.
-The monitor cannot independently notify when its own cron or email provider is down;
-inspect scheduled invocations, pending/blocked emails and quota periodically. The
+The monitor cannot email about its own cron or email provider being down; the
+heartbeat below hands that to an outside service. Without `HEARTBEAT_URL`, inspect
+scheduled invocations, pending/blocked emails and quota periodically. The
 five-minute schedule aims for detection between 50 and 55 minutes, not a guaranteed
 email-delivery SLA. Restore rehearsals, encryption key backups and disk monitoring
 remain separate responsibilities. This service does not prove a dump is restorable.
+
+## Watching the monitor itself
+
+The monitor alerts about backups, but nothing alerted about the monitor: a stopped
+cron sends nothing, and a failing Resend key leaves alerts sitting in D1 with only a
+`console.error` in the Worker logs. So every scheduled check ends with a ping to
+`HEARTBEAT_URL`, a [healthchecks.io](https://healthchecks.io) check that emails the
+operator from outside Cloudflare, Hetzner and Resend:
+
+- **success ping** — the check ran and every alert email has been delivered;
+- **`/fail` ping** — the check threw, or an alert is `blocked` or still undelivered
+  15 minutes (three checks) after it was created. A fresh alert inside its normal
+  retry window does not count;
+- **no ping** — the cron stopped, the Worker was deleted, or Cloudflare is down;
+  healthchecks.io alerts after period plus grace.
+
+A heartbeat failure is logged and swallowed, so it never changes the check's own
+result. The rehearsal Worker leaves `HEARTBEAT_URL` unset and sends nothing.
+The body is `ok` or a fixed reason string; no backup or customer data is sent.
+
+Setup, once:
+
+1. In healthchecks.io create a check named `bam-backup-monitor (staging)`, schedule
+   **Simple**, period **5 minutes**, grace **10 minutes**, with email integration to
+   the operator. Prefer an address or provider other than the Resend sender path, so
+   the two alert routes do not share one failure.
+2. Store its ping URL as a secret (it is the only credential the check has):
+   `corepack pnpm --filter @bam/backup-monitor exec wrangler secret put HEARTBEAT_URL --config wrangler.jsonc`
+3. Deploy: `corepack pnpm --filter @bam/backup-monitor exec wrangler deploy --config wrangler.jsonc`.
+   The check turns green within five minutes.
+4. Accept the alert path: pause the check's cron by temporarily setting
+   `"crons": []`, deploy, wait for the healthchecks.io "down" email, restore
+   `*/5 * * * *` and deploy again, then confirm the "up" email.
 
 To add production later, register `bam-production` explicitly in `MONITOR_IDS`, add
 an independent token, seed its `armed_at` at activation and wire its own service.

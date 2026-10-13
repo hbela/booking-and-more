@@ -7,6 +7,8 @@ export interface Env {
   RESEND_API_KEY: string;
   ALERT_FROM: string;
   ALERT_TO: string;
+  /** Optional healthchecks.io ping URL; unset (as in rehearsal) means no heartbeat. */
+  HEARTBEAT_URL?: string;
 }
 
 const eventSchema = z
@@ -222,6 +224,50 @@ export async function deliver(env: Env, now: number, send: typeof fetch = fetch)
   }
 }
 
+/** An alert counts as stuck once it has gone undelivered for three scheduled checks. */
+async function undeliveredAlerts(env: Env, now: number): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM notifications
+    WHERE sent_at IS NULL AND (blocked=1 OR created_at<=?)`,
+  )
+    .bind(now - 900)
+    .first<{ n: number }>();
+  return (row?.n ?? 0) > 0;
+}
+
+const heartbeatUrl = z
+  .url()
+  .refine((u) => u.startsWith("https://"))
+  .transform((u) => u.replace(/\/+$/, ""));
+
+/**
+ * Dead-man's switch for the monitor itself: it cannot email about its own cron stopping or its
+ * email provider failing, so an outside service alerts when these pings stop or report failure.
+ * Never throws, so a heartbeat outage cannot mask or replace the check's own result.
+ */
+export async function heartbeat(
+  env: Env,
+  failure?: string,
+  send: typeof fetch = fetch,
+): Promise<void> {
+  if (!env.HEARTBEAT_URL) return;
+  const url = heartbeatUrl.safeParse(env.HEARTBEAT_URL);
+  if (!url.success) {
+    console.error("Heartbeat URL is invalid");
+    return;
+  }
+  try {
+    const response = await send(failure ? `${url.data}/fail` : url.data, {
+      method: "POST",
+      body: failure ?? "ok",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error("Heartbeat rejected");
+  } catch {
+    console.error("Backup monitor heartbeat failed");
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     try {
@@ -274,7 +320,16 @@ export default {
   },
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
-    await evaluate(env, now);
-    await deliver(env, now);
+    let failure: string | undefined;
+    try {
+      await evaluate(env, now);
+      await deliver(env, now);
+      if (await undeliveredAlerts(env, now)) failure = "Backup alert email undelivered";
+    } catch (error) {
+      failure = "Scheduled backup check failed";
+      throw error;
+    } finally {
+      await heartbeat(env, failure);
+    }
   },
 };

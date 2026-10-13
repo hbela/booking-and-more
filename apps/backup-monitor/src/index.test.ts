@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { URL as NodeURL } from "node:url";
 import { Miniflare } from "miniflare";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import worker, { deliver, evaluate, type Env } from "./index";
+import worker, { deliver, evaluate, heartbeat, type Env } from "./index";
 
 const now = 1790200000;
 const token = "a".repeat(40);
@@ -234,5 +234,51 @@ describe("incident state and durable outbox", () => {
     expect((await rows("runs")).results).toHaveLength(0);
     expect((await rows("monitors")).results[0]?.last_success).toBe(now + 10);
     expect((await rows("incidents")).results).toHaveLength(1); // current stale incident only
+  });
+});
+
+describe("heartbeat to an outside dead-man's switch", () => {
+  const ping = "https://hc-ping.com/00000000-0000-4000-8000-000000000000";
+  const run = (e: Env) => worker.scheduled({} as ScheduledController, e);
+  const pinged = () =>
+    vi.mocked(fetch).mock.calls.filter(([url]) => (url as string).startsWith(ping));
+
+  it("pings success after a healthy scheduled check, and nothing when unconfigured", async () => {
+    await run(env);
+    expect(pinged()).toHaveLength(0);
+    await run({ ...env, HEARTBEAT_URL: `${ping}/` });
+    expect(pinged().map(([url]) => url)).toEqual([ping]);
+  });
+  it("reports failure when an alert email stays undelivered past three checks", async () => {
+    await evaluate(env, now - 900, "bam-staging", event("failed", now - 900));
+    vi.mocked(fetch).mockImplementation((url) =>
+      Promise.resolve(new Response(null, { status: (url as string).startsWith(ping) ? 200 : 500 })),
+    );
+    await run({ ...env, HEARTBEAT_URL: ping });
+    expect(pinged().map(([url]) => url)).toEqual([`${ping}/fail`]);
+  });
+  it("does not report a fresh alert that is still within its retry window", async () => {
+    await evaluate(env, now, "bam-staging", event("failed"));
+    vi.mocked(fetch).mockImplementation((url) =>
+      Promise.resolve(new Response(null, { status: (url as string).startsWith(ping) ? 200 : 500 })),
+    );
+    await run({ ...env, HEARTBEAT_URL: ping });
+    expect(pinged().map(([url]) => url)).toEqual([ping]);
+  });
+  it("reports failure and still rethrows when the scheduled check itself throws", async () => {
+    await expect(
+      run({ ...env, MONITOR_TOKENS: "not json", HEARTBEAT_URL: ping }),
+    ).rejects.toThrow();
+    expect(pinged().map(([url]) => url)).toEqual([`${ping}/fail`]);
+  });
+  it("never throws when the heartbeat endpoint is down or misconfigured", async () => {
+    const send = vi.fn().mockRejectedValue(new Error("network"));
+    await expect(
+      heartbeat({ ...env, HEARTBEAT_URL: ping }, undefined, send),
+    ).resolves.toBeUndefined();
+    await expect(
+      heartbeat({ ...env, HEARTBEAT_URL: "http://insecure.example" }, undefined, send),
+    ).resolves.toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });
