@@ -42,7 +42,7 @@ describe("processingStatus", () => {
 });
 
 describe("measureProcessing", () => {
-  it("bounds overdue at five minutes and recent failures at thirty", async () => {
+  it("bounds overdue at five minutes, recent failures at thirty, Stripe past its orphan window", async () => {
     const calls: { model: string; where: Record<string, unknown> }[] = [];
     const counter = (model: string) => ({
       count: ({ where }: { where: Record<string, unknown> }) => {
@@ -57,10 +57,15 @@ describe("measureProcessing", () => {
     } as unknown as PrismaClient;
     const now = new Date("2026-10-12T12:00:00Z");
 
-    await measureProcessing(fake, now);
+    await measureProcessing(fake, { now, stripeOrphanTimeoutMs: 15 * 60_000 });
 
     const fiveMinutesAgo = new Date("2026-10-12T11:55:00Z");
     const thirtyMinutesAgo = new Date("2026-10-12T11:30:00Z");
+    const twentyMinutesAgo = new Date("2026-10-12T11:40:00Z");
+    expect(calls).toContainEqual({
+      model: "notification",
+      where: { status: { in: ["PENDING", "SENDING"] }, scheduledAt: { lt: fiveMinutesAgo } },
+    });
     expect(calls).toContainEqual({
       model: "outbox",
       where: { status: "FAILED", availableAt: { gte: thirtyMinutesAgo } },
@@ -71,7 +76,9 @@ describe("measureProcessing", () => {
     });
     expect(calls).toContainEqual({
       model: "stripe",
-      where: { processedAt: null, receivedAt: { lt: fiveMinutesAgo } },
+      // An unattributed event is retried for 15 minutes on purpose; only after
+      // that window plus the margin is it stuck.
+      where: { processedAt: null, receivedAt: { lt: twentyMinutesAgo } },
     });
   });
 });

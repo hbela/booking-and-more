@@ -120,7 +120,9 @@ per-DSN rate limit. They are spent as follows:
   use this slot; they stay on the Cloudflare monitor above.
 - **The same check-in reports stuck work.** Each beat, `createProcessingProbe` in
   `apps/worker/src/processing-health.ts` counts, in aggregate only: outbox events,
-  notifications and Stripe events overdue by more than 5 minutes, and outbox events
+  notifications overdue by more than 5 minutes, Stripe events unprocessed past
+  `STRIPE_EVENT_ORPHAN_TIMEOUT_MS` (15 minutes) plus 5 — an event the processor
+  cannot attribute yet is retried on purpose inside that window — and outbox events
   and notifications that failed in the last 30 minutes. Any non-zero count makes the
   check-in `error` instead of `ok`, so one email covers "worker dead" and "worker
   alive but not getting through its work"; the worker's `processing needs attention`

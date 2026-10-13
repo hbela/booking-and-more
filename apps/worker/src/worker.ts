@@ -298,7 +298,9 @@ async function main(): Promise<void> {
   // process is: stuck or recently failed work reports "error", which alerts on
   // the same monitor as a dead worker. The Docker file stays liveness-only, so
   // a backlog never gets a healthy container restarted.
-  const probeProcessing = createProcessingProbe(prisma, log);
+  const probeProcessing = createProcessingProbe(prisma, log, {
+    stripeOrphanTimeoutMs: env.STRIPE_EVENT_ORPHAN_TIMEOUT_MS,
+  });
   const beat = (): void => {
     writeHeartbeat();
     void probeProcessing().then((status) => {

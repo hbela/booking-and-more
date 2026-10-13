@@ -12,6 +12,15 @@ const OVERDUE_MS = 5 * 60_000;
  */
 const RECENT_FAILURE_MS = 30 * 60_000;
 
+/**
+ * A Stripe event the processor cannot attribute yet is retried on purpose
+ * until `STRIPE_EVENT_ORPHAN_TIMEOUT_MS`, then retired — its sibling event may
+ * still be on the way. Inside that window it is waiting, not stuck: alarming at
+ * five minutes turned every cancelled test subscription into a red monitor.
+ * Past the window plus the usual margin, nothing legitimate is left.
+ */
+const DEFAULT_STRIPE_ORPHAN_TIMEOUT_MS = 15 * 60_000;
+
 /** A probe that cannot answer is an answer: the worker cannot reach its work. */
 const PROBE_TIMEOUT_MS = 10_000;
 
@@ -28,13 +37,25 @@ export interface ProcessingMetrics {
   notificationsFailed: number;
 }
 
+export interface MeasureOptions {
+  now?: Date;
+  /** The worker's `STRIPE_EVENT_ORPHAN_TIMEOUT_MS`. */
+  stripeOrphanTimeoutMs?: number;
+}
+
 /** Aggregate-only diagnostics: customer payloads must never reach monitoring. */
 export async function measureProcessing(
   prisma: PrismaClient,
-  now = new Date(),
+  options: MeasureOptions = {},
 ): Promise<ProcessingMetrics> {
+  const now = options.now ?? new Date();
   const overdue = new Date(now.getTime() - OVERDUE_MS);
   const recent = new Date(now.getTime() - RECENT_FAILURE_MS);
+  const stripeCutoff = new Date(
+    now.getTime() -
+      (options.stripeOrphanTimeoutMs ?? DEFAULT_STRIPE_ORPHAN_TIMEOUT_MS) -
+      OVERDUE_MS,
+  );
   const [
     outboxOverdue,
     outboxRecentlyFailed,
@@ -57,7 +78,7 @@ export async function measureProcessing(
     }),
     prisma.notification.count({ where: { status: "FAILED", updatedAt: { gte: recent } } }),
     prisma.notification.count({ where: { status: "FAILED" } }),
-    prisma.stripeEvent.count({ where: { processedAt: null, receivedAt: { lt: overdue } } }),
+    prisma.stripeEvent.count({ where: { processedAt: null, receivedAt: { lt: stripeCutoff } } }),
   ]);
   return {
     outboxOverdue,
@@ -83,6 +104,7 @@ export function processingStatus(metrics: ProcessingMetrics): ProcessingStatus {
 
 export interface ProcessingProbeOptions {
   timeoutMs?: number;
+  stripeOrphanTimeoutMs?: number;
   measure?: (prisma: PrismaClient) => Promise<ProcessingMetrics>;
 }
 
@@ -101,7 +123,15 @@ export function createProcessingProbe(
   options: ProcessingProbeOptions = {},
 ): () => Promise<ProcessingStatus> {
   const timeoutMs = options.timeoutMs ?? PROBE_TIMEOUT_MS;
-  const measure = options.measure ?? ((client) => measureProcessing(client));
+  const measure =
+    options.measure ??
+    ((client) =>
+      measureProcessing(
+        client,
+        options.stripeOrphanTimeoutMs === undefined
+          ? {}
+          : { stripeOrphanTimeoutMs: options.stripeOrphanTimeoutMs },
+      ));
   let inFlight = false;
 
   return async () => {
