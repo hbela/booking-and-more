@@ -550,6 +550,30 @@ describe.skipIf(!databaseUrl)("stripe processor", () => {
       const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
       expect(subscription?.stripeSubscriptionId).toBe(`sub_held-${suffix}`);
     });
+
+    it("treats metadata naming a tenant that no longer exists as unattributable", async () => {
+      // A discarded organization's subscription keeps sending events. Binding
+      // it would violate the tenant foreign key — an error that is not an
+      // orphan, so it retried every poll forever instead of timing out.
+      const ghost = "00000000-0000-4000-8000-000000000000";
+      await record("evt_ghost", "customer.subscription.updated", {
+        id: `sub_ghost-${suffix}`,
+        status: "active",
+        metadata: { tenantId: ghost },
+      });
+
+      const first = await processStripeEventBatch(options());
+      expect(first).toMatchObject({ processed: 0, failed: 1 });
+      const pending = await prisma.stripeEvent.findUniqueOrThrow({
+        where: { id: `evt_ghost-${suffix}` },
+      });
+      expect(pending.lastError).toMatch(/No subscription recorded/);
+
+      // Past the orphan timeout it is retired, not retried.
+      const retired = await processStripeEventBatch({ ...options(), orphanTimeoutMs: -1 });
+      expect(retired).toMatchObject({ processed: 1, failed: 0 });
+      await expect(prisma.subscription.count({ where: { tenantId: ghost } })).resolves.toBe(0);
+    });
   });
 
   describe("customer.subscription.updated", () => {

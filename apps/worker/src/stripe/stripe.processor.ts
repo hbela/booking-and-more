@@ -1063,6 +1063,17 @@ async function claimByTenantMetadata(
   if (row !== null && row.stripeSubscriptionId !== null) return null;
 
   if (row === null) {
+    // Metadata outlives the organization it names: a discarded test tenant's
+    // Stripe subscription keeps sending events. Creating a row for it violates
+    // the tenant foreign key, which is not an orphan error, so the event used
+    // to retry every poll forever (37 000 attempts on staging, 2026-10-11).
+    // Unattributable is the honest answer; the orphan timeout then retires it.
+    const tenant = await options.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true },
+    });
+    if (tenant === null) return null;
+
     // No row at all: the subscription event beat its checkout session here.
     // Plan is left to be resolved from the price by the caller.
     await options.prisma.subscription.create({
