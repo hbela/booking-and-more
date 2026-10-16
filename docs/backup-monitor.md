@@ -210,10 +210,26 @@ Setup, once:
 2. Store its ping URL as a secret (it is the only credential the check has):
    `corepack pnpm --filter @bam/backup-monitor exec wrangler secret put HEARTBEAT_URL --config wrangler.jsonc`
 3. Deploy: `corepack pnpm --filter @bam/backup-monitor exec wrangler deploy --config wrangler.jsonc`.
-   The check turns green within five minutes.
+   The check turns green within five minutes. **Confirm that it does**: a new
+   healthchecks.io check never alerts before its first ping, and an empty secret
+   value is indistinguishable from "unset", so a mistyped `secret put` fails
+   silently on both sides. Pipe the value through stdin
+   (`printf '%s' '<url>' | … secret put HEARTBEAT_URL …`) to rule out a blank
+   prompt; that is exactly what happened at the first setup on 2026-10-13.
 4. Accept the alert path: pause the check's cron by temporarily setting
    `"crons": []`, deploy, wait for the healthchecks.io "down" email, restore
    `*/5 * * * *` and deploy again, then confirm the "up" email.
+
+Evidence (staging):
+
+- 2026-10-13: code deployed as version `d4e691c3`; the stray secret from a
+  mistyped `secret put` was deleted (version `27df0a04`). No ping arrived:
+  `HEARTBEAT_URL` held an empty value, and the cron ran `ok` with no log line.
+- 2026-10-16: `HEARTBEAT_URL` re-stored through stdin (version `4f53e35c`).
+  healthchecks.io recorded **ping #4 at `17:01:05Z`**, an HTTPS POST from a
+  Cloudflare address (`172.69.63.148`) with body `ok` — the first ping observed
+  from the Worker. The check's earlier pings include the operator's manual test.
+- **Not yet done:** step 4, the silence alert ("down" and "up" emails).
 
 To add production later, register `bam-production` explicitly in `MONITOR_IDS`, add
 an independent token, seed its `armed_at` at activation and wire its own service.
