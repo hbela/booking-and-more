@@ -216,9 +216,18 @@ Setup, once:
    silently on both sides. Pipe the value through stdin
    (`printf '%s' '<url>' | … secret put HEARTBEAT_URL …`) to rule out a blank
    prompt; that is exactly what happened at the first setup on 2026-10-13.
-4. Accept the alert path: pause the check's cron by temporarily setting
-   `"crons": []`, deploy, wait for the healthchecks.io "down" email, restore
-   `*/5 * * * *` and deploy again, then confirm the "up" email.
+4. Accept the alert path by silencing the **heartbeat**, never the cron. Store an
+   empty `HEARTBEAT_URL` (`printf '' | … secret put HEARTBEAT_URL …`). The Worker
+   then skips the ping, and the cron keeps evaluating backups and sending alerts
+   throughout. Wait for the healthchecks.io "down" email, about period plus grace
+   after the last ping. Re-store the URL through stdin and confirm the "up" email.
+   **Do not test by removing the cron trigger.** The 2026-10-16 test did, and lost
+   the backup monitor's cron for 74 minutes (evidence below). If a cron ever stops
+   firing, redeploy the whole Worker with `wrangler deploy`; pushing the trigger
+   again did not help. A trigger change can
+   take 15+ minutes to take effect, a quick removal and re-add can leave the
+   schedule attached but not firing, and backup silence and overrun go undetected
+   for as long as that lasts.
 
 Evidence (staging):
 
@@ -229,7 +238,27 @@ Evidence (staging):
   healthchecks.io recorded **ping #4 at `17:01:05Z`**, an HTTPS POST from a
   Cloudflare address (`172.69.63.148`) with body `ok` — the first ping observed
   from the Worker. The check's earlier pings include the operator's manual test.
-- **Not yet done:** step 4, the silence alert ("down" and "up" emails).
+- 2026-10-16, step 4 **passed**, by the cron-removal method the step now forbids.
+  `"crons": []` was deployed at `17:08:06Z` (version `b3b1ba4c`), but the removal
+  had not taken effect after 23 minutes: scheduled runs and `ok` pings continued
+  on that version until **`17:31:03Z`**. The cron was restored at `17:31:16Z`
+  (version `2defe813`), and the delayed removal then appears to have won over it. healthchecks.io
+  marked the check `up → down` at **`17:46Z`**, last ping plus 15 minutes, and
+  the operator received the "down" email. **That is the acceptance evidence.**
+- 2026-10-16, outage caused by the test: no scheduled run from `17:31:03Z`, while
+  the schedules API listed `*/5 * * * *` as attached throughout. Check-ins from the
+  VPS kept arriving, so a _failed_ backup would still have emailed immediately;
+  silence and overrun detection were down. Attempts: trigger re-push `17:51Z`, new
+  expression `1-59/5` `18:10Z`, clear-then-re-add through the API `18:29–18:31Z`,
+  full deploy `18:42Z` (version `489d10b7`). Cloudflare's status page showed no
+  open incident. The first ping arrived at **`18:45Z`**, the first slot after the
+  full deploy, and the operator received the "up" email. The 18:35 and 18:40 slots
+  after the clear-then-re-add stayed silent. **The fix was a full
+  `wrangler deploy`**, which uploads a new version together with its triggers;
+  trigger-only changes did nothing. Outage: `17:31Z`–`18:45Z`, 74 minutes.
+  The `workersInvocationsScheduled` analytics dataset still showed no runs at
+  `19:13Z`, after pings had resumed. Use healthchecks.io, not that dataset, to
+  judge whether the cron fires.
 
 To add production later, register `bam-production` explicitly in `MONITOR_IDS`, add
 an independent token, seed its `armed_at` at activation and wire its own service.
