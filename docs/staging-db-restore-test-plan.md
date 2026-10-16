@@ -71,8 +71,30 @@ like staging itself.
 - [ ] Record the running staging release SHA (`/health` or Coolify) and its
       PostgreSQL image digest. T3 uses that SHA's `schema.prisma` and migration
       folder, not this branch's.
-- [ ] Record whether staging now holds customers and bookings (counts only). If it
-      holds none, T6 cannot close G2; run it anyway, and leave G2 open in the results.
+- [ ] Real ciphertext is seeded and backed up: see §3.1.
+
+### 3.1 Seed real ciphertext (closes G2)
+
+On 2026-10-16 staging held no customers or bookings, so no backup contained
+encrypted customer data. Create it through the deployed product, never by SQL, so
+the API encrypts it and the real backup stores it:
+
+- An ACTIVE organization with at least two providers and one service. If none
+  exists, provision one through `/platform` first; staging's billing mode decides
+  whether that needs a Stripe test subscription.
+- **8 bookings through the public booking page**, spread over both providers.
+  Customer addresses must be the operator's own aliases
+  (`hajzerbela+drill1@gmail.com` … `+drill8`). Confirmation emails really are
+  sent, so never use anyone else's address.
+- At least one customer name with Hungarian accents (`Árvíztűrő Tünde`) to check
+  encoding through dump and restore. Reschedule one booking and cancel one, so the
+  restore contains more than one booking state.
+- At least one appointment **after 2026-10-25**, when Budapest leaves summer time.
+  T5 then compares an instant on each side of the change.
+- Record the booking references and the time of the last write. Do not record
+  names or addresses. T0 uses the first backup promoted **after** that time.
+- Leave the bookings in place afterwards, so the next monthly drill restores older
+  ciphertext as well.
 
 ## 4. Tests
 
@@ -134,8 +156,9 @@ network, with the vault's `BETTER_AUTH_SECRET`, `CUSTOMER_PII_ENCRYPTION_KEY` an
   Assert equality with live staging's response by hash.
 - A wrong key is rejected.
 
-**Pass:** zero failures. If staging has no customers, record "G2 open — no
-historical ciphertext existed."
+**Pass:** zero failures, and the restored customer count equals the §3.1 seed
+(8, plus any created since). A count of zero means the seed missed the snapshot:
+stop, and pick a later backup rather than recording G2 as closed.
 
 **T7 — Behaviour on restored data.** For one tenant and one fixed date, run
 `pnpm db:explain-availability <slug> <date>` against live and against the restore.
