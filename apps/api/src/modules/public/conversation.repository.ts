@@ -10,7 +10,10 @@ import type {
 } from "@bam/db";
 
 import { hashToken } from "../bookings/booking.repository.js";
-import type { conversationSlotSchema } from "./conversation.schemas.js";
+import type {
+  conversationSlotSchema,
+  conversationSlotSearchSchema,
+} from "./conversation.schemas.js";
 import type { z } from "zod";
 
 /**
@@ -24,6 +27,8 @@ import type { z } from "zod";
  */
 export type StoredConversationState = CollectedFields & {
   lastSlots?: z.infer<typeof conversationSlotSchema>[];
+  /** What the calendar searches, and the customer's provider preference. Phase-12 chat calendar §2.2, §2.4. */
+  slotSearch?: z.infer<typeof conversationSlotSearchSchema>;
 };
 
 /**

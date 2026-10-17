@@ -37,6 +37,10 @@ const PARAMETER_PROPERTIES: Record<string, { type: string[]; description?: strin
   serviceQuery: { type: ["string", "null"], description: "The customer's own words." },
   providerId: { type: ["string", "null"] },
   providerQuery: { type: ["string", "null"] },
+  anyProvider: {
+    type: ["boolean", "null"],
+    description: "true only when the customer says any provider will do.",
+  },
   locationId: { type: ["string", "null"] },
   dateExpression: {
     type: ["string", "null"],

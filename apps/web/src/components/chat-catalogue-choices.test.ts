@@ -15,6 +15,7 @@ describe("chat catalogue choices", () => {
           locale,
           disabled: false,
           onPick: () => {},
+          onPickProvider: () => {},
           services: [
             {
               id: "one",
@@ -39,6 +40,7 @@ describe("chat catalogue choices", () => {
         locale: "hu",
         disabled: false,
         onPick: () => {},
+        onPickProvider: () => {},
         services: [
           { id: "one", name: "Konzultáció", durationMinutes: 30, priceMinor: null, currency: null },
           {
@@ -68,11 +70,27 @@ describe("chat catalogue choices", () => {
         locale: "en",
         disabled: true,
         onPick: () => {},
+        onPickProvider: () => {},
         providers: [{ id: "one", displayName: "Test Provider" }],
       }),
     );
     expect(html).toContain("Test Provider");
     expect(html).toContain('disabled=""');
     expect(html).toContain('aria-label="Providers"');
+  });
+
+  it("offers 'anyone available' before any name, as the form does", () => {
+    const html = renderToStaticMarkup(
+      createElement(ChatCatalogueChoices, {
+        locale: "hu",
+        disabled: false,
+        onPick: () => {},
+        onPickProvider: () => {},
+        providers: [{ id: "one", displayName: "Dr Kiss Katalin" }],
+      }),
+    );
+    expect(html.indexOf("Bárki, aki ráér")).toBeGreaterThan(-1);
+    expect(html.indexOf("Bárki, aki ráér")).toBeLessThan(html.indexOf("Dr Kiss Katalin"));
+    expect(html.match(/<button/g)).toHaveLength(2);
   });
 });

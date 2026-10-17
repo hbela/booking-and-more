@@ -53,6 +53,14 @@ export interface ConversationSlot {
   endAt: string;
 }
 
+/** What the chat's calendar searches. docs/phase-12-chat-slot-calendar.md §2.2. */
+export interface ConversationSlotSearch {
+  serviceId: string;
+  providerId: string | null;
+  /** The one day the customer named, if they named one. */
+  date: string | null;
+}
+
 export interface ConfirmationCard {
   actionId: string;
   tool: "confirmBooking" | "confirmReschedule" | "confirmCancellation";
@@ -75,6 +83,7 @@ export interface ConversationTurn {
   services?: ConversationService[];
   providers?: ConversationProvider[];
   slots?: ConversationSlot[];
+  slotSearch?: ConversationSlotSearch;
   confirmation: ConfirmationCard | null;
   bookingReference: string | null;
   expiresAt: string;
@@ -139,6 +148,10 @@ export async function sendMessage(args: {
   session: ConversationSession;
   text: string;
   idempotencyKey: string;
+  /** A time picked from the calendar; the server skips the model for it. */
+  slot?: { startAt: string; providerId: string } | undefined;
+  /** A provider tapped in the list, `null` for "anyone available". */
+  provider?: { providerId: string | null } | undefined;
   onTextDelta?: ((message: AssistantMessage) => void) | undefined;
 }): Promise<ConversationTurn> {
   const base = API_BASE_URL;
@@ -151,7 +164,11 @@ export async function sendMessage(args: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
     },
-    body: JSON.stringify({ text: args.text }),
+    body: JSON.stringify({
+      text: args.text,
+      ...(args.slot ? { slot: args.slot } : {}),
+      ...(args.provider ? { provider: args.provider } : {}),
+    }),
   });
   if (!response.ok) {
     const text = await response.text();

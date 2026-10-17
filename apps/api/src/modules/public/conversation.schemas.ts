@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   currencySchema,
+  dateOnlySchema,
   idSchema,
   instantSchema,
   languageSchema,
@@ -70,6 +71,19 @@ export const conversationTokenHeaderSchema = z.object({
 
 export const sendMessageBodySchema = z.object({
   text: z.string().trim().min(1).max(100_000),
+  /**
+   * A time picked from the calendar. docs/phase-12-chat-slot-calendar.md §2.3.
+   *
+   * With it the turn runs `SELECT_SLOT` with exactly these values and never
+   * reaches the model; `text` is only what the transcript shows. A claim, not a
+   * decision — `createHold` checks the instant is really offered.
+   */
+  slot: z.object({ startAt: instantSchema, providerId: idSchema }).optional(),
+  /**
+   * A provider tapped in the list; `null` is "anyone available". Skips the model
+   * the same way, and is checked against who offers the service. Chat calendar §5.
+   */
+  provider: z.object({ providerId: idSchema.nullable() }).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -98,6 +112,21 @@ export const conversationSlotSchema = z.object({
   providerName: z.string(),
   startAt: instantSchema,
   endAt: instantSchema,
+});
+
+/**
+ * What the panel's calendar should search. docs/phase-12-chat-slot-calendar.md §2.2.
+ *
+ * The browser reads the month itself through the public slot search, exactly
+ * as the form does; this only tells it which service the conversation settled
+ * on. `providerId` is the customer's preference (or a reschedule's own
+ * provider), never the provider of a previous pick. `date` is set only when the
+ * customer named one day.
+ */
+export const conversationSlotSearchSchema = z.object({
+  serviceId: idSchema,
+  providerId: idSchema.nullable(),
+  date: dateOnlySchema.nullable(),
 });
 
 export const conversationServiceSchema = z.object({
@@ -150,6 +179,8 @@ export const conversationTurnSchema = z.object({
   services: z.array(conversationServiceSchema).optional(),
   providers: z.array(conversationProviderSchema).optional(),
   slots: z.array(conversationSlotSchema).optional(),
+  /** Present while times are on offer, including when the day asked for had none. */
+  slotSearch: conversationSlotSearchSchema.optional(),
   confirmation: confirmationCardSchema.nullable(),
   /** Set once a booking exists. The management token is emailed, never here. */
   bookingReference: z.string().nullable(),

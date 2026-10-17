@@ -40,6 +40,7 @@ interface TurnBody {
   services?: { id: string; name: string }[];
   providers?: { id: string; displayName: string }[];
   slots?: { providerId: string; providerName: string; startAt: string; endAt: string }[];
+  slotSearch?: { serviceId: string; providerId: string | null; date: string | null };
   confirmation: {
     actionId: string;
     tool: string;
@@ -276,20 +277,9 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
    * service, ask for a time, pick one, give their details.
    */
   async function upToConfirmation(site: Clinic, channel: "CHAT" | "VOICE" = "CHAT") {
-    const conversation = await startConversation(site, channel);
+    const { conversation, offered } = await searchedOnMonday(site, channel);
 
-    ai.interpreter.push(
-      envelope({
-        intent: "SEARCH_SLOTS",
-        parameters: { serviceQuery: "dental check-up", dateExpression: MONDAY },
-      }),
-    );
-    const searched = await say(conversation, `I need a dental check-up on ${MONDAY}`);
-    const offered = searched.slots ?? [];
-    expect(offered.length, JSON.stringify(searched)).toBeGreaterThan(0);
-
-    ai.interpreter.push(envelope({ intent: "SELECT_SLOT", parameters: { slotOrdinal: 1 } }));
-    const selected = await say(conversation, "the first one");
+    const selected = await pick(conversation, offered[0]!, "the first one");
     expect(selected.state).toBe("COLLECTING_CUSTOMER_DETAILS");
 
     ai.interpreter.push(
@@ -376,6 +366,303 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       .json<{ items: { startAt: string }[] }>()
       .items.map((slot) => slot.startAt);
     expect(offered).not.toContain(firstSlot.startAt);
+  });
+
+  // -------------------------------------------------------------------------
+  // Picking from the calendar (docs/phase-12-chat-slot-calendar.md)
+  // -------------------------------------------------------------------------
+
+  /** Something tapped rather than typed: the body names it, the model is never asked. */
+  async function tap(
+    conversation: { id: string; headers: Record<string, string> },
+    payload: Record<string, unknown>,
+  ) {
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/public/conversations/${conversation.id}/messages`,
+      headers: { ...conversation.headers, ...key() },
+      payload,
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const block = response.body
+      .split(/\r?\n\r?\n/u)
+      .find((entry) => entry.startsWith("event: completion"));
+    const data = block?.split(/\r?\n/u).find((line) => line.startsWith("data: "));
+    if (!data) throw new Error(`Missing SSE completion: ${response.body}`);
+    return JSON.parse(data.slice(6)) as TurnBody;
+  }
+
+  function pick(
+    conversation: { id: string; headers: Record<string, string> },
+    slot: { startAt: string; providerId: string },
+    text = "picked from the calendar",
+  ) {
+    return tap(conversation, {
+      text,
+      slot: { startAt: slot.startAt, providerId: slot.providerId },
+    });
+  }
+
+  function chooseProvider(
+    conversation: { id: string; headers: Record<string, string> },
+    providerId: string | null,
+    text = "Anyone available",
+  ) {
+    return tap(conversation, { text, provider: { providerId } });
+  }
+
+  /** What the calendar shows for Monday: the public search, as the panel runs it. */
+  async function mondayOnCalendar(site: Clinic) {
+    const search = await app.inject({
+      method: "POST",
+      url: `/v1/public/tenants/${site.slug}/slots/search`,
+      payload: { serviceId: site.serviceId, dateFrom: MONDAY, dateTo: MONDAY },
+    });
+    expect(search.statusCode, search.body).toBe(200);
+    return search.json<{ items: { startAt: string; providerId: string }[] }>().items;
+  }
+
+  /**
+   * Service and day in one sentence, then "anyone available" — the provider
+   * question is asked even when a day was volunteered, and the calendar then
+   * opens on that day.
+   */
+  async function searchedOnMonday(site: Clinic, channel: "CHAT" | "VOICE" = "CHAT") {
+    const conversation = await startConversation(site, channel);
+    ai.interpreter.push(
+      envelope({
+        intent: "SEARCH_SLOTS",
+        parameters: { serviceQuery: "dental check-up", dateExpression: MONDAY },
+      }),
+    );
+    const asked = await say(conversation, `I need a dental check-up on ${MONDAY}`);
+    expect(asked.state, JSON.stringify(asked)).toBe("SELECTING_PROVIDER");
+
+    const searched = await chooseProvider(conversation, null);
+    expect(searched.state, JSON.stringify(searched)).toBe("SELECTING_SLOT");
+
+    const offered = await mondayOnCalendar(site);
+    expect(offered.length).toBeGreaterThan(0);
+    return { conversation, asked, searched, offered };
+  }
+
+  it("asks for the provider before any time, offering everyone who does the service", async () => {
+    const site = await clinic("calprov");
+    const conversation = await startConversation(site);
+    ai.interpreter.push(
+      envelope({
+        intent: "SEARCH_SLOTS",
+        parameters: { serviceQuery: "dental check-up", dateExpression: MONDAY },
+      }),
+    );
+    const asked = await say(conversation, `I need a dental check-up on ${MONDAY}`);
+
+    expect(asked.message.key).toBe("conversation.ask.provider");
+    expect(asked.providers).toEqual([{ id: site.providerId, displayName: "Dr. Kovács Anna" }]);
+    expect(asked.slotSearch).toBeUndefined();
+
+    // A refreshed page asks the same question with the same answers.
+    const replayed = await app.inject({
+      method: "GET",
+      url: `/v1/public/conversations/${conversation.id}`,
+      headers: conversation.headers,
+    });
+    expect(replayed.json<TurnBody>().providers).toEqual(asked.providers);
+
+    // Tapping a name opens that provider's calendar on the day already asked for,
+    // without a model call.
+    const callsBefore = ai.interpreter.calls.length;
+    const chosen = await chooseProvider(conversation, site.providerId, "Dr. Kovács Anna");
+    expect(ai.interpreter.calls.length).toBe(callsBefore);
+    expect(chosen.state).toBe("SELECTING_SLOT");
+    expect(chosen.slotSearch).toEqual({
+      serviceId: site.serviceId,
+      providerId: site.providerId,
+      date: MONDAY,
+    });
+  });
+
+  it("refuses a tapped provider who does not do the service, and asks again", async () => {
+    const site = await clinic("calprovx");
+    const conversation = await startConversation(site);
+    ai.interpreter.push(
+      envelope({ intent: "SEARCH_SLOTS", parameters: { serviceQuery: "dental check-up" } }),
+    );
+    await say(conversation, "a dental check-up");
+
+    const other = await clinic("calprovy");
+    const chosen = await chooseProvider(conversation, other.providerId, "Somebody else");
+
+    expect(chosen.state).toBe("SELECTING_PROVIDER");
+    expect(chosen.providers?.map((provider) => provider.id)).toEqual([site.providerId]);
+  });
+
+  it("takes 'anyone' typed in words as an answer too", async () => {
+    const site = await clinic("calany");
+    const conversation = await startConversation(site);
+    ai.interpreter.push(
+      envelope({ intent: "SEARCH_SLOTS", parameters: { serviceQuery: "dental check-up" } }),
+    );
+    await say(conversation, "a dental check-up");
+
+    ai.interpreter.push(
+      envelope({ intent: "GET_PROVIDER_DETAILS", parameters: { anyProvider: true } }),
+    );
+    const answered = await say(conversation, "mindegy");
+
+    expect(answered.state).toBe("SELECTING_SLOT");
+    // No day was named, so the calendar picks the first one with anything.
+    expect(answered.slotSearch).toEqual({
+      serviceId: site.serviceId,
+      providerId: null,
+      date: null,
+    });
+  });
+
+  it("tells the calendar what to search, naming the day the customer asked for", async () => {
+    const site = await clinic("calsearch");
+    const { searched } = await searchedOnMonday(site);
+
+    // No provider was named, so the calendar searches everyone, like the form.
+    expect(searched.slotSearch).toEqual({
+      serviceId: site.serviceId,
+      providerId: null,
+      date: MONDAY,
+    });
+  });
+
+  it("still offers the calendar when the day asked for has nothing", async () => {
+    const site = await clinic("calempty");
+    const { conversation } = await searchedOnMonday(site);
+    const tuesday = new Date(Date.parse(`${MONDAY}T00:00:00Z`) + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    ai.interpreter.push(
+      envelope({
+        intent: "SEARCH_SLOTS",
+        parameters: { serviceQuery: "dental check-up", dateExpression: tuesday },
+      }),
+    );
+    const searched = await say(conversation, `a check-up on ${tuesday}`);
+
+    expect(searched.message.key).toBe("conversation.error.noSlots");
+    expect(searched.slotSearch).toEqual({
+      serviceId: site.serviceId,
+      providerId: null,
+      date: tuesday,
+    });
+  });
+
+  it("takes a hold for a calendar pick without asking the model", async () => {
+    const site = await clinic("calpick");
+    const { conversation, offered } = await searchedOnMonday(site);
+
+    // The last time of the day: on the calendar, and nowhere in any list the
+    // chat itself produced, so no ordinal could have named it.
+    const last = offered.at(-1)!;
+
+    const usageBefore = await app.prisma.usageAggregate.findMany({
+      where: { tenantId: site.tenantId },
+    });
+    const callsBefore = ai.interpreter.calls.length;
+
+    const picked = await pick(conversation, last, "Mon 16:00");
+
+    expect(picked.state).toBe("COLLECTING_CUSTOMER_DETAILS");
+    expect(picked.slotSearch).toBeUndefined();
+    expect(ai.interpreter.calls.length).toBe(callsBefore);
+    expect(
+      await app.prisma.usageAggregate.findMany({ where: { tenantId: site.tenantId } }),
+    ).toEqual(usageBefore);
+
+    const hold = await app.prisma.bookingHold.findFirst({
+      where: { tenantId: site.tenantId, sessionId: conversation.id },
+    });
+    expect(hold?.startAt.toISOString()).toBe(new Date(last.startAt).toISOString());
+
+    // The transcript reads as the customer saw it.
+    const replayed = await app.inject({
+      method: "GET",
+      url: `/v1/public/conversations/${conversation.id}`,
+      headers: conversation.headers,
+    });
+    expect(
+      replayed.json<TurnBody>().messages?.some((message) => message.content === "Mon 16:00"),
+    ).toBe(true);
+  });
+
+  it("refuses a calendar pick before any time was offered", async () => {
+    const site = await clinic("calearly");
+    const conversation = await startConversation(site);
+
+    const picked = await pick(conversation, {
+      startAt: `${MONDAY}T10:00:00.000Z`,
+      providerId: site.providerId,
+    });
+
+    expect(picked.message.key).toBe("conversation.error.outOfScope");
+    expect(await app.prisma.bookingHold.count({ where: { tenantId: site.tenantId } })).toBe(0);
+  });
+
+  it("treats a picked instant as a claim, and keeps the calendar up when it fails", async () => {
+    const site = await clinic("calclaim");
+    const { conversation } = await searchedOnMonday(site);
+
+    // 03:00 is outside the provider's hours: never offered, whatever the client says.
+    const picked = await pick(conversation, {
+      startAt: `${MONDAY}T03:00:00.000Z`,
+      providerId: site.providerId,
+    });
+
+    expect(picked.message.key).toBe("conversation.error.slotTaken");
+    expect(picked.slotSearch?.serviceId).toBe(site.serviceId);
+    expect(await app.prisma.bookingHold.count({ where: { tenantId: site.tenantId } })).toBe(0);
+  });
+
+  it("does not let a lost hold narrow later searches to its provider", async () => {
+    const site = await clinic("calpref");
+    const { conversation, offered } = await searchedOnMonday(site);
+    const first = offered[0]!;
+
+    await pick(conversation, { startAt: first.startAt, providerId: first.providerId });
+
+    ai.interpreter.push(
+      envelope({
+        intent: "CREATE_BOOKING",
+        requiresConfirmation: true,
+        parameters: { fullName: "Nagy Péter", email: "nagy.peter@example.test" },
+      }),
+    );
+    const prepared = await say(conversation, "Nagy Péter, nagy.peter@example.test");
+    expect(prepared.confirmation, JSON.stringify(prepared)).not.toBeNull();
+
+    // The hold runs out while the card is on screen.
+    await app.prisma.bookingHold.updateMany({
+      where: { tenantId: site.tenantId },
+      // `booking_holds_expiry_after_creation`: age the whole hold, not just its end.
+      data: {
+        createdAt: new Date(Date.now() - 10 * 60_000),
+        expiresAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    const confirmed = await app.inject({
+      method: "POST",
+      url: `/v1/public/conversations/${conversation.id}/actions/${prepared.confirmation!.actionId}/confirm`,
+      headers: { ...conversation.headers, ...key() },
+    });
+    expect(confirmed.statusCode, confirmed.body).toBe(200);
+    const lost = confirmed.json<TurnBody>();
+    expect(lost.message.key).toBe("conversation.error.holdExpired");
+    // Back to the calendar, searching everyone again.
+    expect(lost.slotSearch?.providerId).toBeNull();
+
+    const session = await app.prisma.conversationSession.findUniqueOrThrow({
+      where: { id: conversation.id },
+    });
+    // The held provider came from the pick, not from the customer.
+    expect((session.stateJson as { providerId?: string }).providerId).toBeUndefined();
   });
 
   // -------------------------------------------------------------------------
@@ -571,8 +858,10 @@ describe.skipIf(!databaseUrl)("conversational booking", () => {
       envelope({ intent: "GET_SERVICE_DETAILS", parameters: { serviceQuery: "Dental check-up" } }),
     );
     const picked = await say(conversation, "Dental check-up");
-    expect(picked.state).toBe("SELECTING_DATE");
-    expect(picked.message.key).toBe("conversation.ask.date");
+    // The form's order: the provider comes next, not the day.
+    expect(picked.state).toBe("SELECTING_PROVIDER");
+    expect(picked.message.key).toBe("conversation.ask.provider");
+    expect(picked.providers?.length).toBeGreaterThan(0);
   });
 
   it.each(["START", "COMPLETED"])(

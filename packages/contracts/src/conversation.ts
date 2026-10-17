@@ -95,6 +95,8 @@ export const searchSlotsParametersSchema = z.object({
   serviceQuery: nameQuery.optional(),
   providerId: referenceId.optional(),
   providerQuery: nameQuery.optional(),
+  /** "Anyone", "bárki", "mindegy": the provider question, answered. */
+  anyProvider: z.boolean().optional(),
   locationId: referenceId.optional(),
   /** "tomorrow", "next Tuesday", "jövő héten" — resolved by us, not by them. */
   dateExpression: z.string().trim().min(1).max(120).optional(),
@@ -134,6 +136,8 @@ export const cancelBookingParametersSchema = z.object({
 export const detailsParametersSchema = z.object({
   locationId: referenceId.optional(),
   providerId: referenceId.optional(),
+  /** Choosing "anyone available" rather than a name. docs/phase-12-chat-slot-calendar.md §5. */
+  anyProvider: z.boolean().optional(),
   query: nameQuery.optional(),
 });
 

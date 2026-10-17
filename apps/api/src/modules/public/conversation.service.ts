@@ -51,6 +51,7 @@ import type {
   conversationProviderSchema,
   conversationServiceSchema,
   conversationSlotSchema,
+  conversationSlotSearchSchema,
 } from "./conversation.schemas.js";
 import { ConversationTools } from "./conversation.tools.js";
 import type { z } from "zod";
@@ -240,6 +241,20 @@ export class ConversationService {
         ? { key: "conversation.goodbye", ui: "NONE" }
         : promptFor(args.session.machineState as CustomerBookingState, collected),
       ...(collected.lastSlots === undefined ? {} : { slots: collected.lastSlots }),
+      // The provider question comes back with its answers, or a refreshed page
+      // would ask it with nothing to tap.
+      ...(args.session.machineState === "SELECTING_PROVIDER" && !args.session.closedAt
+        ? { providers: await this.tools.providerChoices(args.tenant.id, collected.serviceId) }
+        : {}),
+      // The calendar comes back with a refreshed page only while a time is
+      // still being chosen: not under a confirmation card, not once one is held.
+      ...(collected.slotSearch === undefined ||
+      collected.startAt !== undefined ||
+      action !== null ||
+      args.session.closedAt ||
+      args.session.status !== "ACTIVE"
+        ? {}
+        : { slotSearch: collected.slotSearch }),
       confirmation:
         action === null
           ? null
@@ -269,6 +284,10 @@ export class ConversationService {
     text: string;
     spoken: boolean;
     now: Date;
+    /** A time picked from the calendar. Skips the model; see `pick`. */
+    slot?: { startAt: string; providerId: string } | undefined;
+    /** A provider tapped in the list, `null` for "anyone available". Skips the model. */
+    provider?: { providerId: string | null } | undefined;
   }): Promise<ConversationTurnResponse> {
     const { session, tenant } = args;
 
@@ -295,6 +314,38 @@ export class ConversationService {
         rateWindowCount: rateActive ? session.rateWindowCount + 1 : 1,
       },
     });
+    if (args.slot !== undefined) {
+      return this.pick({
+        session,
+        tenant,
+        text,
+        characters,
+        now: args.now,
+        // Only while a calendar is on offer, so a pick cannot jump the service step.
+        allowed: (collected) => collected.slotSearch !== undefined,
+        command: {
+          intent: "SELECT_SLOT",
+          parameters: { startAt: args.slot.startAt, providerId: args.slot.providerId },
+        },
+      });
+    }
+    if (args.provider !== undefined) {
+      const providerId = args.provider.providerId;
+      return this.pick({
+        session,
+        tenant,
+        text,
+        characters,
+        now: args.now,
+        // A reschedule keeps the booking's provider, and a provider means
+        // nothing before a service. `listProviders` still checks the id offers it.
+        allowed: (collected) => collected.serviceId !== undefined && session.bookingId === null,
+        command: {
+          intent: "GET_PROVIDER_DETAILS",
+          parameters: providerId === null ? { anyProvider: true } : { providerId },
+        },
+      });
+    }
     const collected = this.repo.collectedOf(session);
     const state = session.machineState as CustomerBookingState;
     const knowledge = await this.assistant.knowledgeContext(tenant, session.locale);
@@ -471,6 +522,74 @@ export class ConversationService {
   }
 
   /**
+   * Something tapped rather than typed: a time from the calendar, or a provider
+   * from the list. docs/phase-12-chat-slot-calendar.md §2.3, §5.
+   *
+   * Everything in `message` up to the model has already run — closed session,
+   * character allowance, turn limit, rate window — and the turn is counted and
+   * recorded the same way. What is skipped is the model: a tap names an exact
+   * thing, and reading it back through a sentence would put a guess between the
+   * customer's tap and what happens next. No AI allowance is reserved or spent.
+   *
+   * The command is fixed by the caller, never by the body, and still runs
+   * through the allowlist. Its values are only a claim: `createHold` checks a
+   * time is offered (rule 14), and `listProviders` that a provider offers the
+   * service.
+   */
+  private async pick(args: {
+    session: ConversationSession;
+    tenant: Tenant;
+    text: string;
+    characters: number;
+    now: Date;
+    allowed: (collected: StoredState) => boolean;
+    command: { intent: ConversationIntent; parameters: Record<string, unknown> };
+  }): Promise<ConversationTurnResponse> {
+    const { session, tenant } = args;
+    const collected = this.repo.collectedOf(session);
+
+    if (!args.allowed(collected)) {
+      return this.reply({ session, tenant, collected, message: refusalMessage("OUT_OF_SCOPE") });
+    }
+
+    const accepted = await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.conversationSession.updateMany({
+        where: {
+          id: session.id,
+          tenantId: tenant.id,
+          closedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: {
+          patientCharacters: { increment: args.characters },
+          turnCount: { increment: 1 },
+        },
+      });
+      if (!changed.count) return false;
+      await tx.conversationMessage.create({
+        data: {
+          tenantId: tenant.id,
+          sessionId: session.id,
+          sender: "CUSTOMER",
+          messageType: "TEXT",
+          content: args.text,
+        },
+      });
+      return true;
+    });
+    if (!accepted) return this.close(session, tenant, "TIME_LIMIT");
+
+    return this.run({
+      session,
+      tenant,
+      collected,
+      command: args.command,
+      utterance: args.text,
+      now: args.now,
+    });
+  }
+
+  /**
    * Execute one validated command through the allowlist.
    *
    * An intent with no handler is refused exactly like an unknown one — which is
@@ -525,6 +644,10 @@ export class ConversationService {
         tenant: args.tenant,
         collected: forgetSlot(args.collected),
         message: refusalMessage(refusal),
+        // Straight back to the calendar, which refetches without the lost time.
+        ...(args.collected.slotSearch === undefined
+          ? {}
+          : { slotSearch: args.collected.slotSearch }),
       });
     }
 
@@ -539,7 +662,10 @@ export class ConversationService {
       });
     }
 
-    const collected: StoredState = { ...args.collected, ...outcome.collected };
+    const collected: StoredState = without(
+      { ...args.collected, ...outcome.collected },
+      outcome.forget ?? [],
+    );
     if (outcome.slots !== undefined) collected.lastSlots = outcome.slots;
 
     let confirmation: ConfirmationCard | null = null;
@@ -571,6 +697,16 @@ export class ConversationService {
         ? stateFor(collected, args.session.machineState as CustomerBookingState)
         : "AWAITING_CONFIRMATION";
 
+    // Each question arrives with what answers it, whichever turn led to it — a
+    // service tapped, a name typed, a time lost. docs/phase-12-chat-slot-calendar.md §5.
+    const providers =
+      nextState === "SELECTING_PROVIDER" && outcome.providers === undefined
+        ? await this.tools.providerChoices(args.tenant.id, collected.serviceId)
+        : outcome.providers;
+    const slotSearch =
+      outcome.slotSearch ?? (nextState === "SELECTING_SLOT" ? slotSearchOf(collected) : undefined);
+    if (slotSearch !== undefined) collected.slotSearch = slotSearch;
+
     return this.reply({
       session: args.session,
       tenant: args.tenant,
@@ -583,8 +719,9 @@ export class ConversationService {
       countTurn: true,
       confirmation,
       ...(outcome.services === undefined ? {} : { services: outcome.services }),
-      ...(outcome.providers === undefined ? {} : { providers: outcome.providers }),
+      ...(providers === undefined ? {} : { providers }),
       ...(outcome.slots === undefined ? {} : { slots: outcome.slots }),
+      ...(slotSearch === undefined ? {} : { slotSearch }),
     });
   }
 
@@ -810,6 +947,7 @@ export class ConversationService {
         collected: forgetSlot(collected),
         state: "SELECTING_SLOT",
         message: refusalMessage(refusal),
+        ...(collected.slotSearch === undefined ? {} : { slotSearch: collected.slotSearch }),
       });
     }
   }
@@ -865,6 +1003,7 @@ export class ConversationService {
     services?: z.infer<typeof conversationServiceSchema>[];
     providers?: z.infer<typeof conversationProviderSchema>[];
     slots?: z.infer<typeof conversationSlotSchema>[];
+    slotSearch?: z.infer<typeof conversationSlotSearchSchema>;
     /** phase-12 §4.5: recorded on the message, never shown to the customer. */
     groundingWarnings?: GroundingIssue[] | null;
   }): Promise<ConversationTurnResponse> {
@@ -925,6 +1064,7 @@ export class ConversationService {
       ...(args.services === undefined ? {} : { services: args.services }),
       ...(args.providers === undefined ? {} : { providers: args.providers }),
       ...(args.slots === undefined ? {} : { slots: args.slots }),
+      ...(args.slotSearch === undefined ? {} : { slotSearch: args.slotSearch }),
       confirmation: args.confirmation ?? null,
       bookingReference: await this.referenceOf(updated),
       turnsRemaining: Math.max(0, this.options.maxTurns - updated.turnCount),
@@ -1012,7 +1152,42 @@ export class ConversationService {
  */
 function forgetSlot(collected: StoredState): StoredState {
   const { startAt: _startAt, holdId: _holdId, ...rest } = collected;
-  return rest;
+  if (collected.slotSearch === undefined) return rest;
+
+  // A pick sets `providerId` to whoever's time was held, and with provider
+  // names hidden the customer never chose them. Losing that time must not
+  // narrow every later search to that provider: put back what the customer
+  // asked for, which is what the calendar searched. Chat calendar §2.4.
+  const { providerId: _picked, ...withoutProvider } = rest;
+  const preferred = collected.slotSearch.providerId;
+  return preferred === null ? withoutProvider : { ...withoutProvider, providerId: preferred };
+}
+
+/** `collected` without the named fields. Removing the key is the honest "not known". */
+function without(collected: StoredState, keys: readonly (keyof StoredState)[]): StoredState {
+  return Object.fromEntries(
+    Object.entries(collected).filter(([key]) => !keys.includes(key as keyof StoredState)),
+  );
+}
+
+/**
+ * What the calendar searches when no search ran this turn: the provider was
+ * just chosen, or a time was lost. A day opens it only if the customer named
+ * exactly one; the default window is fourteen days and opens nothing.
+ */
+function slotSearchOf(
+  collected: StoredState,
+): z.infer<typeof conversationSlotSearchSchema> | undefined {
+  if (collected.serviceId === undefined) return undefined;
+
+  return {
+    serviceId: collected.serviceId,
+    providerId: collected.providerId ?? null,
+    date:
+      collected.dateFrom !== undefined && collected.dateFrom === collected.dateTo
+        ? collected.dateFrom
+        : null,
+  };
 }
 
 function stringValue(value: unknown): string {

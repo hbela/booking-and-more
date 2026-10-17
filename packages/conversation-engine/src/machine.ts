@@ -39,6 +39,12 @@ export type CustomerBookingState =
 export interface CollectedFields {
   serviceId?: string;
   providerId?: string;
+  /**
+   * The customer chose "anyone available" — an answer to the provider question,
+   * which an absent `providerId` alone cannot tell apart from not having been
+   * asked. docs/phase-12-chat-slot-calendar.md §5.
+   */
+  anyProvider?: boolean;
   locationId?: string;
   /** Inclusive `YYYY-MM-DD` range the customer asked about. */
   dateFrom?: string;
@@ -123,7 +129,12 @@ export function stateFor(
   if (current === "AWAITING_CONFIRMATION" || current === "CONFIRMING_BOOKING") return current;
 
   if (collected.serviceId === undefined) return "SELECTING_SERVICE";
-  if (collected.dateFrom === undefined) return "SELECTING_DATE";
+  // The form's order: service, provider, then a day and time from the calendar.
+  // The day is chosen *in* the calendar, so it is no longer a question of its
+  // own; a day the customer volunteered only decides where the calendar opens.
+  if (collected.providerId === undefined && collected.anyProvider !== true) {
+    return "SELECTING_PROVIDER";
+  }
   if (collected.startAt === undefined) return "SELECTING_SLOT";
   if (collected.holdId === undefined) return "HOLDING_SLOT";
 
@@ -141,7 +152,15 @@ export type TransitionRefusal =
 
 /** Which states may follow which. Terminal states have no successors. */
 const TRANSITIONS: Record<CustomerBookingState, CustomerBookingState[]> = {
-  START: ["SELECTING_SERVICE", "SELECTING_DATE", "SEARCHING_SLOTS", "CANCELLED", "EXPIRED"],
+  START: [
+    "SELECTING_SERVICE",
+    "SELECTING_PROVIDER",
+    "SELECTING_DATE",
+    "SEARCHING_SLOTS",
+    "SELECTING_SLOT",
+    "CANCELLED",
+    "EXPIRED",
+  ],
   SELECTING_SERVICE: [
     "SELECTING_PROVIDER",
     "SELECTING_DATE",
@@ -152,6 +171,7 @@ const TRANSITIONS: Record<CustomerBookingState, CustomerBookingState[]> = {
   SELECTING_PROVIDER: [
     "SELECTING_DATE",
     "SEARCHING_SLOTS",
+    "SELECTING_SLOT",
     "SELECTING_SERVICE",
     "CANCELLED",
     "EXPIRED",

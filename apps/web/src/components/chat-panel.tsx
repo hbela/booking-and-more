@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bot, CalendarDays, RefreshCw, Send } from "lucide-react";
 import { ApiError, formatMoney } from "@/lib/api-client";
 import {
@@ -13,7 +14,7 @@ import {
   startConversation,
   type ConfirmationCard,
   type ConversationSession,
-  type ConversationSlot,
+  type ConversationSlotSearch,
   type ConversationTurn,
 } from "@/lib/conversation-client";
 import { Button } from "./ui/button";
@@ -21,6 +22,7 @@ import { Input } from "./ui/input";
 import { Link } from "@/i18n/navigation";
 import { renderMessage } from "@/lib/conversation-messages";
 import { ChatCatalogueChoices } from "./chat-catalogue-choices";
+import { SlotPicker, useSlotPickerState } from "./slot-picker";
 import { Brand } from "./brand";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -65,7 +67,6 @@ const guardCopy = {
 const copy = {
   en: {
     language: "Language",
-    slot: (ordinal: number) => `I would like option ${ordinal}`,
     title: "AI Assistant",
     placeholder: "How can we help?",
     send: "Send",
@@ -79,7 +80,6 @@ const copy = {
   },
   hu: {
     language: "Nyelv",
-    slot: (ordinal: number) => `A(z) ${ordinal}. időpontot kérem`,
     title: "AI Asszistens",
     placeholder: "Miben segíthetünk?",
     send: "Küldés",
@@ -93,7 +93,6 @@ const copy = {
   },
   de: {
     language: "Sprache",
-    slot: (ordinal: number) => `Ich möchte Option ${ordinal}`,
     title: "KI-Rezeption",
     placeholder: "Wie können wir helfen?",
     send: "Senden",
@@ -108,7 +107,6 @@ const copy = {
   },
   fr: {
     language: "Langue",
-    slot: (ordinal: number) => `Je souhaite l’option ${ordinal}`,
     title: "Réceptionniste IA",
     placeholder: "Comment pouvons-nous vous aider ?",
     send: "Envoyer",
@@ -175,6 +173,7 @@ function ChatConversation({
   const [businessName, setBusinessName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const serial = useRef(0);
+  const queryClient = useQueryClient();
 
   const absorb = useCallback(
     (next: ConversationTurn) => {
@@ -281,10 +280,15 @@ function ChatConversation({
       .catch(() => undefined);
   }, [secondsLeft, session, turn?.closureReason]);
 
-  // `shown` is what the customer's bubble says when it differs from what the
-  // server is sent: a slot pick sends its ordinal, which the server resolves
-  // against the list it last showed, but reads as the time that was chosen.
-  const sendText = async (value: string, shown?: string) => {
+  // `slot` is a time picked from the calendar: the server takes it as data and
+  // never asks the model, while `value` is what the transcript and the bubble
+  // say (docs/phase-12-chat-slot-calendar.md §2.3).
+  const sendText = async (
+    value: string,
+    tapped?:
+      | { slot: { startAt: string; providerId: string } }
+      | { provider: { providerId: string | null } },
+  ) => {
     const text = value.trim();
     if (!session || !text || busy || closed) return;
     if (
@@ -297,15 +301,13 @@ function ChatConversation({
     setDraft("");
     setBusy(true);
     setError(null);
-    setBubbles((rows) => [
-      ...rows,
-      { id: `c-${++serial.current}`, from: "customer", text: shown ?? text },
-    ]);
+    setBubbles((rows) => [...rows, { id: `c-${++serial.current}`, from: "customer", text }]);
     try {
       const next = await sendMessage({
         session,
         text,
         idempotencyKey: pendingMessage.current.key,
+        ...tapped,
         onTextDelta: (message) => {
           setBubbles((rows) => [
             ...rows.filter((row) => row.id !== "stream"),
@@ -316,8 +318,12 @@ function ChatConversation({
       setBubbles((rows) => rows.filter((row) => row.id !== "stream"));
       pendingMessage.current = null;
       absorb(next);
+      // Whatever became of the pick, every month on show is now stale: either
+      // the time is held, or somebody else had it first.
+      if (tapped && "slot" in tapped)
+        void queryClient.invalidateQueries({ queryKey: ["public-slots-month", tenantSlug] });
     } catch (cause) {
-      setDraft(text);
+      if (!tapped) setDraft(text);
       if (isAssistantUnavailable(cause)) setAvailable(false);
       else setError(cause instanceof ApiError ? cause.message : String(cause));
     } finally {
@@ -456,17 +462,21 @@ function ChatConversation({
             locale={language}
             disabled={busy || !available || closed}
             onPick={(name) => void sendText(name)}
+            onPickProvider={(providerId, label) =>
+              void sendText(label, { provider: { providerId } })
+            }
           />
-          {!closed && turn?.slots?.length ? (
-            <SlotChoices
-              slots={turn.slots}
-              locale={language}
-              disabled={busy || !available}
-              onPick={(ordinal, slot) =>
-                void sendText(
-                  t.slot(ordinal),
-                  `${formatSlotTime(slot.startAt, language)} · ${slot.providerName}`,
-                )
+          {!closed && turn?.slotSearch ? (
+            <ChatSlotPicker
+              // A new search is a new calendar; the same search keeps its day.
+              key={`${turn.slotSearch.serviceId}.${turn.slotSearch.providerId}.${turn.slotSearch.date}`}
+              tenantSlug={tenantSlug}
+              search={turn.slotSearch}
+              pending={busy || !available}
+              onPick={(slot) =>
+                void sendText(formatSlotTime(slot.startAt, language), {
+                  slot: { startAt: slot.startAt, providerId: slot.providerId },
+                })
               }
             />
           ) : null}
@@ -560,35 +570,40 @@ function ChatConversation({
   );
 }
 
-function SlotChoices({
-  slots,
-  locale,
-  disabled,
+/**
+ * The booking form's calendar, inside the conversation.
+ * docs/phase-12-chat-slot-calendar.md.
+ *
+ * Opens on the day the customer named, if they named one. No provider names:
+ * like the form, a time is shown once and goes to whoever is free (§1).
+ */
+function ChatSlotPicker({
+  tenantSlug,
+  search,
+  pending,
   onPick,
 }: {
-  slots: ConversationSlot[];
-  locale: Locale;
-  disabled: boolean;
-  onPick: (ordinal: number, slot: ConversationSlot) => void;
+  tenantSlug: string;
+  search: ConversationSlotSearch;
+  pending: boolean;
+  onPick: (slot: { startAt: string; providerId: string }) => void;
 }): React.ReactElement {
+  const state = useSlotPickerState(search.date);
+
   return (
-    <ul className="grid gap-2 sm:grid-cols-2">
-      {slots.map((slot, index) => (
-        <li key={`${slot.providerId}-${slot.startAt}`}>
-          <Button
-            variant="outline"
-            className="h-full w-full flex-col"
-            disabled={disabled}
-            onClick={() => onPick(index + 1, slot)}
-          >
-            <time dateTime={slot.startAt}>{formatSlotTime(slot.startAt, locale)}</time>
-            <span className="text-xs text-ink-muted">{slot.providerName}</span>
-          </Button>
-        </li>
-      ))}
-    </ul>
+    <div className="rounded-xl border border-line p-4">
+      <SlotPicker
+        tenantSlug={tenantSlug}
+        serviceId={search.serviceId}
+        providerId={search.providerId}
+        state={state}
+        pending={pending}
+        onPick={onPick}
+      />
+    </div>
   );
 }
+
 function formatSlotTime(startAt: string, locale: Locale): string {
   return new Date(startAt).toLocaleString(locale, {
     weekday: "short",

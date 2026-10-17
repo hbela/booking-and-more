@@ -221,6 +221,12 @@ fact has one authoritative source, and free text may explain a structured fact b
 [Phase 12 — service translation drafts](docs/phase-12-service-translation-drafts.md) (done). The same
 draft endpoint, a third `kind`; its §2.2 is why a service's own name is translated while a name inside the
 profile is not ·
+[Phase 12 — the chat's slot calendar](docs/phase-12-chat-slot-calendar.md) (built; not yet seen in a
+browser). The chat follows the form's order — service, then provider ("anyone available" first), then the
+form's own calendar (`components/slot-picker.tsx`, shared) — and **a tapped time or provider is sent as
+data (`slot` / `provider` on the message) and never reaches the model**. Read its §2.3 before adding
+anything a tap can send, §2.4 before touching `forgetSlot` (the provider of a held time is not the
+customer's preference), and §5.1 before touching `stateFor`: `SELECTING_DATE` is no longer derived ·
 [Phase 12 — site import](docs/phase-12-site-import.md) (**PARKED 2026-10-07 — read its §9 first**; built,
 run once against koronafogaszat.eu and the real model in its §8, owner flow never walked).
 `rg "PARKED — site import"` is the inventory: the route and the Overview card are commented out, two tests

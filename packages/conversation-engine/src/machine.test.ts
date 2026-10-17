@@ -56,11 +56,15 @@ describe("stateFor", () => {
     ).toBe("SELECTING_SLOT");
   });
 
-  it("walks the ordinary path in order", () => {
-    expect(stateFor({ serviceId: "svc_1" })).toBe("SELECTING_DATE");
-    expect(stateFor({ serviceId: "svc_1", dateFrom: "2026-08-18" })).toBe("SELECTING_SLOT");
+  it("walks the form's order: service, provider, then the calendar", () => {
+    expect(stateFor({ serviceId: "svc_1" })).toBe("SELECTING_PROVIDER");
+    // A day volunteered early does not skip the provider question.
+    expect(stateFor({ serviceId: "svc_1", dateFrom: "2026-08-18" })).toBe("SELECTING_PROVIDER");
+    expect(stateFor({ serviceId: "svc_1", providerId: "prv_1" })).toBe("SELECTING_SLOT");
+    // "Anyone available" answers the question as surely as a name does.
+    expect(stateFor({ serviceId: "svc_1", anyProvider: true })).toBe("SELECTING_SLOT");
     expect(
-      stateFor({ serviceId: "svc_1", dateFrom: "2026-08-18", startAt: "2026-08-18T12:00:00Z" }),
+      stateFor({ serviceId: "svc_1", anyProvider: true, startAt: "2026-08-18T12:00:00Z" }),
     ).toBe("HOLDING_SLOT");
     expect(stateFor(without(complete, "fullName"))).toBe("COLLECTING_CUSTOMER_DETAILS");
     expect(stateFor(complete)).toBe("AWAITING_CONFIRMATION");

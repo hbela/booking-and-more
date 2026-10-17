@@ -18,6 +18,7 @@ import type {
   conversationProviderSchema,
   conversationServiceSchema,
   conversationSlotSchema,
+  conversationSlotSearchSchema,
 } from "./conversation.schemas.js";
 import type { z } from "zod";
 
@@ -59,9 +60,13 @@ export interface ToolOutcome {
   message?: AssistantMessage;
   /** Merged into the conversation's collected fields. */
   collected?: Partial<CollectedFields>;
+  /** Removed from them — a merge cannot unset ("anyone" after a name, or the reverse). */
+  forget?: (keyof CollectedFields)[];
   services?: z.infer<typeof conversationServiceSchema>[];
   providers?: z.infer<typeof conversationProviderSchema>[];
   slots?: z.infer<typeof conversationSlotSchema>[];
+  /** What the panel's calendar should search. Set by every search that ran, found or not. */
+  slotSearch?: z.infer<typeof conversationSlotSearchSchema>;
   /** A prepared write, awaiting an explicit confirmation. */
   prepare?: {
     tool: ConfirmationCard["tool"];
@@ -180,7 +185,10 @@ export class ConversationTools {
         (context.utterance !== undefined &&
           fold(stripPunctuation(context.utterance)) === fold(nameOf(only, context.locale)));
       if (picked) {
-        return { collected: { serviceId: only.id }, services: [toServiceView(only, context.locale)] };
+        return {
+          collected: { serviceId: only.id },
+          services: [toServiceView(only, context.locale)],
+        };
       }
     }
 
@@ -210,15 +218,46 @@ export class ConversationTools {
         ui: "SERVICE_LIST",
       };
     } else if (services.length === 1) {
-      message = { key: "conversation.services.only", params: { service: names }, ui: "SERVICE_LIST" };
+      message = {
+        key: "conversation.services.only",
+        params: { service: names },
+        ui: "SERVICE_LIST",
+      };
     } else {
-      message = { key: "conversation.services.available", params: { services: names }, ui: "SERVICE_LIST" };
+      message = {
+        key: "conversation.services.available",
+        params: { services: names },
+        ui: "SERVICE_LIST",
+      };
     }
 
     return { message, services };
   }
 
+  /**
+   * Who the provider question offers: everyone who performs the service, as
+   * the form lists them. The panel adds "anyone available" itself.
+   */
+  async providerChoices(
+    tenantId: string,
+    serviceId: string | undefined,
+  ): Promise<z.infer<typeof conversationProviderSchema>[]> {
+    const rows = await this.catalogue.listProviders({
+      tenantId,
+      limit: 25,
+      ...(serviceId === undefined ? {} : { serviceId }),
+    });
+    return rows.map((row) => ({ id: row.id, displayName: row.displayName }));
+  }
+
   async listProviders(context: ToolContext): Promise<ToolOutcome> {
+    // "Anyone available" answers the provider question without naming anybody,
+    // so it is recorded as an answer rather than inferred from an absence.
+    // docs/phase-12-chat-slot-calendar.md §5.
+    if (context.parameters["anyProvider"] === true) {
+      return { collected: { anyProvider: true }, forget: ["providerId"] };
+    }
+
     const rows = await this.catalogue.listProviders({
       tenantId: context.tenant.id,
       limit: 25,
@@ -240,6 +279,7 @@ export class ConversationTools {
       const only = matched[0]!;
       return {
         collected: { providerId: only.id },
+        forget: ["anyProvider"],
         providers: [{ id: only.id, displayName: only.displayName }],
       };
     }
@@ -277,6 +317,7 @@ export class ConversationTools {
     const providerId =
       stringParam(context.parameters, "providerId") ?? context.collected.providerId;
     if (providerId !== undefined) collected.providerId = providerId;
+    if (context.parameters["anyProvider"] === true) collected.anyProvider = true;
 
     const dates = resolveDateExpression({
       dateExpression: stringParam(context.parameters, "dateExpression"),
@@ -292,6 +333,39 @@ export class ConversationTools {
     collected.dateTo = dates.range.dateTo;
     if (dates.range.timeFrom !== undefined) collected.timeFrom = dates.range.timeFrom;
     if (dates.range.timeTo !== undefined) collected.timeTo = dates.range.timeTo;
+
+    // The form's order: nobody is offered a time before the provider question
+    // is answered. A name in the same sentence answers it; otherwise the day
+    // just resolved is kept, and decides where the calendar opens once they
+    // have chosen. A reschedule never asks — its provider is the booking's.
+    // docs/phase-12-chat-slot-calendar.md §5.
+    if (
+      collected.providerId === undefined &&
+      collected.anyProvider !== true &&
+      context.collected.anyProvider !== true &&
+      context.bookingId === undefined
+    ) {
+      const chosen = await this.listProviders({
+        ...context,
+        collected: { ...context.collected, ...collected },
+      });
+      if (chosen.collected?.providerId === undefined) {
+        return { collected, ...(chosen.providers ? { providers: chosen.providers } : {}) };
+      }
+      collected.providerId = chosen.collected.providerId;
+    }
+
+    // The calendar's search, from the same resolved ids. A single named day
+    // opens the calendar on it; a range or no date leaves the choice to the
+    // calendar's own first-available rule. docs/phase-12-chat-slot-calendar.md §2.2.
+    const slotSearch = {
+      serviceId: collected.serviceId,
+      providerId: collected.providerId ?? null,
+      date:
+        dates.range.dateFrom === dates.range.dateTo && dates.range.assumption !== "DEFAULT_WINDOW"
+          ? dates.range.dateFrom
+          : null,
+    };
 
     const slots = await this.availability.searchSlots({
       tenantId: context.tenant.id,
@@ -320,7 +394,7 @@ export class ConversationTools {
     // list is still ordered, so their preference is simply not first.
     const offered = (withinPreference.length > 0 ? withinPreference : slots).slice(0, 6);
 
-    if (offered.length === 0) return { collected, refusal: "NO_SLOTS" };
+    if (offered.length === 0) return { collected, slotSearch, refusal: "NO_SLOTS" };
 
     const names = await this.providerNames(
       context.tenant.id,
@@ -329,6 +403,7 @@ export class ConversationTools {
 
     return {
       collected,
+      slotSearch,
       slots: offered.map((slot) => ({
         providerId: slot.providerId,
         providerName: names.get(slot.providerId) ?? "",

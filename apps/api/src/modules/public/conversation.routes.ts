@@ -195,6 +195,8 @@ export const publicConversationRoutes: FastifyPluginAsyncZod<ConversationRoutesO
               text: request.body.text,
               spoken: false,
               now: new Date(),
+              slot: request.body.slot,
+              provider: request.body.provider,
             }),
           ),
       );
