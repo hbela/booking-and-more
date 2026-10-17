@@ -107,5 +107,15 @@ The historical checklist below also records outstanding recovery responsibilitie
    decryption with recovered keys. Rebuild queues with outgoing integrations
    disabled during the rehearsal; a database dump alone does not back up Redis.
 
+   **Last run: 2026-10-17, all checks passed**
+   ([restore test](staging-db-restore-test-plan.md) §7, run `restore-20261017`).
+   It restored the 15:00 UTC snapshot 35 minutes after it was taken, in 6.2 s, with
+   secrets from KeePassXC. All 45 tables matched live by row count and content hash,
+   and there was no schema difference against the release. Historical ciphertext
+   decrypted identically to live, and the restored API served byte-identical
+   catalogue and slot answers. The 2026-09-21 daily copy restored, and
+   `restic check --read-data` found no errors. **Next run: about 2026-11-16.** Use
+   that file's §4 as the checklist.
+
 Production will need its own repository, Compose project identifier, credentials,
 `BACKUP_TAG=bam-production`, service/timer instance, monitor and recovery evidence.

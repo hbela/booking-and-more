@@ -101,6 +101,7 @@ jobs:
         run: |
           python3 ops/production/test-backup.py
           python3 ops/production/test-backup-check-in.py
+          python3 ops/production/test-restore-rehearsal.py
 
       - name: Check formatting
         run: pnpm format:check

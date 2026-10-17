@@ -65,6 +65,11 @@ Do not put credentials, encryption keys or customer details in this checklist.
 - [ ] Exercise the missing-backup alert and confirm it arrives before backup age reaches one hour.
 - [ ] Restore a selected backup into isolated PostgreSQL/Redis volumes with outbound
       customer email, live payments and invoicing disabled.
+      Staging evidence, 2026-10-17: the [monthly restore test](staging-db-restore-test-plan.md)
+      passed all 13 checks. That covered recovery point, schema drift, per-table
+      content hashes, historical ciphertext, behaviour on restored data, an old
+      daily copy, the script's refusals and a full repository read. It is staging
+      evidence only; production needs its own run against its own repository.
 - [ ] Demonstrate complete recovery, including secrets, application startup and data
       validation, within four hours; record elapsed time and evidence.
       [Staging technical drill](staging-recovery-drill-2026-09-24.md) passed on

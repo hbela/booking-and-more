@@ -6,7 +6,7 @@ umask 077
 : "${RESTORE_CONTAINER:?Set a separate, empty PostgreSQL 18 container}"
 : "${RESTORE_DATABASE:?Set an empty rehearsal database name}"
 : "${RESTORE_USER:?Set the rehearsal database owner}"
-: "${SNAPSHOT_ID:?Select a specific snapshot from restic snapshots --tag bam-production}"
+: "${SNAPSHOT_ID:?Select a specific snapshot from restic snapshots --tag <BACKUP_TAG>, e.g. bam-staging or bam-production}"
 [[ "$RESTORE_DATABASE" == bam_rehearsal_* ]] || { echo "Rehearsal database must start with bam_rehearsal_"; exit 1; }
 start=$(date +%s)
 # Never use --clean or drop an existing database. An occupied target fails.
