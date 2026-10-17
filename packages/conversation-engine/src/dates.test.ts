@@ -33,6 +33,59 @@ describe("relative days", () => {
   });
 });
 
+describe("a named month and day", () => {
+  /** A Saturday, the day "Október 26 Hétfő" resolved to the Monday after it. */
+  const SATURDAY = new Date("2026-10-17T09:00:00Z");
+
+  it("beats the weekday named alongside it", () => {
+    expect(range("Október 26 Hétfő", SATURDAY)).toMatchObject({
+      dateFrom: "2026-10-26",
+      dateTo: "2026-10-26",
+    });
+    expect(range("hétfő, október 26.", SATURDAY)).toMatchObject({ dateFrom: "2026-10-26" });
+    // The format the chat's own prompt suggests, typed with and without spaces.
+    expect(range("okt. 26., H 09:00", SATURDAY)).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("okt.26.,H 09:00", SATURDAY)).toMatchObject({ dateFrom: "2026-10-26" });
+  });
+
+  it("reads Hungarian and English, full and abbreviated, either order", () => {
+    expect(range("október 26")).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("okt. 26.")).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("oktober 26-an")).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("2026. szeptember 3.")).toMatchObject({ dateFrom: "2026-09-03" });
+    expect(range("October 26th")).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("26 October")).toMatchObject({ dateFrom: "2026-10-26" });
+    expect(range("the 3rd of Sept")).toMatchObject({ dateFrom: "2026-09-03" });
+  });
+
+  it("is not mistaken for 'ma' (today) inside a month name", () => {
+    expect(range("március 3")).toMatchObject({ dateFrom: "2027-03-03" });
+    expect(range("május 4")).toMatchObject({ dateFrom: "2027-05-04" });
+  });
+
+  it("means the next occurrence when no year is given", () => {
+    // Today is 10 August: 9 August has passed, so it is next year's.
+    expect(range("augusztus 9")).toMatchObject({ dateFrom: "2027-08-09" });
+    expect(range("augusztus 10")).toMatchObject({ dateFrom: "2026-08-10" });
+  });
+
+  it("refuses a day the month does not have", () => {
+    expect(
+      resolveDateExpression({ dateExpression: "február 30", timezone: ZONE, now: MONDAY }),
+    ).toEqual({ ok: false, reason: "UNRECOGNISED_DATE", expression: "február 30" });
+  });
+
+  it("never takes a day from the time phrase", () => {
+    const result = resolveDateExpression({
+      dateExpression: "holnap",
+      timeExpression: "10 órakor",
+      timezone: ZONE,
+      now: MONDAY,
+    });
+    expect(result.ok && result.range.dateFrom).toBe("2026-08-11");
+  });
+});
+
 describe("weekdays", () => {
   it("without a marker, means the next one strictly after today", () => {
     // Today is Monday. "on Tuesday" is tomorrow.

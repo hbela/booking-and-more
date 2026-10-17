@@ -58,10 +58,10 @@ export const conversationMessages: Record<string, Record<Locale, string>> = {
     fr: "Quel jour vous conviendrait ?",
   },
   "conversation.ask.slot": {
-    en: "Choose one of these available times.",
-    hu: "Válasszon az elérhető időpontok közül.",
-    de: "Wählen Sie einen verfügbaren Termin.",
-    fr: "Choisissez un créneau disponible.",
+    en: "Choose one of these available times or give me the date and time in this format, for example: Oct 26, Mon 09:00",
+    hu: "Válasszon az elérhető időpontok közül, vagy adja meg a dátumot és az időpontot a következő formátumban, például: okt. 26., H 09:00",
+    de: "Wählen Sie einen der verfügbaren Termine oder nennen Sie mir Datum und Uhrzeit in diesem Format, zum Beispiel: 26. Okt., Mo 09:00",
+    fr: "Choisissez l'un de ces créneaux disponibles ou indiquez-moi la date et l'heure dans ce format, par exemple : 26 oct., lun. 09:00",
   },
   "conversation.ask.name": {
     en: "What name should the booking be under?",

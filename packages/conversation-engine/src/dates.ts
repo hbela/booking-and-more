@@ -105,6 +105,67 @@ const TODAY_WORDS = ["today", "ma", "mai"];
 const TOMORROW_WORDS = ["tomorrow", "holnap", "holnapi"];
 const DAY_AFTER_WORDS = ["day after tomorrow", "holnaputan"];
 
+/**
+ * Month names and their common abbreviations, already accent-stripped.
+ *
+ * Matched as a prefix of a word, so "okt", "okt." and "oktober" all land on
+ * October and "szept" covers "szeptember".
+ */
+const MONTHS: Record<string, number> = {
+  januar: 1,
+  january: 1,
+  jan: 1,
+  februar: 2,
+  february: 2,
+  febr: 2,
+  feb: 2,
+  marcius: 3,
+  march: 3,
+  marc: 3,
+  mar: 3,
+  aprilis: 4,
+  april: 4,
+  apr: 4,
+  majus: 5,
+  may: 5,
+  maj: 5,
+  junius: 6,
+  june: 6,
+  jun: 6,
+  julius: 7,
+  july: 7,
+  jul: 7,
+  augusztus: 8,
+  august: 8,
+  aug: 8,
+  szeptember: 9,
+  september: 9,
+  szept: 9,
+  sept: 9,
+  szep: 9,
+  sep: 9,
+  oktober: 10,
+  october: 10,
+  okt: 10,
+  oct: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
+};
+
+const MONTH_NAME = `(${Object.keys(MONTHS)
+  .sort((a, b) => b.length - a.length)
+  .join("|")})[a-z]*\\.?`;
+/** "október 26", "okt. 26.", "October 26th", "2026. október 26." */
+const MONTH_THEN_DAY = new RegExp(`\\b${MONTH_NAME}\\s*(\\d{1,2})(?!\\d)`, "u");
+/** "26 October", "26th of Oct" */
+const DAY_THEN_MONTH = new RegExp(
+  `(?<!\\d)(\\d{1,2})(?:st|nd|rd|th)?\\.?\\s*(?:of\\s+)?${MONTH_NAME}`,
+  "u",
+);
+const YEAR = /\b(20\d{2})\b/u;
+
 const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/u;
 const CLOCK_TIME = /\b(\d{1,2})[:.](\d{2})\b/u;
 const BARE_HOUR = /\b(\d{1,2})\s*(?:o'?clock|ora|orakor|kor|h)\b/u;
@@ -165,6 +226,61 @@ function nextWeekdayDate(today: DateOnly, weekday: number, nextWeek: boolean): D
 
   const delta = (weekday - todayWeekday + 7) % 7;
   return addDays(today, delta === 0 ? 7 : delta);
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+/**
+ * A named month and day — "október 26", "26 October" — as a date.
+ *
+ * Read from the date phrase alone, never the time phrase, so "10" in "10
+ * órakor" cannot become a day. A year, when given, is taken at its word;
+ * without one the date is the next occurrence, so in December "január 5" is
+ * next January rather than eleven months ago.
+ *
+ * `null` is a date that does not exist ("február 30"), which is a refusal —
+ * `undefined` is a phrase that names no month at all.
+ */
+function calendarDateIn(dateExpression: string, today: DateOnly): DateOnly | null | undefined {
+  const monthFirst = MONTH_THEN_DAY.exec(dateExpression);
+  const dayFirst = monthFirst ? null : DAY_THEN_MONTH.exec(dateExpression);
+
+  let month: number;
+  let day: number;
+  if (monthFirst) {
+    month = MONTHS[monthFirst[1]!]!;
+    day = Number(monthFirst[2]);
+  } else if (dayFirst) {
+    month = MONTHS[dayFirst[2]!]!;
+    day = Number(dayFirst[1]);
+  } else {
+    return undefined;
+  }
+
+  const statedYear = YEAR.exec(dateExpression);
+  const thisYear = Number(today.slice(0, 4));
+  const candidate = (year: number) => `${year}-${pad(month)}-${pad(day)}`;
+
+  // Day 1–31 is not enough: Date.UTC rolls 30 February into March.
+  const exists = (year: number) => {
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    return probe.getUTCMonth() === month - 1 && probe.getUTCDate() === day;
+  };
+
+  if (statedYear) {
+    const year = Number(statedYear[1]);
+    return exists(year) ? candidate(year) : null;
+  }
+
+  // 29 February resolves to the next year that has one only if it is this
+  // year or next; beyond that nobody is booking it.
+  for (const year of [thisYear, thisYear + 1]) {
+    if (exists(year) && candidate(year) >= today) return candidate(year);
+  }
+
+  return null;
 }
 
 /** The daypart or clock time in a phrase, as a minute range. */
@@ -251,6 +367,21 @@ export function resolveDateExpression(args: {
   if (iso) {
     const date = `${iso[1]}-${iso[2]}-${iso[3]}`;
     return { ok: true, range: withTime({ dateFrom: date, dateTo: date }, time) };
+  }
+
+  // Before every word list: "március" contains "ma", "október 26 hétfő" names a
+  // weekday, and a named day of a named month beats both. A weekday given
+  // alongside it ("október 26 hétfő") is the customer's own check, not a second
+  // instruction — the absolute date is read back before anything is written.
+  const calendarDate = calendarDateIn(normalize(args.dateExpression), today);
+  if (calendarDate === null) {
+    return { ok: false, reason: "UNRECOGNISED_DATE", expression: args.dateExpression };
+  }
+  if (calendarDate !== undefined) {
+    return {
+      ok: true,
+      range: withTime({ dateFrom: calendarDate, dateTo: calendarDate }, time),
+    };
   }
 
   if (includesAny(phrase, DAY_AFTER_WORDS)) {
