@@ -27,14 +27,13 @@ The application owner is the launch operator and incident contact.
 Nothing in production exists yet: no Coolify `production` environment, volumes,
 domains, keys or monitors. In order:
 
-1. **Turn CI green.** Every push to `release/production-launch-2026-09-20` since
-   2026-10-05 has failed at _Audit production dependencies_ — two high advisories,
-   `sharp <0.35.5` (via `@sentry/nextjs` → webpack plugin) and `source-map-js <1.2.2`
-   (via `better-auth` → vitest → vite → postcss). The audit runs first, so formatting,
-   lint, types, tests, build, browser tests and migration checks have been **skipped**
-   for two weeks of work (phase 12 assistant, chat calendar, worker heartbeat).
-   Raise the two overrides, then expect the newly-unskipped steps to surface more.
-   The `linux-images` jobs (ARM64 and x86) pass on every push and are unaffected.
+1. ~~**Turn CI green.**~~ Done 2026-10-18 in `0d54492`. Every push since 2026-10-05
+   had failed at _Audit production dependencies_ on two high advisories, `sharp <0.35.5`
+   (via `@sentry/nextjs`) and `source-map-js <1.2.2` (via vitest's postcss). The audit
+   runs first, so every later step had been skipped for two weeks. Root overrides fixed
+   both; the only other debt the unskipped steps found was Prettier formatting in four
+   docs. [Run 39141167574](https://github.com/hbela/booking-and-more/actions/runs/39141167574)
+   passed every step, including the ARM64 and x86 image checks.
 2. **Owner decisions (section 2).** Backup destination, the approved owner emails,
    the three-tier prices, the live Stripe account and Billingo block, the cohort
    dates and the terms/privacy pages. Everything from section 3 onward waits on
@@ -135,7 +134,7 @@ the procedure works; it does not satisfy the gate.
 
 ## 4. Release validation and rehearsal
 
-- [ ] **Restore passing CI on the release branch** (see _What's next_ step 1).
+- [x] **Restore passing CI on the release branch** (see _What's next_ step 1).
 - [ ] Review the release diff, including every pending migration and formatting-only
       changes; exclude unrelated local files. Production deploys onto an empty
       database, so the diff that matters for data is staging's: it last recorded
