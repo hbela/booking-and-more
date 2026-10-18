@@ -58,6 +58,8 @@ Preserve unrelated `.claude/` and `.commandcode/` files outside the release.
   The off-host repository, monitor, separate key recovery and restore drill are pending.
   Existing R2 storage offers bucket `booking-for-all-bucket`; the proposed isolated
   prefix is `booking-and-more/production`, awaiting the operator's storage choice.
+  **Superseded 2026-10-18:** production backs up to a new R2 bucket
+  `bam-production-backups` with a bucket-scoped token; see the tasklist, section 2.
 
 Local validation passed: formatting, lint, types, build, 1,616 tests, 49 browser
 checks, production dependency audit, migration drift, and isolated migrations from

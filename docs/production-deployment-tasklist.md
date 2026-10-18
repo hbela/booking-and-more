@@ -34,7 +34,7 @@ domains, keys or monitors. In order:
    both; the only other debt the unskipped steps found was Prettier formatting in four
    docs. [Run 39141167574](https://github.com/hbela/booking-and-more/actions/runs/39141167574)
    passed every step, including the ARM64 and x86 image checks.
-2. **Owner decisions (section 2).** Backup destination, the approved owner emails,
+2. **Owner decisions (section 2).** Backup destination is decided; still open: the approved owner emails,
    the three-tier prices, the live Stripe account and Billingo block, the cohort
    dates and the terms/privacy pages. Everything from section 3 onward waits on
    at least one of these.
@@ -67,10 +67,22 @@ domains, keys or monitors. In order:
 
 ## 2. Owner inputs and launch arrangements
 
-- [ ] Choose production backup storage. Staging uses R2 bucket `booking-for-all-bucket`,
-      prefix `booking-and-more/staging`, with shared R2 credentials; the
-      [staging record](staging-backup-recovery.md) recommends a separate bucket and
-      credential scope for production rather than only a `booking-and-more/production` prefix.
+- [x] Choose production backup storage. **Decided 2026-10-18:** Cloudflare R2 on the
+      existing account's free tier, in a **new bucket `bam-production-backups`** reached
+      by an R2 API token scoped to that bucket alone. Not a prefix in
+      `booking-for-all-bucket`: staging's credentials are shared with other projects,
+      and a leak of them must not be able to delete production backups.
+      Sizing: staging's repository was 36 MiB at the 2026-10-17 restore test, after
+      three weeks of half-hourly backups under full retention, against the free tier's
+      10 GB-month. The free tier is an allowance, not a cap. Usage past it is billed
+      automatically, so a prune that silently stops working shows up as cost
+      rather than as a refusal. Watch the bucket size in the daily cohort review.
+      Backup monitoring stays on the existing Worker: register `bam-production` in
+      `MONITOR_IDS` with its own token and seed its `armed_at` at activation
+      ([backup monitor](backup-monitor.md), last section). No second Worker or cron.
+      Accepted risk: backups and their monitor share one provider. The healthchecks.io
+      heartbeat alerts from outside Cloudflare, but there is one off-host copy of the
+      data. Revisit a second destination (e.g. a Hetzner Storage Box) once clinics depend on it.
 - [x] Complete [staging custom backup monitor rollout](backup-monitor.md): Cloudflare/Resend email rehearsal and both scheduled successes (2026-09-24, 15:00 and 15:30 Budapest) verified. Operator confirmed Sentry backup Cron deletion; VPS legacy pings disabled with a protected rollback copy. Staging's half-hourly timer remains active.
 - [ ] Supply up to five approved owner email addresses through private configuration.
 - [ ] Confirm the three monthly tiers and the intended AAM configuration. Staging sells
