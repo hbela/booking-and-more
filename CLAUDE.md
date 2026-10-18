@@ -241,7 +241,7 @@ when the site does not state one. ·
 a cached prefix (rules, catalogue, facts, description) and a per-turn tail (language, timezone, step).
 **Read its §3.1 before adding anything to the system prompt** — anything per-turn placed in the cached
 block makes every turn a cache miss. **§3.2 is the other one:** `AiUsage.inputTokens` is input-token
-*equivalents* (cache writes ×1.25, reads ×0.1), so the allowance, the per-conversation cap and the
+_equivalents_ (cache writes ×1.25, reads ×0.1), so the allowance, the per-conversation cap and the
 `AI_INPUT_TOKENS` rows all measure cost, not raw tokens. Both numbers are environment variables,
 `KNOWLEDGE_CHARACTER_LIMIT` (30 000) and `PROMPT_BLOCK_CHARACTER_CEILING` (45 000), and `loadEnv` refuses a
 ceiling below 1.4 × the limit (its §6).

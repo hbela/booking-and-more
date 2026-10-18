@@ -49,16 +49,16 @@ Az értékeket konkrét működéssel mutassa be, például: „A munka megkezd�
 
 ### Vállalkozási adatok — külön mezőkben
 
-| Adat | Mit adjon meg? |
-| --- | --- |
-| Név | Megjelenített név és hivatalos cégnév, ha eltérnek. |
-| Kapcsolat | Weboldal, ügyfélszolgálati telefonszám és e-mail-cím. |
-| Telephelyek | Pontos címek; mely szolgáltatások hol érhetők el. |
-| Szolgáltatási terület | Kiszállási körzet és annak korlátai. |
-| Nyitvatartás | Ügyfélfogadási és ügyfélszolgálati idő, ha eltérnek. |
-| Kapcsolattartási nyelvek | Milyen nyelveken tudják kiszolgálni az ügyfeleket. |
-| Megközelítés | Parkolás, bejutás és akadálymentesség, ha releváns. |
-| Ügyintézés | Foglalás, módosítás és panaszkezelés elérhetőségei. |
+| Adat                     | Mit adjon meg?                                        |
+| ------------------------ | ----------------------------------------------------- |
+| Név                      | Megjelenített név és hivatalos cégnév, ha eltérnek.   |
+| Kapcsolat                | Weboldal, ügyfélszolgálati telefonszám és e-mail-cím. |
+| Telephelyek              | Pontos címek; mely szolgáltatások hol érhetők el.     |
+| Szolgáltatási terület    | Kiszállási körzet és annak korlátai.                  |
+| Nyitvatartás             | Ügyfélfogadási és ügyfélszolgálati idő, ha eltérnek.  |
+| Kapcsolattartási nyelvek | Milyen nyelveken tudják kiszolgálni az ügyfeleket.    |
+| Megközelítés             | Parkolás, bejutás és akadálymentesség, ha releváns.   |
+| Ügyintézés               | Foglalás, módosítás és panaszkezelés elérhetőségei.   |
 
 Több telephely esetén egyértelműen jelezze, melyik adat melyik helyszínre érvényes.
 
@@ -94,17 +94,17 @@ Egészségügyi vagy más speciális szolgáltatásnál a releváns előfeltéte
 
 ### Szolgáltatásonként megadandó adatok
 
-| Adat | Mit adjon meg? |
-| --- | --- |
-| Ár és pénznem | Fix ár, induló ár, óradíj vagy egyedi ajánlat. |
-| Ár tartalma | Mi tartozik bele, és mi fizetendő külön. |
-| Időtartam | A lefoglalt időpont hossza; szükséges-e több alkalom. |
-| Teljesítés | Az elkészülés vagy átadás határideje, ha eltér az időpont hosszától. |
-| Első alkalom | Konzultáció, felmérés, tényleges szolgáltatás vagy ezek kombinációja. |
-| Helyszín és szolgáltató | Hol és kinél foglalható, illetve elérhető-e online vagy kiszállással. |
-| Előfeltételek | Szükséges dokumentum, felmérés, előzetes egyeztetés vagy más feltétel. |
-| Résztvevők | Egyéni vagy csoportos szolgáltatás; létszám- és korosztályi feltételek. |
-| Előkészület | Mit kell az ügyfélnek előre elvégeznie vagy magával hoznia. |
+| Adat                    | Mit adjon meg?                                                          |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Ár és pénznem           | Fix ár, induló ár, óradíj vagy egyedi ajánlat.                          |
+| Ár tartalma             | Mi tartozik bele, és mi fizetendő külön.                                |
+| Időtartam               | A lefoglalt időpont hossza; szükséges-e több alkalom.                   |
+| Teljesítés              | Az elkészülés vagy átadás határideje, ha eltér az időpont hosszától.    |
+| Első alkalom            | Konzultáció, felmérés, tényleges szolgáltatás vagy ezek kombinációja.   |
+| Helyszín és szolgáltató | Hol és kinél foglalható, illetve elérhető-e online vagy kiszállással.   |
+| Előfeltételek           | Szükséges dokumentum, felmérés, előzetes egyeztetés vagy más feltétel.  |
+| Résztvevők              | Egyéni vagy csoportos szolgáltatás; létszám- és korosztályi feltételek. |
+| Előkészület             | Mit kell az ügyfélnek előre elvégeznie vagy magával hoznia.             |
 
 Ha egy adat nem határozható meg előre, írja például: „előzetes egyeztetés szükséges” vagy „egyedi ajánlat alapján”.
 
@@ -112,18 +112,18 @@ Ha egy adat nem határozható meg előre, írja például: „előzetes egyeztet
 
 A szabályok legyenek konkrétak, és az ügyfél számára a foglalás előtt megismerhetők. Az általános szabályokat egyszer adja meg; a szolgáltatásonként vagy telephelyenként eltérő feltételeket külön jelölje.
 
-| Téma | Megválaszolandó kérdések |
-| --- | --- |
-| Foglalás | Hogyan lehet foglalni? Azonnali visszaigazolás vagy szolgáltatói jóváhagyás szükséges? |
-| Előzetes egyeztetés | Mely szolgáltatások előtt szükséges konzultáció vagy felmérés? |
-| Érkezés | Mikorra kell érkezni? Mi történik késés esetén? |
-| Fizetés | Mikor, milyen pénznemben és milyen módon lehet fizetni? |
-| Előleg | Szükséges-e; mennyi, mikor esedékes, és hogyan számítják be? |
-| Módosítás | Hogyan és meddig módosítható az időpont? |
-| Lemondás | Hogyan és meddig mondható le; milyen díj vagy visszatérítés vonatkozik rá? |
-| Távolmaradás | Mi történik, ha az ügyfél lemondás nélkül nem jelenik meg? |
-| Szolgáltatói lemondás | Hogyan értesítik az ügyfelet, és milyen új időpontot vagy visszatérítést kínálnak? |
-| Kapcsolat és panasz | Kihez, milyen csatornán fordulhat az ügyfél? |
+| Téma                  | Megválaszolandó kérdések                                                               |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| Foglalás              | Hogyan lehet foglalni? Azonnali visszaigazolás vagy szolgáltatói jóváhagyás szükséges? |
+| Előzetes egyeztetés   | Mely szolgáltatások előtt szükséges konzultáció vagy felmérés?                         |
+| Érkezés               | Mikorra kell érkezni? Mi történik késés esetén?                                        |
+| Fizetés               | Mikor, milyen pénznemben és milyen módon lehet fizetni?                                |
+| Előleg                | Szükséges-e; mennyi, mikor esedékes, és hogyan számítják be?                           |
+| Módosítás             | Hogyan és meddig módosítható az időpont?                                               |
+| Lemondás              | Hogyan és meddig mondható le; milyen díj vagy visszatérítés vonatkozik rá?             |
+| Távolmaradás          | Mi történik, ha az ügyfél lemondás nélkül nem jelenik meg?                             |
+| Szolgáltatói lemondás | Hogyan értesítik az ügyfelet, és milyen új időpontot vagy visszatérítést kínálnak?     |
+| Kapcsolat és panasz   | Kihez, milyen csatornán fordulhat az ügyfél?                                           |
 
 Kerülje a bizonytalan megfogalmazást: „időben mondja le”. Helyette adjon pontos határidőt, csatornát és következményt. Az előleg visszatérítésének feltételeit is rögzítse.
 

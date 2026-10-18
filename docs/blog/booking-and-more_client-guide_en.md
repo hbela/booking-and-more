@@ -49,16 +49,16 @@ Explain your values through specific practices, such as: “We provide a written
 
 ### Business information — in separate fields
 
-| Field | What to provide |
-| --- | --- |
-| Name | Display name and registered business name, if different. |
-| Contact details | Website, customer service telephone number and email address. |
-| Locations | Exact addresses and the services available at each location. |
-| Service area | The area covered by visits to customers and any restrictions. |
-| Opening hours | Appointment hours and customer service hours, if different. |
-| Languages | The languages in which you can serve customers. |
-| Access | Parking, entry instructions and accessibility, where relevant. |
-| Customer support | Contact details for bookings, changes and complaints. |
+| Field            | What to provide                                                |
+| ---------------- | -------------------------------------------------------------- |
+| Name             | Display name and registered business name, if different.       |
+| Contact details  | Website, customer service telephone number and email address.  |
+| Locations        | Exact addresses and the services available at each location.   |
+| Service area     | The area covered by visits to customers and any restrictions.  |
+| Opening hours    | Appointment hours and customer service hours, if different.    |
+| Languages        | The languages in which you can serve customers.                |
+| Access           | Parking, entry instructions and accessibility, where relevant. |
+| Customer support | Contact details for bookings, changes and complaints.          |
 
 If you have several locations, clearly indicate which information applies to each one.
 
@@ -94,17 +94,17 @@ For healthcare or other specialist services, have the appropriate professional s
 
 ### Information to provide for each service
 
-| Field | What to provide |
-| --- | --- |
-| Price and currency | Fixed price, starting price, hourly rate or individual quotation. |
-| Price inclusions | What is included and what is charged separately. |
-| Duration | The length of the booked appointment and whether multiple sessions are needed. |
-| Completion | The completion or delivery deadline, if different from the appointment duration. |
-| First appointment | Consultation, assessment, delivery of the service or a combination. |
+| Field                 | What to provide                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| Price and currency    | Fixed price, starting price, hourly rate or individual quotation.                                   |
+| Price inclusions      | What is included and what is charged separately.                                                    |
+| Duration              | The length of the booked appointment and whether multiple sessions are needed.                      |
+| Completion            | The completion or delivery deadline, if different from the appointment duration.                    |
+| First appointment     | Consultation, assessment, delivery of the service or a combination.                                 |
 | Location and provider | Where and with whom it can be booked; whether online sessions or visits to customers are available. |
-| Prerequisites | Required documents, assessments, prior discussions or other conditions. |
-| Participants | Individual or group service; participant limits and age requirements. |
-| Preparation | What the customer must do beforehand or bring along. |
+| Prerequisites         | Required documents, assessments, prior discussions or other conditions.                             |
+| Participants          | Individual or group service; participant limits and age requirements.                               |
+| Preparation           | What the customer must do beforehand or bring along.                                                |
 
 If a detail cannot be specified in advance, use wording such as “Prior discussion required” or “Subject to an individual quotation”.
 
@@ -112,18 +112,18 @@ If a detail cannot be specified in advance, use wording such as “Prior discuss
 
 Make policies specific and available to customers before booking. State general policies once; clearly identify any conditions that differ by service or location.
 
-| Topic | Questions to answer |
-| --- | --- |
-| Booking | How can customers book? Is confirmation immediate, or is provider approval required? |
-| Prior discussion | Which services require a consultation or assessment beforehand? |
-| Arrival | When should customers arrive? What happens if they are late? |
-| Payment | When, in which currency and by which methods can customers pay? |
-| Advance payment | Is it required? How much is it, when is it due, and how is it credited towards the final bill? |
-| Rescheduling | How and by what deadline can an appointment be changed? |
-| Cancellation | How and by what deadline can it be cancelled? What fees or refunds apply? |
-| Missed appointments | What happens if a customer does not attend and has not cancelled? |
-| Provider cancellation | How will the customer be notified, and what alternative appointment or refund will be offered? |
-| Contact and complaints | Whom can the customer contact, and through which channel? |
+| Topic                  | Questions to answer                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| Booking                | How can customers book? Is confirmation immediate, or is provider approval required?           |
+| Prior discussion       | Which services require a consultation or assessment beforehand?                                |
+| Arrival                | When should customers arrive? What happens if they are late?                                   |
+| Payment                | When, in which currency and by which methods can customers pay?                                |
+| Advance payment        | Is it required? How much is it, when is it due, and how is it credited towards the final bill? |
+| Rescheduling           | How and by what deadline can an appointment be changed?                                        |
+| Cancellation           | How and by what deadline can it be cancelled? What fees or refunds apply?                      |
+| Missed appointments    | What happens if a customer does not attend and has not cancelled?                              |
+| Provider cancellation  | How will the customer be notified, and what alternative appointment or refund will be offered? |
+| Contact and complaints | Whom can the customer contact, and through which channel?                                      |
 
 Avoid vague wording such as “Cancel in good time”. Instead, specify the deadline, contact channel and consequences. Also state the conditions for refunding advance payments.
 

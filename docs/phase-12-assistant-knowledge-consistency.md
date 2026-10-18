@@ -9,6 +9,7 @@ treatments nobody can book is a defect in the product, not a content problem of 
 
 **Document version:** 1.0 — planned and built 2026-10-05. **All five parts are built** (§7.1–§7.5).
 Open items:
+
 - §6's evaluation has **not been run** against the real model, and nothing in this phase has been;
 - §5.3's email to a live tenant is not built.
 
@@ -34,16 +35,16 @@ Both stopped being true with the receptionist on 2026-08-20. It was corrected in
 
 ## 1.1 The `wellness` tenant, local database, 2026-10-05
 
-| Fact | Structured record (what the app will actually do) | Company profile (HU only, 3,154 chars) | Severity |
-| --- | --- | --- | --- |
-| Bookable services | **Konzultáció** only (30 min, no price) | "Szolgáltatásaink": általános fogászat, szájsebészet, fogszabályozás, esztétikai fogászat, fogtechnika | Error |
-| Providers | **Dr Kiss Katalin**, **Hauser Max** | Dr. Kocsis Zoltán (leader), "Kiss Éva doktornő" (in a review) | Error |
-| Location | **Szentendre**, Szirt utca 11 | "Wellness Fogászat **Budapest**", "budapesti lakosokat"; a review says Szentendre | Error |
-| Hours | Dr Kiss Katalin Mon–Fri **09:00–17:00**; Hauser Max has **no** working hours | "hétfőtől péntekig **8 és 20** óra között" | Error |
-| Price | `price_minor` **null** | Start csomag 31.000 Ft — stated in the profile **and** again in the service description | Warning |
-| Contact | `contact_email`, `contact_phone`, both policies **null** | "Kérjen időpontot…" with no way to do so | Warning |
-| Languages | No EN/DE/FR profile, no service translations, **no FAQs at all** | — | Warning |
-| Personal data | — | Five testimonials with customers' full names | Warning |
+| Fact              | Structured record (what the app will actually do)                            | Company profile (HU only, 3,154 chars)                                                                 | Severity |
+| ----------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------- |
+| Bookable services | **Konzultáció** only (30 min, no price)                                      | "Szolgáltatásaink": általános fogászat, szájsebészet, fogszabályozás, esztétikai fogászat, fogtechnika | Error    |
+| Providers         | **Dr Kiss Katalin**, **Hauser Max**                                          | Dr. Kocsis Zoltán (leader), "Kiss Éva doktornő" (in a review)                                          | Error    |
+| Location          | **Szentendre**, Szirt utca 11                                                | "Wellness Fogászat **Budapest**", "budapesti lakosokat"; a review says Szentendre                      | Error    |
+| Hours             | Dr Kiss Katalin Mon–Fri **09:00–17:00**; Hauser Max has **no** working hours | "hétfőtől péntekig **8 és 20** óra között"                                                             | Error    |
+| Price             | `price_minor` **null**                                                       | Start csomag 31.000 Ft — stated in the profile **and** again in the service description                | Warning  |
+| Contact           | `contact_email`, `contact_phone`, both policies **null**                     | "Kérjen időpontot…" with no way to do so                                                               | Warning  |
+| Languages         | No EN/DE/FR profile, no service translations, **no FAQs at all**             | —                                                                                                      | Warning  |
+| Personal data     | —                                                                            | Five testimonials with customers' full names                                                           | Warning  |
 
 Every row is a question a patient will plausibly ask, and in every row the model is handed two
 answers and asked to pick.
@@ -79,16 +80,16 @@ The assistant states a fact **only from its authoritative source**. Free text ma
 explain; it may never be the only source for a fact that has a structured home, and where they
 disagree the structured record wins.
 
-| Kind of fact | Authoritative source | What free text may add |
-| --- | --- | --- |
-| What can be booked | Active, non-archived services (+ translations) | What a service involves, who it suits |
-| Duration and price | The service's `durationMinutes`, `priceMinor`, `currency` | Package explanations that agree with the price |
-| Who works here | Active providers offering an active service | Credentials, focus — of those providers only |
-| Where | Active locations | Directions, parking, access |
-| When | Working hours (bookable times), per location | Nothing that contradicts them |
-| How to reach us | `contactEmail`, `contactPhone` | — |
-| Booking / cancellation rules | `bookingPolicy`, `cancellationPolicy` | — |
-| Everything else (history, equipment, philosophy, payment methods) | Profile and FAQs | This is what they are for |
+| Kind of fact                                                      | Authoritative source                                      | What free text may add                         |
+| ----------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------- |
+| What can be booked                                                | Active, non-archived services (+ translations)            | What a service involves, who it suits          |
+| Duration and price                                                | The service's `durationMinutes`, `priceMinor`, `currency` | Package explanations that agree with the price |
+| Who works here                                                    | Active providers offering an active service               | Credentials, focus — of those providers only   |
+| Where                                                             | Active locations                                          | Directions, parking, access                    |
+| When                                                              | Working hours (bookable times), per location              | Nothing that contradicts them                  |
+| How to reach us                                                   | `contactEmail`, `contactPhone`                            | —                                              |
+| Booking / cancellation rules                                      | `bookingPolicy`, `cancellationPolicy`                     | —                                              |
+| Everything else (history, equipment, philosophy, payment methods) | Profile and FAQs                                          | This is what they are for                      |
 
 ## 2.2 Owner-facing authoring rules
 
@@ -138,18 +139,18 @@ A new pure package, `@bam/knowledge-engine`, following rule 8: no Prisma, no Fas
 is a snapshot (services, translations, providers, locations, working hours, contact fields, profile
 texts, FAQs); output is `KnowledgeFinding[]`. Property-testable like the availability engine.
 
-| Code | Rule | Detection |
-| --- | --- | --- |
-| `PERSON_NOT_A_PROVIDER` | K2 | Title-prefixed names (`Dr.`, `dr.`, `doktornő`, `Prof.`) and capitalised name pairs, compared to provider names with diacritic folding and edit distance — "Kiss Éva" vs "Kiss Katalin" is reported as a *probable typo*, not just as unknown |
-| `CITY_MISMATCH` | K3 | Hungarian and international city gazetteer (inflected: *budapesti*, *Budapesten*, *Szentendrén*) vs location cities |
-| `HOURS_STATED` / `HOURS_MISMATCH` | K4 | `H–H óra`, `8:00–20:00`, weekday ranges; mismatch if not equal to the union of working hours |
-| `PRICE_NOT_RECORDED` | K5 | `31.000 Ft`, `31 000 HUF`, `€40` vs every bookable service's `priceMinor` (amended in §7.2) |
-| `CONTACT_MISSING` | — | Profile invites contact; `contactEmail` and `contactPhone` both null |
-| `UNBOOKABLE_SERVICE_MENTIONED` | K1 | Bullet items under a heading matching *Szolgáltatás*, *Services*, *Leistungen*, *Prestations* that match no service name (folded, stemmed) |
-| `DUPLICATED_FACT` | K6 | Same price token or ≥ 80-char shingle in profile and a service description |
-| `LOCALE_MISSING` | K7 | Supported locale with no profile, or with services but no translations, or FAQs in one locale only |
-| `PERSONAL_DATA` | K8 | Quoted text followed by `– Firstname Lastname` |
-| `PROVIDER_WITHOUT_HOURS` | — | Active provider with no working hours (Hauser Max) — not a text problem, but it is the reason a "who can I book" answer and the booking page disagree |
+| Code                              | Rule | Detection                                                                                                                                                                                                                                     |
+| --------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PERSON_NOT_A_PROVIDER`           | K2   | Title-prefixed names (`Dr.`, `dr.`, `doktornő`, `Prof.`) and capitalised name pairs, compared to provider names with diacritic folding and edit distance — "Kiss Éva" vs "Kiss Katalin" is reported as a _probable typo_, not just as unknown |
+| `CITY_MISMATCH`                   | K3   | Hungarian and international city gazetteer (inflected: _budapesti_, _Budapesten_, _Szentendrén_) vs location cities                                                                                                                           |
+| `HOURS_STATED` / `HOURS_MISMATCH` | K4   | `H–H óra`, `8:00–20:00`, weekday ranges; mismatch if not equal to the union of working hours                                                                                                                                                  |
+| `PRICE_NOT_RECORDED`              | K5   | `31.000 Ft`, `31 000 HUF`, `€40` vs every bookable service's `priceMinor` (amended in §7.2)                                                                                                                                                   |
+| `CONTACT_MISSING`                 | —    | Profile invites contact; `contactEmail` and `contactPhone` both null                                                                                                                                                                          |
+| `UNBOOKABLE_SERVICE_MENTIONED`    | K1   | Bullet items under a heading matching _Szolgáltatás_, _Services_, _Leistungen_, _Prestations_ that match no service name (folded, stemmed)                                                                                                    |
+| `DUPLICATED_FACT`                 | K6   | Same price token or ≥ 80-char shingle in profile and a service description                                                                                                                                                                    |
+| `LOCALE_MISSING`                  | K7   | Supported locale with no profile, or with services but no translations, or FAQs in one locale only                                                                                                                                            |
+| `PERSONAL_DATA`                   | K8   | Quoted text followed by `– Firstname Lastname`                                                                                                                                                                                                |
+| `PROVIDER_WITHOUT_HOURS`          | —    | Active provider with no working hours (Hauser Max) — not a text problem, but it is the reason a "who can I book" answer and the booking page disagree                                                                                         |
 
 Runs on every `GET /v1/assistant/knowledge/health`. It is cheap, so it is never cached — which is
 what catches §1.2.5: the profile did not change, the providers did.
@@ -176,7 +177,7 @@ works). Advisory only: it never blocks anything (§5.4).
 ## 3.3 Acknowledging a finding
 
 Some findings are true and intended — Dr. Kocsis Zoltán may lead the practice without treating
-patients. The owner can mark a finding *intended*, which stores
+patients. The owner can mark a finding _intended_, which stores
 `(tenantId, code, normalisedExcerpt)` in a small `knowledge_finding_acknowledgements` table.
 Acknowledgement is keyed on the excerpt, so editing the sentence brings the finding back — on
 purpose. An acknowledged `PERSON_NOT_A_PROVIDER` is also passed to the prompt as "named in the
@@ -216,7 +217,7 @@ whatever the source's.
 Per kind rather than all-or-nothing, which the first draft proposed. All-or-nothing would discard an
 English profile the owner wrote just because the FAQs were never translated. That is the same
 argument `localiseService` makes for falling back per field. The model was never confused by a
-Hungarian source. It was confused by not knowing that the text *was* Hungarian, and by getting no
+Hungarian source. It was confused by not knowing that the text _was_ Hungarian, and by getting no
 FAQs at all.
 
 ## 4.4 Record-rendered answers instead of model prose
@@ -283,12 +284,12 @@ A golden question set in `apps/api/src/modules/assistant/eval/`, HU and EN, run 
 model in staging (never in CI — it costs money and is non-deterministic) via
 `pnpm assistant:eval <slug>`:
 
-- *Milyen szolgáltatásokat kínálnak?* / *What treatments do you offer?*
-- *Ki a fogorvos?* / *Who are your doctors?*
-- *Hol vannak?* / *Where are you?*
-- *Mikor vannak nyitva?* / *When are you open?*
-- *Mennyibe kerül a konzultáció?* / *How much is a consultation?*
-- *Tudok fogszabályozásra időpontot foglalni?* / *Can I book braces?*
+- _Milyen szolgáltatásokat kínálnak?_ / _What treatments do you offer?_
+- _Ki a fogorvos?_ / _Who are your doctors?_
+- _Hol vannak?_ / _Where are you?_
+- _Mikor vannak nyitva?_ / _When are you open?_
+- _Mennyibe kerül a konzultáció?_ / _How much is a consultation?_
+- _Tudok fogszabályozásra időpontot foglalni?_ / _Can I book braces?_
 
 Each question runs **5 times**. Assertions are mechanical, using the layer-1 extractors: every
 service, person, city, price and hour mentioned is in `<bookable-facts>`; the five answers agree on
@@ -302,13 +303,13 @@ flags).
 
 # 7. Delivery order
 
-| Part | Content | Migration | Notes |
-| --- | --- | --- | --- |
-| 1 | §4.4 intent routing, §4.3 FAQ fallback, §4.1/§4.2 block split and precedence prompt | No | Fixes most wrong answers for every tenant with no owner action |
-| 2 | `@bam/knowledge-engine` layer 1, `GET …/knowledge/health`, health panel, inline findings, authoring help text (K1–K8) in hu/en | No | |
-| 3 | §3.3 acknowledgements, §5.3 enable gate | Yes — one table | |
-| 4 | §3.2 model audit, §8.4 translation draft | No | Quota-billed |
-| 5 | §4.5 grounding flag on transcripts, §6 eval script | Yes — one nullable column on messages | |
+| Part | Content                                                                                                                        | Migration                             | Notes                                                          |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | -------------------------------------------------------------- |
+| 1    | §4.4 intent routing, §4.3 FAQ fallback, §4.1/§4.2 block split and precedence prompt                                            | No                                    | Fixes most wrong answers for every tenant with no owner action |
+| 2    | `@bam/knowledge-engine` layer 1, `GET …/knowledge/health`, health panel, inline findings, authoring help text (K1–K8) in hu/en | No                                    |                                                                |
+| 3    | §3.3 acknowledgements, §5.3 enable gate                                                                                        | Yes — one table                       |                                                                |
+| 4    | §3.2 model audit, §8.4 translation draft                                                                                       | No                                    | Quota-billed                                                   |
+| 5    | §4.5 grounding flag on transcripts, §6 eval script                                                                             | Yes — one nullable column on messages |                                                                |
 
 ## 7.1 Part 1 — as built (2026-10-05)
 
@@ -339,12 +340,13 @@ flags).
   - cities match a short list plus a whitelist of Hungarian case endings, so "Vác" does not match
     "vacsora" and "Pécs" does not match "pecsét";
   - offerings are only read from bullet lists under a heading that announces them
-    (*Szolgáltatásaink*, *Services* …).
+    (_Szolgáltatásaink_, _Services_ …).
 
   A missed contradiction is the safe direction. A false one teaches the owner to ignore the list.
+
 - **`GET /v1/assistant/knowledge/health`** (`knowledge-health.ts`) loads exactly what the assistant
   is given, through `PublicCatalogueService.bookableFacts`, and returns `{ errors, warnings,
-  findings }`. It has the same `read` guard as the settings `GET`. It is computed on every request.
+findings }`. It has the same `read` guard as the settings `GET`. It is computed on every request.
   The response schema is `knowledgeHealthSchema` in `@bam/contracts`.
 - **Overview:** `KnowledgeHealthCard` heads the knowledge section. Each finding shows its source, the
   rule it breaks and, where the fix is on another screen, a link there. The K1–K8 rules are a
@@ -384,7 +386,7 @@ flags).
   `ProviderDelegation.grantedByUserId`. A row whose key no longer matches anything is inert, so
   nothing prunes it.
 - **`findingKey`** (`@bam/knowledge-engine`) is `code | source kind | source id | locale | folded
-  excerpt`:
+excerpt`:
   - changing case or punctuation keeps an acknowledgement; rewording the sentence brings the finding
     back;
   - the same name acknowledged in the profile is still reported in an FAQ.
@@ -428,6 +430,7 @@ flags).
   Both force a tool schema, and the caller parses the result again. A `max_tokens` stop or a
   missing tool call is a failure, never "nothing found". Tenant text cannot open or close a block,
   and a test covers forged `</records>` and `<text>` tags.
+
 - **`KnowledgeAiService`:**
   - Both calls go through the chat's sequence: count, reserve with 10% headroom, call, reconcile.
     They are measured against the **same monthly ceilings** the chat uses, so the owner spends the
@@ -462,6 +465,7 @@ flags).
 
   The profile fields were restructured so the buttons and notes sit **outside** each `<label>`.
   Before this, the findings link was inside it and so part of the textarea's accessible name.
+
 - **Verified:**
   - `@bam/ai`: 22 tests;
   - API: 464 passed / 34 skipped, including `knowledge-ai.test.ts` through `buildApp` with the fake:
