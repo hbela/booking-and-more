@@ -8,18 +8,41 @@ secret recovery have passed on staging; staging evidence does not complete produ
 while existing staging data is preserved. Follow the
 [environment decision](production-environment-decision.md) for setup and promotion.
 The preserved-data conversion and test-billing transition tasks below apply only
-to an environment containing existing data; mark them not applicable for empty
-production after verifying it. The recorded server baseline currently describes
-staging, so production identifiers and recovery evidence must be collected separately.
+to an environment containing existing data; they are marked _N/A for empty
+production_ and need only a check that the new database holds zero legacy rows.
+The recorded server baseline describes staging, so production identifiers and
+recovery evidence must be collected separately.
 
-Status recorded: 2026-09-20. Execution details and baseline identifiers are in the
-[release runbook](production-launch.md). Checked items represent completed work;
-implementation completion does not mean production acceptance.
+Status recorded: 2026-09-20; **reviewed 2026-10-18**. Execution details and baseline
+identifiers are in the [release runbook](production-launch.md). Checked items
+represent completed work; implementation completion does not mean production acceptance.
 
-Launch scope: preserve accounts and bookings, admit up to five approved businesses
+Launch scope: a new, empty production stack; admit up to five approved businesses
 for seven days, require fresh live checkout, and keep public owner signup closed.
 Recovery targets: at most one hour of lost data and service restored within four hours.
 The application owner is the launch operator and incident contact.
+
+## What's next (2026-10-18)
+
+Nothing in production exists yet: no Coolify `production` environment, volumes,
+domains, keys or monitors. In order:
+
+1. **Turn CI green.** Every push to `release/production-launch-2026-09-20` since
+   2026-10-05 has failed at _Audit production dependencies_ — two high advisories,
+   `sharp <0.35.5` (via `@sentry/nextjs` → webpack plugin) and `source-map-js <1.2.2`
+   (via `better-auth` → vitest → vite → postcss). The audit runs first, so formatting,
+   lint, types, tests, build, browser tests and migration checks have been **skipped**
+   for two weeks of work (phase 12 assistant, chat calendar, worker heartbeat).
+   Raise the two overrides, then expect the newly-unskipped steps to surface more.
+   The `linux-images` jobs (ARM64 and x86) pass on every push and are unaffected.
+2. **Owner decisions (section 2).** Backup destination, the approved owner emails,
+   the three-tier prices, the live Stripe account and Billingo block, the cohort
+   dates and the terms/privacy pages. Everything from section 3 onward waits on
+   at least one of these.
+3. **Create the production stack** per the environment decision: rename the current
+   Coolify environment to `staging`, create `production` with new volumes, domains,
+   auth secret and both PII keys. Then run the section 3 gates against it.
+4. **Section 4 on the selected SHA**, then the reduced cutover in section 5.
 
 ## 1. Completed preparation
 
@@ -33,17 +56,28 @@ The application owner is the launch operator and incident contact.
 - [x] Centralize web API-origin validation and implement worker heartbeat/progress checks.
 - [x] Pass local formatting, lint, types, build, tests, browser checks, dependency
       audit, migration drift and isolated migration checks; record results in the runbook.
-- [x] Add ARM64 and x86 Linux image verification to CI; execution remains pending.
+- [x] Add ARM64 and x86 Linux image verification to CI. Both jobs build, migrate an
+      empty database and start every image on each push; last passed on `15956c2`.
 - [x] Install restic and stage backup/restore scripts and systemd units on the VPS.
 - [x] Verify backup failure handling with four isolated Linux tests and add them to CI.
+- [x] Convert staging's existing data to encrypted PII. The 2026-10-17 restore test
+      decrypted restored historical ciphertext with the vault keys (T6, 0 failures).
+- [x] Automate staging checks: weekly booking/chat run (passed 2026-09-30, 10-07,
+      10-14) and the Stripe Sandbox lifecycle suite; see the
+      [automated test checklist](automated-test-checklist.md).
 
 ## 2. Owner inputs and launch arrangements
 
-- [ ] Choose backup storage: existing R2 bucket `booking-for-all-bucket` with
-      separate prefix `booking-and-more/production`, or another destination.
+- [ ] Choose production backup storage. Staging uses R2 bucket `booking-for-all-bucket`,
+      prefix `booking-and-more/staging`, with shared R2 credentials; the
+      [staging record](staging-backup-recovery.md) recommends a separate bucket and
+      credential scope for production rather than only a `booking-and-more/production` prefix.
 - [x] Complete [staging custom backup monitor rollout](backup-monitor.md): Cloudflare/Resend email rehearsal and both scheduled successes (2026-09-24, 15:00 and 15:30 Budapest) verified. Operator confirmed Sentry backup Cron deletion; VPS legacy pings disabled with a protected rollback copy. Staging's half-hourly timer remains active.
 - [ ] Supply up to five approved owner email addresses through private configuration.
-- [ ] Confirm monthly prices of 9,990 and 24,990 HUF and the intended AAM configuration.
+- [ ] Confirm the three monthly tiers and the intended AAM configuration. Staging sells
+      Form 9,990, Professional 29,900 and Professional Plus 59,800 HUF
+      ([staging rollout](staging-subscription-rollout-2026-09-27.md)); the earlier
+      9,990 / 24,990 two-tier plan is superseded. Production needs its own live price IDs.
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
@@ -53,6 +87,9 @@ Do not put credentials, encryption keys or customer details in this checklist.
 
 ## 3. Recovery and infrastructure gates
 
+All of these are for the **new production resource**. Staging evidence below shows
+the procedure works; it does not satisfy the gate.
+
 - [ ] Review firewall/Docker bindings and verify database/Redis isolation externally,
       including IPv6 if enabled; resolve the historical database exposure conclusively.
 - [ ] Restrict SSH and Coolify administration to operator addresses or VPN access;
@@ -60,9 +97,14 @@ Do not put credentials, encryption keys or customer details in this checklist.
 - [ ] Initialize the encrypted off-host backup repository and securely configure the timer.
 - [ ] Back up configuration, authentication secrets and both distinct customer PII
       keys separately from the database; verify the operator can recover them.
+      Staging's keys are in the operator's KeePassXC vault and were recovered from it
+      in the 2026-09-24 and 2026-10-17 drills; production's keys must be added separately.
 - [ ] Enable 30-minute backups with seven-day full retention plus 30 daily copies.
 - [ ] Observe two successful backups 30 minutes apart and record recoverable snapshot IDs/times.
 - [ ] Exercise the missing-backup alert and confirm it arrives before backup age reaches one hour.
+      Production needs its own `bam-production` monitor ID and token in the backup
+      monitor Worker. Staging silence, failure and overrun alerts passed on 2026-09-24,
+      and the healthchecks.io heartbeat that watches the monitor itself passed on 2026-10-16.
 - [ ] Restore a selected backup into isolated PostgreSQL/Redis volumes with outbound
       customer email, live payments and invoicing disabled.
       Staging evidence, 2026-10-17: the [monthly restore test](staging-db-restore-test-plan.md)
@@ -83,52 +125,82 @@ Do not put credentials, encryption keys or customer details in this checklist.
       outside that timer, and representative production data/configuration was not tested.
 - [ ] Configure and test alerts for web/API availability, stale worker heartbeat,
       overdue/failed work, disk pressure, billing and invoicing failures; exclude customer details.
+      State on staging ([monitoring setup](monitoring-setup.md)):
+  - [x] API `/health/ready` Sentry uptime monitor (covers PostgreSQL and Redis).
+  - [x] Worker heartbeat Sentry cron; stopping the worker alerted the operator (2026-10-12).
+  - [ ] Stuck/failed work reported through the same heartbeat — built, never provoked end to end.
+  - [ ] Web `/api/health` check — not configured; the Sentry free plan allows one uptime monitor.
+  - [ ] Disk pressure, billing and invoicing failure alerts — not wired.
+  - [ ] Production Sentry environment, separate monitors, and a repeat of the heartbeat test.
 
 ## 4. Release validation and rehearsal
 
-- [ ] Review the implementation diff against deployed `4a19f82`, including every
-      pending migration and formatting-only changes; exclude unrelated local files.
+- [ ] **Restore passing CI on the release branch** (see _What's next_ step 1).
+- [ ] Review the release diff, including every pending migration and formatting-only
+      changes; exclude unrelated local files. Production deploys onto an empty
+      database, so the diff that matters for data is staging's: it last recorded
+      `8633c0d` (2026-09-28) and has since run at least `2d202e6` (worker heartbeat
+      verified 2026-10-12). Confirm the current staging revision in Coolify.
 - [ ] Select and record the immutable release SHA and rollback image references.
 - [ ] Obtain passing CI for that SHA: `pnpm format:check`, `pnpm lint`,
       `pnpm check-types`, `pnpm test`, `pnpm build`, `pnpm test:e2e`,
       `pnpm audit:prod`, migration drift and migrations from scratch.
 - [ ] Build and start the actual Linux web/API/worker images on ARM64 and x86;
-      verify readiness and record image references.
-- [ ] Rehearse encryption against preserved data in isolation: interruption/repeat,
-      wrong/missing keys, row counts, decryptability, tenant-separated matching,
-      readable booking responses and notification/calendar paths.
+      verify readiness and record image references. CI does this on every push and
+      it passes; record the run for the selected SHA.
+- [ ] _N/A for empty production._ Rehearse encryption against preserved data in
+      isolation. Staging was already converted (section 1); for production, verify
+      zero legacy plaintext rows after migrating and that the first new customer
+      write is encrypted.
 - [ ] Verify unverified/disallowed owners are denied creation and checkout,
       approved verified owners succeed, and existing-owner checkout is guarded.
 - [ ] Verify staff invitations and public patient booking remain functional.
+      Public booking and cancellation pass weekly against staging; staff invitations
+      have no automated staging check.
 - [ ] Exercise Stripe sandbox success, failed payment, cancellation, duplicate and
       out-of-order events, wrong-mode events, and invoicing retry behavior.
-- [ ] Dry-run billing transition for every in-scope tenant; classify all references
-      and pending work, verify trial history/accounts/bookings are preserved, and
-      resolve unknown references before maintenance.
+      Done on staging 2026-09-28 (five lifecycle scenarios, plus the same-second
+      ordering fix): success, failed renewal, cancellation, duplicate/out-of-order,
+      upgrades and scheduled downgrades. **Still open:** wrong-mode events, Billingo
+      invoicing retry, and hosted Checkout completion by hand.
+- [ ] _N/A for empty production._ Dry-run billing transition for every in-scope tenant.
+      Verify the production database has no tenants before the cohort is admitted.
 - [ ] Verify cross-tenant denial, simultaneous booking conflicts, Budapest DST
       boundaries and worker restart/recovery; review relevant skipped test coverage.
+      Cross-tenant access and slot conflicts are covered by isolated-database tests
+      (once CI runs them again); DST and worker restart have no recorded check.
 - [ ] Verify actual verification-email delivery and resend with the configured sender.
 - [ ] Stage invite-only configuration, HTTPS origins and production billing settings;
       verify price mode/currency/interval/amount and webhook signing configuration.
-- [ ] Rehearse the maintenance sequence and pre-reopening restore rollback.
+- [ ] Rehearse the maintenance sequence and pre-reopening restore rollback. For empty
+      production this reduces to: deploy, migrate, smoke-test while closed, and
+      tear down and recreate if it fails — rehearse that on a throwaway stack.
 
-**Entry gate:** complete sections 2–4 before production conversion. Keep onboarding
+**Entry gate:** complete sections 2–4 before opening production. Keep onboarding
 closed if any gate lacks evidence. Retain one API instance for this launch.
 
 ## 5. Maintenance cutover — execute in order
+
+Written for converting a database that holds data. For the **empty production stack**
+the steps marked _N/A_ are replaced by the zero-legacy-rows check; nothing is open
+to the public yet, so "maintenance" means keeping the new domains closed.
 
 - [ ] Start the maintenance window and block new application writes.
 - [ ] Stop API and worker writers; verify no old processes can resume automatically.
 - [ ] Take a fresh off-host maintenance backup after writes stop; record its snapshot
       ID, timestamp, existing images and configuration recovery references.
 - [ ] Apply the reviewed additive migration using the selected release tooling.
-- [ ] Run PII dry-run, apply, finalize and verify commands from the runbook.
-- [ ] Validate unchanged row counts, decryptability and matching; confirm targeted
-      fields contain no plaintext and old normalized lookup values are cleared.
-- [ ] Apply each reviewed tenant billing transition using test credentials; confirm
-      encrypted archives, detached test mappings and preserved trial-use history.
-- [ ] Confirm test billing events/jobs are quarantined, test-derived paid access is
-      removed, and unrelated booking/notification work remains intact.
+- [ ] _N/A for empty production._ Run PII dry-run, apply, finalize and verify
+      commands from the runbook. Run `--verify` only, expecting zero rows.
+- [ ] _N/A for empty production._ Validate unchanged row counts, decryptability and
+      matching; confirm targeted fields contain no plaintext and old normalized
+      lookup values are cleared.
+- [ ] _N/A for empty production._ Apply each reviewed tenant billing transition using
+      test credentials; confirm encrypted archives, detached test mappings and
+      preserved trial-use history.
+- [ ] _N/A for empty production._ Confirm test billing events/jobs are quarantined,
+      test-derived paid access is removed, and unrelated booking/notification work
+      remains intact.
 - [ ] Switch API and worker together to verified live billing configuration and
       invite-only access; require fresh checkout, with no automatic charges.
 - [ ] Start the selected release while keeping public access in maintenance.
@@ -155,13 +227,13 @@ subsequent bookings/payments. A database restore does not reverse external billi
 
 ## Evidence to record at completion
 
-| Evidence                                                            | Reference                          |
-| ------------------------------------------------------------------- | ---------------------------------- |
-| Selected release SHA and passing CI run                             | Pending                            |
-| Deployed image references and migration result                      | Pending                            |
-| Maintenance backup and separate configuration/key recovery location | Pending; location only, no secrets |
-| Restore drill result and total recovery time                        | Pending                            |
-| Network and alert verification                                      | Pending                            |
-| Encryption and per-tenant billing transition validation             | Pending; aggregate results only    |
-| Deployed smoke checks and first purchase/invoice outcome            | Pending; no customer details       |
-| Cohort dates, operator and incident record                          | Pending                            |
+| Evidence                                                            | Reference                                                   |
+| ------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Selected release SHA and passing CI run                             | Pending                                                     |
+| Deployed image references and migration result                      | Pending                                                     |
+| Maintenance backup and separate configuration/key recovery location | Pending; location only, no secrets                          |
+| Restore drill result and total recovery time                        | Pending                                                     |
+| Network and alert verification                                      | Pending                                                     |
+| Encryption and per-tenant billing transition validation             | N/A for empty production; record the zero-legacy-rows check |
+| Deployed smoke checks and first purchase/invoice outcome            | Pending; no customer details                                |
+| Cohort dates, operator and incident record                          | Pending                                                     |

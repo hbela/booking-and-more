@@ -62,8 +62,9 @@ against shared staging.
       all three scenarios passed against staging.
 - [x] [AUTO] Make the workflow available on the default branch and enable weekly booking/chat.
       Enabled Wednesdays at 05:30 UTC, testing `release/production-launch-2026-09-20`.
-- [ ] [AUTO] Confirm the first scheduled run. Scheduling alone is not evidence of execution.
-      First expected run: Wednesday, 2026-09-30 at 05:30 UTC.
+- [x] [AUTO] Confirm the first scheduled run. Scheduling alone is not evidence of execution.
+      Scheduled runs passed on 2026-09-30, 2026-10-07 and 2026-10-14 (GitHub started
+      them several hours after the 05:30 UTC slot).
 
 Commands and cleanup behavior: [staging-live-tests.md](staging-live-tests.md).
 
