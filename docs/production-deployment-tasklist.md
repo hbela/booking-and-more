@@ -106,6 +106,18 @@ the procedure works; it does not satisfy the gate.
 - [ ] Restrict SSH and Coolify administration to operator addresses or VPN access;
       verify access without disrupting unrelated applications on the shared VPS.
 - [ ] Initialize the encrypted off-host backup repository and securely configure the timer.
+      **Repository done 2026-10-22; timer pending** (Part B, needs the production stack).
+      Restic repository `48985bdc` (format version 2) at
+      `bam-production-backups/booking-and-more`, on a bucket-scoped Account API token.
+      Credentials sit in the files `bam-backup@production.service` will load:
+      `/etc/bam/production-restic.password`, `/etc/bam/production-r2-access-key` and
+      `/etc/bam/production-r2-secret-key`, root-only. The password and both keys are in KeePassXC.
+      Following the [initialise-and-test guide](guides/init-and-test-repo.md), a test file
+      was backed up and restored byte-identical. Deleting its snapshot and then
+      `restic prune` (2 packs, 1 index file) proved the token can delete, which retention
+      needs. `restic check` found no errors, and the repository is empty again.
+      Still to do: `/etc/bam/production-backup.conf` with the new compose project, the
+      empty `production-backup-monitor-url` and the monitor token, then the timer.
 - [ ] Back up configuration, authentication secrets and both distinct customer PII
       keys separately from the database; verify the operator can recover them.
       Staging's keys are in the operator's KeePassXC vault and were recovered from it
