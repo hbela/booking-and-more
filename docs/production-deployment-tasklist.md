@@ -89,7 +89,26 @@ domains, keys or monitors. In order:
       Form 9,990, Professional 29,900 and Professional Plus 59,800 HUF
       ([staging rollout](staging-subscription-rollout-2026-09-27.md)); the earlier
       9,990 / 24,990 two-tier plan is superseded. Production needs its own live price IDs.
+      **AAM confirmed 2026-10-25** from the NAV registration record, dated 2026-09-21. The
+      seller is a sole trader (egyéni vállalkozó), adószám `92310634-1-33`, who has elected
+      subject exemption from VAT (alanyi adómentesség, code 2) and holds an EU VAT
+      number. This matches the code: payment links are created with automatic tax off,
+      prices are tax-unspecified, and Billingo is restricted to `BILLINGO_VAT_CODE=AAM`.
+      Stripe Tax stays off and no tax rates are added. If annual revenue passes the
+      subject-exemption limit, the exemption ends and the VAT configuration must change;
+      the accountant tracks this. **Still open: the prices.**
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
+      **Stripe account chosen 2026-10-24:** a new dedicated account, Booking-and-more
+      `acct_1UU4xdL8y0mQzxRg`, rather than `acct_1PMXZAGzrhgSGwTy`
+      ("MyConnectingAccount"). That older account is shared with the predecessor project,
+      and the Stripe connector in the development environment is attached to its live mode.
+      Payment flow: customers pay us directly; no Connect, no connected accounts.
+      Business type: sole proprietorship under the legal name, with the adószám as the
+      business tax ID and `hu_tin` on receipts. The sandbox Stripe created alongside it is
+      not used, because staging keeps the Peach Seesaw Sandbox. Live keys must start
+      `sk_live_` and come from this account. Still open: activation and verification,
+      public details (business name, statement descriptor, support email), the default
+      Customer Portal, the live catalogue, the webhook endpoint, and all of Billingo.
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures.
