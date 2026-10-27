@@ -126,13 +126,29 @@ domains, keys or monitors. In order:
       "Don't copy anything" from the sandbox. Stripe also created sandboxes
       `acct_1UU4xnLXEsDQu3oh` and `acct_1UV9z8LDQJZ48JtH`, both unused, because staging
       keeps the Peach Seesaw Sandbox. Live keys must start `sk_live_` and come from this
-      account. Still open: Stripe's verification result; public details (business name,
-      statement descriptor, support email); a check that no Connect platform profile
-      exists on live; the webhook endpoint, once the production API domain exists; and all
-      of Billingo.
+      account. **Verification received 2026-10-27.** Connect checked on live: no platform
+      profile, no connected accounts. Public details: trading name "Booking-and-More",
+      statement descriptor "Booking and More" (plain Latin and naming the business, since
+      an unrecognised descriptor invites disputes), support email set to the operator's
+      address, and business website `https://booking.appointer.hu`.
+      The restricted catalogue key has been deleted.
+      Still open: the webhook endpoint, once the production API domain exists; and all of
+      Billingo.
+- [ ] Decide the production domains. **Public site: `booking.appointer.hu`** (decided
+      2026-10-27; it is also the website registered with Stripe). Before the first live
+      charge it must show the three plans and their prices, contact details, and links
+      to terms, privacy and cancellation/refund pages. Stripe's review and card-network
+      dispute handling check exactly those. Still open: the production **app** and
+      **API** hostnames. Staging already holds `app.booking.appointer.hu` and
+      `api.booking.appointer.hu`, the natural names for production. Either production
+      takes different names, or staging moves (for example to `staging-app.…`) before
+      production claims them. Moving staging changes its live-test targets
+      (`playwright.live.config.ts`, `e2e-live/fixtures.ts`), its Sentry uptime monitor
+      and its Stripe webhook URL.
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
-      customer-data deletion and incident procedures.
+      customer-data deletion and incident procedures. They must be live on
+      `booking.appointer.hu` (above).
 
 Do not put credentials, encryption keys or customer details in this checklist.
 
