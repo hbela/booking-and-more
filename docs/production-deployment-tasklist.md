@@ -143,7 +143,7 @@ domains, keys or monitors. In order:
       `staging-app.booking.appointer.hu` / `staging-api.booking.appointer.hu`, and
       production then takes `app.booking.appointer.hu` / `api.booking.appointer.hu`.
       Runbook: [staging domain move](staging-domain-move.md). **Staging moved 2026-10-27**
-      (live suite passed on the new names); its Stripe webhook and Sentry monitor are still to repoint.
+      (live suite passed on the new names); its Stripe webhook and Sentry uptime monitor were repointed the same day.
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures. They must be live on

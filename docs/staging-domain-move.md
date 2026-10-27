@@ -14,7 +14,7 @@ billing (Peach Seesaw Sandbox) are untouched. Only the names change.
 
 ## Status (2026-10-27)
 
-Steps 1–3, 7 and 8 are done; **4–6 are still open**.
+Steps 1–5, 7 and 8 are done; step 6 applies only if Google sign-in is configured on staging.
 
 - **DNS:** nothing to add. A wildcard A record `*.booking.appointer.hu` already resolves
   both new names to the VPS (116.203.205.166), as it does the old ones.
@@ -31,10 +31,10 @@ Steps 1–3, 7 and 8 are done; **4–6 are still open**.
 - **Live suite by hand:**
   [run 40549532758](https://github.com/hbela/booking-and-more/actions/runs/40549532758)
   on `ff824ea`: preflight, booking/cancellation and chat, 3 passed.
-- **Open, and both are failing right now:** the Stripe sandbox webhook (step 4) still targets
-  the old API name, so sandbox events are not delivered until it moves. Stripe retries for
-  up to three days. The Sentry uptime monitor (step 5) still probes the old name, which
-  answers 503 and will alert. Step 6 applies only if Google sign-in is configured.
+- **Stripe sandbox webhook** moved to the new API name the same day (step 4).
+- **Sentry uptime monitor `2413672`** now probes
+  `https://staging-api.booking.appointer.hu/health/ready` (step 5). The worker cron
+  monitor and the error alert rule carry no hostname and needed no change.
 
 ## What the move does and does not need
 
