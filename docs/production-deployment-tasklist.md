@@ -85,42 +85,35 @@ domains, keys or monitors. In order:
       data. Revisit a second destination (e.g. a Hetzner Storage Box) once clinics depend on it.
 - [x] Complete [staging custom backup monitor rollout](backup-monitor.md): Cloudflare/Resend email rehearsal and both scheduled successes (2026-09-24, 15:00 and 15:30 Budapest) verified. Operator confirmed Sentry backup Cron deletion; VPS legacy pings disabled with a protected rollback copy. Staging's half-hourly timer remains active.
 - [ ] Supply up to five approved owner email addresses through private configuration.
-- [ ] Confirm the three monthly tiers and the intended AAM configuration. Staging sells
-      Form 9,990, Professional 29,900 and Professional Plus 59,800 HUF
-      ([staging rollout](staging-subscription-rollout-2026-09-27.md)); the earlier
-      9,990 / 24,990 two-tier plan is superseded. Production needs its own live price IDs.
-      **AAM confirmed 2026-10-25** from the NAV registration record, dated 2026-09-21. The
-      seller is a sole trader (egyéni vállalkozó), adószám `92310634-1-33`, who has elected
-      subject exemption from VAT (alanyi adómentesség, code 2) and holds an EU VAT
-      number. This matches the code: payment links are created with automatic tax off,
-      prices are tax-unspecified, and Billingo is restricted to `BILLINGO_VAT_CODE=AAM`.
-      Stripe Tax stays off and no tax rates are added. If annual revenue passes the
-      subject-exemption limit, the exemption ends and the VAT configuration must change;
-      the accountant tracks this.
-      **Prices created and verified 2026-10-27** in live account `acct_1UU4xdL8y0mQzxRg`.
-      They were created by `stripe:catalog --apply` using a restricted live key, and
-      `--verify` reports all three as valid: monthly HUF, tax unspecified.
-
-      | Setting                          | Live price ID                    | HUF / month |
-          | -------------------------------- | -------------------------------- | ----------: |
-          | `STRIPE_PRICE_STARTER`           | `price_1UUXMeL8y0mQzxRgrYKxKLvI` |       9,990 |
-          | `STRIPE_PRICE_PROFESSIONAL`      | `price_1UUXMfL8y0mQzxRg2sNtz47v` |      29,900 |
-          | `STRIPE_PRICE_PROFESSIONAL_PLUS` | `price_1UUXMfL8y0mQzxRga1vKPW3j` |      59,800 |
-
-          Production has no legacy prices, so `STRIPE_PRICE_*_LEGACY` stays unset; both
-          default to empty. Set all three in Coolify. `loadEnv` refuses to start without
-          the first two, but **does not require `STRIPE_PRICE_PROFESSIONAL_PLUS`**: if it
-          is missing, production starts and simply cannot sell that plan. That gap is
-          in `packages/config/src/schema.ts`.
-          **Customer Portal still open.** Only a sandbox portal has been saved so far. The live
-          account needs its default portal saved in the dashboard, followed by
-          `--apply --portal` and `--verify --portal`.
-          Watch for the `.env` fallback: a fresh PowerShell window has none of these
-          variables set, so the script silently loads `.env` and verifies the local
-          _test_ account. Its prices have the same amounts, so every line still reads
-          `valid`. Before trusting a result, check that the portal and price IDs contain
-          `L8y0mQzxRg`.
-
+- [x] Confirm the three monthly tiers and the intended AAM configuration, and create the
+      live catalogue. **AAM confirmed 2026-10-25** from the NAV registration record, dated
+      2026-09-21. The seller is a sole trader (egyéni vállalkozó), adószám `92310634-1-33`,
+      who has elected subject exemption from VAT (alanyi adómentesség, code 2) and holds
+      an EU VAT number. This matches the code: payment links are created with automatic
+      tax off, prices are tax-unspecified, and Billingo is restricted to
+      `BILLINGO_VAT_CODE=AAM`. Stripe Tax stays off and no tax rates are added. If annual
+      revenue passes the subject-exemption limit, the exemption ends and the VAT
+      configuration must change; the accountant tracks this.
+      **Catalogue created and verified 2026-10-27** in live account `acct_1UU4xdL8y0mQzxRg`
+      by `stripe:catalog --apply --portal`, using a restricted live key (delete it in
+      the dashboard once done). `--verify --portal` reported all four checks valid. The prices are
+      Form 9,990, Professional 29,900 and Professional Plus 59,800 HUF a month, tax
+      unspecified:
+      `STRIPE_PRICE_STARTER=price_1UUXMeL8y0mQzxRgrYKxKLvI`,
+      `STRIPE_PRICE_PROFESSIONAL=price_1UUXMfL8y0mQzxRg2sNtz47v`,
+      `STRIPE_PRICE_PROFESSIONAL_PLUS=price_1UUXMfL8y0mQzxRga1vKPW3j`.
+      The default Customer Portal `bpc_1UVBKKL8y0mQzxRgdCpH7HtL` offers all three plans,
+      with immediate prorated upgrades and downgrades at the end of the period, plus
+      invoice history.
+      Production has no legacy prices, so `STRIPE_PRICE_*_LEGACY` stays unset; both
+      default to empty. Set all three prices in Coolify. `loadEnv` refuses to start without
+      the first two, but **does not require `STRIPE_PRICE_PROFESSIONAL_PLUS`**: if it is
+      missing, production starts and simply cannot sell that plan. That gap is in
+      `packages/config/src/schema.ts`.
+      Watch for the `.env` fallback: a fresh PowerShell window has none of these variables
+      set, so the script silently loads `.env` and verifies the local _test_ account.
+      Its prices have the same amounts, so every line still reads `valid`. Before trusting a
+      result, check that the portal and price IDs contain `L8y0mQzxRg`.
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
       **Stripe account chosen 2026-10-24:** a new dedicated account, Booking-and-more
       `acct_1UU4xdL8y0mQzxRg`, rather than `acct_1PMXZAGzrhgSGwTy`
@@ -128,11 +121,15 @@ domains, keys or monitors. In order:
       and the Stripe connector in the development environment is attached to its live mode.
       Payment flow: customers pay us directly; no Connect, no connected accounts.
       Business type: sole proprietorship under the legal name, with the adószám as the
-      business tax ID and `hu_tin` on receipts. The sandbox Stripe created alongside it is
-      not used, because staging keeps the Peach Seesaw Sandbox. Live keys must start
-      `sk_live_` and come from this account. Still open: activation and verification,
-      public details (business name, statement descriptor, support email), the default
-      Customer Portal, the live catalogue, the webhook endpoint, and all of Billingo.
+      business tax ID and `hu_tin` on receipts. Payout bank account added; account
+      verification submitted 2026-10-27. The live account was entered with
+      "Don't copy anything" from the sandbox. Stripe also created sandboxes
+      `acct_1UU4xnLXEsDQu3oh` and `acct_1UV9z8LDQJZ48JtH`, both unused, because staging
+      keeps the Peach Seesaw Sandbox. Live keys must start `sk_live_` and come from this
+      account. Still open: Stripe's verification result; public details (business name,
+      statement descriptor, support email); a check that no Connect platform profile
+      exists on live; the webhook endpoint, once the production API domain exists; and all
+      of Billingo.
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures.
