@@ -138,13 +138,11 @@ domains, keys or monitors. In order:
       2026-10-27; it is also the website registered with Stripe). Before the first live
       charge it must show the three plans and their prices, contact details, and links
       to terms, privacy and cancellation/refund pages. Stripe's review and card-network
-      dispute handling check exactly those. Still open: the production **app** and
-      **API** hostnames. Staging already holds `app.booking.appointer.hu` and
-      `api.booking.appointer.hu`, the natural names for production. Either production
-      takes different names, or staging moves (for example to `staging-app.…`) before
-      production claims them. Moving staging changes its live-test targets
-      (`playwright.live.config.ts`, `e2e-live/fixtures.ts`), its Sentry uptime monitor
-      and its Stripe webhook URL.
+      dispute handling check exactly those. Production **app** and
+      **API** hostnames **decided 2026-10-27: staging moves first.** Staging goes to
+      `staging-app.booking.appointer.hu` / `staging-api.booking.appointer.hu`, and
+      production then takes `app.booking.appointer.hu` / `api.booking.appointer.hu`.
+      Runbook: [staging domain move](staging-domain-move.md). **Not yet carried out.**
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures. They must be live on
