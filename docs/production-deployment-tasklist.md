@@ -96,7 +96,31 @@ domains, keys or monitors. In order:
       prices are tax-unspecified, and Billingo is restricted to `BILLINGO_VAT_CODE=AAM`.
       Stripe Tax stays off and no tax rates are added. If annual revenue passes the
       subject-exemption limit, the exemption ends and the VAT configuration must change;
-      the accountant tracks this. **Still open: the prices.**
+      the accountant tracks this.
+      **Prices created and verified 2026-10-27** in live account `acct_1UU4xdL8y0mQzxRg`.
+      They were created by `stripe:catalog --apply` using a restricted live key, and
+      `--verify` reports all three as valid: monthly HUF, tax unspecified.
+
+      | Setting                          | Live price ID                    | HUF / month |
+          | -------------------------------- | -------------------------------- | ----------: |
+          | `STRIPE_PRICE_STARTER`           | `price_1UUXMeL8y0mQzxRgrYKxKLvI` |       9,990 |
+          | `STRIPE_PRICE_PROFESSIONAL`      | `price_1UUXMfL8y0mQzxRg2sNtz47v` |      29,900 |
+          | `STRIPE_PRICE_PROFESSIONAL_PLUS` | `price_1UUXMfL8y0mQzxRga1vKPW3j` |      59,800 |
+
+          Production has no legacy prices, so `STRIPE_PRICE_*_LEGACY` stays unset; both
+          default to empty. Set all three in Coolify. `loadEnv` refuses to start without
+          the first two, but **does not require `STRIPE_PRICE_PROFESSIONAL_PLUS`**: if it
+          is missing, production starts and simply cannot sell that plan. That gap is
+          in `packages/config/src/schema.ts`.
+          **Customer Portal still open.** Only a sandbox portal has been saved so far. The live
+          account needs its default portal saved in the dashboard, followed by
+          `--apply --portal` and `--verify --portal`.
+          Watch for the `.env` fallback: a fresh PowerShell window has none of these
+          variables set, so the script silently loads `.env` and verifies the local
+          _test_ account. Its prices have the same amounts, so every line still reads
+          `valid`. Before trusting a result, check that the portal and price IDs contain
+          `L8y0mQzxRg`.
+
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
       **Stripe account chosen 2026-10-24:** a new dedicated account, Booking-and-more
       `acct_1UU4xdL8y0mQzxRg`, rather than `acct_1PMXZAGzrhgSGwTy`
