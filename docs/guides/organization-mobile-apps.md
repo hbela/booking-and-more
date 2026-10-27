@@ -20,31 +20,31 @@ The public catalogue exposes only `features.assistant`, not subscription or bill
 Replace `wellness-demo` with the organization's slug. Do not put login tokens or patient data in QR URLs.
 
 ```html
-<a href="https://app.booking.appointer.hu/wellness-demo/book">
+<a href="https://staging-app.booking.appointer.hu/wellness-demo/book">
   <img
     width="256"
     height="256"
     alt="Book an appointment"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=hu"
+    src="https://staging-app.booking.appointer.hu/api/pwa/wellness-demo/book/qr?locale=hu"
   />
   Book an appointment — no installation needed
 </a>
 <!-- Show this card only when the chat QR is available for the subscription. -->
-<a href="https://app.booking.appointer.hu/wellness-demo/chat">
+<a href="https://staging-app.booking.appointer.hu/wellness-demo/chat">
   <img
     width="256"
     height="256"
     alt="Chat booking"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=hu"
+    src="https://staging-app.booking.appointer.hu/api/pwa/wellness-demo/chat/qr?locale=hu"
   />
   Chat booking — no installation needed
 </a>
-<a href="https://app.booking.appointer.hu/wellness-demo/install/staff">
+<a href="https://staging-app.booking.appointer.hu/wellness-demo/install/staff">
   <img
     width="256"
     height="256"
     alt="Install the staff app"
-    src="https://app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu"
+    src="https://staging-app.booking.appointer.hu/api/pwa/wellness-demo/staff/qr?locale=hu"
   />
   Staff app — open installation
 </a>

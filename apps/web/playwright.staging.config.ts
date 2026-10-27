@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 60_000,
   reporter: "list",
   use: {
-    baseURL: "https://app.booking.appointer.hu",
+    baseURL: "https://staging-app.booking.appointer.hu",
     trace: "retain-on-failure",
   },
   projects: [

@@ -6,7 +6,9 @@ import QRCode from "qrcode";
 for (const site of ["wellness", "wellness-local", "medicare"]) {
   const wellness = site.startsWith("wellness");
   const origin =
-    site === "wellness-local" ? "http://localhost:3000" : "https://app.booking.appointer.hu";
+    site === "wellness-local"
+      ? "http://localhost:3000"
+      : "https://staging-app.booking.appointer.hu";
   for (const locale of ["hu", "en"]) {
     for (const width of [390, 1440]) {
       for (const audience of wellness ? ["patient", "staff"] : ["index"]) {

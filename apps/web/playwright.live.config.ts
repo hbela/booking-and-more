@@ -24,7 +24,7 @@ export default defineConfig({
   reporter: "list",
   outputDir: "./test-results/live",
   use: {
-    baseURL: "https://app.booking.appointer.hu",
+    baseURL: "https://staging-app.booking.appointer.hu",
     locale: "en-GB",
     timezoneId: "Europe/Budapest",
     // Network traces contain booking management and conversation credentials.

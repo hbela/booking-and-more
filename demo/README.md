@@ -1,6 +1,6 @@
 # Wellness and Medicare staging websites
 
-These independent static sites replace `customer-site`. Hungarian is served at `/`, English at `/en/`. All links open `https://app.booking.appointer.hu`. Staff login identifies the organization by its stored Domain field, explicitly included in the URL. Booking and AI Assistant links retain their existing tenant slugs. The referring website domain is never inferred. No secrets or environment variables are required by these sites.
+These independent static sites replace `customer-site`. Hungarian is served at `/`, English at `/en/`. All links open `https://staging-app.booking.appointer.hu`. Staff login identifies the organization by its stored Domain field, explicitly included in the URL. Booking and AI Assistant links retain their existing tenant slugs. The referring website domain is never inferred. No secrets or environment variables are required by these sites.
 
 ## Organization identity and owner access
 
@@ -63,7 +63,7 @@ Redeploy the previous revision of each affected resource independently. Keep the
 
 ## Read-only staging check — 16 September 2026
 
-- The staging app's public booking page returned HTTP 200 and identifies `https://api.booking.appointer.hu` as its API origin.
+- The staging app's public booking page returned HTTP 200 and identifies `https://staging-api.booking.appointer.hu` as its API origin.
 - `GET /v1/public/tenants/wellness` succeeds. Its `/assistant` endpoint reports `available: false` and the four supported locales. This confirms current public chat unavailability; an administrator must inspect configuration/entitlements to establish the reason.
 - Both Medicare public endpoints return HTTP 404 (`TENANT_NOT_FOUND` from `/assistant`). Confirm the existing tenant's exact slug and status in the administrator interface before publishing these links. No tenant was created or renamed.
 - The earlier HTTP 200 checks targeted the original subdomains, which belong to another application. They do not validate these demos. The corrected `wellness-demo` and `medicare-demo` domains still require deployment and HTTPS verification. `/medicare/sign-in` on the staging app returned 404, so the new application route was not deployed there at the time of the check.

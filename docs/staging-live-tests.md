@@ -8,8 +8,8 @@ a normal test-owner login; the separate Stripe suite also needs a Sandbox key.
 
 Targets are fixed in `playwright.live.config.ts` and `e2e-live/fixtures.ts`:
 
-- Frontend: `https://app.booking.appointer.hu`
-- API: `https://api.booking.appointer.hu`
+- Frontend: `https://staging-app.booking.appointer.hu`
+- API: `https://staging-api.booking.appointer.hu`
 
 ## Prepare a dedicated tenant
 

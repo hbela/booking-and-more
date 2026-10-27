@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test as base, type APIRequestContext, type Page } from "@playwright/test";
 
-export const appOrigin = "https://app.booking.appointer.hu";
-export const apiOrigin = "https://api.booking.appointer.hu";
+export const appOrigin = "https://staging-app.booking.appointer.hu";
+export const apiOrigin = "https://staging-api.booking.appointer.hu";
 
 interface LiveConfig {
   slug: string;

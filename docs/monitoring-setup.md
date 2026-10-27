@@ -80,13 +80,13 @@ in Sentry; SDK initialization alone does not establish alert delivery.
 Configure external availability checks separately from backup monitoring and verify
 operator alert delivery:
 
-| Monitor                 | Type                      | Target / expectation                                                                    |
-| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------- |
-| Staging web             | HTTPS                     | `https://app.booking.appointer.hu/api/health`, HTTP 200 — **not configured**, see below |
-| Staging API             | Sentry uptime             | `https://api.booking.appointer.hu/health/ready`, HTTP 200, every 60 s                   |
-| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors      |
-| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes    |
-| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck     |
+| Monitor                 | Type                      | Target / expectation                                                                            |
+| ----------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
+| Staging web             | HTTPS                     | `https://staging-app.booking.appointer.hu/api/health`, HTTP 200 — **not configured**, see below |
+| Staging API             | Sentry uptime             | `https://staging-api.booking.appointer.hu/health/ready`, HTTP 200, every 60 s                   |
+| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors              |
+| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes            |
+| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck             |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together
