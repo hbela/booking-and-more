@@ -12,6 +12,30 @@ The public site `booking.appointer.hu` belongs to production
 ([tasklist §2](production-deployment-tasklist.md)). Staging data, volumes, keys and
 billing (Peach Seesaw Sandbox) are untouched. Only the names change.
 
+## Status (2026-10-27)
+
+Steps 1–3, 7 and 8 are done; **4–6 are still open**.
+
+- **DNS:** nothing to add. A wildcard A record `*.booking.appointer.hu` already resolves
+  both new names to the VPS (116.203.205.166), as it does the old ones.
+- **Coolify:** domains and `APP_BASE_URL`/`API_BASE_URL` switched, and the web rebuilt.
+  Let's Encrypt certificates for both names were issued 16:19 UTC; their chain runs YR1 →
+  Root YR → ISRG Root X1. A Windows `curl` (schannel) refused the chain on its first
+  attempt and accepted it on the next; `openssl` verified it throughout.
+- **Verified:** `staging-api…/health/ready` and `staging-app…/api/health` return 200. The
+  web CSP's `connect-src` names `https://staging-api.booking.appointer.hu`, which proves
+  the rebuilt bundle. CORS preflight allows the new web origin and refuses the old one.
+  The old names now answer `503 no available server`.
+- **Repository:** `ff824ea` updated the live-test targets, the demo sites, and current docs.
+  The demo-sites e2e passed, 20 of 20.
+- **Live suite by hand:**
+  [run 40549532758](https://github.com/hbela/booking-and-more/actions/runs/40549532758)
+  on `ff824ea`: preflight, booking/cancellation and chat, 3 passed.
+- **Open, and both are failing right now:** the Stripe sandbox webhook (step 4) still targets
+  the old API name, so sandbox events are not delivered until it moves. Stripe retries for
+  up to three days. The Sentry uptime monitor (step 5) still probes the old name, which
+  answers 503 and will alert. Step 6 applies only if Google sign-in is configured.
+
 ## What the move does and does not need
 
 **No application code change.** Every origin check derives from two settings: the
