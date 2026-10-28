@@ -106,14 +106,15 @@ domains, keys or monitors. In order:
       with immediate prorated upgrades and downgrades at the end of the period, plus
       invoice history.
       Production has no legacy prices, so `STRIPE_PRICE_*_LEGACY` stays unset; both
-      default to empty. Set all three prices in Coolify. `loadEnv` refuses to start without
-      the first two, but **does not require `STRIPE_PRICE_PROFESSIONAL_PLUS`**: if it is
-      missing, production starts and simply cannot sell that plan. That gap is in
-      `packages/config/src/schema.ts`.
+      default to empty. Set all three prices in Coolify. `loadEnv` now refuses to start
+      with a Stripe key unless all three are set; it used to accept a missing
+      `STRIPE_PRICE_PROFESSIONAL_PLUS` and silently stop selling that plan.
       Watch for the `.env` fallback: a fresh PowerShell window has none of these variables
-      set, so the script silently loads `.env` and verifies the local _test_ account.
-      Its prices have the same amounts, so every line still reads `valid`. Before trusting a
-      result, check that the portal and price IDs contain `L8y0mQzxRg`.
+      set, so the script silently loaded `.env` and verified the local _test_ account,
+      whose prices have the same amounts, so every line read `valid`. Since then the script
+      requires `--live` or `--test-only` with `--apply` and `--verify`, and refuses a key
+      from the other mode. It also prints the mode, where the key came from, and each ID
+      it checked.
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
       **Stripe account chosen 2026-10-24:** a new dedicated account, Booking-and-more
       `acct_1UU4xdL8y0mQzxRg`, rather than `acct_1PMXZAGzrhgSGwTy`

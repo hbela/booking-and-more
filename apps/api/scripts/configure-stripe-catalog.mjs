@@ -1,11 +1,21 @@
 import { config as loadDotenv } from "dotenv";
 import Stripe from "stripe";
 
+// Read before dotenv runs: dotenv never overrides a variable the shell already
+// set, so this is the only moment we can still tell where the key came from.
+const KEY_FROM_SHELL = process.env["STRIPE_SECRET_KEY"] !== undefined;
 loadDotenv({ path: "../../.env", quiet: true });
 
 const APPLY = process.argv.includes("--apply");
 const VERIFY = process.argv.includes("--verify");
 const PORTAL = process.argv.includes("--portal");
+// The caller must say which account they mean. A fresh shell has no key set, so
+// the script falls back to `.env`, whose test catalogue has the same amounts, and
+// a `--verify` meant for production once reported four `valid` lines against the
+// local test account. The key and prices agreed with each other there; only a
+// declared intent could disagree with them.
+const WANT_LIVE = process.argv.includes("--live");
+const WANT_TEST = process.argv.includes("--test-only");
 // Stripe accepts HUF charges with two decimal places, so API amounts are in
 // fillér even though prices are normally presented as whole forints. HUF is
 // zero-decimal only for payouts, not for charges.
@@ -48,10 +58,23 @@ if (!APPLY && !VERIFY) {
 }
 
 const secretKey = process.env["STRIPE_SECRET_KEY"];
-if (!secretKey) throw new Error("STRIPE_SECRET_KEY is required with --apply.");
+if (!secretKey) throw new Error("STRIPE_SECRET_KEY is required with --apply or --verify.");
 
-if (process.argv.includes("--test-only") && !secretKey.startsWith("sk_test_"))
-  throw new Error("--test-only requires a Stripe test key; no changes made.");
+if (WANT_LIVE === WANT_TEST)
+  throw new Error(
+    "Say which account you mean: pass exactly one of --live or --test-only. No Stripe call was made.",
+  );
+// Restricted keys (rk_) are the recommended way to run this by hand.
+const KEY_IS_LIVE = /^(sk|rk)_live_/.test(secretKey);
+if (!KEY_IS_LIVE && !/^(sk|rk)_test_/.test(secretKey))
+  throw new Error("STRIPE_SECRET_KEY is neither a live nor a test key; no Stripe call was made.");
+const keySource = KEY_FROM_SHELL ? "the shell" : "../../.env";
+if (KEY_IS_LIVE !== WANT_LIVE)
+  throw new Error(
+    `${WANT_LIVE ? "--live" : "--test-only"} was passed, but the ${KEY_IS_LIVE ? "live" : "test"} key from ${keySource} was found; no Stripe call was made.` +
+      (KEY_FROM_SHELL ? "" : " Set STRIPE_SECRET_KEY in this shell first."),
+  );
+console.log(`Stripe ${KEY_IS_LIVE ? "LIVE" : "test"} mode, key from ${keySource}.`);
 
 const stripe = new Stripe(secretKey, {
   apiVersion: "2026-07-29.dahlia",
@@ -73,6 +96,7 @@ if (VERIFY) {
     const price = await stripe.prices.retrieve(priceId);
     configuredPrices.push(price.id);
     const matches =
+      price.livemode === KEY_IS_LIVE &&
       price.active &&
       price.currency === "huf" &&
       price.unit_amount === stripeUnitAmount(offer.amountHuf) &&
@@ -80,7 +104,7 @@ if (VERIFY) {
       price.tax_behavior === "unspecified";
 
     console.log(
-      `${offer.plan}: ${matches ? "valid" : "mismatch"} (${price.unit_amount === null ? "unknown" : price.unit_amount / HUF_MINOR_UNITS_PER_FORINT} ${price.currency.toUpperCase()}/${price.recurring?.interval ?? "not recurring"}, tax ${price.tax_behavior ?? "unspecified"})`,
+      `${offer.plan}: ${matches ? "valid" : "mismatch"} ${price.id} (${price.livemode ? "live" : "test"}, ${price.unit_amount === null ? "unknown" : price.unit_amount / HUF_MINOR_UNITS_PER_FORINT} ${price.currency.toUpperCase()}/${price.recurring?.interval ?? "not recurring"}, tax ${price.tax_behavior ?? "unspecified"})`,
     );
     valid &&= matches;
   }
@@ -93,6 +117,7 @@ if (VERIFY) {
     const update = configuration.features.subscription_update;
     const offered = update.products?.flatMap((product) => product.prices) ?? [];
     const matches =
+      configuration.livemode === KEY_IS_LIVE &&
       update.enabled &&
       update.default_allowed_updates.includes("price") &&
       update.proration_behavior === "always_invoice" &&
@@ -100,7 +125,9 @@ if (VERIFY) {
         (condition) => condition.type === "decreasing_item_amount",
       ) &&
       configuredPrices.every((price) => offered.includes(price));
-    console.log(`Customer Portal ${portal.id}: ${matches ? "valid" : "mismatch"}`);
+    console.log(
+      `Customer Portal ${portal.id} (${configuration.livemode ? "live" : "test"}): ${matches ? "valid" : "mismatch"}`,
+    );
     valid &&= matches;
   }
 

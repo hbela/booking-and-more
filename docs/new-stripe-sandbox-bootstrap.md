@@ -59,10 +59,12 @@ because it is below the 175 HUF minimum charge.
 From the repository root:
 
 ```bash
-pnpm stripe:catalog -- --apply
+pnpm stripe:catalog -- --apply --test-only
 ```
 
-The command is idempotent within one Stripe account. Copy the two printed IDs
+`--test-only` (or `--live` for production) is required with `--apply` and `--verify`;
+the script refuses when the key it finds is from the other mode. The command is
+idempotent within one Stripe account. Copy the two printed IDs
 into the uncommitted root `.env`:
 
 ```env
@@ -74,7 +76,7 @@ Verification, rather than the apply command's exit code, is the acceptance
 gate:
 
 ```bash
-pnpm stripe:catalog -- --verify
+pnpm stripe:catalog -- --verify --test-only
 ```
 
 Expected output:

@@ -122,6 +122,7 @@ describe("loadEnv", () => {
       STRIPE_WEBHOOK_SECRET: "whsec_test",
       STRIPE_PRICE_STARTER: "price_starter",
       STRIPE_PRICE_PROFESSIONAL: "price_professional",
+      STRIPE_PRICE_PROFESSIONAL_PLUS: "price_professional_plus",
       BILLINGO_API_KEY: "test-api-key",
       BILLINGO_BASE_URL: "https://api.billingo.hu/v3",
       BILLINGO_BANK_ACCOUNT_ID: "123",
@@ -146,6 +147,25 @@ describe("loadEnv", () => {
     it("rejects production VAT codes in the sandbox slice", () => {
       expect(() => load({ ...billingo, BILLINGO_VAT_CODE: "27%" })).toThrow(EnvValidationError);
     });
+  });
+
+  it("requires every plan's price alongside a Stripe key", () => {
+    const stripe = {
+      STRIPE_SECRET_KEY: "sk_test_key",
+      STRIPE_WEBHOOK_SECRET: "whsec_test",
+      STRIPE_PRICE_STARTER: "price_starter",
+      STRIPE_PRICE_PROFESSIONAL: "price_professional",
+      STRIPE_PRICE_PROFESSIONAL_PLUS: "price_professional_plus",
+    } satisfies NodeJS.ProcessEnv;
+
+    expect(() => load(stripe)).not.toThrow();
+    for (const key of [
+      "STRIPE_PRICE_STARTER",
+      "STRIPE_PRICE_PROFESSIONAL",
+      "STRIPE_PRICE_PROFESSIONAL_PLUS",
+    ] as const) {
+      expect(() => load({ ...stripe, [key]: "" })).toThrowError(new RegExp(key));
+    }
   });
 
   it("still refuses a half-configured pair when only one side is blank", () => {

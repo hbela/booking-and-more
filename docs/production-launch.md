@@ -182,7 +182,8 @@ links; disable their use in the old environment as an operator cleanup task.
 Switch API and worker together to the confirmed live configuration. Validate the
 9,990/24,990 HUF monthly prices and existing AAM treatment with the owner; check the
 live webhook delivery/signing configuration and Billingo settings separately.
-Use the existing `stripe:catalog --verify` command with the intended live account.
+Use `stripe:catalog --verify --portal --live` with the intended live account; it
+refuses unless the key it finds is a live one.
 Mode-mismatched inbound events are acknowledged without entitlement changes;
 the worker also refuses mismatched/unclassified stored events.
 

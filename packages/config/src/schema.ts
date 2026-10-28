@@ -559,9 +559,16 @@ const refinedEnvSchema = baseEnvSchema.superRefine((env, ctx) => {
   // are also what a Payment Link is built from. Missing, two things break at
   // once: a scheduled downgrade resolves to no plan and is silently ignored —
   // surfacing weeks later as a customer still on the plan they downgraded away
-  // from — and the plan cannot be sold at all.
+  // from — and the plan cannot be sold at all. All three plans are on sale, so
+  // all three prices are required: PROFESSIONAL_PLUS was left out when that
+  // tier arrived, and a deployment missing it booted cleanly and simply could
+  // not sell the plan.
   if (env.STRIPE_SECRET_KEY !== undefined) {
-    for (const key of ["STRIPE_PRICE_STARTER", "STRIPE_PRICE_PROFESSIONAL"] as const) {
+    for (const key of [
+      "STRIPE_PRICE_STARTER",
+      "STRIPE_PRICE_PROFESSIONAL",
+      "STRIPE_PRICE_PROFESSIONAL_PLUS",
+    ] as const) {
       if (env[key] === undefined) {
         ctx.addIssue({
           code: "custom",

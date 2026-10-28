@@ -128,6 +128,7 @@ describe.skipIf(!local)("preserved-data PII migration", () => {
             STRIPE_WEBHOOK_SECRET: "whsec_test",
             STRIPE_PRICE_STARTER: "price_test_starter",
             STRIPE_PRICE_PROFESSIONAL: "price_test_pro",
+            STRIPE_PRICE_PROFESSIONAL_PLUS: "price_test_pro_plus",
           },
         },
       );
