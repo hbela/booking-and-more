@@ -112,8 +112,11 @@ Tuesday night. Otherwise the weekly run tests a hostname that is not serving.
    - Mocked browser tests and unit tests that use `app.booking.appointer.hu` as an
      example origin (`e2e/patient-qr.spec.ts`, `e2e/demo-sites.spec.ts`,
      `src/lib/tenant-pwa.test.ts`) mock their own responses and never contact it. Update
-     `demo-sites.spec.ts` with the demo pages, because it asserts their links; the others
-     can stay.
+     `demo-sites.spec.ts` with the demo pages, because it asserts their links.
+     **`patient-qr.spec.ts` must follow too.** It intercepts the demo pages' own QR
+     request by its full URL, so once the pages call `staging-app.…` the old pattern
+     silently stops matching. The first pass missed it; the CI audit failure hid it,
+     and it was fixed on 2026-10-28. Only `tenant-pwa.test.ts` can keep the old origin.
 8. **Run the live suite once by hand** against the new names: the preflight first, then
    booking and chat ([staging live tests](staging-live-tests.md)), so the scheduled run
    is not the first proof.

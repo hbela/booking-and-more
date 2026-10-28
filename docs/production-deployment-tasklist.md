@@ -239,6 +239,12 @@ the procedure works; it does not satisfy the gate.
       database, so the diff that matters for data is staging's: it last recorded
       `8633c0d` (2026-09-28) and has since run at least `2d202e6` (worker heartbeat
       verified 2026-10-12). Confirm the current staging revision in Coolify.
+- [ ] **Upgrade Better Auth to ≥ 1.7.7** and remove its entries from
+      [accepted advisories](accepted-advisories.md). Four advisories (one critical) are
+      accepted on 1.6.25 only because we load none of the plugins they need. 1.7 needs a
+      Prisma migration for `Account.issuer` with the account-identity backfill from its
+      upgrade guide, applied to staging and to production. Do it before the cohort if
+      possible, and in any case before adding any Better Auth plugin.
 - [ ] Select and record the immutable release SHA and rollback image references.
 - [ ] Obtain passing CI for that SHA: `pnpm format:check`, `pnpm lint`,
       `pnpm check-types`, `pnpm test`, `pnpm build`, `pnpm test:e2e`,

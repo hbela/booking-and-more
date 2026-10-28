@@ -83,7 +83,7 @@ for (const assistant of [false, true]) {
           body: await readFile(new URL(file, root), "utf8"),
         });
       });
-      await page.route("https://app.booking.appointer.hu/api/pwa/**", (route) =>
+      await page.route("https://staging-app.booking.appointer.hu/api/pwa/**", (route) =>
         route.fulfill({
           status: route.request().url().includes("/chat/") && !assistant ? 404 : 200,
           contentType: "image/svg+xml",
