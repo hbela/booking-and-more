@@ -132,8 +132,27 @@ domains, keys or monitors. In order:
       an unrecognised descriptor invites disputes), support email set to the operator's
       address, and business website `https://booking.appointer.hu`.
       The restricted catalogue key has been deleted.
-      Still open: the webhook endpoint, once the production API domain exists; and all of
-      Billingo.
+      **Billingo chosen 2026-10-28:** a new, separate live Billingo account for the sole
+      trader. Staging keeps its own Billingo _test_ account, key and IDs unchanged;
+      that account must never be switched to live ("Váltás éles rendszerre"), because
+      the weekly Stripe lifecycle tests would then issue real NAV-reported invoices.
+      Production settings, none of them secret:
+      `BILLINGO_BASE_URL=https://api.billingo.hu/v3`,
+      `BILLINGO_BANK_ACCOUNT_ID=298836` (HUF),
+      `BILLINGO_DOCUMENT_BLOCK_ID=344906` (the default invoice block "Számlák", with no
+      prefix; the operator issues no invoices for other work, so the block holds only
+      Booking and More invoices), and `BILLINGO_VAT_CODE=AAM`. Never use block 344907
+      ("Nyugták"), which is a receipt block. The live API key is in KeePassXC and goes
+      into Coolify only.
+      Plan: Basic plus the **"API és tömeges számlagenerálás"** add-on. Every Billingo
+      plan charges extra for creating invoices through the API, and the worker does that
+      after each paid Stripe invoice
+      ([pricing](https://www.billingo.hu/arak), checked 2026-10-28).
+      Still open: - **NAV Online Számla technical user**, entered and tested in Billingo. This is a
+      launch gate: without it, live invoices are not reported to NAV. The NAV portal
+      was unavailable on 2026-10-28. - **Confirm the API add-on is active on the live account** before the first purchase. - **Company data** checked in Billingo: name, address, adószám, EU VAT number,
+      alanyi adómentes. - **Stripe webhook endpoint**, once the production API domain exists. - Never run `billingo:smoke -- --apply` with the live key: it creates a real invoice,
+      and nothing in the script prevents it on a live account.
 - [ ] Decide the production domains. **Public site: `booking.appointer.hu`** (decided
       2026-10-27; it is also the website registered with Stripe). Before the first live
       charge it must show the three plans and their prices, contact details, and links
