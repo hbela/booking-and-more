@@ -143,6 +143,14 @@ per-DSN rate limit. They are spent as follows:
 
 ## Remaining coverage
 
+- **Browser telemetry from staging is being refused (found 2026-10-28).** The `/api/monitoring`
+  tunnel forwards correctly, but Sentry answers browser envelopes with
+  `403 event submission rejected with_reason: ProjectId`, for project `4512126117412944`,
+  the project in staging's web DSN. Sentry is refusing the project, not the request. Check
+  in Sentry that this is `booking-and-more-web` and that it is active, and check that
+  `WEB_SENTRY_DSN` in Coolify belongs to it. When it was last working is not recorded. The
+  web DSN is compiled in at build time, so a fix needs a rebuild.
+
 - Worker heartbeat alerting is **verified on staging (2026-10-12)**: stopping the
   worker container produced a failed `booking-and-more-worker` check-in and an email
   to the operator; restarting it recovered the monitor. Repeat once for production.

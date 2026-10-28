@@ -35,3 +35,11 @@ Fixed in the same change, because they _were_ exploitable or could become so: `n
 `@sentry/node` → 10.78.0 (a tunnel-route middleware bypass, and the web uses the
 `/api/monitoring` tunnel), `zod` → 4.6.7, `fastify` → 5.12.7, `fast-uri` overrides →
 3.1.9 / 4.2.3, `vitest` → 4.1.12, and a `vite` override → 8.1.6.
+
+**Deployed to staging 2026-10-28** at `97f1209`. The served bundle reports Next.js
+16.4.3. Health, CSP and CORS were checked, and CI was green. The live suite's first run failed
+its chat test: `#chat-message` was not found within 15 s after "Start chat". It did not
+reproduce in a separate browser session, and
+[the rerun](https://github.com/hbela/booking-and-more/actions/runs/40756705068) passed all
+three tests. If it recurs, it is a flake to investigate in the chat panel's
+post-start render.
