@@ -1,8 +1,10 @@
 # Application and backup monitoring
 
-Updated 2026-10-12. Sentry handles application monitoring. Backup monitoring is
-handled by a custom Cloudflare Worker with Resend email following the completed
-staging Sentry Cron cutover. UptimeRobot is not required. Keep staging and production separate.
+Updated 2026-10-29. Sentry handles error reporting and the worker heartbeat. **UptimeRobot**
+checks web and API availability, because the Sentry plan has one uptime monitor and no
+pay-as-you-go uptime seat; an HTTP check needs only the URL, no DSN. Backup monitoring is
+handled by a custom Cloudflare Worker with Resend email following the completed staging
+Sentry Cron cutover. Keep staging and production separate.
 See [custom backup monitoring](backup-monitor.md) for verified status and rollout gates.
 
 ## Staging account setup
@@ -80,13 +82,14 @@ in Sentry; SDK initialization alone does not establish alert delivery.
 Configure external availability checks separately from backup monitoring and verify
 operator alert delivery:
 
-| Monitor                 | Type                      | Target / expectation                                                                            |
-| ----------------------- | ------------------------- | ----------------------------------------------------------------------------------------------- |
-| Staging web             | HTTPS                     | `https://staging-app.booking.appointer.hu/api/health`, HTTP 200 — **not configured**, see below |
-| Staging API             | Sentry uptime             | `https://staging-api.booking.appointer.hu/health/ready`, HTTP 200, every 60 s                   |
-| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors              |
-| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes            |
-| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck             |
+| Monitor                 | Type                      | Target / expectation                                                                                                                                    |
+| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Staging web             | UptimeRobot HTTP(S)       | `https://staging-app.booking.appointer.hu/api/health`, HTTP 200 (configured 2026-10-28)                                                                 |
+| Staging API             | UptimeRobot HTTP(S)       | `https://staging-api.booking.appointer.hu/health/ready`, HTTP 200 (configured 2026-10-28). `/health/ready` answers 503 when PostgreSQL or Redis is down |
+| Staging API (also)      | Sentry uptime `2413672`   | Same URL, every 60 s. This is the plan's single uptime slot                                                                                             |
+| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors                                                                      |
+| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes                                                                    |
+| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck                                                                     |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together
@@ -143,13 +146,16 @@ per-DSN rate limit. They are spent as follows:
 
 ## Remaining coverage
 
-- **Browser telemetry from staging is being refused (found 2026-10-28).** The `/api/monitoring`
-  tunnel forwards correctly, but Sentry answers browser envelopes with
-  `403 event submission rejected with_reason: ProjectId`, for project `4512126117412944`,
-  the project in staging's web DSN. Sentry is refusing the project, not the request. Check
-  in Sentry that this is `booking-and-more-web` and that it is active, and check that
-  `WEB_SENTRY_DSN` in Coolify belongs to it. When it was last working is not recorded. The
-  web DSN is compiled in at build time, so a fix needs a rebuild.
+- **Staging browser telemetry: web project replaced 2026-10-28.** The old web DSN pointed
+  at project `4512126117412944`, which no longer existed; Sentry answered every browser
+  envelope with `403 … with_reason: ProjectId`. A new Next.js project was created, and its
+  DSN was set as `WEB_SENTRY_DSN` and built in. The bundle now targets `4512126139564112`,
+  and session envelopes are accepted (200). **Open:** two synthetic browser errors
+  ("Sentry staging web diagnostic …") were answered `429`, quota or rate limit, while the
+  organization's usage page shows no quota block. Check whether they arrived in Issues. If
+  they did not, check the client key's rate limit and the Stats page's dropped-event reasons.
+- **UptimeRobot alert delivery is not yet verified.** Take one monitor down, or point it at a
+  path that returns 404, and confirm the operator receives the alert and the recovery.
 
 - Worker heartbeat alerting is **verified on staging (2026-10-12)**: stopping the
   worker container produced a failed `booking-and-more-worker` check-in and an email

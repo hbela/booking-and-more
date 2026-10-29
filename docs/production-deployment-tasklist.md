@@ -224,12 +224,18 @@ the procedure works; it does not satisfy the gate.
 - [ ] Configure and test alerts for web/API availability, stale worker heartbeat,
       overdue/failed work, disk pressure, billing and invoicing failures; exclude customer details.
       State on staging ([monitoring setup](monitoring-setup.md)):
-  - [x] API `/health/ready` Sentry uptime monitor (covers PostgreSQL and Redis).
+  - [x] API `/health/ready` availability (covers PostgreSQL and Redis): Sentry uptime, and
+        UptimeRobot since 2026-10-28.
   - [x] Worker heartbeat Sentry cron; stopping the worker alerted the operator (2026-10-12).
   - [ ] Stuck/failed work reported through the same heartbeat — built, never provoked end to end.
-  - [ ] Web `/api/health` check — not configured; the Sentry free plan allows one uptime monitor.
+  - [ ] Web `/api/health` check: configured in UptimeRobot 2026-10-28; alert delivery not yet
+        tested. Sentry has no uptime seat left for it.
+  - [ ] Browser error reporting: new web project (`4512126139564112`) accepts sessions, but
+        two test errors were answered 429. Confirm they arrive.
   - [ ] Disk pressure, billing and invoicing failure alerts — not wired.
-  - [ ] Production Sentry environment, separate monitors, and a repeat of the heartbeat test.
+  - [ ] Production: Sentry environment `production`, UptimeRobot monitors for
+        `app.booking.appointer.hu/api/health` and `api.booking.appointer.hu/health/ready`, and a
+        repeat of the heartbeat test.
 
 ## 4. Release validation and rehearsal
 
