@@ -1,8 +1,10 @@
 # Application and backup monitoring
 
-Updated 2026-10-29. Sentry handles error reporting and the worker heartbeat. **UptimeRobot**
-checks web and API availability, because the Sentry plan has one uptime monitor and no
-pay-as-you-go uptime seat; an HTTP check needs only the URL, no DSN. Backup monitoring is
+Updated 2026-10-29. **UptimeRobot** checks web and API availability every 5 minutes. An
+HTTP check needs only the URL, and the Sentry plan has no uptime seat to spare, so Sentry's
+uptime monitors were deleted. Sentry keeps error reporting and the worker heartbeat cron.
+**The DSNs are not uptime settings:** `SENTRY_DSN` is also what sends the worker heartbeat
+(`reportHeartbeat` is a no-op without it), so removing it silently ends worker monitoring. Backup monitoring is
 handled by a custom Cloudflare Worker with Resend email following the completed staging
 Sentry Cron cutover. Keep staging and production separate.
 See [custom backup monitoring](backup-monitor.md) for verified status and rollout gates.
@@ -82,14 +84,13 @@ in Sentry; SDK initialization alone does not establish alert delivery.
 Configure external availability checks separately from backup monitoring and verify
 operator alert delivery:
 
-| Monitor                 | Type                      | Target / expectation                                                                                                                                    |
-| ----------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Staging web             | UptimeRobot HTTP(S)       | `https://staging-app.booking.appointer.hu/api/health`, HTTP 200 (configured 2026-10-28)                                                                 |
-| Staging API             | UptimeRobot HTTP(S)       | `https://staging-api.booking.appointer.hu/health/ready`, HTTP 200 (configured 2026-10-28). `/health/ready` answers 503 when PostgreSQL or Redis is down |
-| Staging API (also)      | Sentry uptime `2413672`   | Same URL, every 60 s. This is the plan's single uptime slot                                                                                             |
-| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors                                                                      |
-| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes                                                                    |
-| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck                                                                     |
+| Monitor                 | Type                      | Target / expectation                                                                                            |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Staging web             | UptimeRobot, every 5 min  | `https://staging-app.booking.appointer.hu/api/health`, HTTP 200 (working since 2026-10-28)                      |
+| Staging API             | UptimeRobot, every 5 min  | `https://staging-api.booking.appointer.hu/health/ready`, HTTP 200; answers 503 when PostgreSQL or Redis is down |
+| Worker                  | Sentry cron (heartbeat)   | `booking-and-more-worker`: one check-in a minute, issue after two misses or errors                              |
+| Staging database backup | Custom Cloudflare monitor | Successful backups every 30 minutes; stale at 50 minutes, checked every five minutes                            |
+| Backup monitor itself   | healthchecks.io heartbeat | One ping per 5-minute check, grace 10 minutes; `/fail` when an alert email is stuck                             |
 
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together

@@ -205,8 +205,9 @@ cross-tenant denial, multilingual chat, embedded booking, QR/PWA, booking/cancel
 reminders, and fresh live checkout during real onboarding. Worker health now tests
 heartbeat freshness; monitor actual progress separately: oldest due outbox/notification
 over five minutes, failed jobs, unprocessed Stripe events, and invoice failures.
-Route alerts to the owner without customer payloads. External HTTP probes should
-alert after two consecutive one-minute failures.
+Route alerts to the owner without customer payloads. External HTTP probes run in
+UptimeRobot every five minutes (see [monitoring setup](monitoring-setup.md)), so an
+outage is noticed within about 5–10 minutes.
 
 Before conversion, retain previous images and a fresh maintenance backup. Before
 reopening, failure permits restoring that backup and the previous code while writes
