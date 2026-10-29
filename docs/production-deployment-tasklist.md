@@ -231,12 +231,18 @@ the procedure works; it does not satisfy the gate.
   - [x] Web `/api/health` check: UptimeRobot every 5 minutes since 2026-10-28, working.
         Detection is therefore 5–10 minutes rather than the runbook's two one-minute failures,
         which is acceptable against the one-hour/four-hour targets.
-  - [ ] Browser error reporting: new web project (`4512126139564112`) accepts sessions, but
-        two test errors were answered 429. Confirm they arrive.
+  - [x] Sentry keeps exactly two things: the worker cron monitor and the "Error Monitor"
+        issue alert on the backend project (confirmed 2026-10-29).
+  - [x] Web error reporting **switched off on staging** (2026-10-29): `WEB_SENTRY_DSN` was
+        removed and staging redeployed. Browser and Next.js server errors are no longer
+        reported; API and worker errors still are, through `SENTRY_DSN`.
+  - [ ] UptimeRobot alert delivery: take one monitor down and confirm the down and up emails.
   - [ ] Disk pressure, billing and invoicing failure alerts — not wired.
-  - [ ] Production: Sentry environment `production`, UptimeRobot monitors for
-        `app.booking.appointer.hu/api/health` and `api.booking.appointer.hu/health/ready`, and a
-        repeat of the heartbeat test.
+  - [ ] Production: Sentry environment `production` with `SENTRY_DSN` set (the heartbeat
+        needs it), UptimeRobot monitors for `app.booking.appointer.hu/api/health` and
+        `api.booking.appointer.hu/health/ready`, and a repeat of the heartbeat test. Decide
+        whether production sets `WEB_SENTRY_DSN`; without it a front-end failure is seen only
+        when a customer reports it.
 
 ## 4. Release validation and rehearsal
 

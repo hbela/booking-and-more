@@ -2,9 +2,12 @@
 
 Updated 2026-10-29. **UptimeRobot** checks web and API availability every 5 minutes. An
 HTTP check needs only the URL, and the Sentry plan has no uptime seat to spare, so Sentry's
-uptime monitors were deleted. Sentry keeps error reporting and the worker heartbeat cron.
+uptime monitors were deleted. Sentry keeps the worker heartbeat cron and the "Error Monitor"
+issue alert for API and worker errors.
 **The DSNs are not uptime settings:** `SENTRY_DSN` is also what sends the worker heartbeat
-(`reportHeartbeat` is a no-op without it), so removing it silently ends worker monitoring. Backup monitoring is
+(`reportHeartbeat` is a no-op without it), so removing it silently ends worker monitoring.
+**Staging has no web DSN since 2026-10-29:** `WEB_SENTRY_DSN` was removed, so browser and
+Next.js server errors are not reported there. Setting it again needs a web rebuild. Backup monitoring is
 handled by a custom Cloudflare Worker with Resend email following the completed staging
 Sentry Cron cutover. Keep staging and production separate.
 See [custom backup monitoring](backup-monitor.md) for verified status and rollout gates.
@@ -17,7 +20,7 @@ Use `booking-and-more-web` for browser and Next.js server errors, and
 
 ```text
 SENTRY_DSN=<booking-and-more-fastify DSN>
-WEB_SENTRY_DSN=<booking-and-more-web DSN>
+WEB_SENTRY_DSN=<booking-and-more-web DSN>   # optional; unset on staging since 2026-10-29
 SENTRY_ENVIRONMENT=staging
 SENTRY_ORG=<your Sentry organization slug>
 ```
@@ -95,7 +98,9 @@ operator alert delivery:
 Use one-minute HTTP checks if supported by the account; otherwise document the
 available interval. Ensure the heartbeat interval/grace/notification delay together
 produce an alert before the newest successful backup reaches one hour old.
-Create separate production monitors once the production domains exist.
+Create separate production monitors once the production domains exist: UptimeRobot, every
+5 minutes, on `https://app.booking.appointer.hu/api/health` and
+`https://api.booking.appointer.hu/health/ready`.
 
 The Cloudflare Worker and VPS check-ins are deployed; failure, silence, overrun
 and recovery emails were verified in Gmail on 2026-09-24. A genuine manual backup
@@ -147,14 +152,12 @@ per-DSN rate limit. They are spent as follows:
 
 ## Remaining coverage
 
-- **Staging browser telemetry: web project replaced 2026-10-28.** The old web DSN pointed
-  at project `4512126117412944`, which no longer existed; Sentry answered every browser
-  envelope with `403 … with_reason: ProjectId`. A new Next.js project was created, and its
-  DSN was set as `WEB_SENTRY_DSN` and built in. The bundle now targets `4512126139564112`,
-  and session envelopes are accepted (200). **Open:** two synthetic browser errors
-  ("Sentry staging web diagnostic …") were answered `429`, quota or rate limit, while the
-  organization's usage page shows no quota block. Check whether they arrived in Issues. If
-  they did not, check the client key's rate limit and the Stats page's dropped-event reasons.
+- **Staging web telemetry: switched off 2026-10-29.** On 2026-10-28 the old web DSN was
+  found to point at a deleted project (`4512126117412944`, every envelope `403 … ProjectId`),
+  and a replacement project (`4512126139564112`) accepted sessions but answered two synthetic
+  errors `429`. The next day `WEB_SENTRY_DSN` was removed from staging and staging
+  redeployed, so that question is moot there. If web reporting comes back, for staging or
+  production, re-run step 2 of the delivery verification above and check the 429 first.
 - **UptimeRobot alert delivery is not yet verified.** Take one monitor down, or point it at a
   path that returns 404, and confirm the operator receives the alert and the recovery.
 
