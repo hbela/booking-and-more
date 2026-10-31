@@ -19,6 +19,10 @@ export const tenantSlugSchema = z
 /**
  * Slugs that must not be claimed by a tenant, because they collide with
  * platform routes or invite phishing.
+ *
+ * Every directory beside `[tenantSlug]` in `apps/web/src/app/[locale]/` belongs
+ * here: Next matches static segments first, so a tenant whose slug equals one
+ * would have a booking page nobody can reach.
  */
 export const RESERVED_SLUGS: readonly string[] = [
   "api",
@@ -30,13 +34,21 @@ export const RESERVED_SLUGS: readonly string[] = [
   "dashboard",
   "docs",
   "health",
+  "invitations",
+  "legal",
   "login",
   "logout",
   "platform",
+  "pricing",
+  "privacy",
+  "refund",
   "settings",
+  "sign-in",
+  "sign-up",
   "signin",
   "signup",
   "support",
+  "terms",
   "www",
 ];
 

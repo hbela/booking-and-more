@@ -91,7 +91,8 @@
     "noAccount": "Még nincs fiókja?",
     "haveAccount": "Már van fiókja?",
     "genericError": "Nem sikerült. Ellenőrizze az adatokat, majd próbálja újra.",
-    "networkError": "A kiszolgáló nem érhető el. Ellenőrizze a kapcsolatot, majd próbálja újra."
+    "networkError": "A kiszolgáló nem érhető el. Ellenőrizze a kapcsolatot, majd próbálja újra.",
+    "signUpConsent": "A fiók létrehozásával elfogadja az <terms>Általános Szerződési Feltételeket</terms>, és tudomásul veszi az <privacy>Adatkezelési tájékoztatót</privacy>."
   },
   "dashboard": {
     "assistant": "AI Asszistens",
@@ -542,7 +543,8 @@
     "confirmationEmail": "A visszaigazolást e-mailben küldjük. Mentse el ezt a linket is — online csak ezen keresztül módosíthat vagy mondhat le.",
     "slotTaken": "Valaki épp lefoglalta ezt az időpontot. Íme a még szabad időpontok.",
     "holdExpired": "A fenntartás lejárt. Kérjük, válasszon újra időpontot.",
-    "language": "Nyelv"
+    "language": "Nyelv",
+    "privacyNote": "Adatait az a vállalkozás kezeli, amelynél időpontot foglal. <link>Hogyan dolgozza fel őket a Booking and More</link>"
   },
   "manage": {
     "loading": "Betöltés…",
@@ -904,5 +906,27 @@
       "quota": "Az e havi MI-keret elfogyott. A következő hónap elején megújul.",
       "unavailable": "Az MI jelenleg nem érhető el. Kérjük, próbálja újra később."
     }
+  },
+  "legal": {
+    "pricing": "Árak",
+    "terms": "Általános Szerződési Feltételek",
+    "privacy": "Adatkezelési tájékoztató",
+    "refund": "Lemondás és visszatérítés",
+    "footerNav": "Árak és jogi információk",
+    "legalNotice": "Impresszum",
+    "seller": "Üzemeltető",
+    "address": "Székhely",
+    "taxNumber": "Adószám",
+    "euVatNumber": "Közösségi adószám",
+    "registrationNumber": "Nyilvántartási szám",
+    "email": "E-mail",
+    "hosting": "Tárhelyszolgáltató",
+    "effective": "Hatályos: {date}",
+    "contents": "Tartalom",
+    "pricingTitle": "Csomagok és árak",
+    "pricingIntro": "Szervezetenként egy havidíj, beállítási díj és hűségidő nélkül. Minden csomag tartalmazza a nyilvános foglalási oldalt, a munkatársi alkalmazást és a foglalási e-maileket.",
+    "startTrial": "Ingyenes próba indítása",
+    "billingNote": "Havonta előre, bankkártyával fizethető a Stripe-on keresztül. Minden fizetés után elektronikus számlát állítunk ki. A magasabb csomagra váltás azonnal, az alacsonyabbra váltás és a lemondás a kifizetett időszak végén lép hatályba.",
+    "pricingTermsNote": "Az előfizetéssel elfogadja az <terms>Általános Szerződési Feltételeket</terms>. Lásd még: <refund>Lemondás és visszatérítés</refund>."
   }
 }

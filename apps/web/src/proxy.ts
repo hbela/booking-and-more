@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import createMiddleware from "next-intl/middleware";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { isTenantPath, routing } from "./i18n/routing";
+import { canonicalRedirect } from "./lib/canonical-host";
 import { buildContentSecurityPolicy } from "./lib/security-headers";
 
 // Tenant booking pages use the tenant's configured language, not the
@@ -17,6 +18,15 @@ const withoutDetection = createMiddleware({ ...routing, localeDetection: false }
  * and onto the response so the browser enforces the same policy.
  */
 export function proxy(request: NextRequest) {
+  // Before anything else: a redirect-only host serves no page, so it needs no
+  // nonce or locale handling. 308 keeps the method, and `/api/*` never gets
+  // here (see `config.matcher`), so health checks are untouched.
+  const redirectTo = canonicalRedirect(request.nextUrl, request.headers.get("host"), {
+    APP_BASE_URL: process.env["APP_BASE_URL"],
+    CANONICAL_REDIRECT_HOSTS: process.env["CANONICAL_REDIRECT_HOSTS"],
+  });
+  if (redirectTo) return NextResponse.redirect(redirectTo, 308);
+
   const nonce = randomBytes(16).toString("base64");
   const csp = buildContentSecurityPolicy(nonce, process.env["NODE_ENV"] === "production");
   const requestHeaders = new Headers(request.headers);

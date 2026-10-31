@@ -172,10 +172,22 @@ domains, keys or monitors. In order:
       production then takes `app.booking.appointer.hu` / `api.booking.appointer.hu`.
       Runbook: [staging domain move](staging-domain-move.md). **Staging moved 2026-10-27**
       (live suite passed on the new names); its Stripe webhook and Sentry uptime monitor were repointed the same day.
+      **Public site built 2026-10-31** ([public site and legal pages](public-site-and-legal-pages.md)):
+      `/pricing`, `/terms`, `/privacy` and `/refund` in the web app, in Hungarian and
+      English, with an impresszum footer, and `booking.appointer.hu` 308-redirecting to
+      the app. Still to do: an A record for `booking` under `appointer.hu` (the wildcard
+      does not cover it), the domain added to the web service in Coolify, and
+      `CANONICAL_REDIRECT_HOSTS=booking.appointer.hu` plus the six `LEGAL_*` variables
+      set (record §4).
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures. They must be live on
       `booking.appointer.hu` (above).
+      **Drafts written 2026-10-31** from the code and the records, so every claim is
+      checkable (record §3). Launch gate: review by an accountant or lawyer, approval of
+      the refund cases and the liability limit, and a decision on a separate
+      data-processing agreement for clinics (record §5). Set the effective date when the
+      reviewed version is published.
 
 Do not put credentials, encryption keys or customer details in this checklist.
 

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
+import { Link } from "@/i18n/navigation";
 import {
   apiFetch,
   formatMoney,
@@ -531,6 +532,23 @@ function DetailsStep({
             nobody can confirm or warn about a cancellation. Saying it here
             saves a round trip. */}
         {contactMissing ? <p className="text-ink-muted text-sm">{t("contactRequired")}</p> : null}
+
+        {/* The clinic is the controller here and we are its processor, so this
+            points at the part of our notice that says so rather than at the
+            clinic's own notice, which we do not hold (privacy §4). */}
+        <p className="text-ink-muted text-sm">
+          {t.rich("privacyNote", {
+            link: (chunks) => (
+              <Link
+                href="/privacy#patients"
+                target="_blank"
+                className="underline underline-offset-4"
+              >
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
 
         <button
           type="submit"

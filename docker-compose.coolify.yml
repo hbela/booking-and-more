@@ -288,6 +288,20 @@ services:
       SENTRY_DSN: ${WEB_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
       SENTRY_RELEASE: ${SOURCE_COMMIT:-}
+      # The seller's impresszum, read per request (apps/web/src/lib/legal-entity.ts).
+      # Runtime rather than build arguments: a sole trader's address stays out
+      # of the image, and correcting a line needs a restart, not a rebuild.
+      LEGAL_NAME: ${LEGAL_NAME:-}
+      LEGAL_ADDRESS: ${LEGAL_ADDRESS:-}
+      LEGAL_TAX_NUMBER: ${LEGAL_TAX_NUMBER:-}
+      LEGAL_EU_VAT_NUMBER: ${LEGAL_EU_VAT_NUMBER:-}
+      LEGAL_REGISTRATION_NUMBER: ${LEGAL_REGISTRATION_NUMBER:-}
+      LEGAL_EMAIL: ${LEGAL_EMAIL:-}
+      # Hosts that only 308-redirect to APP_BASE_URL, e.g. booking.appointer.hu
+      # (apps/web/src/lib/canonical-host.ts). Each must also be one of this
+      # service's domains in Coolify, so Traefik routes it and issues a
+      # certificate; the service answers on it, the proxy sends it on.
+      CANONICAL_REDIRECT_HOSTS: ${CANONICAL_REDIRECT_HOSTS:-}
       # As on the API above: this is what earns the web app a domain and a
       # Traefik route to container port 3000. Edit the generated value in
       # Coolify to your own host, and make it agree with APP_BASE_URL exactly —

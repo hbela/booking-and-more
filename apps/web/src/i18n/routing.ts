@@ -32,8 +32,12 @@ const APP_SEGMENTS = new Set([
   "dashboard",
   "invitations",
   "platform",
+  "pricing",
+  "privacy",
+  "refund",
   "sign-in",
   "sign-up",
+  "terms",
 ]);
 
 /**

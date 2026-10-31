@@ -91,7 +91,8 @@
     "noAccount": "No account yet?",
     "haveAccount": "Already have an account?",
     "genericError": "That did not work. Please check your details and try again.",
-    "networkError": "Could not reach the server. Check your connection and try again."
+    "networkError": "Could not reach the server. Check your connection and try again.",
+    "signUpConsent": "By creating an account you accept the <terms>Terms of Service</terms> and acknowledge the <privacy>Privacy notice</privacy>."
   },
   "dashboard": {
     "assistant": "AI Assistant",
@@ -542,7 +543,8 @@
     "confirmationEmail": "A confirmation is on its way. Save this link too — it is the only way to change or cancel online.",
     "slotTaken": "Somebody just took that time. Here are the times still free.",
     "holdExpired": "Your reservation ran out. Please pick a time again.",
-    "language": "Language"
+    "language": "Language",
+    "privacyNote": "Your details are handled by the business you are booking with. <link>How Booking and More processes them</link>"
   },
   "manage": {
     "loading": "Loading…",
@@ -904,5 +906,27 @@
       "quota": "This month's AI allowance has been used. It renews at the start of next month.",
       "unavailable": "The AI is not available right now. Please try again later."
     }
+  },
+  "legal": {
+    "pricing": "Pricing",
+    "terms": "Terms of Service",
+    "privacy": "Privacy notice",
+    "refund": "Cancellation and refunds",
+    "footerNav": "Pricing and legal information",
+    "legalNotice": "Legal notice",
+    "seller": "Operator",
+    "address": "Registered address",
+    "taxNumber": "Tax number",
+    "euVatNumber": "EU VAT number",
+    "registrationNumber": "Registration number",
+    "email": "Email",
+    "hosting": "Hosting provider",
+    "effective": "Effective from {date}",
+    "contents": "Contents",
+    "pricingTitle": "Plans and prices",
+    "pricingIntro": "One monthly fee per organization, with no setup fee and no commitment. Every plan includes the public booking page, the staff app and booking emails.",
+    "startTrial": "Start free trial",
+    "billingNote": "Billed monthly in advance by card through Stripe. An electronic invoice is issued after each payment. Upgrades apply immediately; downgrades and cancellations at the end of the paid period.",
+    "pricingTermsNote": "Subscribing accepts the <terms>Terms of Service</terms>. See also <refund>Cancellation and refunds</refund>."
   }
 }

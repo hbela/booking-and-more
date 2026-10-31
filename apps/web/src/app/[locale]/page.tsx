@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { AuthHeader } from "@/components/auth-header";
-import { Brand } from "@/components/brand";
+import { PlanCards } from "@/components/plan-cards";
+import { PublicFooter, PublicHeader } from "@/components/public-page";
 import { InstallApp } from "@/components/staff-pwa";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
@@ -17,6 +17,7 @@ export default async function HomePage({
 
   const t = await getTranslations("home");
   const pwa = await getTranslations("pwa");
+  const legal = await getTranslations("legal");
 
   return (
     <main className="flex min-h-screen flex-col">
@@ -24,13 +25,7 @@ export default async function HomePage({
           controls inside it (a native select, a button, a link) are themed, and
           floating them on dark artwork would mean a second colour scheme for
           every one of them. */}
-      <div className="border-line border-b">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-end justify-between gap-6 px-6 py-4">
-          <Brand />
-          {/* The way in — this is where an operator starts before /admin. */}
-          <AuthHeader signOutTo="/" />
-        </div>
-      </div>
+      <PublicHeader />
 
       {/* One image for both themes, deliberately: a browser can match
           `prefers-color-scheme` but not our `data-theme` cookie, so a per-theme
@@ -126,7 +121,14 @@ export default async function HomePage({
           </div>
           <p className="text-sm leading-relaxed text-ink-muted">{t("onlineNote")}</p>
         </section>
+        <section aria-labelledby="pricing-title" className="flex flex-col gap-6">
+          <h2 id="pricing-title" className="font-display text-2xl font-bold">
+            {legal("pricingTitle")}
+          </h2>
+          <PlanCards locale={locale} headingLevel={3} />
+        </section>
       </div>
+      <PublicFooter />
     </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signIn, signUp } from "@/lib/auth-client";
 import { Button } from "./ui/button";
@@ -125,6 +125,26 @@ export function AuthForm({
       {/* role="alert" so a screen reader announces the failure rather than
           leaving the user wondering why nothing happened (PRD §12.4). */}
       <ErrorText>{error}</ErrorText>
+
+      {/* Stated beside the button rather than behind a checkbox: an owner
+          creates the account to subscribe, and the terms are the ones the
+          subscription runs under (docs/public-site-and-legal-pages.md §2). */}
+      {mode === "sign-up" ? (
+        <p className="text-sm text-ink-muted">
+          {t.rich("signUpConsent", {
+            terms: (chunks) => (
+              <Link href="/terms" target="_blank" className="underline underline-offset-4">
+                {chunks}
+              </Link>
+            ),
+            privacy: (chunks) => (
+              <Link href="/privacy" target="_blank" className="underline underline-offset-4">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      ) : null}
 
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? t("working") : mode === "sign-up" ? t("createAccount") : t("signIn")}
