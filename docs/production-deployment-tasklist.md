@@ -95,8 +95,7 @@ domains, keys or monitors. In order:
       revenue passes the subject-exemption limit, the exemption ends and the VAT
       configuration must change; the accountant tracks this.
       **Catalogue created and verified 2026-10-27** in live account `acct_1UU4xdL8y0mQzxRg`
-      by `stripe:catalog --apply --portal`, using a restricted live key (delete it in
-      the dashboard once done). `--verify --portal` reported all four checks valid. The prices are
+      by `stripe:catalog --apply --portal`, using a restricted live key, since deleted. `--verify --portal` reported all four checks valid. The prices are
       Form 9,990, Professional 29,900 and Professional Plus 59,800 HUF a month, tax
       unspecified:
       `STRIPE_PRICE_STARTER=price_1UUXMeL8y0mQzxRgrYKxKLvI`,
@@ -149,11 +148,18 @@ domains, keys or monitors. In order:
       plan charges extra for creating invoices through the API, and the worker does that
       after each paid Stripe invoice
       ([pricing](https://www.billingo.hu/arak), checked 2026-10-28).
-      Still open: - **NAV Online Számla technical user**, entered and tested in Billingo. This is a
-      launch gate: without it, live invoices are not reported to NAV. The NAV portal
-      was unavailable on 2026-10-28. - **Confirm the API add-on is active on the live account** before the first purchase. - **Company data** checked in Billingo: name, address, adószám, EU VAT number,
-      alanyi adómentes. - **Stripe webhook endpoint**, once the production API domain exists. - Never run `billingo:smoke -- --apply` with the live key: it creates a real invoice,
-      and nothing in the script prevents it on a live account.
+      Still open, Billingo: the **NAV Online Számla technical user**, entered and tested
+      in Billingo, is a launch gate, because without it live invoices are not reported to
+      NAV (the NAV portal was unavailable on 2026-10-28). Also confirm the API add-on is
+      active on the live account, and check the company data in Billingo: name, address,
+      adószám, EU VAT number, alanyi adómentes. `billingo:smoke -- --apply` refuses to run
+      unless `BILLING_MODE=test`; never work around that with the live key, because it
+      would create a real invoice.
+      Still open, Stripe: the live secret key (`sk_live_`, into KeePassXC and Coolify
+      only), and the webhook endpoint `https://api.booking.appointer.hu/v1/webhooks/stripe`
+      with the 13 events listed in [the sandbox bootstrap](new-stripe-sandbox-bootstrap.md)
+      §5, once the production API answers. Its signing secret becomes
+      `STRIPE_WEBHOOK_SECRET`.
 - [ ] Decide the production domains. **Public site: `booking.appointer.hu`** (decided
       2026-10-27; it is also the website registered with Stripe). Before the first live
       charge it must show the three plans and their prices, contact details, and links
