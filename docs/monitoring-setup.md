@@ -143,9 +143,14 @@ per-DSN rate limit. They are spent as follows:
   (`available_at`) stands in. A measurement that takes longer than 10 seconds or
   cannot reach the database reports `error` too. The Docker heartbeat file stays
   liveness-only, so a backlog never gets a healthy container restarted.
-- **Rate limiting is client-side.** `createEventBudget` caps each process at 3
-  identical errors a minute and 50 an hour, and `scrubOrDrop` drops telemetry whose
-  scrubbing throws. Both exist because a scrubber overflow once reported itself
+- **Rate limiting is client-side**, because the free plan cannot rate-limit a client
+  key. `createEventBudget` caps each runtime at 3 identical errors a minute, 10 an
+  hour and **20 a day** (the daily cap since 2026-10-31), and `scrubOrDrop` drops
+  telemetry whose scrubbing throws. Eight runtimes across staging and production
+  (API, worker, Next.js server, edge) × 20 × 30 days = 4,800, inside the ~5,000 a
+  month. A restart or a browser tab starts a fresh budget, so this is a ceiling on
+  runaway loops, not a guarantee. On 2026-10-29 the month's allowance was already
+  spent: Sentry answered `error_usage_exceeded` for the whole organization. Both exist because a scrubber overflow once reported itself
   ~8,500 times a day until the error quota was gone (BOOKING-AND-MORE-FASTIFY-2).
 - Spike Protection notifications are on for both projects; quota emails are on by
   default for the organization owner.

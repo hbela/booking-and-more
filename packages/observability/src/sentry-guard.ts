@@ -31,26 +31,39 @@ export interface EventBudgetOptions {
   perKeyPerMinute?: number;
   /** All errors allowed per hour, across keys. */
   perHour?: number;
+  /** All errors allowed per day, across keys. */
+  perDay?: number;
   now?: () => number;
 }
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 /**
  * A per-process error budget: what the Business plan's DSN rate limit would
  * do, done client-side. Fixed windows rather than sliding ones — the point is a
  * ceiling on a runaway loop, not an even rate. A real outage arrives as a
  * sample, which is enough to alert on.
+ *
+ * The daily cap is what keeps the month inside the free plan's ~5,000 errors.
+ * Each runtime has its own budget — per environment the API, the worker, the
+ * Next.js server and its edge runtime — so staging and production together run
+ * eight, and 8 × 20 × 30 = 4,800. A restart starts a fresh budget, and a
+ * browser tab has its own, so neither is bounded by this; only Sentry's
+ * server-side limits, which the free plan lacks, could be.
  */
 export function createEventBudget(
   options: EventBudgetOptions = {},
 ): (event: BudgetedEvent) => boolean {
   const perKeyPerMinute = options.perKeyPerMinute ?? 3;
-  const perHour = options.perHour ?? 50;
+  const perHour = options.perHour ?? 10;
+  const perDay = options.perDay ?? 20;
   const now = options.now ?? Date.now;
 
-  let hourStart = now();
+  let dayStart = now();
+  let dayCount = 0;
+  let hourStart = dayStart;
   let hourCount = 0;
   let minuteStart = hourStart;
   // Cleared every minute, so a stream of distinct messages cannot grow it
@@ -59,6 +72,10 @@ export function createEventBudget(
 
   return (event) => {
     const time = now();
+    if (time - dayStart >= DAY_MS) {
+      dayStart = time;
+      dayCount = 0;
+    }
     if (time - hourStart >= HOUR_MS) {
       hourStart = time;
       hourCount = 0;
@@ -67,7 +84,7 @@ export function createEventBudget(
       minuteStart = time;
       perKey = new Map();
     }
-    if (hourCount >= perHour) return false;
+    if (hourCount >= perHour || dayCount >= perDay) return false;
 
     const key = budgetKey(event);
     const seen = perKey.get(key) ?? 0;
@@ -75,6 +92,7 @@ export function createEventBudget(
 
     perKey.set(key, seen + 1);
     hourCount += 1;
+    dayCount += 1;
     return true;
   };
 }

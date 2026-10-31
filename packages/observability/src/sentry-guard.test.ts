@@ -28,7 +28,7 @@ describe("createEventBudget", () => {
 
   it("lets the same error through only so often per minute", () => {
     const { now, advance } = clock();
-    const allow = createEventBudget({ perKeyPerMinute: 3, perHour: 100, now });
+    const allow = createEventBudget({ perKeyPerMinute: 3, perHour: 100, perDay: 100, now });
 
     const decisions = Array.from({ length: 5 }, () => allow(error("boom")));
     expect(decisions).toEqual([true, true, true, false, false]);
@@ -40,7 +40,7 @@ describe("createEventBudget", () => {
 
   it("caps all errors per hour, whatever their message", () => {
     const { now, advance } = clock();
-    const allow = createEventBudget({ perKeyPerMinute: 3, perHour: 5, now });
+    const allow = createEventBudget({ perKeyPerMinute: 3, perHour: 5, perDay: 100, now });
 
     const decisions = Array.from({ length: 7 }, (_, i) => allow(error(`failure ${i}`)));
     expect(decisions.filter(Boolean)).toHaveLength(5);
@@ -51,7 +51,22 @@ describe("createEventBudget", () => {
     expect(allow(error("new hour"))).toBe(true);
   });
 
-  it("would have held the scrubber loop to the hourly cap", () => {
+  it("caps all errors per day, across hours", () => {
+    const { now, advance } = clock();
+    const allow = createEventBudget({ perKeyPerMinute: 3, perHour: 5, perDay: 8, now });
+
+    let sent = 0;
+    for (let hour = 0; hour < 23; hour += 1) {
+      for (let i = 0; i < 5; i += 1) if (allow(error(`h${hour} failure ${i}`))) sent += 1;
+      advance(60 * 60_000);
+    }
+    expect(sent).toBe(8);
+
+    advance(60 * 60_000);
+    expect(allow(error("new day"))).toBe(true);
+  });
+
+  it("would have held the scrubber loop to the daily cap", () => {
     const { now, advance } = clock();
     const allow = createEventBudget({ now });
     let sent = 0;
@@ -60,8 +75,8 @@ describe("createEventBudget", () => {
       if (allow(error("Maximum call stack size exceeded"))) sent += 1;
       advance(10_000);
     }
-    // 6 a minute arrive, 3 pass, and the hourly cap of 50 binds first.
-    expect(sent).toBe(24 * 50);
+    // 6 a minute arrive, 3 pass; the hourly cap of 10 binds, then the daily 20.
+    expect(sent).toBe(20);
   });
 
   it("keys message-only events by their message", () => {
