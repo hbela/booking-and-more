@@ -149,9 +149,16 @@ per-DSN rate limit. They are spent as follows:
   telemetry whose scrubbing throws. Eight runtimes across staging and production
   (API, worker, Next.js server, edge) × 20 × 30 days = 4,800, inside the ~5,000 a
   month. A restart or a browser tab starts a fresh budget, so this is a ceiling on
-  runaway loops, not a guarantee. On 2026-10-29 the month's allowance was already
-  spent: Sentry answered `error_usage_exceeded` for the whole organization. Both exist because a scrubber overflow once reported itself
-  ~8,500 times a day until the error quota was gone (BOOKING-AND-MORE-FASTIFY-2).
+  runaway loops, not a guarantee. Both guards exist because a scrubber overflow once
+  reported itself ~8,500 times a day until the error quota was gone
+  (BOOKING-AND-MORE-FASTIFY-2).
+- **That incident is what spent the 2026-10-10 → 11-09 billing period.** The usage
+  export shows `booking-and-more-fastify` accepting 5,026 errors on 2026-10-10, the
+  period's first day, and 1,873 more dropped over quota on 10-10 and 10-11; nothing
+  from any project after that. So on 2026-10-29 Sentry refused every error with
+  `organization:error_usage_exceeded` although nothing was still flooding. Error
+  intake returns with the next period, about 2026-11-10; re-run the web console test
+  then.
 - Spike Protection notifications are on for both projects; quota emails are on by
   default for the organization owner.
 
