@@ -35,7 +35,7 @@ domains, keys or monitors. In order:
    docs. [Run 39141167574](https://github.com/hbela/booking-and-more/actions/runs/39141167574)
    passed every step, including the ARM64 and x86 image checks.
 2. **Owner decisions (section 2).** Backup destination is decided; still open: the approved owner emails,
-   the three-tier prices, the live Stripe account and Billingo block, the cohort
+   the Stripe live key and webhook (account, prices, portal and Billingo are done), the cohort
    dates and the terms/privacy pages. Everything from section 3 onward waits on
    at least one of these.
 3. **Create the production stack** per the environment decision: rename the current
@@ -115,6 +115,7 @@ domains, keys or monitors. In order:
       from the other mode. It also prints the mode, where the key came from, and each ID
       it checked.
 - [ ] Confirm the production Stripe account and Billingo environment/document block.
+      Billingo is done; Stripe waits only on the live key and the webhook (below).
       **Stripe account chosen 2026-10-24:** a new dedicated account, Booking-and-more
       `acct_1UU4xdL8y0mQzxRg`, rather than `acct_1PMXZAGzrhgSGwTy`
       ("MyConnectingAccount"). That older account is shared with the predecessor project,
@@ -148,11 +149,12 @@ domains, keys or monitors. In order:
       plan charges extra for creating invoices through the API, and the worker does that
       after each paid Stripe invoice
       ([pricing](https://www.billingo.hu/arak), checked 2026-10-28).
-      Still open, Billingo: the **NAV Online Számla technical user**, entered and tested
-      in Billingo, is a launch gate, because without it live invoices are not reported to
-      NAV (the NAV portal was unavailable on 2026-10-28). Also confirm the API add-on is
-      active on the live account, and check the company data in Billingo: name, address,
-      adószám, EU VAT number, alanyi adómentes. `billingo:smoke -- --apply` refuses to run
+      **Billingo production fully set up 2026-10-31** (operator confirmation): the NAV
+      Online Számla technical user is entered and tested in Billingo, the API add-on is
+      active on the live account, and the company data (name, address, adószám, EU VAT
+      number, alanyi adómentes) is checked. What remains is putting the live API key and
+      the settings above into the production stack's Coolify variables, and checking the
+      first real invoice in the cohort (§6). `billingo:smoke -- --apply` refuses to run
       unless `BILLING_MODE=test`; never work around that with the live key, because it
       would create a real invoice.
       Still open, Stripe: the live secret key (`sk_live_`, into KeePassXC and Coolify
