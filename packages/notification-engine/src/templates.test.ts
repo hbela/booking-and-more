@@ -113,6 +113,16 @@ describe("renderSubscriptionConfirmed", () => {
     expect(email.text).not.toContain("<");
   });
 
+  // The dashboard section's title, verbatim, so the owner can find it
+  // (docs/customer-onboarding-and-website-links.md §2.3).
+  it.each([
+    ["hu", "Foglalás a weboldalán"],
+    ["en", "Put booking on your website"],
+  ] as const)("points %s owners at the website section", (locale, section) => {
+    const email = renderSubscriptionConfirmed(locale, confirmed);
+    expect(email.text).toContain(section);
+  });
+
   /**
    * The line that prevents a dispute.
    *

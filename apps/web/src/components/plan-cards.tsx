@@ -8,7 +8,7 @@ import { getLegalEntity } from "@/lib/legal-entity";
  * what a Payment Link actually carries; this copy has to agree with it, and the
  * web app cannot read the API's configuration.
  */
-const ADVERTISED_TRIAL_DAYS = 30;
+export const ADVERTISED_TRIAL_DAYS = 30;
 
 const PLANS: readonly SubscribablePlan[] = ["STARTER", "PROFESSIONAL", "PROFESSIONAL_PLUS"];
 

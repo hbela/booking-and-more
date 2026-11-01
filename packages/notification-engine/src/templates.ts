@@ -295,6 +295,8 @@ interface SubscriptionConfirmedCopy {
   trialCharge: (date: string) => string;
   paidCharge: (date: string) => string;
   unlocked: string;
+  /** Where the website links are; the reason the owner subscribed (customer-onboarding §2.3). */
+  website: string;
   action: string;
   button: string;
   fallback: string;
@@ -317,6 +319,8 @@ const SUBSCRIPTION_CONFIRMED_COPY: Record<
       paidCharge: (date) => `A következő megújulás időpontja: ${date}.`,
       unlocked:
         "Mostantól minden funkció elérhető: felvehet szolgáltatókat, szolgáltatásokat és helyszíneket, majd elindíthatja a foglalásokat.",
+      website:
+        "A vezérlőpult „Foglalás a weboldalán” részében megtalálja a weboldalára szánt foglalási gombot és munkatársi hivatkozást.",
       action: "Kezdje itt:",
       button: "Ugrás a vezérlőpultra",
       fallback: "Ha a gomb nem működik, másolja be ezt a címet a böngészőjébe:",
@@ -336,6 +340,8 @@ const SUBSCRIPTION_CONFIRMED_COPY: Record<
       paidCharge: (date) => `Your next renewal is on ${date}.`,
       unlocked:
         "Everything is unlocked: add your providers, services and locations, then start taking bookings.",
+      website:
+        "The “Put booking on your website” section of your dashboard has the booking button and the staff link to add to your website.",
       action: "Start here:",
       button: "Go to your dashboard",
       fallback: "If the button does not work, paste this address into your browser:",
@@ -381,6 +387,7 @@ export function renderSubscriptionConfirmed(
     ...chargeLine,
     "",
     body.unlocked,
+    body.website,
     "",
     body.action,
     values.dashboardUrl,
@@ -395,6 +402,7 @@ export function renderSubscriptionConfirmed(
     <p>${escapeHtml(body.intro(values.organizationName, values.planName))}</p>
     ${chargeLine.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
     <p>${escapeHtml(body.unlocked)}</p>
+    <p>${escapeHtml(body.website)}</p>
     <p>${escapeHtml(body.action)}</p>
     <p>
       <a href="${escapeHtml(values.dashboardUrl)}" style="${BUTTON_STYLE}">

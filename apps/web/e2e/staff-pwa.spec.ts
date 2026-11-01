@@ -1,51 +1,30 @@
 import { expect, test, type Page } from "@playwright/test";
 
-for (const [path, staffTitle, patientTitle, installLabel] of [
-  ["/en", "For owners and staff", "For patients and customers", "Install app"],
+// The home page is for prospects, not staff (docs/customer-onboarding-and-website-links.md
+// §2.1): no workspace or owner sign-up buttons, and the install prompt now lives on
+// each organization's `/{slug}/install/staff`, covered by tenant-app-install.spec.ts.
+for (const [path, steps, demo, demoHref] of [
+  [
+    "/en",
+    "How to start",
+    "See it on a sample clinic website",
+    "https://wellness-demo.appointer.hu/en/",
+  ],
   [
     "/hu",
-    "Tulajdonosoknak és munkatársaknak",
-    "Pácienseknek és ügyfeleknek",
-    "Alkalmazás telepítése",
+    "Így kezdheti el",
+    "Nézze meg egy minta rendelő weboldalán",
+    "https://wellness-demo.appointer.hu/",
   ],
 ] as const) {
-  test(`home page explains mobile access before sign-in: ${path}`, async ({ page }, testInfo) => {
+  test(`home page addresses prospects: ${path}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.route("**/v1/me", (route) => route.fulfill({ status: 401, json: {} }));
     await page.goto(path);
-    await expect(page.getByRole("heading", { name: staffTitle, exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: patientTitle, exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "iPhone / iPad · Safari" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Android · Chrome" })).toBeVisible();
-    await expect(
-      page.getByRole("button", {
-        name: path === "/en" ? "How to install" : "Telepítési útmutató",
-        exact: true,
-      }),
-    ).toBeVisible();
-    // Everything asserted above is server-rendered, so it proves nothing about
-    // hydration — and `InstallApp` attaches its `beforeinstallprompt` listener
-    // in an effect. Dispatched once, the event was lost whenever hydration ran
-    // late, which on a loaded machine was most runs (phase-11-shadcn-adoption
-    // §3.4). The browser fires it whenever it decides to, so re-firing until
-    // the button appears is also the more faithful model.
-    const install = page.getByRole("button", { name: installLabel, exact: true });
-    await expect(async () => {
-      await page.evaluate(() => {
-        const event = new Event("beforeinstallprompt", { cancelable: true });
-        Object.assign(event, {
-          prompt: () => {
-            document.documentElement.dataset.installPrompted = "true";
-            return Promise.resolve();
-          },
-          userChoice: Promise.resolve({ outcome: "dismissed" }),
-        });
-        window.dispatchEvent(event);
-      });
-      await expect(install).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    await install.click();
-    await expect(page.locator("html")).toHaveAttribute("data-install-prompted", "true");
+    await expect(page.getByRole("heading", { name: steps, exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: demo }).first()).toHaveAttribute("href", demoHref);
+    await expect(page.locator('a[href$="/sign-up"]')).toHaveCount(0);
+    await expect(page.locator('a[href$="/dashboard"]')).toHaveCount(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);

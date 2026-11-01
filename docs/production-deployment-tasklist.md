@@ -179,6 +179,13 @@ domains, keys or monitors. In order:
       does not cover it), the domain added to the web service in Coolify, and
       `CANONICAL_REDIRECT_HOSTS=booking.appointer.hu` plus the six `LEGAL_*` variables
       set (record §4).
+      **Onboarding reviewed 2026-11-01** ([customer onboarding and website links](customer-onboarding-and-website-links.md)):
+      the home page now addresses prospects (sample clinic site, how to start, prices),
+      public pages no longer link to sign-up, and a subscribed owner's dashboard gives the
+      booking and staff links and HTML snippets for their own website. Admit the cohort
+      through provisioning in `/platform` (record §2.4). **Redeploy the wellness demo
+      resource**: the live build's links point at `app.booking.appointer.hu`, which
+      answers 503 (record §3).
 - [ ] Set the maintenance window, seven-day cohort dates and actual support/incident contact.
 - [ ] Publish and review terms/privacy information and approve the documented
       customer-data deletion and incident procedures. They must be live on

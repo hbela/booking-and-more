@@ -15,14 +15,20 @@ export default async function SignInPage({
   return (
     <AuthLayout title={t("signInTitle")}>
       <AuthForm mode="sign-in" />
+      {/* No link to /sign-up: during invite-only launch a self-registered
+          account can neither create an organization nor subscribe
+          (docs/customer-onboarding-and-website-links.md §2.4). */}
       <p className="text-ink-muted text-sm">
-        {t("noAccount")}{" "}
-        <Link
-          href="/sign-up"
-          className="text-primary hover:text-primary-hover font-medium underline underline-offset-2"
-        >
-          {t("createAccount")}
-        </Link>
+        {t.rich("invitationOnly", {
+          pricing: (chunks) => (
+            <Link
+              href="/pricing"
+              className="text-primary hover:text-primary-hover font-medium underline underline-offset-2"
+            >
+              {chunks}
+            </Link>
+          ),
+        })}
       </p>
     </AuthLayout>
   );

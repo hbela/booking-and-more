@@ -39,22 +39,6 @@
     "tryLater": "Please check the link with the organization or try again later."
   },
   "home": {
-    "staffTitle": "For owners and staff",
-    "staffDescription": "Manage your business, appointments and working hours from your phone or computer.",
-    "staffAccount": "Owners can create an account. Providers and assistants should first accept their organization’s invitation, then sign in with that account.",
-    "staffInstall": "Use the website directly, or install the staff app using the instructions below. Installation is optional.",
-    "staffLaunch": "Open Booking and More from your home screen and sign in if asked. Your account determines which organization and diaries you can access.",
-    "staffOpen": "Open staff workspace",
-    "ownerStart": "Create an owner account",
-    "patientTitle": "For patients and customers",
-    "patientDescription": "Book with your clinic or service provider from your phone. You do not need a staff account.",
-    "patientLink": "Open the booking link or scan the QR code provided by your clinic, or tap Book on its website. Ask the clinic for its link if you do not have it.",
-    "patientBook": "Choose a service, provider and time, then enter your contact details and confirm. You can also use the clinic’s AI chat when available.",
-    "patientManage": "Keep your confirmation and booking-management link so you can review, change or cancel your appointment.",
-    "patientInstallNote": "Scan or tap your organization's booking QR code to open its booking page. Chat QR codes are also available with the Professional subscription. No app installation is needed.",
-    "installTitle": "Install the staff app on your phone",
-    "installDescription": "Add Booking and More to your home screen for easy access. The same app works for owners, providers and assistants; no app-store download is needed.",
-    "onlineNote": "An internet connection is required to view or change appointments. When disconnected, the staff app shows an offline notice. You can also keep using Booking and More in your browser.",
     "title": "Online appointment booking",
     "description": "A booking platform where customers book appointments from your own page, and each provider keeps their own working hours — with the services, people and locations of one organization kept entirely separate from every other.",
     "phaseNotice": "Phase 2 — providers, services and locations. The booking flow arrives in Epic 4.",
@@ -68,7 +52,21 @@
       "statusOk": "ok",
       "statusDown": "down",
       "statusNotConfigured": "not configured (arrives in Epic 5)"
-    }
+    },
+    "demoCta": "See it on a sample clinic website",
+    "pricingCta": "Plans and prices",
+    "patientsTitle": "For your patients",
+    "patientsDescription": "Patients book from a button on your own website, by QR code, or with the AI chat on Professional plans. They need no app and no account, and their confirmation email carries a link to change or cancel.",
+    "teamTitle": "For your team",
+    "teamDescription": "Each provider keeps their own working hours and diary, and an assistant reaches the diaries you assign them. It works in the browser, or as an app on a phone's home screen.",
+    "stepsTitle": "How to start",
+    "step1Title": "Get in touch",
+    "step1": "Tell us about your business and choose a plan. We set up your organization.",
+    "step2Title": "Accept the invitation",
+    "step2": "You receive an invitation by email. Choose a password, then start your subscription with a {days}-day free trial.",
+    "step3Title": "Put booking on your website",
+    "step3": "Add your services, providers and their working hours. Your dashboard then gives you the booking button and the staff link for your website, as on the sample clinic site.",
+    "demoNote": "The sample site is a demonstration; bookings made there are not real."
   },
   "tenantLogin": {
     "title": "Staff sign-in · {tenant}",
@@ -88,11 +86,11 @@
     "password": "Password",
     "passwordHint": "At least 12 characters.",
     "working": "Working…",
-    "noAccount": "No account yet?",
     "haveAccount": "Already have an account?",
     "genericError": "That did not work. Please check your details and try again.",
     "networkError": "Could not reach the server. Check your connection and try again.",
-    "signUpConsent": "By creating an account you accept the <terms>Terms of Service</terms> and acknowledge the <privacy>Privacy notice</privacy>."
+    "signUpConsent": "By creating an account you accept the <terms>Terms of Service</terms> and acknowledge the <privacy>Privacy notice</privacy>.",
+    "invitationOnly": "Accounts are created from an invitation, sent by your organization or by us. New to Booking and More? See the <pricing>plans and prices</pricing>."
   },
   "dashboard": {
     "assistant": "AI Assistant",
@@ -929,5 +927,26 @@
     "contactSubject": "Enquiry: {plan} plan",
     "billingNote": "Billed monthly in advance by card through Stripe. An electronic invoice is issued after each payment. Upgrades apply immediately; downgrades and cancellations at the end of the paid period.",
     "pricingTermsNote": "Subscribing accepts the <terms>Terms of Service</terms>. See also <refund>Cancellation and refunds</refund>."
+  },
+  "websiteLinks": {
+    "title": "Put booking on your website",
+    "description": "Add these to your own website, as on the sample clinic site: the booking button where patients will see it, and the staff link in the header or footer.",
+    "linksTitle": "Links",
+    "bookingHu": "Booking page (Hungarian)",
+    "bookingEn": "Booking page (English)",
+    "chatHu": "Chat (Hungarian)",
+    "chatEn": "Chat (English)",
+    "staffSignIn": "Staff sign-in",
+    "staffInstall": "Staff app installation",
+    "snippetsTitle": "Ready-made HTML",
+    "snippetsDescription": "Paste these into your website's HTML, or send them to whoever maintains it. The text is in your organization's language.",
+    "bookingButton": "Booking button",
+    "bookingButtonHint": "For the page body, for example beside your opening hours or contact details.",
+    "staffLink": "Staff link",
+    "staffLinkHint": "For the header or footer. Providers and assistants sign in through it.",
+    "copy": "Copy",
+    "copyLabel": "Copy {label}",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select the text and copy it by hand."
   }
 }

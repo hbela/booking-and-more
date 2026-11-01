@@ -25,6 +25,7 @@ import {
 } from "./ui/table";
 import { BusinessKnowledge } from "./business-knowledge";
 import { PatientQrCodes } from "./patient-qr-codes";
+import { WebsiteLinks } from "./website-links";
 import { ArrowUpRight, CalendarDays, Clock3, Bot } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { navFor } from "@/lib/dashboard-nav";
@@ -135,6 +136,18 @@ export function Dashboard(): React.ReactElement {
             <PendingPanel
               organizationName={context.me.tenant.name}
               daysRemaining={context.me.tenant.daysRemaining}
+            />
+          ) : null}
+
+          {/* Putting booking on the clinic's website is the owner's step, so it
+              is gated on the permission that edits the organization's own
+              details; everyone else keeps the QR codes alone. */}
+          {!context.awaitingSubscription && context.me.tenant && context.can("tenant:manage") ? (
+            <WebsiteLinks
+              slug={context.me.tenant.slug}
+              domain={context.me.tenant.domain}
+              defaultLanguage={context.me.tenant.defaultLanguage}
+              assistant={context.me.features.assistant}
             />
           ) : null}
 
