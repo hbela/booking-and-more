@@ -925,7 +925,8 @@
     "contents": "Contents",
     "pricingTitle": "Plans and prices",
     "pricingIntro": "One monthly fee per organization, with no setup fee and no commitment. Every plan includes the public booking page, the staff app and booking emails.",
-    "startTrial": "Start free trial",
+    "contactUs": "Contact us",
+    "contactSubject": "Enquiry: {plan} plan",
     "billingNote": "Billed monthly in advance by card through Stripe. An electronic invoice is issued after each payment. Upgrades apply immediately; downgrades and cancellations at the end of the paid period.",
     "pricingTermsNote": "Subscribing accepts the <terms>Terms of Service</terms>. See also <refund>Cancellation and refunds</refund>."
   }

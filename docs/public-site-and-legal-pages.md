@@ -40,6 +40,10 @@ Hungarian at the unprefixed path, English under `/en`, as everywhere else.
 - **A public footer** on the home page and these four pages: their links, and the
   _impresszum_ (seller name, address, tax number, registration number, EU VAT number,
   email, hosting provider). Hungarian e-commerce law (Ekertv. 4. §) requires it.
+- **Each plan's button is "Contact us"**, a `mailto:` to `LEGAL_EMAIL` with the plan
+  named in the subject, not a link to sign-up. During the launch cohort only approved
+  owners can subscribe, so a "Start free trial" button would end in a refusal. With no
+  `LEGAL_EMAIL` the button is omitted. Revisit when subscribing opens to everyone.
 - **The home page** gains a pricing section and the footer.
 - **Sign-up** states that creating an account accepts the terms and acknowledges the
   privacy notice, with both linked.

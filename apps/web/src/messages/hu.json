@@ -925,7 +925,8 @@
     "contents": "Tartalom",
     "pricingTitle": "Csomagok és árak",
     "pricingIntro": "Szervezetenként egy havidíj, beállítási díj és hűségidő nélkül. Minden csomag tartalmazza a nyilvános foglalási oldalt, a munkatársi alkalmazást és a foglalási e-maileket.",
-    "startTrial": "Ingyenes próba indítása",
+    "contactUs": "Kapcsolatfelvétel",
+    "contactSubject": "Érdeklődés: {plan} csomag",
     "billingNote": "Havonta előre, bankkártyával fizethető a Stripe-on keresztül. Minden fizetés után elektronikus számlát állítunk ki. A magasabb csomagra váltás azonnal, az alacsonyabbra váltás és a lemondás a kifizetett időszak végén lép hatályba.",
     "pricingTermsNote": "Az előfizetéssel elfogadja az <terms>Általános Szerződési Feltételeket</terms>. Lásd még: <refund>Lemondás és visszatérítés</refund>."
   }

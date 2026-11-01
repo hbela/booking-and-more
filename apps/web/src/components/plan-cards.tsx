@@ -1,7 +1,7 @@
 import { SUBSCRIPTION_OFFERS, type SubscribablePlan } from "@bam/contracts";
 import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
-import { Link } from "@/i18n/navigation";
+import { getLegalEntity } from "@/lib/legal-entity";
 
 /**
  * Advertised trial length. The server's `TRIAL_PERIOD_DAYS` (default 30) is
@@ -28,6 +28,10 @@ export async function PlanCards({
   const t = await getTranslations("legal");
   const plans = await getTranslations("dashboard");
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  // Contact rather than sign-up: during the launch cohort only approved owners
+  // can subscribe, so a self-service trial button would end in a refusal. No
+  // address configured means no button rather than a broken mailto: link.
+  const email = getLegalEntity().email;
 
   const name: Record<SubscribablePlan, string> = {
     STARTER: plans("planStarter"),
@@ -58,9 +62,17 @@ export async function PlanCards({
                 <span className="text-ink-muted">{plans("perMonth")}</span>
               </p>
               <p className="text-ink-muted leading-relaxed">{description[plan]}</p>
-              <Button asChild className="mt-auto">
-                <Link href="/sign-up">{t("startTrial")}</Link>
-              </Button>
+              {email ? (
+                <Button asChild className="mt-auto">
+                  <a
+                    href={`mailto:${email}?subject=${encodeURIComponent(
+                      t("contactSubject", { plan: name[plan] }),
+                    )}`}
+                  >
+                    {t("contactUs")}
+                  </a>
+                </Button>
+              ) : null}
             </li>
           );
         })}
