@@ -35,8 +35,9 @@ domains, keys or monitors. In order:
    docs. [Run 39141167574](https://github.com/hbela/booking-and-more/actions/runs/39141167574)
    passed every step, including the ARM64 and x86 image checks.
 2. **Owner decisions (section 2).** Backup destination is decided; still open: the approved owner emails,
-   the Stripe live key and webhook (account, prices, portal and Billingo are done), the cohort
-   dates and the terms/privacy pages. Everything from section 3 onward waits on
+   the cohort dates, and the legal review of the terms/privacy/refund drafts. Stripe and
+   Billingo are done on their side (live key and webhook created 2026-11-03); their
+   values wait in KeePassXC for the production stack. Everything from section 3 onward waits on
    at least one of these.
 3. **Create the production stack** per the environment decision: rename the current
    Coolify environment to `staging`, create `production` with new volumes, domains,
@@ -157,11 +158,21 @@ domains, keys or monitors. In order:
       first real invoice in the cohort (§6). `billingo:smoke -- --apply` refuses to run
       unless `BILLING_MODE=test`; never work around that with the live key, because it
       would create a real invoice.
-      Still open, Stripe: the live secret key (`sk_live_`, into KeePassXC and Coolify
-      only), and the webhook endpoint `https://api.booking.appointer.hu/v1/webhooks/stripe`
-      with the 13 events listed in [the sandbox bootstrap](new-stripe-sandbox-bootstrap.md)
-      §5, once the production API answers. Its signing secret becomes
-      `STRIPE_WEBHOOK_SECRET`.
+      **Stripe live key and webhook created 2026-11-03** (operator), both in KeePassXC
+      and nowhere else: a standard secret key (`sk_live_`, which `BILLING_MODE=live`
+      requires; a restricted key is refused) for `STRIPE_SECRET_KEY`, and the endpoint
+      `https://api.booking.appointer.hu/v1/webhooks/stripe` with the 13 events listed in
+      [the sandbox bootstrap](new-stripe-sandbox-bootstrap.md) §5, whose signing secret
+      is `STRIPE_WEBHOOK_SECRET`. The endpoint's payload version is
+      `2026-09-30.endive` while the SDK pins `2026-07-29.dahlia`. This was checked against the
+      endive changelog and is harmless: subscription and schedule events are re-fetched at
+      the pinned version, and the fields read straight from checkout and invoice payloads
+      are untouched by endive's one billing breaking change (the billing-cycle-anchor
+      format, which nothing here reads). Revisit if the SDK pin moves past endive or the
+      processor starts reading new payload fields. The endpoint receives nothing until a
+      live subscription exists. What remains is putting both values into the production
+      stack's Coolify variables with `BILLING_MODE=live` and the three
+      `STRIPE_PRICE_*` IDs, then an unsigned `POST` to the endpoint must answer `400`.
 - [ ] Decide the production domains. **Public site: `booking.appointer.hu`** (decided
       2026-10-27; it is also the website registered with Stripe). Before the first live
       charge it must show the three plans and their prices, contact details, and links
