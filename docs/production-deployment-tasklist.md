@@ -39,7 +39,8 @@ domains, keys or monitors. In order:
    Billingo are done on their side (live key and webhook created 2026-11-03); their
    values wait in KeePassXC for the production stack. Everything from section 3 onward waits on
    at least one of these.
-3. **Create the production stack** per the environment decision: rename the current
+3. **Create the production stack** per the environment decision, step by step in
+   [production stack setup](production-stack-setup.md): rename the current
    Coolify environment to `staging`, create `production` with new volumes, domains,
    auth secret and both PII keys. Then run the section 3 gates against it.
 4. **Section 4 on the selected SHA**, then the reduced cutover in section 5.
@@ -172,7 +173,7 @@ domains, keys or monitors. In order:
       processor starts reading new payload fields. The endpoint receives nothing until a
       live subscription exists. What remains is putting both values into the production
       stack's Coolify variables with `BILLING_MODE=live` and the three
-      `STRIPE_PRICE_*` IDs, then an unsigned `POST` to the endpoint must answer `400`.
+      `STRIPE_PRICE_*` IDs, then an unsigned `POST` to the endpoint must answer `401`.
 - [ ] Decide the production domains. **Public site: `booking.appointer.hu`** (decided
       2026-10-27; it is also the website registered with Stripe). Before the first live
       charge it must show the three plans and their prices, contact details, and links
