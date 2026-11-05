@@ -78,31 +78,31 @@ which the config treats as "not configured".
 
 ### 3.2 Plain settings: not secret
 
-| Variable                         | Value                                                              |
-| -------------------------------- | ------------------------------------------------------------------ |
-| `APP_BASE_URL`                   | `https://app.booking.appointer.hu`                                 |
-| `API_BASE_URL`                   | `https://api.booking.appointer.hu`                                 |
-| `BILLING_MODE`                   | `live`                                                             |
-| `LAUNCH_ACCESS_MODE`             | `invite_only`                                                      |
-| `LAUNCH_OWNER_EMAIL_ALLOWLIST`   | Empty. Owners arrive through provisioning (onboarding record §2.4) |
-| `EMAIL_FROM`                     | The same sender as staging's `EMAIL_FROM`, on the verified domain  |
-| `STRIPE_PRICE_STARTER`           | `price_1UUXMeL8y0mQzxRgrYKxKLvI`                                   |
-| `STRIPE_PRICE_PROFESSIONAL`      | `price_1UUXMfL8y0mQzxRg2sNtz47v`                                   |
-| `STRIPE_PRICE_PROFESSIONAL_PLUS` | `price_1UUXMfL8y0mQzxRga1vKPW3j`                                   |
-| `BILLINGO_BASE_URL`              | `https://api.billingo.hu/v3`                                       |
-| `BILLINGO_BANK_ACCOUNT_ID`       | `298836`                                                           |
-| `BILLINGO_DOCUMENT_BLOCK_ID`     | `344906` (never `344907`, the receipt block)                       |
-| `BILLINGO_VAT_CODE`              | `AAM`                                                              |
-| `SENTRY_DSN`                     | Same API project DSN as staging                                    |
-| `WEB_SENTRY_DSN`                 | Same web project DSN as staging                                    |
-| `SENTRY_ENVIRONMENT`             | `production`                                                       |
-| `CANONICAL_REDIRECT_HOSTS`       | `booking.appointer.hu`                                             |
-| `LEGAL_NAME`                     | Your choice of what the impresszum shows (public-site record §2.1) |
-| `LEGAL_ADDRESS`                  | Same                                                               |
-| `LEGAL_TAX_NUMBER`               | Same                                                               |
-| `LEGAL_EU_VAT_NUMBER`            | Same                                                               |
-| `LEGAL_REGISTRATION_NUMBER`      | Same                                                               |
-| `LEGAL_EMAIL`                    | The support address; it is also the "Contact us" button's target   |
+| Variable                         | Value                                                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_BASE_URL`                   | `https://app.booking.appointer.hu`                                                                                                                         |
+| `API_BASE_URL`                   | `https://api.booking.appointer.hu`                                                                                                                         |
+| `BILLING_MODE`                   | `live`                                                                                                                                                     |
+| `LAUNCH_ACCESS_MODE`             | `invite_only`                                                                                                                                              |
+| `LAUNCH_OWNER_EMAIL_ALLOWLIST`   | The approved owners' addresses, comma-separated. **Required even for provisioned owners**: the payment link is refused without it (onboarding record §2.4) |
+| `EMAIL_FROM`                     | The same sender as staging's `EMAIL_FROM`, on the verified domain                                                                                          |
+| `STRIPE_PRICE_STARTER`           | `price_1UUXMeL8y0mQzxRgrYKxKLvI`                                                                                                                           |
+| `STRIPE_PRICE_PROFESSIONAL`      | `price_1UUXMfL8y0mQzxRg2sNtz47v`                                                                                                                           |
+| `STRIPE_PRICE_PROFESSIONAL_PLUS` | `price_1UUXMfL8y0mQzxRga1vKPW3j`                                                                                                                           |
+| `BILLINGO_BASE_URL`              | `https://api.billingo.hu/v3`                                                                                                                               |
+| `BILLINGO_BANK_ACCOUNT_ID`       | `298836`                                                                                                                                                   |
+| `BILLINGO_DOCUMENT_BLOCK_ID`     | `344906` (never `344907`, the receipt block)                                                                                                               |
+| `BILLINGO_VAT_CODE`              | `AAM`                                                                                                                                                      |
+| `SENTRY_DSN`                     | Same API project DSN as staging                                                                                                                            |
+| `WEB_SENTRY_DSN`                 | Same web project DSN as staging                                                                                                                            |
+| `SENTRY_ENVIRONMENT`             | `production`                                                                                                                                               |
+| `CANONICAL_REDIRECT_HOSTS`       | `booking.appointer.hu`                                                                                                                                     |
+| `LEGAL_NAME`                     | Your choice of what the impresszum shows (public-site record §2.1)                                                                                         |
+| `LEGAL_ADDRESS`                  | Same                                                                                                                                                       |
+| `LEGAL_TAX_NUMBER`               | Same                                                                                                                                                       |
+| `LEGAL_EU_VAT_NUMBER`            | Same                                                                                                                                                       |
+| `LEGAL_REGISTRATION_NUMBER`      | Same                                                                                                                                                       |
+| `LEGAL_EMAIL`                    | The support address; it is also the "Contact us" button's target                                                                                           |
 
 The `LEGAL_*` values are public once the page renders, but they are personal, so they
 live in Coolify and KeePassXC, never in the repository.

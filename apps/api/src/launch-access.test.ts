@@ -41,6 +41,10 @@ describe.skipIf(!databaseUrl)("invite-only launch", () => {
     });
     expect(signup.statusCode).toBe(200);
     cookie = signup.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    // A sign-up naming no callback must not redirect to the API's own root.
+    expect(new URL(verificationUrls[0]!).searchParams.get("callbackURL")).toBe(
+      `${env.APP_BASE_URL}/dashboard`,
+    );
     userId = (await app.prisma.user.findUniqueOrThrow({ where: { email } })).id;
   });
   afterAll(async () => {
@@ -63,12 +67,15 @@ describe.skipIf(!databaseUrl)("invite-only launch", () => {
     });
     expect(resent.statusCode).toBe(200);
     expect(verificationUrls.length).toBeGreaterThanOrEqual(2);
-    const verificationUrl = new URL(verificationUrls.at(-1)!);
+    // The link from sign-up itself: its rewritten callback has to pass Better
+    // Auth's origin check and land on the web app.
+    const verificationUrl = new URL(verificationUrls[0]!);
     const verified = await app.inject({
       method: "GET",
       url: verificationUrl.pathname + verificationUrl.search,
     });
     expect(verified.statusCode).toBeLessThan(400);
+    expect(verified.headers.location).toBe("http://localhost:3000/dashboard");
     expect((await app.prisma.user.findUniqueOrThrow({ where: { id: userId } })).emailVerified).toBe(
       true,
     );

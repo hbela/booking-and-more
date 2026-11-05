@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import type { PrismaClient } from "@bam/db";
+import { verificationUrlForApp } from "./verification-url.js";
 
 /**
  * Better Auth instance factory.
@@ -47,7 +48,7 @@ export interface CreateAuthOptions {
 }
 
 export function createAuth(options: CreateAuthOptions) {
-  const { prisma, secret, baseUrl, appUrl, secureCookies, google } = options;
+  const { prisma, secret, baseUrl, appUrl, secureCookies, sendVerificationEmail, google } = options;
 
   return betterAuth({
     appName: "booking-and-more",
@@ -69,10 +70,12 @@ export function createAuth(options: CreateAuthOptions) {
       autoSignIn: true,
     },
 
-    ...(options.sendVerificationEmail
+    ...(sendVerificationEmail
       ? {
           emailVerification: {
-            sendVerificationEmail: options.sendVerificationEmail,
+            sendVerificationEmail: async ({ user, url }) => {
+              await sendVerificationEmail({ user, url: verificationUrlForApp(url, appUrl) });
+            },
             sendOnSignUp: true,
             expiresIn: 3600,
           },

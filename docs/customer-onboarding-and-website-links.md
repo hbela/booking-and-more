@@ -87,8 +87,13 @@ handed the address directly. No public page links to it. The sign-in page's
 a link to pricing for anyone who has none. Reopening public signup is the separate
 decision the [launch runbook](production-launch.md) already requires.
 
-**Recommended cohort path:** provisioning in `/platform` (step 1). It needs no
-allow-list entry, and it is the path whose emails are described above.
+**Recommended cohort path:** provisioning in `/platform` (step 1), the path whose
+emails are described above. **It still needs an allow-list entry**, correcting what this
+section first said: `POST /v1/billing/subscribe` calls `assertLaunchAccess`, so in
+`invite_only` a provisioned owner whose address is not in
+`LAUNCH_OWNER_EMAIL_ALLOWLIST` can accept the invitation and is then refused the
+payment link. Add each approved owner's address, then restart the API. Accepting the
+invitation already marks the address verified, so no further step is needed.
 
 ## 3. Found on the way
 

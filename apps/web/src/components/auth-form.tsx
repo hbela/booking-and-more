@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { Link, useRouter } from "@/i18n/navigation";
+import { useLocale, useTranslations } from "next-intl";
+import { getPathname, Link, useRouter } from "@/i18n/navigation";
 import { apiFetch, type MeResponse } from "@/lib/api-client";
 import { signIn, signUp } from "@/lib/auth-client";
 import { Button } from "./ui/button";
@@ -40,6 +40,7 @@ export function AuthForm({
   onAuthenticated?: () => Promise<void>;
 }): React.ReactElement {
   const t = useTranslations("auth");
+  const locale = useLocale();
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -56,7 +57,14 @@ export function AuthForm({
     try {
       const result =
         mode === "sign-up"
-          ? await signUp.email({ email, password, name })
+          ? await signUp.email({
+              email,
+              password,
+              name,
+              // Absolute, because the verification link is served by the API and
+              // a path would resolve there. Carries the locale they signed up in.
+              callbackURL: `${window.location.origin}${getPathname({ locale, href: "/dashboard" })}`,
+            })
           : await signIn.email({ email, password });
 
       if (result.error) {
