@@ -43,8 +43,10 @@ domains, keys or monitors. In order:
    [production stack setup](production-stack-setup.md): rename the current
    Coolify environment to `staging`, create `production` with new volumes, domains,
    auth secret and both PII keys. Then run the section 3 gates against it.
-   **Created 2026-11-05** in Coolify's new `production` environment, deployed at
-   `189be16` from the release branch. Checked from outside: API and web health `200`,
+   **Created 2026-11-05** in Coolify's new `production` environment, resource
+   `zwwwkk0cwkk80w4sgsocooc4`, deployed at `4324547` from the release branch (same code as
+   `189be16`; only docs differ). Coolify builds the branch's latest commit unless one is pinned.
+   Checked from outside: API and web health `200`,
    unsigned webhook `401`, Let's Encrypt certificate on `booking.appointer.hu`, impresszum
    and contact buttons rendering, platform admin created. `booking.appointer.hu` redirects with `308`. Still open: `LAUNCH_OWNER_EMAIL_ALLOWLIST` is empty until the owners
    are approved, and the verification link needs a real sign-up to confirm. No real
