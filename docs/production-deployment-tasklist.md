@@ -46,9 +46,7 @@ domains, keys or monitors. In order:
    **Created 2026-11-05** in Coolify's new `production` environment, deployed at
    `189be16` from the release branch. Checked from outside: API and web health `200`,
    unsigned webhook `401`, Let's Encrypt certificate on `booking.appointer.hu`, impresszum
-   and contact buttons rendering, platform admin created. Still open: the
-   `booking.appointer.hu` redirect answers `200` rather than `308`
-   (`CANONICAL_REDIRECT_HOSTS`), `LAUNCH_OWNER_EMAIL_ALLOWLIST` is empty until the owners
+   and contact buttons rendering, platform admin created. `booking.appointer.hu` redirects with `308`. Still open: `LAUNCH_OWNER_EMAIL_ALLOWLIST` is empty until the owners
    are approved, and the verification link needs a real sign-up to confirm. No real
    sign-up, payment or webhook delivery has happened yet.
 4. **Section 4 on the selected SHA**, then the reduced cutover in section 5.
