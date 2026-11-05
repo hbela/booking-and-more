@@ -51,9 +51,11 @@ and the live `BILLINGO_API_KEY`.
    - `web`: `https://app.booking.appointer.hu,https://booking.appointer.hu`
    - `api`: `https://api.booking.appointer.hu`
 
-   The A records `app.booking` and `api.booking` already exist (they served staging
-   before 2026-10-27). Add one for **`booking`** under `appointer.hu`, pointing at the
-   same VPS. The wildcard does not cover it.
+   The wildcard `*.booking.appointer.hu` already covers `app.booking` and `api.booking`.
+   Add an A record for **`booking`** under `appointer.hu`, pointing at the same VPS.
+   Neither wildcard covers it: `*.booking` only matches names below it, and because
+   names exist below `booking`, DNS treats `booking` itself as existing with no records,
+   so `*.appointer.hu` does not apply to it either (RFC 4592).
 
 ## 3. The variables
 
