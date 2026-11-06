@@ -43,13 +43,19 @@ domains, keys or monitors. In order:
    [production stack setup](production-stack-setup.md): rename the current
    Coolify environment to `staging`, create `production` with new volumes, domains,
    auth secret and both PII keys. Then run the section 3 gates against it.
-   **Created 2026-11-05** in Coolify's new `production` environment, resource
-   `zwwwkk0cwkk80w4sgsocooc4`, deployed at `4324547` from the release branch (same code as
-   `189be16`; only docs differ). Coolify builds the branch's latest commit unless one is pinned.
+   **Created 2026-11-05** in Coolify's new `production` environment, compose project
+   `y8kk8o0wowcwc44cw0kk84ow` (read from the running containers on 2026-11-06: `APP_BASE_URL`
+   is `app.booking`, `BILLING_MODE` is `live`; staging is `zcskco80804ogk4gskwoso40`), deployed at `4324547` from the release branch (same code as
+   `189be16`; only docs differ). **Pinned to that commit 2026-11-06** (the resource's Commit SHA
+   field), so a redeploy rebuilds `4324547`; to release, set the new SHA first, then deploy.
    Checked from outside: API and web health `200`,
    unsigned webhook `401`, Let's Encrypt certificate on `booking.appointer.hu`, impresszum
    and contact buttons rendering, platform admin created. `booking.appointer.hu` redirects with `308`. Still open: `LAUNCH_OWNER_EMAIL_ALLOWLIST` is empty until the owners
-   are approved, and the verification link needs a real sign-up to confirm. No real
+   are approved, and the throwaway account from the verification test must be removed before
+   the empty-database check. The verification link passed with that account on 2026-11-06:
+   no API 404, and the database shows `emailVerified` true. An installed staff app opened the
+   link and showed sign-in, because staff apps have `scope: "/"`; the landing on the dashboard
+   itself was therefore not observed directly. No real owner
    sign-up, payment or webhook delivery has happened yet.
 4. **Section 4 on the selected SHA**, then the reduced cutover in section 5.
 
@@ -238,17 +244,31 @@ the procedure works; it does not satisfy the gate.
       was backed up and restored byte-identical. Deleting its snapshot and then
       `restic prune` (2 packs, 1 index file) proved the token can delete, which retention
       needs. `restic check` found no errors, and the repository is empty again.
-      Still to do: `/etc/bam/production-backup.conf` with the new compose project, the
-      empty `production-backup-monitor-url` and the monitor token, then the timer.
+      (`production-restic.password` was found mode 0644 on 2026-11-06 and set to 0600; `/etc/bam`
+      is 0700 and root is the only login account, so nothing was exposed.)
+      **2026-11-06:** `/etc/bam/production-backup.conf` written for compose project
+      `y8kk8o0wowcwc44cw0kk84ow`, with an empty `production-backup-monitor-url`. Installed
+      scripts and units matched the repository's checksums. First manual backup succeeded:
+      snapshot `8bf20858`, tag `bam-production`, in repository `48985bdc` (confirmed with
+      `restic cat config`). `bam-backup@production.timer` enabled 2026-11-06, first run due
+      14:30 UTC. Monitor connected the same day: Worker version `d1f6f2c7`, token in
+      `/etc/bam/production-backup-monitor-token` and KeePassXC.
 - [ ] Back up configuration, authentication secrets and both distinct customer PII
       keys separately from the database; verify the operator can recover them.
       Staging's keys are in the operator's KeePassXC vault and were recovered from it
       in the 2026-09-24 and 2026-10-17 drills; production's keys must be added separately.
-- [ ] Enable 30-minute backups with seven-day full retention plus 30 daily copies.
-- [ ] Observe two successful backups 30 minutes apart and record recoverable snapshot IDs/times.
-- [ ] Exercise the missing-backup alert and confirm it arrives before backup age reaches one hour.
-      Production needs its own `bam-production` monitor ID and token in the backup
-      monitor Worker. Staging silence, failure and overrun alerts passed on 2026-09-24,
+- [x] Enable 30-minute backups with seven-day full retention plus 30 daily copies.
+      `bam-backup@production.timer`, enabled 2026-11-06.
+- [x] Observe two successful backups 30 minutes apart and record recoverable snapshot IDs/times.
+      Scheduled runs on 2026-11-06, all tagged `bam-production`: `16f21022` (14:30:01 UTC),
+      `761f1372` (15:00:01 UTC), `9c4bb2ef` (15:30:02 UTC). Last run `Result=success`,
+      `ExecMainStatus=0`. Nearly empty database, so this says nothing yet about duration at scale.
+- [x] Exercise the missing-backup alert and confirm it arrives before backup age reaches one hour.
+      **Passed 2026-11-06:** timer stopped after the 17:00:02 UTC run; the alert email arrived at
+      17:50 UTC, about 50 minutes after that backup started. Timer restarted 18:04:43 UTC.
+      `bam-production` is registered with its own token and armed. On 2026-11-06 both monitors
+      recorded a successful scheduled run at 16:30:03 UTC, so staging kept its token through
+      the change. Staging silence, failure and overrun alerts passed on 2026-09-24,
       and the healthchecks.io heartbeat that watches the monitor itself passed on 2026-10-16.
 - [ ] Restore a selected backup into isolated PostgreSQL/Redis volumes with outbound
       customer email, live payments and invoicing disabled.

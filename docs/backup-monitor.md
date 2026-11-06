@@ -260,8 +260,16 @@ Evidence (staging):
   `19:13Z`, after pings had resumed. Use healthchecks.io, not that dataset, to
   judge whether the cron fires.
 
-To add production later, register `bam-production` explicitly in `MONITOR_IDS`, add
-an independent token, seed its `armed_at` at activation and wire its own service.
+Production was added on 2026-11-06 (Worker version `d1f6f2c7`): `bam-production` in
+`MONITOR_IDS`, an independent token, `armed_at` seeded at activation, and its own drop-in at
+`/etc/systemd/system/bam-backup@production.service.d/monitor.conf`.
+
+**Adding a monitor has one safe order: upload the tokens, then deploy the new ID.** Every
+request and scheduled check throws `Missing monitor token` if any listed ID has no token, so
+deploying the ID first would stop monitoring for every environment. `MONITOR_TOKENS` is one
+secret, so it must carry the existing tokens too; compare a fingerprint of the existing token
+before uploading, because a wrong value shows up only as refused check-ins.
+
 Rehearsal state must never share staging's monitor ID or token.
 
 References: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/),

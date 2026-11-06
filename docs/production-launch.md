@@ -93,7 +93,9 @@ conversion or billing activation has occurred.
    and demonstrate two successful off-host backups 30 minutes apart.
    Set the compose project from the running database's Docker label; the script
    requires exactly one matching running PostgreSQL container on every execution.
-   The verified production project label is `zcskco80804ogk4gskwoso40`.
+   The production project label is `y8kk8o0wowcwc44cw0kk84ow` (verified 2026-11-06).
+   `zcskco80804ogk4gskwoso40`, named in the 2026-09-20 baseline above, is now **staging**:
+   a backup pointed at it would succeed and protect the wrong database.
 5. Backups retain every snapshot for seven days and daily snapshots for 30 days.
    Monitor disk space at 80% warning/90% critical. A failed backup or retention
    operation does not send a success heartbeat. Measure duration; if it approaches

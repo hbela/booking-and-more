@@ -14,5 +14,5 @@
     },
   ],
   "observability": { "enabled": true },
-  "vars": { "MONITOR_IDS": "bam-staging" },
+  "vars": { "MONITOR_IDS": "bam-staging,bam-production" },
 }
