@@ -229,8 +229,24 @@ Do not put credentials, encryption keys or customer details in this checklist.
 All of these are for the **new production resource**. Staging evidence below shows
 the procedure works; it does not satisfy the gate.
 
-- [ ] Review firewall/Docker bindings and verify database/Redis isolation externally,
+- [x] Review firewall/Docker bindings and verify database/Redis isolation externally,
       including IPv6 if enabled; resolve the historical database exposure conclusively.
+      **IPv4 probed from outside 2026-11-07:** only 22, 80 and 443 answer; 5432, 5433, 6379,
+      8000, 6001, 6002, 8080, 3000, 3001, 5678, 2375, 2376, 4000, 9000 and 9090 do not, and
+      the prober's own network was shown to reach those ports elsewhere. DNS has no AAAA
+      record. **IPv6 probed the same day** at the server's global address: the same result,
+      only 22, 80 and 443 answer. **Published Docker ports, read on the server:** neither
+      Booking and More stack publishes anything. Published on all IPv4 and IPv6 addresses, and
+      held closed only by the external firewall: 5432 by `sc48g08s404k80gcw040ow00-proxy` (a
+      Coolify database outside this project, made publicly available, which fits the
+      2026-08-04 CERT-Bund finding), Coolify's 8000 and 6001–6002, the proxy's 8080, and three
+      other applications' web containers on 32768–32770. **Identified 2026-11-07:** that
+      database is the predecessor project's production PostgreSQL (`postgresql-database-prod`,
+      used by `sunshine-dental:production`), made public only so pgAdmin could reach it.
+      Decision: switch "Make it publicly available" off and reach it through an SSH tunnel
+      instead. **Done 2026-11-07:** the `-proxy` container is gone, the database container
+      shows only its unpublished `5432/tcp`, and nothing listens on 5432 on the host, so
+      the port stays closed even without the external firewall.
 - [ ] Restrict SSH and Coolify administration to operator addresses or VPN access;
       verify access without disrupting unrelated applications on the shared VPS.
 - [ ] Initialize the encrypted off-host backup repository and securely configure the timer.
@@ -328,8 +344,10 @@ the procedure works; it does not satisfy the gate.
         same day; `booking-and-more-worker` then listed a `production` environment. **Heartbeat
         test passed:** worker stopped 15:13:42 UTC, Sentry's production cron-failure email arrived
         15:20 UTC (about 6½ minutes), worker started 15:21:53 UTC. UptimeRobot monitors done
-        (above). **Still open:** decide whether production sets `WEB_SENTRY_DSN`; without it a
-        front-end failure is seen only when a customer reports it.
+        (above). `WEB_SENTRY_DSN` is **empty on production** (2026-11-07), as on staging since
+        2026-10-29: browser and Next.js server errors are not reported, so a front-end failure is
+        seen only when a customer reports it. Setting it later needs a redeploy, because the
+        browser's copy is a build argument.
 
 ## 4. Release validation and rehearsal
 
