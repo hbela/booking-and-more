@@ -256,7 +256,11 @@ the procedure works; it does not satisfy the gate.
 - [ ] Back up configuration, authentication secrets and both distinct customer PII
       keys separately from the database; verify the operator can recover them.
       Staging's keys are in the operator's KeePassXC vault and were recovered from it
-      in the 2026-09-24 and 2026-10-17 drills; production's keys must be added separately.
+      in the 2026-09-24 and 2026-10-17 drills.
+      **Production, 2026-11-06:** `BETTER_AUTH_SECRET`, both PII keys and the restic password
+      in KeePassXC match the running `api` and `worker` containers and the server's file, by
+      SHA-256 fingerprint. Left open: the other configuration values were not compared, and
+      that the vault itself has a copy off the operator's PC is not recorded here.
 - [x] Enable 30-minute backups with seven-day full retention plus 30 daily copies.
       `bam-backup@production.timer`, enabled 2026-11-06.
 - [x] Observe two successful backups 30 minutes apart and record recoverable snapshot IDs/times.
@@ -265,7 +269,8 @@ the procedure works; it does not satisfy the gate.
       `ExecMainStatus=0`. Nearly empty database, so this says nothing yet about duration at scale.
 - [x] Exercise the missing-backup alert and confirm it arrives before backup age reaches one hour.
       **Passed 2026-11-06:** timer stopped after the 17:00:02 UTC run; the alert email arrived at
-      17:50 UTC, about 50 minutes after that backup started. Timer restarted 18:04:43 UTC.
+      17:50 UTC, about 50 minutes after that backup started. Timer restarted 18:04:43 UTC; the
+      recovery email arrived in the same minute, after the catch-up backup.
       `bam-production` is registered with its own token and armed. On 2026-11-06 both monitors
       recorded a successful scheduled run at 16:30:03 UTC, so staging kept its token through
       the change. Staging silence, failure and overrun alerts passed on 2026-09-24,
@@ -277,6 +282,15 @@ the procedure works; it does not satisfy the gate.
       content hashes, historical ciphertext, behaviour on restored data, an old
       daily copy, the script's refusals and a full repository read. It is staging
       evidence only; production needs its own run against its own repository.
+      **Production, database part passed 2026-11-06** (`restore-20261106`): snapshot `e262af28`,
+      14 minutes old, restored in 4 s into a networkless copy, 19 s in all. All 45 tables
+      (48 rows) matched live by count and content hash, as did constraints, indexes and
+      extensions; 45 of 45 migrations finished cleanly; exclusion constraint validated;
+      `restic check --read-data` clean; everything removed afterwards. **Left open, so not
+      ticked:** no Redis volume or application start, and no ciphertext, because production
+      has no customers yet. Repeat with the application and decryption after the first real
+      customers. The occupied-target and wrong-name refusals are meaningful; the wrong-password
+      case aimed at a database that does not exist, so it would have failed either way.
 - [ ] Demonstrate complete recovery, including secrets, application startup and data
       validation, within four hours; record elapsed time and evidence.
       [Staging technical drill](staging-recovery-drill-2026-09-24.md) passed on
@@ -303,13 +317,19 @@ the procedure works; it does not satisfy the gate.
   - [x] Web error reporting **switched off on staging** (2026-10-29): `WEB_SENTRY_DSN` was
         removed and staging redeployed. Browser and Next.js server errors are no longer
         reported; API and worker errors still are, through `SENTRY_DSN`.
-  - [ ] UptimeRobot alert delivery: take one monitor down and confirm the down and up emails.
+  - [x] UptimeRobot alert delivery: take one monitor down and confirm the down and up emails.
+        **Passed on production 2026-11-07:** production's `api` container was stopped; the down
+        email arrived at 15:23 Budapest and the up email at 15:28, after it was started again.
+        Both production monitors exist (`app.booking…/api/health`, `api.booking…/health/ready`).
   - [ ] Disk pressure, billing and invoicing failure alerts — not wired.
   - [ ] Production: Sentry environment `production` with `SENTRY_DSN` set (the heartbeat
-        needs it), UptimeRobot monitors for `app.booking.appointer.hu/api/health` and
-        `api.booking.appointer.hu/health/ready`, and a repeat of the heartbeat test. Decide
-        whether production sets `WEB_SENTRY_DSN`; without it a front-end failure is seen only
-        when a customer reports it.
+        needs it). **Found empty on 2026-11-07** in the running production worker, so neither
+        heartbeat nor API/worker errors reached Sentry; staging's is set. Set and redeployed the
+        same day; `booking-and-more-worker` then listed a `production` environment. **Heartbeat
+        test passed:** worker stopped 15:13:42 UTC, Sentry's production cron-failure email arrived
+        15:20 UTC (about 6½ minutes), worker started 15:21:53 UTC. UptimeRobot monitors done
+        (above). **Still open:** decide whether production sets `WEB_SENTRY_DSN`; without it a
+        front-end failure is seen only when a customer reports it.
 
 ## 4. Release validation and rehearsal
 
